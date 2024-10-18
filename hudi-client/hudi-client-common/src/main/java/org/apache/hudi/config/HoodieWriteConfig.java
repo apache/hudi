@@ -189,7 +189,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "These merger impls will filter by hoodie.write.record.merge.strategy "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
 
-  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY_ID = ConfigProperty
+  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
       .key("hoodie.write.record.merge.strategy")
       .noDefaultValue()
       .markAdvanced()
@@ -871,11 +871,6 @@ public class HoodieWriteConfig extends HoodieConfig {
   @Deprecated
   public static final String TIMELINE_LAYOUT_VERSION = TIMELINE_LAYOUT_VERSION_NUM.key();
   /**
-   * @deprecated Use {@link #RECORD_MERGER_STRATEGY_ID} and its methods instead
-   */
-  @Deprecated
-  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = RECORD_MERGER_STRATEGY_ID;
-  /**
    * @deprecated Use {@link #BASE_PATH} and its methods instead
    */
   @Deprecated
@@ -1244,7 +1239,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getRecordMergerStrategy() {
-    return getString(RECORD_MERGER_STRATEGY_ID);
+    return getString(RECORD_MERGER_STRATEGY);
   }
 
   public RecordMergeMode getRecordMergeMode() {
@@ -1253,7 +1248,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public HoodieRecordMerger getRecordMerger() {
     return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH),
-        engineType, getString(RECORD_MERGER_IMPLS), getString(RECORD_MERGER_STRATEGY_ID));
+        engineType, getString(RECORD_MERGER_IMPLS), getString(RECORD_MERGER_STRATEGY));
   }
 
   public String getSchema() {
@@ -1265,7 +1260,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public void setRecordMergerClass(String recordMergerStrategy) {
-    setValue(RECORD_MERGER_STRATEGY_ID, recordMergerStrategy);
+    setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
   }
 
   /**
@@ -2915,7 +2910,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withRecordMergerStrategy(String recordMergerStrategy) {
-      writeConfig.setValue(RECORD_MERGER_STRATEGY_ID, recordMergerStrategy);
+      writeConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
       return this;
     }
 

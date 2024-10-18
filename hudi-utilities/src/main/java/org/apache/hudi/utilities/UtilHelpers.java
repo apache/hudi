@@ -134,7 +134,7 @@ public class UtilHelpers {
   public static HoodieRecordMerger createRecordMerger(Properties props) {
     return HoodieRecordUtils.createRecordMerger(null, EngineType.SPARK,
         props.getProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key()),
-        props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY_ID.key()));
+        props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key()));
   }
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,

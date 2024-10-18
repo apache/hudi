@@ -189,7 +189,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       opts.put(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), DefaultSparkRecordMerger.class.getName());
       opts.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
       opts.put(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
-      opts.put(HoodieWriteConfig.RECORD_MERGER_STRATEGY_ID.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
+      opts.put(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
       for (Map.Entry<String, String> entry : opts.entrySet()) {
         hoodieConfig.add(String.format("%s=%s", entry.getKey(), entry.getValue()));
       }
@@ -1631,7 +1631,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     assertTrue(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
     assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_MODE.key()));
-    assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGER_STRATEGY_ID.key()));
+    assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGER_STRATEGY.key()));
 
     //now create one more deltaStreamer instance and update payload class
     cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,

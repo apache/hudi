@@ -175,7 +175,7 @@ object HoodieWriterUtils {
         //expression payload will never be the table config so skip validation of merge configs
         ignoreConfig = ignoreConfig || (payloadIsExpressionPayload && (key.equals(PAYLOAD_CLASS_NAME.key())
           || key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()) || key.equals(RECORD_MERGE_MODE.key())
-          || key.equals(RECORD_MERGER_STRATEGY_ID.key())))
+          || key.equals(RECORD_MERGER_STRATEGY.key())))
 
         //don't validate the payload only in the case that insert into is using fallback to some legacy configs
         ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) &&  value.equals("org.apache.spark.sql.hudi.command.ValidateDuplicateKeyPayload"))
@@ -296,7 +296,7 @@ object HoodieWriterUtils {
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
     PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
-    RECORD_MERGER_STRATEGY_ID -> HoodieTableConfig.RECORD_MERGER_STRATEGY_ID,
+    RECORD_MERGER_STRATEGY -> HoodieTableConfig.RECORD_MERGER_STRATEGY,
     RECORD_MERGE_MODE -> HoodieTableConfig.RECORD_MERGE_MODE
   )
 

@@ -209,15 +209,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
-  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY_ID = ConfigProperty
+  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
       .key("hoodie.record.merge.custom.strategy")
       .noDefaultValue()
       .withAlternatives("hoodie.compaction.record.merger.strategy")
       .sinceVersion("0.13.0")
       .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.write.record.merge.custom.impl.classes which has the same merger strategy id");
-
-  @Deprecated
-  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = RECORD_MERGER_STRATEGY_ID;
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
@@ -372,9 +369,9 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(RECORD_MERGE_MODE, recordMergeMode.name());
         needStore = true;
       }
-      if (contains(RECORD_MERGER_STRATEGY_ID) && recordMergerStrategyId != null
-          && !getString(RECORD_MERGER_STRATEGY_ID).equals(recordMergerStrategyId)) {
-        setValue(RECORD_MERGER_STRATEGY_ID, recordMergerStrategyId);
+      if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
+          && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
+        setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
         needStore = true;
       }
       if (needStore) {
@@ -683,9 +680,9 @@ public class HoodieTableConfig extends HoodieConfig {
   public String getPayloadClass() {
     return RecordPayloadType.getPayloadClassName(this);
   }
-  
-  public String getRecordMergerStrategyID() {
-    return getString(RECORD_MERGER_STRATEGY_ID);
+
+  public String getRecordMergerStrategy() {
+    return getString(RECORD_MERGER_STRATEGY);
   }
 
   /**
