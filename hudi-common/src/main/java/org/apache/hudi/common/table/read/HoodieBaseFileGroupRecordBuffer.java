@@ -59,6 +59,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
@@ -177,8 +178,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                                                          Map<String, Object> metadata,
                                                                          Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) throws IOException {
     if (existingRecordMetadataPair != null) {
-      // Preserve the information for the lost deletes.
-      if (existingRecordMetadataPair.getRight().containsKey(INTERNAL_META_ORDERING_FIELD)) {
+      // If there is a deletion before this record, we can safely skip.
+      if (existingRecordMetadataPair.getRight().containsKey(INTERNAL_META_OPERATION)) {
         return Option.of(Pair.of(existingRecordMetadataPair.getLeft().get(), existingRecordMetadataPair.getRight()));
       }
 
@@ -395,11 +396,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }
-
-          if (newerInfoMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
+          if (newerInfoMap.containsKey(INTERNAL_META_OPERATION)) {
             return newer;
           }
-
           if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
             return older;
           }
