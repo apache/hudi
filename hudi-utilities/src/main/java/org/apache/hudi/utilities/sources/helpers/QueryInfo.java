@@ -159,7 +159,7 @@ public class QueryInfo {
         this.queryType,
         this.previousInstant,
         this.startInstant,
-        checkpointWithPredicates.getEndInstant(),
+        checkpointWithPredicates.getEndCompletionTime(),
         checkpointWithPredicates.getPredicateFilter(),
         this.orderColumn,
         this.keyColumn,

@@ -263,7 +263,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         .stream()
         .filter(Option::isPresent)
         .map(Option::get)
-        .min(HoodieInstant.COMPARATOR);
+        .min(HoodieInstant.INSTANT_TIME_COMPARATOR);
 
     // Step2: We cannot archive any commits which are made after the first savepoint present,
     // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
@@ -300,7 +300,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       List<HoodieInstant> cleanAndRollbackInstantsToArchive =
           getCleanAndRollbackInstantsToArchive(latestCommitInstantToArchive);
       instantsToArchive.addAll(cleanAndRollbackInstantsToArchive);
-      instantsToArchive.sort(HoodieInstant.COMPARATOR);
+      instantsToArchive.sort(HoodieInstant.INSTANT_TIME_COMPARATOR);
     }
 
     // For archive, we need to include instant's all states.
