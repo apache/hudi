@@ -19,13 +19,12 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps
+import org.apache.hudi.common.table.timeline.{HoodieInstant, InstantComparatorUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
@@ -106,17 +105,17 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     assertTrue(nArchivedInstants >= 3)
 
     //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
-    val startUnarchivedCommitTs = completedCommits.nthInstant(0).get().getTimestamp //C4
-    val endUnarchivedCommitTs = completedCommits.nthInstant(1).get().getTimestamp //C5
+    val startUnarchivedCommitTs = completedCommits.nthInstant(0).get().getRequestTime //C4
+    val endUnarchivedCommitTs = completedCommits.nthInstant(1).get().getRequestTime //C5
 
-    val startArchivedCommitTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
-    val endArchivedCommitTs = archivedInstants(1).asInstanceOf[HoodieInstant].getTimestamp //C1
+    val startArchivedCommitTs = archivedInstants(0).asInstanceOf[HoodieInstant].getRequestTime //C0
+    val endArchivedCommitTs = archivedInstants(1).asInstanceOf[HoodieInstant].getRequestTime //C1
 
     val startOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
     val endOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
 
-    assertTrue(HoodieTimeline.compareTimestamps(startOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
-    assertTrue(HoodieTimeline.compareTimestamps(endOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
+    assertTrue(compareTimestamps(startOutOfRangeCommitTs, InstantComparatorUtils.GREATER_THAN, completedCommits.lastInstant().get().getRequestTime))
+    assertTrue(compareTimestamps(endOutOfRangeCommitTs, InstantComparatorUtils.GREATER_THAN, completedCommits.lastInstant().get().getRequestTime))
 
     // Test both start and end commits are archived
     runIncrementalQueryAndCompare(startArchivedCommitTs, endArchivedCommitTs, 1, true)
@@ -144,8 +143,8 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
     // Test both start commit and end commits is not archived and not cleaned
     val reversedCommits = completedCommits.getReverseOrderedInstants.toArray
-    val startUncleanedCommitTs = reversedCommits.apply(1).asInstanceOf[HoodieInstant].getTimestamp
-    val endUncleanedCommitTs = reversedCommits.apply(0).asInstanceOf[HoodieInstant].getTimestamp
+    val startUncleanedCommitTs = reversedCommits.apply(1).asInstanceOf[HoodieInstant].getRequestTime
+    val endUncleanedCommitTs = reversedCommits.apply(0).asInstanceOf[HoodieInstant].getRequestTime
     runIncrementalQueryAndCompare(startUncleanedCommitTs, endUncleanedCommitTs, 1, true)
     runIncrementalQueryAndCompare(startUncleanedCommitTs, endUncleanedCommitTs, 1, false)
   }

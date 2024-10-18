@@ -145,7 +145,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
         LOG.info("Clear up cached hashing metadata because find a new replace commit.\n Instant: {}.\n Effected Partitions: {}.",  lastRefreshInstant, affectedPartitions);
         affectedPartitions.forEach(this.partitionToIdentifier::remove);
       }
-      this.lastRefreshInstant = timeline.lastInstant().get().getTimestamp();
+      this.lastRefreshInstant = timeline.lastInstant().get().getRequestTime();
     }
   }
 

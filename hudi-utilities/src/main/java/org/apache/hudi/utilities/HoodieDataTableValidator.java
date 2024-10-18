@@ -26,7 +26,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -58,6 +57,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 
 /**
  * TODO: [HUDI-8294]
@@ -306,10 +308,10 @@ public class HoodieDataTableValidator implements Serializable {
           HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
       // verify that no data files present with commit time < earliest commit in active timeline.
       if (metaClient.getActiveTimeline().firstInstant().isPresent()) {
-        String earliestInstant = metaClient.getActiveTimeline().firstInstant().get().getTimestamp();
+        String earliestInstant = metaClient.getActiveTimeline().firstInstant().get().getRequestTime();
         List<StoragePath> danglingFilePaths = allDataFilePaths.stream().filter(path -> {
           String instantTime = FSUtils.getCommitTime(path.getName());
-          return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN,
+          return compareTimestamps(instantTime, LESSER_THAN,
               earliestInstant);
         }).collect(Collectors.toList());
 
@@ -334,7 +336,7 @@ public class HoodieDataTableValidator implements Serializable {
         List<String> danglingFiles = engineContext.flatMap(hoodieInstants, instant -> {
           Option<Set<String>> filesFromTimeline = RepairUtils.getBaseAndLogFilePathsFromTimeline(
               activeTimeline, instant);
-          List<String> baseAndLogFilesFromFs = instantToFilesMap.containsKey(instant.getTimestamp()) ? instantToFilesMap.get(instant.getTimestamp())
+          List<String> baseAndLogFilesFromFs = instantToFilesMap.containsKey(instant.getRequestTime()) ? instantToFilesMap.get(instant.getRequestTime())
               : Collections.emptyList();
           if (!baseAndLogFilesFromFs.isEmpty()) {
             Set<String> danglingInstantFiles = new HashSet<>(baseAndLogFilesFromFs);

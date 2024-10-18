@@ -119,7 +119,7 @@ public class HoodieTableServiceManagerClient {
       String instantRange = StringUtils.join(metaClient.reloadActiveTimeline()
           .filterPendingCompactionTimeline()
           .getInstantsAsStream()
-          .map(HoodieInstant::getTimestamp)
+          .map(HoodieInstant::getRequestTime)
           .toArray(String[]::new), ",");
 
       executeRequest(EXECUTE_COMPACTION, getDefaultParams(Action.REQUEST, instantRange));
@@ -135,7 +135,7 @@ public class HoodieTableServiceManagerClient {
           .getCleanerTimeline()
           .filterInflightsAndRequested()
           .getInstantsAsStream()
-          .map(HoodieInstant::getTimestamp)
+          .map(HoodieInstant::getRequestTime)
           .toArray(String[]::new), ",");
 
       executeRequest(EXECUTE_CLEAN, getDefaultParams(Action.REQUEST, instantRange));
@@ -150,7 +150,7 @@ public class HoodieTableServiceManagerClient {
       metaClient.reloadActiveTimeline();
       String instantRange = StringUtils.join(ClusteringUtils.getPendingClusteringInstantTimes(metaClient)
           .stream()
-          .map(HoodieInstant::getTimestamp)
+          .map(HoodieInstant::getRequestTime)
           .toArray(String[]::new), ",");
 
       executeRequest(EXECUTE_CLUSTERING, getDefaultParams(Action.REQUEST, instantRange));

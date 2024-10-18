@@ -54,7 +54,7 @@ public class CompactionPlanStrategies {
           }
           List<String> instants = Arrays.asList(config.compactionPlanInstant.split(","));
           return pendingCompactionTimeline.getInstantsAsStream()
-              .filter(instant -> instants.contains(instant.getTimestamp()))
+              .filter(instant -> instants.contains(instant.getRequestTime()))
               .collect(Collectors.toList());
         };
       case CompactionPlanStrategy.NUM_INSTANTS:

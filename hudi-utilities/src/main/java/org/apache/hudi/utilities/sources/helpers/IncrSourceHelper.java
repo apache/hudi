@@ -118,7 +118,7 @@ public class IncrSourceHelper {
     HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
     final HoodieTimeline activeCommitTimeline = handleHollowCommitIfNeeded(completedCommitTimeline, srcMetaClient, handlingMode);
     Function<HoodieInstant, String> timestampForLastInstant = instant -> handlingMode == HollowCommitHandling.USE_TRANSITION_TIME
-        ? instant.getCompletionTime() : instant.getTimestamp();
+        ? instant.getCompletionTime() : instant.getRequestTime();
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
         if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
@@ -140,11 +140,11 @@ public class IncrSourceHelper {
     if (!beginInstantTime.equals(DEFAULT_BEGIN_TIMESTAMP)) {
       Option<HoodieInstant> previousInstant = activeCommitTimeline.findInstantBefore(beginInstantTime);
       if (previousInstant.isPresent()) {
-        previousInstantTime = previousInstant.get().getTimestamp();
+        previousInstantTime = previousInstant.get().getRequestTime();
       } else {
         // if begin instant time matches first entry in active timeline, we can set previous = beginInstantTime - 1
         if (activeCommitTimeline.filterCompletedInstants().firstInstant().isPresent()
-            && activeCommitTimeline.filterCompletedInstants().firstInstant().get().getTimestamp().equals(beginInstantTime)) {
+            && activeCommitTimeline.filterCompletedInstants().firstInstant().get().getRequestTime().equals(beginInstantTime)) {
           previousInstantTime = String.valueOf(Long.parseLong(beginInstantTime) - 1);
         }
       }
@@ -163,13 +163,13 @@ public class IncrSourceHelper {
             .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
       }
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), previousInstantTime,
-          beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime),
+          beginInstantTime, nthInstant.map(HoodieInstant::getRequestTime).orElse(beginInstantTime),
           orderColumn, keyColumn, limitColumn);
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(),
-          previousInstantTime, beginInstantTime, lastInstant.get().getTimestamp(),
+          previousInstantTime, beginInstantTime, lastInstant.get().getRequestTime(),
           orderColumn, keyColumn, limitColumn);
     }
   }

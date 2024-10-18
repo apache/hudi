@@ -388,7 +388,7 @@ public class HoodieTableSource implements
     if (!fsView.getLastInstant().isPresent()) {
       return Collections.emptyList();
     }
-    String latestCommit = fsView.getLastInstant().get().getTimestamp();
+    String latestCommit = fsView.getLastInstant().get().getRequestTime();
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     final AtomicInteger cnt = new AtomicInteger(0);
     // generates one input split for each file group

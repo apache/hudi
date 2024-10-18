@@ -54,7 +54,7 @@ public class PreferWriterConflictResolutionStrategy
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
                                                     Option<HoodieInstant> lastSuccessfulInstant) {
     HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
-    if (ClusteringUtils.isClusteringInstant(activeTimeline, currentInstant)
+    if (ClusteringUtils.isClusteringInstant(activeTimeline, currentInstant, metaClient.getTimelineLayout().getInstantFactory())
         || COMPACTION_ACTION.equals(currentInstant.getAction())) {
       return getCandidateInstantsForTableServicesCommits(activeTimeline, currentInstant);
     } else {
@@ -72,7 +72,7 @@ public class PreferWriterConflictResolutionStrategy
     List<HoodieInstant> completedCommitsInstants = activeTimeline
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
         .filterCompletedInstants()
-        .findInstantsModifiedAfterByCompletionTime(currentInstant.getTimestamp())
+        .findInstantsModifiedAfterByCompletionTime(currentInstant.getRequestTime())
         .getInstantsOrderedByCompletionTime()
         .collect(Collectors.toList());
     LOG.info(String.format("Instants that may have conflict with %s are %s", currentInstant, completedCommitsInstants));
@@ -91,7 +91,7 @@ public class PreferWriterConflictResolutionStrategy
         activeTimeline
             .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
             .filterCompletedInstants()
-            .findInstantsModifiedAfterByCompletionTime(currentInstant.getTimestamp())
+            .findInstantsModifiedAfterByCompletionTime(currentInstant.getRequestTime())
             .getInstantsAsStream();
 
     // Fetch list of ingestion inflight commits.

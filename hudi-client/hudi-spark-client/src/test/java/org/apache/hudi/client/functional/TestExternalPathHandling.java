@@ -67,6 +67,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 
 /**
@@ -108,7 +109,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     String filePath1 = getPath(partitionPath1, fileName1);
     WriteStatus writeStatus1 = createWriteStatus(instantTime1, partitionPath1, filePath1, fileId1);
     JavaRDD<WriteStatus> rdd1 = createRdd(Collections.singletonList(writeStatus1));
-    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime1), Option.empty());
+    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime1), Option.empty());
     writeClient.commit(instantTime1, rdd1, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,  Collections.emptyMap());
 
     assertFileGroupCorrectness(instantTime1, partitionPath1, filePath1, fileId1, 1);
@@ -123,7 +125,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     JavaRDD<WriteStatus> rdd2 = createRdd(Collections.singletonList(newWriteStatus));
     Map<String, List<String>> partitionToReplacedFileIds = new HashMap<>();
     partitionToReplacedFileIds.put(partitionPath1, Collections.singletonList(fileId1));
-    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime2), Option.empty());
+    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime2), Option.empty());
     writeClient.commit(instantTime2, rdd2, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, partitionToReplacedFileIds);
 
     assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, 1);
@@ -137,7 +140,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     String filePath3 = getPath(partitionPath2, fileName3);
     WriteStatus writeStatus3 = createWriteStatus(instantTime3, partitionPath2, filePath3, fileId3);
     JavaRDD<WriteStatus> rdd3 = createRdd(Collections.singletonList(writeStatus3));
-    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
+    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
     writeClient.commit(instantTime3, rdd3, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, Collections.emptyMap());
 
     assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
@@ -146,10 +150,10 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     String cleanTime = writeClient.createNewInstantTime();
     HoodieCleanerPlan cleanerPlan = cleanerPlan(new HoodieActionInstant(instantTime2, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieInstant.State.COMPLETED.name()), instantTime3,
         Collections.singletonMap(partitionPath1, Collections.singletonList(new HoodieCleanFileInfo(filePath1, false))));
-    metaClient.getActiveTimeline().saveToCleanRequested(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime),
+    metaClient.getActiveTimeline().saveToCleanRequested(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime),
         TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
     HoodieInstant inflightClean = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(
-        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.empty());
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.empty());
     List<HoodieCleanStat> cleanStats = Collections.singletonList(createCleanStat(partitionPath1, Arrays.asList(filePath1), instantTime2, instantTime3));
     HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(
         cleanTime,

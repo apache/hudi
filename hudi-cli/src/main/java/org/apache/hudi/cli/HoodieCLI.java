@@ -101,12 +101,11 @@ public class HoodieCLI {
         .setConf(HoodieCLI.conf.newInstance()).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
         .setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
         .setTimeGeneratorConfig(timeGeneratorConfig == null ? HoodieTimeGeneratorConfig.defaultConfig(basePath) : timeGeneratorConfig)
-        .setLayoutVersion(Option.of(layoutVersion)).build());
+        .setLayoutVersion(Option.ofNullable(layoutVersion)).build());
   }
 
-  public static void connectTo(String basePath, Integer layoutVersion) {
+  public static void connectTo(String basePath) {
     setBasePath(basePath);
-    setLayoutVersion(layoutVersion);
     refreshTableMetadata();
   }
 

@@ -20,6 +20,8 @@ package org.apache.hudi.metaserver.client;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFactoryV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.RetryHelper;
@@ -56,6 +58,7 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
   private boolean isLocal;
   private ThriftHoodieMetaserver.Iface client;
   private TTransport transport;
+  private InstantFactory instantFactory = new InstantFactoryV2();
 
   public HoodieMetaserverClientImp(HoodieMetaserverConfig config) {
     this.config = config;
@@ -110,8 +113,8 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
   @Override
   public List<HoodieInstant> listInstants(String db, String tb, int commitNum) {
     return exceptionWrapper(() -> this.client.listInstants(db, tb, commitNum).stream()
-        .map(EntityConversions::fromTHoodieInstant)
-        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
+        .map(instant -> EntityConversions.fromTHoodieInstant(instant, instantFactory))
+        .sorted(Comparator.comparing(HoodieInstant::getRequestTime).reversed())
         .collect(Collectors.toList())).get();
   }
 

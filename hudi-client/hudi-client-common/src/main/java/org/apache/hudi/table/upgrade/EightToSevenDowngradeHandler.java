@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -72,12 +73,14 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
     List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
     if (!instants.isEmpty()) {
+      InstantFileNameFactory instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameFactory();
       context.map(instants, instant -> {
-        if (instant.getFileName().contains(UNDERSCORE)) {
+        String fileName = instantFileNameFactory.getFileName(instant);
+        if (fileName.contains(UNDERSCORE)) {
           try {
             // Rename the metadata file name from the ${instant_time}_${completion_time}.action[.state] format in version 1.x to the ${instant_time}.action[.state] format in version 0.x.
-            StoragePath fromPath = new StoragePath(metaClient.getMetaPath(), instant.getFileName());
-            StoragePath toPath = new StoragePath(metaClient.getMetaPath(), instant.getFileName().replaceAll(UNDERSCORE + "\\d+", ""));
+            StoragePath fromPath = new StoragePath(metaClient.getMetaPath(), fileName);
+            StoragePath toPath = new StoragePath(metaClient.getMetaPath(), fileName.replaceAll(UNDERSCORE + "\\d+", ""));
             boolean success = metaClient.getStorage().rename(fromPath, toPath);
             // TODO: We need to rename the action-related part of the metadata file name here when we bring separate action name for clustering/compaction in 1.x as well.
             if (!success) {

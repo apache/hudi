@@ -45,11 +45,11 @@ public class HoodieSparkMergeOnReadTableCompactor<T>
   public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
     HoodieInstant requestedCompactionInstantTime = WriteOperationType.COMPACT.equals(operationType)
-        ? HoodieTimeline.getCompactionRequestedInstant(instantTime)
-        : HoodieTimeline.getLogCompactionRequestedInstant(instantTime);
+        ? table.getInstantFactory().getCompactionRequestedInstant(instantTime)
+        : table.getInstantFactory().getLogCompactionRequestedInstant(instantTime);
     if (!pendingCompactionTimeline.containsInstant(requestedCompactionInstantTime)) {
       throw new IllegalStateException(
-          "No Compaction request available at " + requestedCompactionInstantTime.getTimestamp() + " to run compaction");
+          "No Compaction request available at " + requestedCompactionInstantTime.getRequestTime() + " to run compaction");
     }
   }
 

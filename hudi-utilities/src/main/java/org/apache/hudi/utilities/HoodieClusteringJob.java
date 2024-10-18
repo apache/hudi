@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -217,7 +217,7 @@ public class HoodieClusteringJob {
         Option<HoodieInstant> firstClusteringInstant =
             metaClient.getActiveTimeline().getFirstPendingClusterInstant();
         if (firstClusteringInstant.isPresent()) {
-          cfg.clusteringInstantTime = firstClusteringInstant.get().getTimestamp();
+          cfg.clusteringInstantTime = firstClusteringInstant.get().getRequestTime();
           LOG.info("Found the earliest scheduled clustering instant which will be executed: "
               + cfg.clusteringInstantTime);
         } else {
@@ -266,11 +266,11 @@ public class HoodieClusteringJob {
 
         if (lastClusterOpt.isPresent()) {
           HoodieInstant inflightClusteringInstant = lastClusterOpt.get();
-          Date clusteringStartTime = HoodieActiveTimeline.parseDateFromInstantTime(inflightClusteringInstant.getTimestamp());
+          Date clusteringStartTime = ActiveTimelineUtils.parseDateFromInstantTime(inflightClusteringInstant.getRequestTime());
           if (clusteringStartTime.getTime() + cfg.maxProcessingTimeMs < System.currentTimeMillis()) {
             // if there has failed clustering, then we will use the failed clustering instant-time to trigger next clustering action which will rollback and clustering.
             LOG.info("Found failed clustering instant at : " + inflightClusteringInstant + "; Will rollback the failed clustering and re-trigger again.");
-            instantTime = Option.of(inflightClusteringInstant.getTimestamp());
+            instantTime = Option.of(inflightClusteringInstant.getRequestTime());
           } else {
             LOG.info(inflightClusteringInstant + " might still be in progress, will trigger a new clustering job.");
           }
