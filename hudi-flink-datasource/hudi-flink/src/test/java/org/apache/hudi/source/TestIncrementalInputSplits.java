@@ -18,10 +18,12 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -35,8 +37,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
+import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -44,8 +49,11 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
+import org.apache.flink.table.functions.FunctionIdentifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -331,12 +339,14 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     testData.addAll(TestData.DATA_SET_INSERT.stream().collect(Collectors.toList()));
     testData.addAll(TestData.DATA_SET_INSERT_PARTITION_IS_NULL.stream().collect(Collectors.toList()));
     TestData.writeData(testData, conf);
-    PartitionPruners.PartitionPruner partitionPruner = PartitionPruners.getInstance(
-        Collections.singletonList(partitionEvaluator),
-        Collections.singletonList("partition"),
-        Collections.singletonList(DataTypes.STRING()),
-        PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH,
-        false);
+    PartitionPruners.PartitionPruner partitionPruner =
+        PartitionPruners.builder()
+            .partitionEvaluators(Collections.singletonList(partitionEvaluator))
+            .partitionKeys(Collections.singletonList("partition"))
+            .partitionTypes(Collections.singletonList(DataTypes.STRING()))
+            .defaultParName(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH)
+            .hivePartition(false)
+            .build();
     IncrementalInputSplits iis = IncrementalInputSplits.builder()
         .conf(conf)
         .path(new Path(basePath))
@@ -346,6 +356,51 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     IncrementalInputSplits.Result result = iis.inputSplits(metaClient, null, false);
     List<String> partitions = getFilteredPartitions(result);
     assertEquals(expectedPartitions, partitions);
+  }
+
+  @Test
+  void testInputSplitsWithPartitionStatsPruner() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_PARTITION_DATA_SKIPPING_ENABLED, true);
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
+    DataPruner dataPruner =
+        DataPruner.newInstance(Arrays.asList(
+            new CallExpression(
+                FunctionIdentifier.of("greaterThan"),
+                BuiltInFunctionDefinitions.GREATER_THAN,
+                Arrays.asList(
+                    new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+                    new ValueLiteralExpression("id5", DataTypes.STRING().notNull())
+                ),
+                DataTypes.BOOLEAN()),
+            new CallExpression(
+                FunctionIdentifier.of("lessThan"),
+                BuiltInFunctionDefinitions.LESS_THAN,
+                Arrays.asList(
+                    new FieldReferenceExpression("age", DataTypes.INT(), 2, 2),
+                    new ValueLiteralExpression(30, DataTypes.INT().notNull())
+                ),
+                DataTypes.BOOLEAN())));
+
+    PartitionPruners.PartitionPruner partitionPruner =
+        PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(basePath).conf(conf).dataPruner(dataPruner).build();
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .partitionPruner(partitionPruner)
+        .build();
+    metaClient = HoodieTableMetaClient.builder()
+        .setStorage(new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf()))
+        .setBasePath(basePath)
+        .build();
+    IncrementalInputSplits.Result result = iis.inputSplits(metaClient, null, false);
+    List<String> partitions = getFilteredPartitions(result);
+    assertEquals(Arrays.asList("par3"), partitions);
   }
 
   @Test
