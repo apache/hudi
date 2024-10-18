@@ -289,13 +289,13 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           }
           Comparable deleteOrderingVal = readerContext.getOrderingValue(
               Option.empty(), Collections.emptyMap(), readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
-          // Checks the ordering value does not equal to 0
-          // because we use 0 as the default value which means natural order
-          boolean chooseExisting = !deleteOrderingVal.equals(orderingFieldDefault)
-              && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-              && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
+          // Here existing record represents newer record with the same key, which can be a delete or non-delete record.
+          // Choose the newer record if
+          // 1. the delete record uses natural order; or
+          // 2. the delete record has less than or equal ordering value.
+          boolean chooseExisting = deleteOrderingVal.equals(orderingFieldDefault)
+              || (ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal) && deleteOrderingVal.compareTo(existingOrderingVal) <= 0);
           if (chooseExisting) {
-            // The DELETE message is obsolete if the old message has greater orderingVal.
             return Option.empty();
           }
       }
