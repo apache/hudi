@@ -26,17 +26,32 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.SaveMode
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.slf4j.LoggerFactory
+
+import scala.collection.convert.ImplicitConversions.`iterable AsScalaIterable`
+import scala.jdk.CollectionConverters.asJavaIterableConverter
 
 class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
-  @Test
-  def showDeleteIsInconsistent(): Unit = {
-    val merger = classOf[DefaultSparkRecordMerger].getName
-    val useFGReader = "true"
-    // val useFGReader = "false"
-    // val tableType = "COPY_ON_WRITE"
-    val tableType = "MERGE_ON_READ"
+  val LOG = LoggerFactory.getLogger(classOf[TestDeleteRecordLogic])
+  val expected = Seq(
+    (11, "1", "rider-X", "driver-X", 19.1, 9),
+    (14, "5", "rider-Z", "driver-Z", 17.85, 3),
+    (-7, "4", "rider-DDD", "driver-DDD", 20.0, 1),
+    (10, "3", "rider-C", "driver-C", 33.9, 10),
+    (10, "2", "rider-B", "driver-B", 27.7, 1))
 
+  @ParameterizedTest
+  @MethodSource(Array("provideParams"))
+  def showDeleteIsInconsistent(useFgReader: String, tableType: String, recordType: String): Unit = {
+    LOG.info(
+      "Testing: {} with file group reader {} and record type: {}",
+      tableType, useFgReader, recordType)
+
+    val merger = classOf[DefaultSparkRecordMerger].getName
     val columns = Seq("ts", "key", "rider", "driver", "fare", "number")
     val data = Seq(
       (10, "1", "rider-A", "driver-A", 19.10, 7),
@@ -138,7 +153,29 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
       option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
       option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "false").load(basePath)
-    val finalDf = df.select("ts", "key", "rider", "driver", "fare", "number")
-    finalDf.show(100,false)
+    val finalDf = df.select("ts", "key", "rider", "driver", "fare", "number").sort("ts")
+
+    val expectedDf = spark.createDataFrame(expected).toDF(columns: _*).sort("ts")
+    val expectedMinusActual = expectedDf.except(finalDf)
+    val actualMinusExpected = finalDf.except(expectedDf)
+
+    expectedMinusActual.show(false)
+    actualMinusExpected.show(false)
+
+    assertTrue(expectedMinusActual.isEmpty && actualMinusExpected.isEmpty)
+  }
+}
+
+object TestDeleteRecordLogic {
+  def provideParams(): java.util.List[Arguments] = {
+    java.util.Arrays.asList(
+      Arguments.of("false", "COPY_ON_WRITE", "AVRO"),
+      Arguments.of("false", "COPY_ON_WRITE", "SPARK"),
+      Arguments.of("false", "MERGE_ON_READ", "AVRO"),
+      Arguments.of("false", "MERGE_ON_READ", "SPARK"),
+      Arguments.of("true", "COPY_ON_WRITE", "AVRO"),
+      Arguments.of("true", "COPY_ON_WRITE", "SPARK"),
+      Arguments.of("true", "MERGE_ON_READ", "AVRO"),
+      Arguments.of("true", "MERGE_ON_READ", "SPARK"))
   }
 }
