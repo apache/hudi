@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -36,7 +35,6 @@ import org.apache.avro.Schema;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -44,7 +42,7 @@ import java.util.stream.Collectors;
 import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -104,10 +102,10 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
         //       it since these records will be put into records(Map).
         HoodieRecord finalRecord = latestHoodieRecord.copy();
 
-        // Handle delete lost for MOR tables.
+        // Reserve the delete information.
         if (prevRecord.isDelete(readerSchema, this.getPayloadProps())
-            || (prevRecord.getMetadata().isPresent() && prevRecord.getMetaDataInfo(INTERNAL_META_ORDERING_FIELD).isPresent())) {
-          finalRecord.addMetadata(INTERNAL_META_ORDERING_FIELD, HoodieReaderContext.maxValue(orderingFieldType));
+            || (prevRecord.getMetadata().isPresent() && prevRecord.getMetaDataInfo(INTERNAL_META_OPERATION).isPresent())) {
+          finalRecord.addMetadata(INTERNAL_META_OPERATION, "DELETE_IN_BETWEEN");
         }
         records.put(key, finalRecord);
       }

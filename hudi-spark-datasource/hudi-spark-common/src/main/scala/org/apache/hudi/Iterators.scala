@@ -302,7 +302,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
     //       on the record from the Delta Log
 
     // Delete records are in-between; no merge is needed.
-    if (newRecord.getMetaDataInfo(HoodieReaderContext.INTERNAL_META_ORDERING_FIELD).isPresent) {
+    if (newRecord.getMetaDataInfo(HoodieReaderContext.INTERNAL_META_OPERATION).isPresent) {
       recordMerger.getRecordType match {
         case HoodieRecordType.SPARK => {
           val schema = HoodieInternalRowUtils.getCachedSchema(logFileReaderAvroSchema)
