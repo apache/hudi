@@ -21,10 +21,12 @@ import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.model.HoodieAvroRecordMerger
+import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, RECORD_MERGE_MODE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -742,7 +744,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
+      HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
+      RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
+      RECORD_MERGER_STRATEGY.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID,
 
       // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
       //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'

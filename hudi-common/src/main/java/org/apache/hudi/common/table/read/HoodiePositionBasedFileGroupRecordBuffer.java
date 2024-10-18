@@ -19,10 +19,10 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -68,11 +68,11 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
   public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                                   HoodieTableMetaClient hoodieTableMetaClient,
+                                                  RecordMergeMode recordMergeMode,
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
-                                                  HoodieRecordMerger recordMerger,
                                                   TypedProperties props) {
-    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger, props);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props);
   }
 
   @Override
@@ -176,7 +176,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       case OVERWRITE_WITH_LATEST:
         for (Long recordPosition : recordPositions) {
           records.putIfAbsent(recordPosition,
-              Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", orderingFieldDefault, orderingFieldType)));
+              Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", orderingFieldDefault, orderingFieldTypeOpt)));
         }
         return;
       case EVENT_TIME_ORDERING:
@@ -199,7 +199,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     if (recordOpt.isPresent()) {
       String recordKey = recordOpt.get().getRecordKey();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue(), orderingFieldType)));
+          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue() == null ? orderingFieldDefault : recordOpt.get().getOrderingValue(), orderingFieldTypeOpt)));
     }
   }
 

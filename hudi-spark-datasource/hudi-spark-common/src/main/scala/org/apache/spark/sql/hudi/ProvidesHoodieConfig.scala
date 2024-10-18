@@ -21,8 +21,8 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, TypedProperties}
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, WriteOperationType}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, RecordMergeMode, TypedProperties}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
@@ -32,6 +32,7 @@ import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.keygen.{BaseKeyGenerator, ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -48,6 +49,7 @@ import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -284,8 +286,23 @@ trait ProvidesHoodieConfig extends Logging {
       }
     }
 
+    val (recordMergeMode, recordMergeStrategy) = if (payloadClassName.equals(classOf[ValidateDuplicateKeyPayload].getCanonicalName)) {
+      (RecordMergeMode.CUSTOM.name(), HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)
+    } else {
+      (RecordMergeMode.EVENT_TIME_ORDERING.name(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+    }
+
+    if (tableConfig.getPayloadClass.equals(classOf[DefaultHoodieRecordPayload].getCanonicalName) &&
+        tableConfig.getRecordMergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING)) {
+      tableConfig.clearValue(HoodieTableConfig.PAYLOAD_CLASS_NAME)
+      tableConfig.clearValue(HoodieTableConfig.RECORD_MERGE_MODE)
+      tableConfig.clearValue(HoodieTableConfig.RECORD_MERGER_STRATEGY)
+    }
+
     val defaultOpts = Map(
-      PAYLOAD_CLASS_NAME.key -> payloadClassName,
+      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> payloadClassName,
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key -> recordMergeMode,
+      DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key() -> recordMergeStrategy,
       // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
       //       for the table
       HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(combineBeforeInsert),

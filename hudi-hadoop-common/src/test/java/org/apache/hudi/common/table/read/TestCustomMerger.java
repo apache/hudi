@@ -22,9 +22,11 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
@@ -48,6 +50,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.AVRO;
@@ -59,6 +62,16 @@ import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.R
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
+
+  @Override
+  protected Properties getMetaProps() {
+    Properties metaProps =  super.getMetaProps();
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), CustomAvroMerger.KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY);
+    metaProps.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
+    return metaProps;
+  }
+
   @BeforeAll
   public static void setUp() throws IOException {
     // Enable our custom merger.
