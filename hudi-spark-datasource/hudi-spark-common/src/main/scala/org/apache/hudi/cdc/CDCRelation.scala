@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils._
 import org.apache.hudi.common.table.log.InstantRange
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.internal.schema.InternalSchema
 
@@ -48,7 +49,8 @@ class CDCRelation(
     metaClient: HoodieTableMetaClient,
     startInstant: String,
     endInstant: String,
-    options: Map[String, String]
+    options: Map[String, String],
+    rangeType: RangeType = InstantRange.RangeType.OPEN_CLOSED
 ) extends BaseRelation with PrunedFilteredScan with Logging {
 
   imbueConfigs(sqlContext)
@@ -80,7 +82,7 @@ class CDCRelation(
         .startInstant(startInstant)
         .endInstant(endInstant)
         .nullableBoundary(true)
-        .rangeType(InstantRange.RangeType.OPEN_CLOSED).build(),
+        .rangeType(rangeType).build(),
       false)
 
   override final def needConversion: Boolean = false
@@ -186,7 +188,8 @@ object CDCRelation {
   def getCDCRelation(
       sqlContext: SQLContext,
       metaClient: HoodieTableMetaClient,
-      options: Map[String, String]): CDCRelation = {
+      options: Map[String, String],
+      rangeType: RangeType = RangeType.OPEN_CLOSED): CDCRelation = {
 
     if (!isCDCEnabled(metaClient)) {
       throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePath}")
@@ -202,7 +205,7 @@ object CDCRelation {
       throw new HoodieException(s"This is not a valid range between $startingInstant and $endingInstant")
     }
 
-    new CDCRelation(sqlContext, metaClient, startingInstant, endingInstant, options)
+    new CDCRelation(sqlContext, metaClient, startingInstant, endingInstant, options, rangeType)
   }
 
   def getTimestampOfLatestInstant(metaClient: HoodieTableMetaClient): String = {

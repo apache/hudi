@@ -22,7 +22,7 @@ import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.util.TablePathUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StoragePath
@@ -78,8 +78,8 @@ class HoodieStreamSource(
           INIT_OFFSET
         case HoodieLatestOffsetRangeLimit =>
           getLatestOffset.getOrElse(INIT_OFFSET)
-        case HoodieSpecifiedOffsetRangeLimit(instantTime) =>
-          HoodieSourceOffset(instantTime)
+        case HoodieSpecifiedOffsetRangeLimit(completionTime) =>
+          HoodieSourceOffset(completionTime)
       }
       metadataLog.add(0, offset)
       logInfo(s"The initial offset is $offset")
@@ -125,12 +125,13 @@ class HoodieStreamSource(
       sqlContext.internalCreateDataFrame(
         sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema, isStreaming = true)
     } else {
+      val (startCompletionTime, rangeType) = getStartCompletionTimeAndRangeType(startOffset)
       if (isCDCQuery) {
         val cdcOptions = Map(
-          DataSourceReadOptions.BEGIN_COMPLETION_TIME.key() -> startCompletionTime(startOffset),
+          DataSourceReadOptions.BEGIN_COMPLETION_TIME.key() -> startCompletionTime,
           DataSourceReadOptions.END_COMPLETION_TIME.key() -> endOffset.completionTime
         )
-        val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
+        val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions, rangeType)
           .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
 
         sqlContext.sparkSession.internalCreateDataFrame(rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)
@@ -138,19 +139,19 @@ class HoodieStreamSource(
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-          DataSourceReadOptions.BEGIN_COMPLETION_TIME.key -> startCompletionTime(startOffset),
+          DataSourceReadOptions.BEGIN_COMPLETION_TIME.key -> startCompletionTime,
           DataSourceReadOptions.END_COMPLETION_TIME.key -> endOffset.completionTime
         )
 
         val rdd = tableType match {
           case HoodieTableType.COPY_ON_WRITE =>
             val serDe = sparkAdapter.createSparkRowSerDe(schema)
-            new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
+            new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient, rangeType)
               .buildScan()
               .map(serDe.serializeRow)
           case HoodieTableType.MERGE_ON_READ =>
             val requiredColumns = schema.fields.map(_.name)
-            new MergeOnReadIncrementalRelation(sqlContext, incParams, metaClient, Some(schema))
+            new MergeOnReadIncrementalRelation(sqlContext, incParams, metaClient, Some(schema), rangeType = rangeType)
               .buildScan(requiredColumns, Array.empty[Filter])
               .asInstanceOf[RDD[InternalRow]]
           case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
@@ -160,11 +161,10 @@ class HoodieStreamSource(
     }
   }
 
-  private def startCompletionTime(startOffset: HoodieSourceOffset): String = {
+  private def getStartCompletionTimeAndRangeType(startOffset: HoodieSourceOffset): (String, RangeType) = {
     startOffset match {
-      case INIT_OFFSET => startOffset.completionTime
-      case HoodieSourceOffset(completionTime) =>
-        HoodieInstantTimeGenerator.instantTimePlusMillis(completionTime, 1)
+      case INIT_OFFSET => (startOffset.completionTime, RangeType.CLOSED_CLOSED)
+      case HoodieSourceOffset(completionTime) => (completionTime, RangeType.OPEN_CLOSED)
       case _=> throw new IllegalStateException("UnKnow offset type.")
     }
   }

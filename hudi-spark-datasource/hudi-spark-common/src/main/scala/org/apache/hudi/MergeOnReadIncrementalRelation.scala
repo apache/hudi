@@ -21,7 +21,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.log.InstantRange
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata, HollowCommitHandling}
@@ -51,7 +51,8 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
                                           override val optParams: Map[String, String],
                                           override val metaClient: HoodieTableMetaClient,
                                           private val userSchema: Option[StructType],
-                                          private val prunedDataSchema: Option[StructType] = None)
+                                          private val prunedDataSchema: Option[StructType] = None,
+                                          override val rangeType: RangeType = RangeType.CLOSED_CLOSED)
   extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
     with HoodieIncrementalRelationTrait {
 
@@ -199,12 +200,14 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       || affectedFilesInCommits.asScala.exists(fileStatus => !metaClient.getStorage.exists(fileStatus.getPath)))
   }
 
+  protected val rangeType: RangeType
+
   protected lazy val queryContext: IncrementalQueryAnalyzer.QueryContext =
     IncrementalQueryAnalyzer.builder()
       .metaClient(metaClient)
       .beginCompletionTime(optParams(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key))
       .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_COMPLETION_TIME.key, null))
-      .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
+      .rangeType(rangeType)
       .build()
       .analyze()
 

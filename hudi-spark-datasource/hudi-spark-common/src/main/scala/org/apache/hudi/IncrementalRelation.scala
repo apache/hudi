@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
@@ -56,7 +57,8 @@ import scala.collection.mutable
 class IncrementalRelation(val sqlContext: SQLContext,
                           val optParams: Map[String, String],
                           val userSchema: Option[StructType],
-                          val metaClient: HoodieTableMetaClient) extends BaseRelation with TableScan {
+                          val metaClient: HoodieTableMetaClient,
+                          val rangeType: RangeType = RangeType.CLOSED_CLOSED) extends BaseRelation with TableScan {
 
   private val log = LoggerFactory.getLogger(classOf[IncrementalRelation])
 
@@ -83,7 +85,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       .metaClient(metaClient)
       .beginCompletionTime(optParams(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key))
       .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_COMPLETION_TIME.key, null))
-      .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
+      .rangeType(rangeType)
       .build()
       .analyze()
 
