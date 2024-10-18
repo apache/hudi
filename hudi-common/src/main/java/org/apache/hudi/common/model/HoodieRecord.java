@@ -440,7 +440,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   public Option<Object> getMetaDataInfo(String key) {
-    if (metaData!= null && metaData.isPresent()) {
+    if (metaData != null && metaData.isPresent()) {
       return Option.ofNullable(metaData.get().getOrDefault(key, null));
     }
     return Option.empty();
