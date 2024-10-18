@@ -274,8 +274,13 @@ case class HoodieFileIndex(spark: SparkSession,
                 .collect(Collectors.toSet[String])
               val baseFileStatusOpt = getBaseFileInfo(Option.apply(fs.getBaseFile.orElse(null)))
               baseFileStatusOpt.exists(f => fileSliceFiles.add(f.getPath.getName))
-              // NOTE: This predicate is true when {@code Option} is empty
-              candidateFilesNamesOpt.forall(files => files.exists(elem => fileSliceFiles.contains(elem)))
+              if (candidateFilesNamesOpt.isDefined) {
+                // if any file in the file slice is part of candidate file names, we need to inclue the file slice.
+                // in other words, if all files in the file slice is not present in candidate file names, we can filter out the file slice.
+                fileSliceFiles.stream().filter(fileSliceFile => candidateFilesNamesOpt.get.contains(fileSliceFile)).findAny().isPresent
+              } else {
+                true
+              }
             })
           }
 
