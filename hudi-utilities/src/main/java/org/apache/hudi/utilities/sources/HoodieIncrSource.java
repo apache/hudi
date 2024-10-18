@@ -49,7 +49,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -236,7 +235,7 @@ public class HoodieIncrSource extends RowSource {
               .map(HoodieInstant::getTimestamp)
               .collect(Collectors.toList());
         } else {
-          endCompletionTime = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
+          endCompletionTime = queryContext.getMaxCompletionTime();
         }
       }
 
@@ -248,8 +247,8 @@ public class HoodieIncrSource extends RowSource {
     } else {
       // normal incremental query
       String beginCompletionTime = queryContext.getInstants().stream()
+          .min(HoodieInstant.COMPLETION_TIME_COMPARATOR)
           .map(HoodieInstant::getCompletionTime)
-          .min(Comparator.naturalOrder())
           .get();
 
       source = reader
