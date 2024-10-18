@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -62,6 +63,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import scala.Function1;
@@ -209,7 +211,14 @@ public class SparkMetadataWriterUtils {
     StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
     Function1<GenericRecord, Row> converterToRow = AvroConversionUtils.createConverterToRow(schema, structType);
     List<Row> avroRecords = records.stream()
-        .map(r -> (GenericRecord) r.getData())
+        .map(r -> {
+          try {
+            return (GenericRecord) (r.getData() instanceof GenericRecord ? r.getData()
+                : ((HoodieRecordPayload) r.getData()).getInsertValue(schema, new Properties()).get());
+          } catch (IOException e) {
+            throw new HoodieIOException("Could not fetch record payload");
+          }
+        })
         .map(converterToRow::apply)
         // .map(row -> RowFactory.create(path, row))
         .collect(Collectors.toList());
