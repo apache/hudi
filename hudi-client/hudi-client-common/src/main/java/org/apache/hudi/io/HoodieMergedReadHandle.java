@@ -46,7 +46,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -167,8 +167,9 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
         String key = record.getRecordKey();
         if (deltaRecordMap.containsKey(key)) {
           deltaRecordKeys.remove(key);
-          // This orderingValue stored in metadata means deletes are in between.
-          if (deltaRecordMap.get(key).getMetaDataInfo(INTERNAL_META_ORDERING_FIELD).isPresent()) {
+          // When internal operation exists, it means there are at least one delete in between.
+          // Therefore, no need to merge with the base record.
+          if (deltaRecordMap.get(key).getMetaDataInfo(INTERNAL_META_OPERATION).isPresent()) {
             mergedRecords.add(deltaRecordMap.get(key));
             continue;
           }

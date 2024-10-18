@@ -292,7 +292,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Option<Map<String, Object>> getMetadata() {
+  public Option<Map<String, String>> getMetadata() {
     // TODO HUDI-5282 support metaData
     return Option.empty();
   }
