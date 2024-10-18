@@ -32,7 +32,7 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
@@ -99,6 +99,19 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
+
+  def considerConvertToHadoopFsRelation: BaseRelation = {
+    if (fileIndex.enableOptimizedReadForMorWithAllBaseFileOnlySlice && fileIndex.isBaseFileOnlyForCachedFileSlices) {
+      val relation = BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths, None, Some(fileIndex))
+      if (relation.hasSchemaOnRead) {
+        relation
+      } else {
+        relation.toHadoopFsRelation
+      }
+    } else {
+      this
+    }
+  }
 
   /**
    * Determines whether relation's schema could be pruned by Spark's Optimizer

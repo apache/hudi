@@ -440,13 +440,15 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
 
   /**
    * Corrupt a parquet file by deleting it and replacing
-   * it with an empty file
+   * it with an invalid data file
    */
   protected static void corruptFile(Path path) {
     File fileToCorrupt = path.toFile();
     fileToCorrupt.delete();
     try {
       fileToCorrupt.createNewFile();
+      // write invalid data
+      Files.write(path, "corrupted".getBytes());
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
