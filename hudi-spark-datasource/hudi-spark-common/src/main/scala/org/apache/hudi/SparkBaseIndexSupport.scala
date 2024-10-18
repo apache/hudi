@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
+import java.util.Collections
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
@@ -79,13 +80,18 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
   protected def getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
                                                 includeLogFiles: Boolean = false): (Set[String], Set[String]) = {
-    val prunedPartitions : scala.collection.mutable.Set[String] = scala.collection.mutable.Set.empty[String]
+    val prunedPartitions = prunedPartitionsAndFileSlices.flatMap{ entry =>
+      if (entry._1.isDefined) {
+        Seq(entry._1.get.path)
+      } else {
+        Seq.empty[String]
+      }
+    }
     val prunedFiles = prunedPartitionsAndFileSlices
       .flatMap {
         case (_, fileSlices) => fileSlices
       }
       .flatMap { fileSlice =>
-        prunedPartitions.add(fileSlice.getPartitionPath)
         val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
         val logFiles = if (includeLogFiles) {
           fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toList
