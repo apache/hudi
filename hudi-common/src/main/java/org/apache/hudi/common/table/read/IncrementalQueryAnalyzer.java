@@ -425,7 +425,7 @@ public class IncrementalQueryAnalyzer {
      * Returns the latest instant time which should be included physically in reading.
      */
     public String getLastInstant() {
-      ValidationUtils.checkArgument(!this.instants.isEmpty());
+      ValidationUtils.checkState(!this.instants.isEmpty());
       return this.instants.get(this.instants.size() - 1);
     }
 
