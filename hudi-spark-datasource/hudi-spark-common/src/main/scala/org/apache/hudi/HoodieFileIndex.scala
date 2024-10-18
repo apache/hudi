@@ -147,6 +147,17 @@ case class HoodieFileIndex(spark: SparkSession,
         files
       }).toSeq
   }
+  // ---------- Inject for mor table's snapshot query optimization ---------- //
+  // TODO: ugly implementation, need to refactor
+
+  def isBaseFileOnlyForCachedFileSlices: Boolean = !includeLogFiles || isAllCachedInputFileSlicesBaseFileOnly
+
+  def enableOptimizedReadForMorWithAllBaseFileOnlySlice: Boolean = {
+    options.get(DataSourceReadOptions.ENABLE_OPTIMIZED_READ_FOR_MOR_WITH_ALL_BASE_FILE_ONLY_SLICE.key)
+      .map(_.toBoolean).getOrElse(DataSourceReadOptions.ENABLE_OPTIMIZED_READ_FOR_MOR_WITH_ALL_BASE_FILE_ONLY_SLICE.defaultValue())
+  }
+
+  // ---------- Inject for mor table's snapshot query optimization ---------- //
 
   /**
    * Invoked by Spark to fetch list of latest base files per partition.

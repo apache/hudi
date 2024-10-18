@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
+import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex, MergeOnReadSnapshotRelation}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogStatistics
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, ExpressionSet, NamedExpression, PredicateHelper, SubqueryExpression}
@@ -53,7 +53,8 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
       // instead we simply just refresh the index and update the stats
       fileIndex.listFiles(partitionPruningFilters, Seq())
 
-      if (partitionPruningFilters.nonEmpty) {
+      // FileIndex push down the partition pruning filters
+      val catalogTableOpt = if (partitionPruningFilters.nonEmpty) {
         // Change table stats based on the sizeInBytes of pruned files
         val filteredStats = FilterEstimation(Filter(partitionPruningFilters.reduce(And), lr)).estimate
         val colStats = filteredStats.map {
@@ -69,12 +70,34 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
               rowCount = filteredStats.flatMap(_.rowCount),
               colStats = colStats.getOrElse(Map.empty)))
         ))
-
-        val prunedLogicalRelation = lr.copy(catalogTable = tableWithStats)
-        // Keep partition-pruning predicates so that they are visible in physical planning
-        rebuildPhysicalOperation(projects, filters, prunedLogicalRelation)
+        Some(tableWithStats)
       } else {
-        op
+        None
+      }
+
+      // ---------- Inject for mor table's snapshot query optimization ---------- //
+      // TODO: ugly implementation, need to refactor
+      val newRelationOpt: Option[BaseRelation] = lr.relation match {
+        case mor: MergeOnReadSnapshotRelation =>
+          // Try to rebuild relation with [HadoopFsRelation]
+          Some(mor.considerConvertToHadoopFsRelation)
+        case _ =>
+          None
+      }
+      // ---------- Inject for mor table's snapshot query optimization ---------- //
+
+      (catalogTableOpt, newRelationOpt) match {
+        case (Some(table), Some(newRelation)) =>
+          val prunedLogicalRelation = lr.copy(catalogTable = table, relation = newRelation)
+          rebuildPhysicalOperation(projects, filters, prunedLogicalRelation)
+        case (Some(table), None) =>
+          val prunedLogicalRelation = lr.copy(catalogTable = table)
+          rebuildPhysicalOperation(projects, filters, prunedLogicalRelation)
+        case (None, Some(newRelation)) =>
+          val prunedLogicalRelation = lr.copy(relation = newRelation)
+          rebuildPhysicalOperation(projects, filters, prunedLogicalRelation)
+        case _ =>
+          op
       }
   }
 

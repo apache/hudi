@@ -52,8 +52,9 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
                                 override val optParams: Map[String, String],
                                 private val userSchema: Option[StructType],
                                 private val globPaths: Seq[StoragePath],
-                                private val prunedDataSchema: Option[StructType] = None)
-  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema)
+                                private val prunedDataSchema: Option[StructType] = None,
+                                private val fileIndexOpt: Option[HoodieFileIndex] = None)
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema, fileIndexOpt)
     with SparkAdapterSupport {
 
   case class HoodieBaseFileSplit(filePartition: FilePartition) extends HoodieFileSplit

@@ -250,7 +250,13 @@ object DefaultSource {
     val isCdcQuery = queryType == QUERY_TYPE_INCREMENTAL_OPT_VAL &&
       parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
 
-    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+    // ---------- Inject for mor table's snapshot query optimization ---------- //
+    // TODO: ugly implementation, need to refactor
+    val isReadOptimizedForMor = parameters.get(ENABLE_OPTIMIZED_READ_FOR_MOR_WITH_ALL_BASE_FILE_ONLY_SLICE.key()).map(_.toBoolean)
+      .getOrElse(ENABLE_OPTIMIZED_READ_FOR_MOR_WITH_ALL_BASE_FILE_ONLY_SLICE.defaultValue())
+    // ---------- Inject for mor table's snapshot query optimization ---------- //
+
+    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType, isCdcQuery is: $isCdcQuery, isReadOptimizedForMor is: $isReadOptimizedForMor")
 
     // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
     //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that

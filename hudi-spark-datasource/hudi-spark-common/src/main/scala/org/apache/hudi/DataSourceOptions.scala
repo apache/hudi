@@ -220,6 +220,15 @@ object DataSourceReadOptions {
 
   val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 
+  val ENABLE_OPTIMIZED_READ_FOR_MOR_WITH_ALL_BASE_FILE_ONLY_SLICE: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.read.optimized.mor.with.all.base.file.only.slice.enable")
+    .defaultValue(true)
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("When set to true, optimized read for MOR table with all base file only slice will be enabled. " +
+      "This config is used to optimize the read performance for MOR table with all base file only slice. " +
+      "When set to true, the read performance will be improved by pass HadoopFsRelation to the Spark SQL engine ")
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
