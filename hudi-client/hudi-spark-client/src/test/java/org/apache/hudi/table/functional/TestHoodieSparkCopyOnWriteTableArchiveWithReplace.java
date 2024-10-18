@@ -20,8 +20,8 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -50,20 +50,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("functional")
 public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClientFunctionalTestHarness {
 
-  public String basePath() {
-    return "file:///home/balaji/hudi_0_15_table/";
-  }
-
   @ParameterizedTest
-  @ValueSource(booleans = {false})
+  @ValueSource(booleans = {false, true})
   public void testDeletePartitionAndArchive(boolean metadataEnabled) throws IOException {
-    HoodieTableMetaClient metaClient =  HoodieTableMetaClient.builder().setConf(new HoodieSparkEngineContext(jsc(), sqlContext()).getStorageConf())
-        .setBasePath(basePath())
-        .build();
-    HoodieWriteConfig writeConfig = getConfigBuilder(true).withWriteTableVersion(6)
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
+    HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataEnabled).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataEnabled).build())
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
          HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(DEFAULT_PARTITION_PATHS)) {
