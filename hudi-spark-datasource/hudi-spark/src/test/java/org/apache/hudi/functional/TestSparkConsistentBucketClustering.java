@@ -320,10 +320,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
   }
 
   private List<Row> readRecords() {
-    Dataset<Row> roViewDF = sparkSession
-        .read()
-        .format("hudi")
-        .load(basePath + "/*/*/*/*");
+    Dataset<Row> roViewDF = sparkSession.read().format("hudi").load(basePath);
     roViewDF.createOrReplaceTempView("hudi_ro_table");
     return sparkSession.sqlContext().sql("select * from hudi_ro_table").collectAsList();
   }

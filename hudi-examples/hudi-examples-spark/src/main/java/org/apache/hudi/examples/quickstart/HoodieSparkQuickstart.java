@@ -152,10 +152,7 @@ public final class HoodieSparkQuickstart {
    */
   public static void queryData(SparkSession spark, JavaSparkContext jsc, String tablePath, String tableName,
                                HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
-    Dataset<Row> roViewDF = spark
-        .read()
-        .format("hudi")
-        .load(tablePath + "/*/*/*/*");
+    Dataset<Row> roViewDF = spark.read().format("hudi").load(tablePath);
 
     roViewDF.createOrReplaceTempView("hudi_ro_table");
 
@@ -202,7 +199,7 @@ public final class HoodieSparkQuickstart {
    */
   public static Dataset<Row> delete(SparkSession spark, String tablePath, String tableName) {
 
-    Dataset<Row> roViewDF = spark.read().format("hudi").load(tablePath + "/*/*/*/*");
+    Dataset<Row> roViewDF = spark.read().format("hudi").load(tablePath);
     roViewDF.createOrReplaceTempView("hudi_ro_table");
     Dataset<Row> toBeDeletedDf = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table limit 2");
     Dataset<Row> df = toBeDeletedDf.select("uuid", "partitionpath", "ts");
