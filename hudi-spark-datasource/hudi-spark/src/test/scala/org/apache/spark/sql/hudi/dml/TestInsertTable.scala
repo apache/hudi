@@ -1702,7 +1702,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | (6, 'a1,1', 10, 1000, "2021-01-05"),
                  | (7, 'a1,1', 10, 1000, "2021-01-05"),
                  | (8, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (9, 'a3,3', 30, 3000, "2021-01-05")
+                 | (10, 'a3,3', 30, 3000, "2021-01-05")
                """.stripMargin)
 
             checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(

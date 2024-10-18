@@ -121,9 +121,8 @@ public class TestBucketIdentifier {
     assertEquals("bcd", keys.get(1));
 
     keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd,efg", "partition"), "f1,f2");
-    assertEquals(3, keys.size());
+    assertEquals(2, keys.size());
     assertEquals("abc", keys.get(0));
-    assertEquals("bcd", keys.get(1));
-    assertEquals("efg", keys.get(2));
+    assertEquals("bcd,efg", keys.get(1));
   }
 }
