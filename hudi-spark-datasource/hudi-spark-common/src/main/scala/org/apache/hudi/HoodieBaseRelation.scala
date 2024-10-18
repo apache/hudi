@@ -273,7 +273,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,
       recordMergerImpls = recordMergerImpls,
-      recordMergerStrategy = tableConfig.getRecordMergerStrategy
+      recordMergerStrategy = tableConfig.getRecordMergerStrategyID
     )
   }
 

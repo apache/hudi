@@ -66,7 +66,7 @@ public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
   protected Properties getMetaProps() {
     Properties metaProps =  super.getMetaProps();
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
-    metaProps.setProperty(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), CustomAvroMerger.KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY);
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGER_STRATEGY_ID.key(), CustomAvroMerger.KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY);
     metaProps.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
     return metaProps;
   }

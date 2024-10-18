@@ -1631,7 +1631,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     assertTrue(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
     assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_MODE.key()));
-    assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGER_STRATEGY.key()));
+    assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGER_STRATEGY_ID.key()));
 
     //now create one more deltaStreamer instance and update payload class
     cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,

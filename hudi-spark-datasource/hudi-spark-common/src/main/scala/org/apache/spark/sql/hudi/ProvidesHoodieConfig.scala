@@ -296,13 +296,13 @@ trait ProvidesHoodieConfig extends Logging {
         tableConfig.getRecordMergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING)) {
       tableConfig.clearValue(HoodieTableConfig.PAYLOAD_CLASS_NAME)
       tableConfig.clearValue(HoodieTableConfig.RECORD_MERGE_MODE)
-      tableConfig.clearValue(HoodieTableConfig.RECORD_MERGER_STRATEGY)
+      tableConfig.clearValue(HoodieTableConfig.RECORD_MERGER_STRATEGY_ID)
     }
 
     val defaultOpts = Map(
       DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> payloadClassName,
       DataSourceWriteOptions.RECORD_MERGE_MODE.key -> recordMergeMode,
-      DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key() -> recordMergeStrategy,
+      DataSourceWriteOptions.RECORD_MERGER_STRATEGY_ID.key() -> recordMergeStrategy,
       // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
       //       for the table
       HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(combineBeforeInsert),

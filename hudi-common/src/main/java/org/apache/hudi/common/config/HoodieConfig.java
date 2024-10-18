@@ -73,6 +73,9 @@ public class HoodieConfig implements Serializable {
 
   public <T> void clearValue(ConfigProperty<T> cfg) {
     props.remove(cfg.key());
+    for (String altKey : cfg.getAlternatives()) {
+      props.remove(altKey);
+    }
   }
 
   public void setAll(Properties properties) {

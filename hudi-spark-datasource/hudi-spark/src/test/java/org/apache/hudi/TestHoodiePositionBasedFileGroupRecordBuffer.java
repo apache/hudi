@@ -91,7 +91,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     writeConfigs.put(HoodieWriteConfig.RECORD_MERGE_MODE.key(), mergeMode.name());
     if (mergeMode.equals(RecordMergeMode.CUSTOM)) {
       writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), getCustomPayload());
-      writeConfigs.put(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID);
+      writeConfigs.put(HoodieTableConfig.RECORD_MERGER_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID);
     }
     commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
 
@@ -128,7 +128,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
     if (mergeMode.equals(RecordMergeMode.CUSTOM)) {
       writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), getCustomPayload());
-      writeConfigs.put(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID);
+      writeConfigs.put(HoodieTableConfig.RECORD_MERGER_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID);
     }
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
         ctx,
