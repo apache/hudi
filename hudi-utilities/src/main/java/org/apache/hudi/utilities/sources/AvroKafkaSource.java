@@ -69,7 +69,6 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
   @Deprecated
   public static final String KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA =
       OLD_KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX + "schema";
-  private static final int GROUP_ID_MAX_BYTES_LENGTH = 255;
   private final String deserializerClassName;
 
   //other schema provider may have kafka offsets

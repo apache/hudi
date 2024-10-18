@@ -48,6 +48,7 @@ public abstract class KafkaSource<T> extends Source<T> {
   protected static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
   protected static final String NATIVE_KAFKA_CONSUMER_GROUP_ID = "group.id";
   protected static final String METRIC_NAME_KAFKA_MESSAGE_IN_COUNT = "kafkaMessageInCount";
+  protected static final int GROUP_ID_MAX_BYTES_LENGTH = 255;
 
   protected final HoodieIngestionMetrics metrics;
   protected final SchemaProvider schemaProvider;
