@@ -170,7 +170,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     configMapping.put("hoodie.delete.shuffle.parallelism", "1");
     configMapping.put("hoodie.merge.small.file.group.candidates.limit", "0");
     configMapping.put("hoodie.compact.inline", "false");
-    configMapping.put("hoodie.datasource.write.record.merge.mode", recordMergeMode.name());
+    configMapping.put("hoodie.write.record.merge.mode", recordMergeMode.name());
     if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
       configMapping.put("hoodie.datasource.write.payload.class", getCustomPayload());
     }

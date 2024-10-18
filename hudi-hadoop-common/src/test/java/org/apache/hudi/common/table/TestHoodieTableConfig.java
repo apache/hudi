@@ -20,9 +20,13 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -33,7 +37,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -46,7 +52,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.OVERWRITE_WITH_LATEST;
+import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
@@ -57,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
  * Tests {@link HoodieTableConfig}.
@@ -279,5 +293,90 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
     });
+  }
+
+  private static Stream<Arguments> argumentsForInferringRecordMergeMode() {
+    String defaultPayload = DefaultHoodieRecordPayload.class.getName();
+    String overwritePayload = OverwriteWithLatestAvroPayload.class.getName();
+    String customPayload = "custom_payload";
+    String customStrategy = "custom_strategy";
+
+    Stream<Arguments> arguments = Stream.of(
+        //test empty args with both null and ""
+        arguments(null, null, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+        arguments(null, "", "", false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+
+        //test legal event time ordering combos
+        arguments(EVENT_TIME_ORDERING, null, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, defaultPayload, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, null, DEFAULT_MERGER_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+        arguments(null, defaultPayload, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+        arguments(null, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+        arguments(null, null, DEFAULT_MERGER_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+
+        //test legal overwrite combos
+        arguments(OVERWRITE_WITH_LATEST, null, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
+        arguments(OVERWRITE_WITH_LATEST, overwritePayload, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
+        arguments(OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
+        arguments(OVERWRITE_WITH_LATEST, null, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
+        arguments(null, overwritePayload, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
+        arguments(null, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
+        arguments(null, null, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
+        arguments(OVERWRITE_WITH_LATEST, null, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
+
+        //test legal custom payload combos
+        arguments(CUSTOM, customPayload, null, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID),
+        arguments(CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID),
+        arguments(null, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID),
+        arguments(null, customPayload, null, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID),
+
+        //test legal custom merger combos
+        arguments(CUSTOM, null, customStrategy, false, CUSTOM, defaultPayload, customStrategy),
+        //for now this case is ok but will need to be changed when we add dummy payload for [HUDI-8317]
+        arguments(CUSTOM, defaultPayload, customStrategy, false, CUSTOM, defaultPayload, customStrategy),
+
+        //test illegal combos due to missing info
+        arguments(CUSTOM, null, null, true, null, null, null),
+        arguments(CUSTOM, null, PAYLOAD_BASED_MERGER_STRATEGY_UUID, true, null, null, null),
+
+        //test illegal combos
+        arguments(EVENT_TIME_ORDERING, overwritePayload, null , true, null, null, null),
+        arguments(EVENT_TIME_ORDERING, customPayload, null , true, null, null, null),
+        arguments(EVENT_TIME_ORDERING, null, OVERWRITE_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(EVENT_TIME_ORDERING, null, customStrategy , true, null, null, null),
+        arguments(EVENT_TIME_ORDERING, null, PAYLOAD_BASED_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(OVERWRITE_WITH_LATEST, defaultPayload, null , true, null, null, null),
+        arguments(OVERWRITE_WITH_LATEST, customPayload, null , true, null, null, null),
+        arguments(OVERWRITE_WITH_LATEST, null, DEFAULT_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(OVERWRITE_WITH_LATEST, null, customStrategy , true, null, null, null),
+        arguments(OVERWRITE_WITH_LATEST, null, PAYLOAD_BASED_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(CUSTOM, defaultPayload, null , true, null, null, null),
+        arguments(CUSTOM, overwritePayload, null , true, null, null, null),
+        arguments(CUSTOM, null, DEFAULT_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(CUSTOM, null, OVERWRITE_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(CUSTOM, defaultPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(CUSTOM, overwritePayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(CUSTOM, defaultPayload, OVERWRITE_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(CUSTOM, overwritePayload, DEFAULT_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(null, defaultPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(null, overwritePayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(null, defaultPayload, OVERWRITE_MERGER_STRATEGY_UUID , true, null, null, null),
+        arguments(null, overwritePayload, DEFAULT_MERGER_STRATEGY_UUID , true, null, null, null));
+    return arguments;
+  }
+  @ParameterizedTest
+  @MethodSource("argumentsForInferringRecordMergeMode")
+  public void testInferMergeMode(RecordMergeMode inputMergeMode, String inputPayloadClass, String inputMergeStrategy, boolean shouldThrow,
+                                 RecordMergeMode outputMergeMode, String outputPayloadClass, String outputMergeStrategy) {
+    if (shouldThrow) {
+      assertThrows(IllegalArgumentException.class,
+          () -> HoodieTableConfig.inferCorrectMergingBehavior(inputMergeMode, inputPayloadClass, inputMergeStrategy));
+    } else {
+      Triple<RecordMergeMode, String, String> inferredConfigs = HoodieTableConfig.inferCorrectMergingBehavior(inputMergeMode, inputPayloadClass, inputMergeStrategy);
+      assertEquals(outputMergeMode, inferredConfigs.getLeft());
+      assertEquals(outputPayloadClass, inferredConfigs.getMiddle());
+      assertEquals(outputMergeStrategy, inferredConfigs.getRight());
+    }
   }
 }

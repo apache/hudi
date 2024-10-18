@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -172,16 +171,4 @@ public interface HoodieRecordMerger extends Serializable {
    */
   String getMergingStrategy();
 
-  static String getAvroMergerStrategyFromMergeMode(RecordMergeMode mergeMode) {
-    switch (mergeMode) {
-      case OVERWRITE_WITH_LATEST:
-        return OVERWRITE_MERGER_STRATEGY_UUID;
-      case EVENT_TIME_ORDERING:
-        return DEFAULT_MERGER_STRATEGY_UUID;
-      case CUSTOM:
-        return PAYLOAD_BASED_MERGER_STRATEGY_UUID;
-      default:
-        throw new IllegalStateException("Merge Mode: '" + mergeMode + "' has not been fully implemented.");
-    }
-  }
 }

@@ -76,7 +76,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
         Option.of(merger),
         Option.of(HoodieRecordTestPayload.class.getName()));
     properties.setProperty(
-        "hoodie.datasource.write.record.merge.mode", RecordMergeMode.EVENT_TIME_ORDERING.name());
+        "hoodie.write.record.merge.mode", RecordMergeMode.EVENT_TIME_ORDERING.name());
 
     // -------------------------------------------------------------
     // The test logic is as follows:

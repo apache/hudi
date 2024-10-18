@@ -121,7 +121,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
         Option.empty(), metaClient.getTableConfig()));
     TypedProperties props = new TypedProperties();
-    props.put(HoodieCommonConfig.RECORD_MERGE_MODE.key(), mergeMode.name());
+    props.put("hoodie.write.record.merge.mode", mergeMode.name());
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
     props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), metaClient.getTempFolderPath());
     props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());

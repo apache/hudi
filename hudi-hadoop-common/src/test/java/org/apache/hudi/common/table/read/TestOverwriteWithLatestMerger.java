@@ -71,7 +71,7 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
     readerContext = new HoodieTestReaderContext(
         Option.of(merger),
         Option.of(OverwriteWithLatestAvroPayload.class.getName()));
-    properties.setProperty("hoodie.datasource.write.record.merge.mode", RecordMergeMode.OVERWRITE_WITH_LATEST.name());
+    properties.setProperty("hoodie.write.record.merge.mode", RecordMergeMode.OVERWRITE_WITH_LATEST.name());
 
     // -------------------------------------------------------------
     // The test logic is as follows:

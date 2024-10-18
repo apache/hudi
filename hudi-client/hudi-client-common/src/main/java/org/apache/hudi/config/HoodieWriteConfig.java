@@ -174,26 +174,28 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
   public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
-      .key("hoodie.datasource.write.record.merge.mode")
+      .key("hoodie.write.record.merge.mode")
       .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
 
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
-      .key("hoodie.datasource.write.record.merger.impls")
+      .key("hoodie.write.record.merge.custom.impl.classes")
       .noDefaultValue()
       .markAdvanced()
+      .withAlternatives("hoodie.datasource.write.record.merger.impls")
       .sinceVersion("0.13.0")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
-          + "These merger impls will filter by hoodie.datasource.write.record.merger.strategy "
+          + "These merger impls will filter by hoodie.write.record.merge.strategy "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
 
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
-      .key("hoodie.datasource.write.record.merger.strategy")
+      .key("hoodie.write.record.merge.strategy")
       .noDefaultValue()
       .markAdvanced()
+      .withAlternatives("hoodie.datasource.write.record.merger.strategy")
       .sinceVersion("0.13.0")
-      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.write.record.merge.custom.impl.classes which has the same merger strategy id");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")
@@ -1245,7 +1247,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieRecordMerger getRecordMerger() {
-    return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH), engineType, getString(RECORD_MERGER_IMPLS), getString(RECORD_MERGER_STRATEGY));
+    return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH),
+        engineType, getString(RECORD_MERGER_IMPLS), getString(RECORD_MERGER_STRATEGY));
   }
 
   public String getSchema() {
