@@ -77,13 +77,15 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
   def invalidateCaches(): Unit
 
-  protected def getPrunedFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
-                                   includeLogFiles: Boolean = false): Set[String] = {
-    prunedPartitionsAndFileSlices
+  protected def getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                                includeLogFiles: Boolean = false): (Set[String], Set[String]) = {
+    val prunedPartitions : scala.collection.mutable.Set[String] = scala.collection.mutable.Set.empty[String]
+    val prunedFiles = prunedPartitionsAndFileSlices
       .flatMap {
         case (_, fileSlices) => fileSlices
       }
       .flatMap { fileSlice =>
+        prunedPartitions.add(fileSlice.getPartitionPath)
         val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
         val logFiles = if (includeLogFiles) {
           fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toList
@@ -91,6 +93,8 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
         baseFileOption.map(_.getFileName).toList ++ logFiles
       }
       .toSet
+
+    (prunedPartitions.toSet, prunedFiles)
   }
 
   protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], prunedFileNames: Set[String]): Set[String] = {
