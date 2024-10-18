@@ -205,8 +205,12 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
       String recordKey = recordOpt.get().getRecordKey();
+      Comparable orderingVal = readerContext.getOrderingValue(
+          Option.empty(), Collections.EMPTY_MAP, readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
+      Comparable orderingValApplied =
+          recordOpt.get().getOrderingValue() == null ? orderingVal : recordOpt.get().getOrderingValue();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue() == null ? orderingFieldDefault : recordOpt.get().getOrderingValue(), orderingFieldTypeOpt)));
+          recordKey, recordOpt.get().getPartitionPath(), orderingValApplied, orderingFieldTypeOpt)));
     }
   }
 

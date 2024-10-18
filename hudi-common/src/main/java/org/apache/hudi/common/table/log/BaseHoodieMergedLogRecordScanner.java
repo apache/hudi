@@ -208,12 +208,13 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
     String key = deleteRecord.getRecordKey();
     HoodieRecord oldRecord = records.get(key);
+
+    Comparable deleteOrderingVal = deleteRecord.getOrderingValue() == null ? orderingFieldDefault :  deleteRecord.getOrderingValue();
     if (oldRecord != null) {
       // Merge and store the merged record. The ordering val is taken to decide whether the same key record
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
       // For same ordering values, uses the natural order(arrival time semantics).
       Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
-      Comparable deleteOrderingVal = orderingFieldDefault;
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
       boolean choosePrev = !deleteOrderingVal.equals(orderingFieldDefault)
@@ -227,9 +228,9 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     // Put the DELETE record
     if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
       records.put((K) key, SpillableMapUtils.generateEmptyPayload(key,
-          deleteRecord.getPartitionPath(), orderingFieldDefault, getPayloadClassFQN()));
+          deleteRecord.getPartitionPath(), deleteOrderingVal, getPayloadClassFQN()));
     } else {
-      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, orderingFieldDefault, recordType);
+      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteOrderingVal, recordType);
       records.put((K) key, record);
     }
   }

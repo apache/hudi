@@ -117,12 +117,14 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       return;
     }
 
-    Comparable orderingVal = readerContext.getOrderingValue(
-        Option.empty(), Collections.EMPTY_MAP, readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
+      Comparable orderingVal = readerContext.getOrderingValue(
+          Option.empty(), Collections.EMPTY_MAP, readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
+      Comparable orderingValApplied =
+          recordOpt.get().getOrderingValue() == null ? orderingVal : recordOpt.get().getOrderingValue();
       records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          (String) recordKey, recordOpt.get().getPartitionPath(), orderingVal, orderingFieldTypeOpt)));
+          (String) recordKey, recordOpt.get().getPartitionPath(), orderingValApplied, orderingFieldTypeOpt)));
     }
   }
 
