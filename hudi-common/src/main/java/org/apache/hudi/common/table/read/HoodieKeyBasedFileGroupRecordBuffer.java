@@ -41,7 +41,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -111,15 +111,13 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
-    // Currently we can use processing time for delete records only, if there is an existing record
-    // with the same key for the delete record, we should use it since existing record is new.
-    Comparable orderingVal = readerContext.maxValue(orderingFieldTypeOpt.get());
     if (existingRecordMetadataPair != null) {
-      // When new values are inserted after delete, max value is used to respect event time.
-      existingRecordMetadataPair.getRight().put(INTERNAL_META_ORDERING_FIELD, orderingVal);
+      existingRecordMetadataPair.getRight().put(INTERNAL_META_OPERATION, "DELETE_IN_BETWEEN");
       return;
     }
 
+    Comparable orderingVal = readerContext.getOrderingValue(
+        Option.empty(), Collections.EMPTY_MAP, readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
       records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
