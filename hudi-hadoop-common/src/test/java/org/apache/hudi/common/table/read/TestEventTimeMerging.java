@@ -19,9 +19,11 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieAvroRecordTestMerger;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
@@ -44,6 +46,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
@@ -54,6 +57,16 @@ import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.R
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
+
+  @Override
+  protected Properties getMetaProps() {
+    Properties metaProps =  super.getMetaProps();
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
+    metaProps.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
+    return metaProps;
+  }
+
   @BeforeAll
   public static void setUp() throws IOException {
     // Create dedicated merger to avoid current delete logic holes.
@@ -63,7 +76,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
         Option.of(merger),
         Option.of(HoodieRecordTestPayload.class.getName()));
     properties.setProperty(
-        HoodieCommonConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+        "hoodie.datasource.write.record.merge.mode", RecordMergeMode.EVENT_TIME_ORDERING.name());
 
     // -------------------------------------------------------------
     // The test logic is as follows:
