@@ -609,7 +609,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       List<String> partitions = metadata.getAllPartitionPaths();
       fsView.loadAllPartitions();
       List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-      partitions.forEach(partition -> fsView.getLatestFileSlices(partition).forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+      partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition,
+          dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp())
+          .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
       return partitionFileSlicePairs;
     }
   }
@@ -645,8 +647,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           this.getClass().getSimpleName());
     } else {
       final List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+      String latestCommit = dataMetaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
       for (String partition : partitions) {
-        fsView.getLatestFileSlices(partition).forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs)));
+        fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestCommit).forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs)));
       }
 
       LOG.info("Initializing record index from " + partitionFileSlicePairs.size() + " file slices in "
