@@ -21,7 +21,6 @@ package org.apache.hudi.source;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -33,17 +32,13 @@ import org.apache.hudi.source.stats.ColumnStatsIndices;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
-import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -54,7 +49,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -83,8 +77,8 @@ public class FileIndex implements Serializable {
     this.rowType = rowType;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.tableExists = StreamerUtil.tableExists(path.toString(), hadoopConf);
-    this.metadataConfig = metadataConfig(conf);
-    this.dataPruner = isDataSkippingFeasible(conf.getBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? dataPruner : null;
+    this.metadataConfig = StreamerUtil.metadataConfig(conf);
+    this.dataPruner = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? dataPruner : null;
     this.partitionPruner = partitionPruner;
     this.dataBucket = dataBucket;
   }
@@ -154,6 +148,9 @@ public class FileIndex implements Serializable {
     }
     String[] partitions =
         getOrBuildPartitionPaths().stream().map(p -> fullPartitionPath(path, p)).toArray(String[]::new);
+    if (partitions.length < 1) {
+      return Collections.emptyList();
+    }
     List<StoragePathInfo> allFiles = FSUtils.getFilesInPartitions(
             new HoodieFlinkEngineContext(hadoopConf),
             new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString(), partitions)
@@ -177,7 +174,8 @@ public class FileIndex implements Serializable {
     }
 
     // data skipping
-    Set<String> candidateFiles = candidateFilesInMetadataTable(allFiles);
+    Set<String> candidateFiles = ColumnStatsIndices.candidateFilesInMetadataTable(path.toString(), metadataConfig,
+        rowType, dataPruner, allFiles.stream().map(StoragePathInfo::toString).collect(Collectors.toList()));
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
       return allFiles;
@@ -216,65 +214,6 @@ public class FileIndex implements Serializable {
   // -------------------------------------------------------------------------
 
   /**
-   * Computes pruned list of candidate base-files' names based on provided list of data filters.
-   * conditions, by leveraging Metadata Table's Column Statistics index (hereon referred as ColStats for brevity)
-   * bearing "min", "max", "num_nulls" statistics for all columns.
-   *
-   * <p>NOTE: This method has to return complete set of candidate files, since only provided candidates will
-   * ultimately be scanned as part of query execution. Hence, this method has to maintain the
-   * invariant of conservatively including every base-file's name, that is NOT referenced in its index.
-   *
-   * <p>The {@code filters} must all be simple.
-   *
-   * @return set of pruned (data-skipped) candidate base-files' names
-   */
-  @Nullable
-  private Set<String> candidateFilesInMetadataTable(List<StoragePathInfo> allFileStatus) {
-    if (dataPruner == null) {
-      return null;
-    }
-    try {
-      String[] referencedCols = dataPruner.getReferencedCols();
-      final List<RowData> colStats =
-          ColumnStatsIndices.readColumnStatsIndex(path.toString(), metadataConfig, referencedCols);
-      final Pair<List<RowData>, String[]> colStatsTable =
-          ColumnStatsIndices.transposeColumnStatsIndex(colStats, referencedCols, rowType);
-      List<RowData> transposedColStats = colStatsTable.getLeft();
-      String[] queryCols = colStatsTable.getRight();
-      if (queryCols.length == 0) {
-        // the indexed columns have no intersection with the referenced columns, returns early
-        return null;
-      }
-      RowType.RowField[] queryFields = DataTypeUtils.projectRowFields(rowType, queryCols);
-
-      Set<String> allIndexedFileNames = transposedColStats.stream().parallel()
-          .map(row -> row.getString(0).toString())
-          .collect(Collectors.toSet());
-      Set<String> candidateFileNames = transposedColStats.stream().parallel()
-          .filter(row -> dataPruner.test(row, queryFields))
-          .map(row -> row.getString(0).toString())
-          .collect(Collectors.toSet());
-
-      // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
-      //       base-file: since it's bound to clustering, which could occur asynchronously
-      //       at arbitrary point in time, and is not likely to be touching all the base files.
-      //
-      //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
-      //       files and all outstanding base-files, and make sure that all base files not
-      //       represented w/in the index are included in the output of this method
-      Set<String> nonIndexedFileNames = allFileStatus.stream()
-          .map(fileStatus -> fileStatus.getPath().getName()).collect(Collectors.toSet());
-      nonIndexedFileNames.removeAll(allIndexedFileNames);
-
-      candidateFileNames.addAll(nonIndexedFileNames);
-      return candidateFileNames;
-    } catch (Throwable throwable) {
-      LOG.warn("Read column stats for data skipping error", throwable);
-      return null;
-    }
-  }
-
-  /**
    * Returns all the relative partition paths.
    *
    * <p>The partition paths are cached once invoked.
@@ -294,15 +233,6 @@ public class FileIndex implements Serializable {
       this.partitionPaths = new ArrayList<>(prunedPartitionPaths);
     }
     return this.partitionPaths;
-  }
-
-  public static HoodieMetadataConfig metadataConfig(org.apache.flink.configuration.Configuration conf) {
-    Properties properties = new Properties();
-
-    // set up metadata.enabled=true in table DDL to enable metadata listing
-    properties.put(HoodieMetadataConfig.ENABLE.key(), conf.getBoolean(FlinkOptions.METADATA_ENABLED));
-
-    return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
   }
 
   private boolean isDataSkippingFeasible(boolean dataSkippingEnabled) {
