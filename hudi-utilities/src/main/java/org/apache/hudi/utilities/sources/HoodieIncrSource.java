@@ -191,13 +191,13 @@ public class HoodieIncrSource extends RowSource {
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
     String endCompletionTime;
-    // analyzer.getBeginCompletionTime() is empty only when reading the latest instant
+    // analyzer.getStartCompletionTime() is empty only when reading the latest instant
     // in the first batch
     if (queryContext.isEmpty()
         || (endCompletionTime = queryContext.getMaxCompletionTime())
         .equals(analyzer.getStartCompletionTime().orElseGet(() -> null))) {
       LOG.info("Already caught up. No new data to process");
-      return Pair.of(Option.empty(), analyzer.getStartCompletionTime().get());
+      return Pair.of(Option.empty(), lastCkptStr.orElse(null));
     }
 
     DataFrameReader reader = sparkSession.read().format("hudi");
@@ -246,7 +246,7 @@ public class HoodieIncrSource extends RowSource {
               String.join("','", instantTimeList)));
     } else {
       // normal incremental query
-      String beginCompletionTime = queryContext.getInstants().stream()
+      String startCompletionTime = queryContext.getInstants().stream()
           .min(HoodieInstant.COMPLETION_TIME_COMPARATOR)
           .map(HoodieInstant::getCompletionTime)
           .get();
@@ -254,7 +254,7 @@ public class HoodieIncrSource extends RowSource {
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(START_COMMIT().key(), beginCompletionTime)
+          .option(START_COMMIT().key(), startCompletionTime)
           .option(END_COMMIT().key(), endCompletionTime)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
