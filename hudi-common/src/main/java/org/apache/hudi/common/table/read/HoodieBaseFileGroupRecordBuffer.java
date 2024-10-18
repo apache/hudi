@@ -189,6 +189,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                                                          Map<String, Object> metadata,
                                                                          Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) throws IOException {
     if (existingRecordMetadataPair != null) {
+      // Preserve the information for the lost deletes.
+      if (existingRecordMetadataPair.getRight().containsKey(INTERNAL_META_ORDERING_FIELD)) {
+        return Option.of(Pair.of(existingRecordMetadataPair.getLeft().get(), existingRecordMetadataPair.getRight()));
+      }
+
       if (enablePartialMerging) {
         // TODO(HUDI-7843): decouple the merging logic from the merger
         //  and use the record merge mode to control how to merge partial updates
@@ -414,6 +419,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }
+
+          if (newerInfoMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
+            return newer;
+          }
+
           if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
             return older;
           }
