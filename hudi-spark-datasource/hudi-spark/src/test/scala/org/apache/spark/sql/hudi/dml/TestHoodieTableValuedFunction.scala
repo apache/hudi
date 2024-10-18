@@ -131,7 +131,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
-          
+
           checkAnswer(
             s"""select id,
                |name,
