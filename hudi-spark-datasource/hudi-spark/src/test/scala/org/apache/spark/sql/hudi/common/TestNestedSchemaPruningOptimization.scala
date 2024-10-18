@@ -147,9 +147,9 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
           // NOTE: Unfortunately, we can't use pattern-matching to extract required fields, due to a need to maintain
           //       compatibility w/ Spark 2.4
-          selectDF.queryExecution.executedPlan match {
+          (tableType, selectDF.queryExecution.executedPlan) match {
             // COW
-            case ProjectExec(_, fileScan: FileSourceScanExec) =>
+            case ("cow", ProjectExec(_, fileScan: FileSourceScanExec)) =>
               val tableIdentifier = fileScan.tableIdentifier
               val requiredSchema = fileScan.requiredSchema
 
@@ -157,7 +157,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
               assertEquals(expectedSchema, requiredSchema)
 
             // MOR
-            case ProjectExec(_, dataScan: RowDataSourceScanExec) =>
+            case (_, _) =>
               // NOTE: This is temporary solution to assert for Spark 2.4, until it's deprecated
               val explainedPlan = explain(selectDF.queryExecution.logical)
               assertTrue(explainedPlan.contains(expectedReadSchemaClause))
