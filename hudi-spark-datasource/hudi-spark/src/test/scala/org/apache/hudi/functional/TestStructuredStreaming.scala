@@ -24,7 +24,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
@@ -145,9 +145,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       // wait for spark streaming to process one microbatch
       val currNumCommits = waitTillAtleastNCommits(storage, destPath, 1, 120, 5)
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, destPath, "000"))
-      val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, destPath)
       val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, destPath)
-      val beforeCommitCompletionTime1 = HoodieInstantTimeGenerator.instantTimeMinusMillis(commitCompletionTime1, 1)
       // Read RO View
       val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
         .load(destPath + "/*/*/*/*")

@@ -131,9 +131,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
-          val firstCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
-          val firstInstant = spark.sql(s"select min(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
-
+          
           checkAnswer(
             s"""select id,
                |name,

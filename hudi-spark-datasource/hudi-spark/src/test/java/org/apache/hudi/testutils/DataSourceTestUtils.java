@@ -20,7 +20,6 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -43,7 +42,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.Objects;
 import java.util.Random;
 import java.util.UUID;
 
@@ -165,30 +163,18 @@ public class DataSourceTestUtils {
   }
 
   public static String latestCommitCompletionTime(FileSystem fs, String basePath) {
-    HoodieTimeline timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath);
-    return timeline.getInstantsAsStream()
-        .map(HoodieInstant::getCompletionTime)
-        .filter(Objects::nonNull)
-        .max(String::compareTo)
-        .orElse(null);
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath)
+        .getLatestCompletionTime().orElse(null);
   }
 
   public static String latestCommitCompletionTime(HoodieStorage storage, String basePath) {
-    HoodieTimeline timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath);
-    return timeline.getInstantsAsStream()
-        .map(HoodieInstant::getCompletionTime)
-        .filter(Objects::nonNull)
-        .max(String::compareTo)
-        .orElse(null);
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
+        .getLatestCompletionTime().orElse(null);
   }
 
   public static String latestDeltaCommitCompletionTime(HoodieStorage storage, String basePath) {
-    HoodieTimeline timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath);
-    return timeline.getInstantsAsStream()
+    return HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath)
         .filter(instant -> HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
-        .map(HoodieInstant::getCompletionTime)
-        .filter(Objects::nonNull)
-        .max(String::compareTo)
-        .orElse(null);
+        .getLatestCompletionTime().orElse(null);
   }
 }

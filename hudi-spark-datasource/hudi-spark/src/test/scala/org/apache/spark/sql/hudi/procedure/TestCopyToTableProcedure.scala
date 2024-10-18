@@ -191,7 +191,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
-      // mark startTime
+      // mark startCompletionTime
       val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       val startCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
