@@ -68,6 +68,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_IN_BETWEEN;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
@@ -323,6 +324,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           boolean chooseExisting = deleteOrderingVal.equals(orderingFieldDefault)
               || (ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal) && deleteOrderingVal.compareTo(existingOrderingVal) <= 0);
           if (chooseExisting) {
+            if (deleteOrderingVal.equals(orderingFieldDefault)) {
+              existingRecordMetadataPair.getRight().put(INTERNAL_META_OPERATION, DELETE_IN_BETWEEN);
+            }
             return Option.empty();
           }
       }
