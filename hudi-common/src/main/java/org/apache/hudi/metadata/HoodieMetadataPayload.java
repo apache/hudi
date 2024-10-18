@@ -205,8 +205,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   protected HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
-    this(key, type, filesystemMetadata, null, null, null, null,
-        filesystemMetadata.isEmpty());
+    this(key, type, filesystemMetadata, null, null, null, null);
   }
 
   protected HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
@@ -223,6 +222,21 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   private HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
     this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata, secondaryIndexMetadata.getIsDeleted());
+  }
+
+  protected HoodieMetadataPayload(String key, int type,
+                                  Map<String, HoodieMetadataFileInfo> filesystemMetadata,
+                                  HoodieMetadataBloomFilter metadataBloomFilter,
+                                  HoodieMetadataColumnStats columnStats,
+                                  HoodieRecordIndexInfo recordIndexMetadata,
+                                  HoodieSecondaryIndexInfo secondaryIndexMetadata) {
+    this.key = key;
+    this.type = type;
+    this.filesystemMetadata = filesystemMetadata;
+    this.bloomFilterMetadata = metadataBloomFilter;
+    this.columnStatMetadata = columnStats;
+    this.recordIndexMetadata = recordIndexMetadata;
+    this.secondaryIndexMetadata = secondaryIndexMetadata;
   }
 
   protected HoodieMetadataPayload(String key, int type,
