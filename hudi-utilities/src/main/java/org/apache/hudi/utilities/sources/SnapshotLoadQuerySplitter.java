@@ -56,16 +56,16 @@ public abstract class SnapshotLoadQuerySplitter {
    * Checkpoint returned for the SnapshotLoadQuerySplitter.
    */
   public static class CheckpointWithPredicates {
-    String endInstant;
+    String endCompletionTime;
     String predicateFilter;
 
-    public CheckpointWithPredicates(String endInstant, String predicateFilter) {
-      this.endInstant = endInstant;
+    public CheckpointWithPredicates(String endCompletionTime, String predicateFilter) {
+      this.endCompletionTime = endCompletionTime;
       this.predicateFilter = predicateFilter;
     }
 
-    public String getEndInstant() {
-      return endInstant;
+    public String getEndCompletionTime() {
+      return endCompletionTime;
     }
 
     public String getPredicateFilter() {

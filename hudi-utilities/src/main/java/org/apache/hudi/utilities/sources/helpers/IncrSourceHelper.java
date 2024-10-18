@@ -204,7 +204,7 @@ public class IncrSourceHelper {
       }
     } else {
       throw new IllegalArgumentException("Missing start completion time for incremental pull. For reading from latest "
-          + "committed instant set hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
+          + "committed instant, set " + MISSING_CHECKPOINT_STRATEGY.key() + " to a valid value");
     }
 
     final int numInstantsFromConfigFinal = numInstantsFromConfig;

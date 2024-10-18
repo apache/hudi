@@ -39,6 +39,10 @@ import static org.apache.spark.sql.functions.count;
 import static org.apache.spark.sql.functions.max;
 import static org.apache.spark.sql.functions.min;
 
+/**
+ * An implementation of {@link SnapshotLoadQuerySplitter} that limits the number of rows
+ * ingested per batch based on `test.snapshot.load.max.row.count` config.
+ */
 public class TestSnapshotQuerySplitterImpl extends SnapshotLoadQuerySplitter {
 
   public static final String MAX_ROWS_PER_BATCH = "test.snapshot.load.max.row.count";

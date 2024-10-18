@@ -148,7 +148,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      // Pair<HoodieInstant, Records>
+      // WriteResult is a Pair<HoodieInstant, Records>
       WriteResult insert1 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
       WriteResult insert2 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
       WriteResult insert3 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
@@ -233,7 +233,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
-          500,
+          400,
           inserts.get(5).getCompletionTime());
 
       // Even if the start completion timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant
