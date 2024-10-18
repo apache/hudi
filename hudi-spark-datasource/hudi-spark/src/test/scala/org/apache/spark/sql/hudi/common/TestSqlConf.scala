@@ -89,7 +89,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
       // global configs
       DFSPropertiesConfiguration.addToGlobalProps(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      DFSPropertiesConfiguration.addToGlobalProps(BEGIN_COMPLETION_TIME.key, commitCompletionTime2)
+      DFSPropertiesConfiguration.addToGlobalProps(START_COMMIT.key, commitCompletionTime2)
       spark.catalog.refreshTable(tableName)
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
         Seq(2, "a2", 10.0, 1000, partitionVal)

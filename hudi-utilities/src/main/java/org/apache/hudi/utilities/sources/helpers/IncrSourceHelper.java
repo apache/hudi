@@ -218,7 +218,7 @@ public class IncrSourceHelper {
 
     return IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .beginCompletionTime(beginCompletionTime)
+        .startCompletionTime(beginCompletionTime)
         .endCompletionTime(null)
         .rangeType(rangeType)
         .limit(numInstantsPerFetch)

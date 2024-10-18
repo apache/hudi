@@ -55,11 +55,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.DataSourceReadOptions.BEGIN_COMPLETION_TIME;
-import static org.apache.hudi.DataSourceReadOptions.END_COMPLETION_TIME;
+import static org.apache.hudi.DataSourceReadOptions.END_COMMIT;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
+import static org.apache.hudi.DataSourceReadOptions.START_COMMIT;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -195,9 +195,9 @@ public class HoodieIncrSource extends RowSource {
     // in the first batch
     if (queryContext.isEmpty()
         || (endCompletionTime = queryContext.getMaxCompletionTime())
-        .equals(analyzer.getBeginCompletionTime().orElseGet(() -> null))) {
+        .equals(analyzer.getStartCompletionTime().orElseGet(() -> null))) {
       LOG.info("Already caught up. No new data to process");
-      return Pair.of(Option.empty(), analyzer.getBeginCompletionTime().get());
+      return Pair.of(Option.empty(), analyzer.getStartCompletionTime().get());
     }
 
     DataFrameReader reader = sparkSession.read().format("hudi");
@@ -212,7 +212,7 @@ public class HoodieIncrSource extends RowSource {
     boolean shouldFullScan =
         missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT
             && queryContext.getActiveTimeline()
-            .isBeforeTimelineStartsByCompletionTime(analyzer.getBeginCompletionTime().get());
+            .isBeforeTimelineStartsByCompletionTime(analyzer.getStartCompletionTime().get());
     Dataset<Row> source;
     if (instantRange.isEmpty() || shouldFullScan) {
       // snapshot query
@@ -254,8 +254,8 @@ public class HoodieIncrSource extends RowSource {
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(BEGIN_COMPLETION_TIME().key(), beginCompletionTime)
-          .option(END_COMPLETION_TIME().key(), endCompletionTime)
+          .option(START_COMMIT().key(), beginCompletionTime)
+          .option(END_COMMIT().key(), endCompletionTime)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                   INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))

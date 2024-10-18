@@ -181,10 +181,10 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
   protected val hollowCommitHandling: HollowCommitHandling = getHollowCommitHandling(optParams)
 
-  protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key)
+  protected def startTimestamp: String = optParams(DataSourceReadOptions.START_COMMIT.key)
 
   protected def endTimestamp: String = optParams.getOrElse(
-    DataSourceReadOptions.END_COMPLETION_TIME.key, super.timeline.getLatestCompletionTime.get)
+    DataSourceReadOptions.END_COMMIT.key, super.timeline.getLatestCompletionTime.get)
 
   protected def startInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty
 
@@ -205,8 +205,8 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val queryContext: IncrementalQueryAnalyzer.QueryContext =
     IncrementalQueryAnalyzer.builder()
       .metaClient(metaClient)
-      .beginCompletionTime(optParams(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key))
-      .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_COMPLETION_TIME.key, null))
+      .startCompletionTime(optParams(DataSourceReadOptions.START_COMMIT.key))
+      .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_COMMIT.key, null))
       .rangeType(rangeType)
       .build()
       .analyze()
@@ -242,9 +242,9 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       throw new HoodieException("No instants to incrementally pull")
     }
 
-    if (!this.optParams.contains(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key)) {
-      throw new HoodieException(s"Specify the begin instant time to pull from using " +
-        s"option ${DataSourceReadOptions.BEGIN_COMPLETION_TIME.key}")
+    if (!this.optParams.contains(DataSourceReadOptions.START_COMMIT.key)) {
+      throw new HoodieException(s"Specify the start completion time to pull from using " +
+        s"option ${DataSourceReadOptions.START_COMMIT.key}")
     }
 
     if (!this.tableConfig.populateMetaFields()) {

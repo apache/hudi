@@ -244,7 +244,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
         fail("Only Spark 3 is currently supported")
 
     val incrementalOpts: Map[String, String] = Map(
-      DataSourceReadOptions.BEGIN_COMPLETION_TIME.key -> "001"
+      DataSourceReadOptions.START_COMMIT.key -> "001"
     )
 
     // Test MOR / Incremental / Skip-merge
@@ -280,8 +280,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     val readOpts = defaultWriteOpts ++ Map(
       "path" -> tablePath,
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-      DataSourceReadOptions.BEGIN_COMPLETION_TIME.key -> startUnarchivedCommitTs,
-      DataSourceReadOptions.END_COMPLETION_TIME.key -> endUnarchivedCommitTs
+      DataSourceReadOptions.START_COMMIT.key -> startUnarchivedCommitTs,
+      DataSourceReadOptions.END_COMMIT.key -> endUnarchivedCommitTs
     )
 
     val inputDf = spark.read.format("hudi")
@@ -306,8 +306,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     val readOpts = defaultWriteOpts ++ Map(
       "path" -> tablePath,
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-      DataSourceReadOptions.BEGIN_COMPLETION_TIME.key -> startUnarchivedCommitTs,
-      DataSourceReadOptions.END_COMPLETION_TIME.key -> endUnarchivedCommitTs
+      DataSourceReadOptions.START_COMMIT.key -> startUnarchivedCommitTs,
+      DataSourceReadOptions.END_COMMIT.key -> endUnarchivedCommitTs
     )
 
     val inputDf = spark.read.format("hudi")

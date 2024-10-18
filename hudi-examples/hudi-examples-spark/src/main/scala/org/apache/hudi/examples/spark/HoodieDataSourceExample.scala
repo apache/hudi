@@ -18,7 +18,7 @@
 
 package org.apache.hudi.examples.spark
 
-import org.apache.hudi.DataSourceReadOptions.{BEGIN_COMPLETION_TIME, END_COMPLETION_TIME, QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{END_COMMIT, QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, START_COMMIT}
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, DELETE_PARTITION_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PARTITIONS_TO_DELETE, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.model.HoodieAvroPayload
@@ -183,7 +183,7 @@ object HoodieDataSourceExample {
       read.
       format("hudi").
       option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-      option(BEGIN_COMPLETION_TIME.key, beginTime).
+      option(START_COMMIT.key, beginTime).
         load(tablePath)
     incViewDF.createOrReplaceTempView("hudi_incr_table")
     spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_incr_table where fare > 20.0").show()
@@ -203,8 +203,8 @@ object HoodieDataSourceExample {
     //incrementally query data
     val incViewDF = spark.read.format("hudi").
       option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-      option(BEGIN_COMPLETION_TIME.key, beginTime).
-      option(END_COMPLETION_TIME.key, endTime).
+      option(START_COMMIT.key, beginTime).
+      option(END_COMMIT.key, endTime).
       load(tablePath)
     incViewDF.createOrReplaceTempView("hudi_incr_table")
     spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare > 20.0").show()

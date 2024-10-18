@@ -1005,8 +1005,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         // Test incremental query
         val hudiIncDF1 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, firstCompletionTime)
-          .option(DataSourceReadOptions.END_COMPLETION_TIME.key, firstCompletionTime)
+          .option(DataSourceReadOptions.START_COMMIT.key, firstCompletionTime)
+          .option(DataSourceReadOptions.END_COMMIT.key, firstCompletionTime)
           .load(targetBasePath)
         hudiIncDF1.createOrReplaceTempView("inc1")
         checkAnswer(s"select id, name, price, _ts from inc1")(
@@ -1030,7 +1030,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         // Test incremental query
         val hudiIncDF2 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, thirdCompletionTime)
+          .option(DataSourceReadOptions.START_COMMIT.key, thirdCompletionTime)
           .load(targetBasePath)
         hudiIncDF2.createOrReplaceTempView("inc2")
         checkAnswer(s"select id, name, price, _ts from inc2 order by id")(

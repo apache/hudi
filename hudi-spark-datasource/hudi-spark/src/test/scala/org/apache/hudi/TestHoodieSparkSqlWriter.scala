@@ -755,8 +755,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       val currentCommits = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
       val incrementalKeyIdNum = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, "0000")
-        .option(DataSourceReadOptions.END_COMPLETION_TIME.key, currentCommits(0))
+        .option(DataSourceReadOptions.START_COMMIT.key, "0000")
+        .option(DataSourceReadOptions.END_COMMIT.key, currentCommits(0))
         .load(tempBasePath).select("keyid").orderBy("keyid").count
       assert(incrementalKeyIdNum == 1000)
 
@@ -774,8 +774,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       val currentCommitsBootstrap = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
       val incrementalKeyIdNumBootstrap = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, "0000")
-        .option(DataSourceReadOptions.END_COMPLETION_TIME.key, currentCommitsBootstrap(0))
+        .option(DataSourceReadOptions.START_COMMIT.key, "0000")
+        .option(DataSourceReadOptions.END_COMMIT.key, currentCommitsBootstrap(0))
         .load(tempBasePath).select("keyid").orderBy("keyid").count
       assert(incrementalKeyIdNumBootstrap == 1000)
     }

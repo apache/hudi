@@ -195,10 +195,10 @@ object CDCRelation {
       throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePath}")
     }
 
-    val startingInstant = options.getOrElse(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key(),
+    val startingInstant = options.getOrElse(DataSourceReadOptions.START_COMMIT.key(),
       throw new HoodieException("CDC Query should provide the valid start version or timestamp")
     )
-    val endingInstant = options.getOrElse(DataSourceReadOptions.END_COMPLETION_TIME.key(),
+    val endingInstant = options.getOrElse(DataSourceReadOptions.END_COMMIT.key(),
       getTimestampOfLatestInstant(metaClient)
     )
     if (startingInstant > endingInstant) {

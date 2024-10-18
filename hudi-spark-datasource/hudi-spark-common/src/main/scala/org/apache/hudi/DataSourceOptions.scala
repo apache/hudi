@@ -103,21 +103,21 @@ object DataSourceReadOptions {
     .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
       "specified start instant time")
 
-  val BEGIN_COMPLETION_TIME: ConfigProperty[String] = ConfigProperty
+  val START_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()
     .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. "
       + "Represents the completion time to start incrementally pulling data from. The completion time here need not necessarily "
-      + "correspond to an instant on the timeline. New data written with an completion_time >= BEGIN_COMPLETION_TIME are fetched out. "
+      + "correspond to an instant on the timeline. New data written with an completion_time >= START_COMMIT are fetched out. "
       + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM.")
 
-  val END_COMPLETION_TIME: ConfigProperty[String] = ConfigProperty
+  val END_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
     .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL
       + "`. Represents the completion time to limit incrementally fetched data to. When not specified latest commit "
       + "completion time from timeline is assumed by default. When specified, new data written with "
-      + "an completion_time <= END_COMPLETION_TIME are fetched out. "
+      + "an completion_time <= END_COMMIT are fetched out. "
       + "Point in time type queries make more sense with begin and end completion times specified.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
@@ -256,12 +256,12 @@ object DataSourceReadOptions {
   val VIEW_TYPE_REALTIME_OPT_VAL = "realtime"
   @Deprecated
   val DEFAULT_VIEW_TYPE_OPT_VAL = VIEW_TYPE_READ_OPTIMIZED_OPT_VAL
-  /** @deprecated Use {@link BEGIN_COMPLETION_TIME} and its methods instead */
+  /** @deprecated Use {@link START_COMMIT} and its methods instead */
   @Deprecated
-  val BEGIN_INSTANTTIME_OPT_KEY = BEGIN_COMPLETION_TIME.key()
-  /** @deprecated Use {@link END_COMPLETION_TIME} and its methods instead */
+  val BEGIN_INSTANTTIME_OPT_KEY = START_COMMIT.key()
+  /** @deprecated Use {@link END_COMMIT} and its methods instead */
   @Deprecated
-  val END_INSTANTTIME_OPT_KEY = END_COMPLETION_TIME.key()
+  val END_INSTANTTIME_OPT_KEY = END_COMMIT.key()
   /** @deprecated Use {@link INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME} and its methods instead */
   @Deprecated
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY = INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key()

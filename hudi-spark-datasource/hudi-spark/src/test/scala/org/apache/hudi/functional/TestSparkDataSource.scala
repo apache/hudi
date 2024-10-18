@@ -141,8 +141,8 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0)
     val hoodieIncViewDf1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, commitCompletionTime1)
-      .option(DataSourceReadOptions.END_COMPLETION_TIME.key, commitCompletionTime1)
+      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime1)
+      .option(DataSourceReadOptions.END_COMMIT.key, commitCompletionTime1)
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath)
     assertEquals(10, hoodieIncViewDf1.count(), "should have pulled 10 initial inserts")
@@ -160,8 +160,8 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     // another incremental query with commit2 and commit3
     val hoodieIncViewDf2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, commitCompletionTime3)
-      .option(DataSourceReadOptions.END_COMPLETION_TIME.key(), commitCompletionTime3)
+      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime3)
+      .option(DataSourceReadOptions.END_COMMIT.key(), commitCompletionTime3)
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath)
 

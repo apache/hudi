@@ -356,7 +356,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   private def createSQLTable(hudiOpts: Map[String, String], queryType: String): Unit = {
     val opts = hudiOpts + (
       DataSourceReadOptions.QUERY_TYPE.key -> queryType,
-      DataSourceReadOptions.BEGIN_COMPLETION_TIME.key() -> metaClient.getActiveTimeline.getInstants.get(0).getTimestamp.replaceFirst(".", "0")
+      DataSourceReadOptions.START_COMMIT.key() -> metaClient.getActiveTimeline.getInstants.get(0).getTimestamp.replaceFirst(".", "0")
     )
     val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
     inputDF1.createOrReplaceTempView("tbl")
@@ -365,7 +365,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   private def createIncrementalSQLTable(hudiOpts: Map[String, String], beginCompletionTime: String): Unit = {
     val opts = hudiOpts + (
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-      DataSourceReadOptions.BEGIN_COMPLETION_TIME.key() -> beginCompletionTime
+      DataSourceReadOptions.START_COMMIT.key() -> beginCompletionTime
     )
     val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
     inputDF1.createOrReplaceTempView("tbl")

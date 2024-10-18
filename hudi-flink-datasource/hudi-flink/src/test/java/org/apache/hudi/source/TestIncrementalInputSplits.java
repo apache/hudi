@@ -103,7 +103,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     IncrementalQueryAnalyzer analyzer1 = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
         .rangeType(InstantRange.RangeType.OPEN_CLOSED)
-        .beginCompletionTime(completionTimeMap.get("1"))
+        .startCompletionTime(completionTimeMap.get("1"))
         .skipClustering(true)
         .build();
     // previous read iteration read till instant time "1", next read iteration should return ["2", "3"]
@@ -125,7 +125,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     IncrementalQueryAnalyzer analyzer3 = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
         .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
-        .beginCompletionTime(completionTimeMap.get("1"))
+        .startCompletionTime(completionTimeMap.get("1"))
         .endCompletionTime(completionTimeMap.get("3"))
         .skipClustering(true)
         .build();

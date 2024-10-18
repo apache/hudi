@@ -45,13 +45,13 @@ import java.util.stream.Stream;
 
 /**
  * Analyzer for incremental queries on the timeline, to filter instants based on specified ranges
- * using optional begin and end completion time (see the details below).
+ * using optional start and end completion time (see the details below).
  *
  * <p>The analyzer is supplied the following information:
  * <ul>
  *   <li>The archived instants;</li>
  *   <li>The active instants;</li>
- *   <li>The instant filtering predicate, e.g the instant range with a "beginCompletionTime" and "endCompletionTime"</li>
+ *   <li>The instant filtering predicate, e.g the instant range with a "startCompletionTime" and "endCompletionTime"</li>
  *   <li>Whether the query starts from the "earliest" available instant;</li>
  *   <li>Whether the query ends to the "latest" available instant;</li>
  *   <li>The max completion time used for fs view file slice version filtering.</li>
@@ -87,8 +87,8 @@ import java.util.stream.Stream;
  *     <td>'_hoodie_commit_time' = i_n</td>
  *   </tr>
  *   <tr>
- *     <td>[beginCompletionTime, +INF]</td>
- *     <td>i).find the instant set setA, setA is a collection of all the instants completed after or on 'beginCompletionTime';
+ *     <td>[startCompletionTime, +INF]</td>
+ *     <td>i).find the instant set setA, setA is a collection of all the instants completed after or on 'startCompletionTime';
  *     ii). read the latest snapshot from table metadata if setA has archived instants or the commit metadata if all the instants are still active</td>
  *     <td>'_hoodie_commit_time' in setA</td>
  *   </tr>
@@ -105,10 +105,10 @@ import java.util.stream.Stream;
  * <p>IMPORTANT: the reader may optionally choose to fall back to reading the latest snapshot if there are files decoding the commit metadata are already cleaned.
  */
 public class IncrementalQueryAnalyzer {
-  public static final String BEGIN_COMMIT_EARLIEST = "earliest";
+  public static final String START_COMMIT_EARLIEST = "earliest";
 
   private final HoodieTableMetaClient metaClient;
-  private final Option<String> beginCompletionTime;
+  private final Option<String> startCompletionTime;
   private final Option<String> endCompletionTime;
   private final InstantRange.RangeType rangeType;
   private final boolean skipCompaction;
@@ -119,7 +119,7 @@ public class IncrementalQueryAnalyzer {
 
   private IncrementalQueryAnalyzer(
       HoodieTableMetaClient metaClient,
-      String beginCompletionTime,
+      String startCompletionTime,
       String endCompletionTime,
       InstantRange.RangeType rangeType,
       boolean skipCompaction,
@@ -128,7 +128,7 @@ public class IncrementalQueryAnalyzer {
       boolean readCdcFromChangelog,
       int limit) {
     this.metaClient = metaClient;
-    this.beginCompletionTime = Option.ofNullable(beginCompletionTime);
+    this.startCompletionTime = Option.ofNullable(startCompletionTime);
     this.endCompletionTime = Option.ofNullable(endCompletionTime);
     this.rangeType = rangeType;
     this.skipCompaction = skipCompaction;
@@ -138,8 +138,8 @@ public class IncrementalQueryAnalyzer {
     this.limit = limit;
   }
 
-  public Option<String> getBeginCompletionTime() {
-    return beginCompletionTime;
+  public Option<String> getStartCompletionTime() {
+    return startCompletionTime;
   }
 
   /**
@@ -161,7 +161,7 @@ public class IncrementalQueryAnalyzer {
         return QueryContext.EMPTY;
       }
       HoodieTimeline filteredTimeline = getFilteredTimeline(this.metaClient);
-      List<String> instantTimeList = completionTimeQueryView.getInstantTimes(filteredTimeline, beginCompletionTime, endCompletionTime, rangeType);
+      List<String> instantTimeList = completionTimeQueryView.getInstantTimes(filteredTimeline, startCompletionTime, endCompletionTime, rangeType);
       if (instantTimeList.isEmpty()) {
         // no instants completed within the give time range, returns early.
         return QueryContext.EMPTY;
@@ -190,16 +190,16 @@ public class IncrementalQueryAnalyzer {
         // no instants completed within the give time range, returns early.
         return QueryContext.EMPTY;
       }
-      if (beginCompletionTime.isEmpty() && endCompletionTime.isPresent()) {
+      if (startCompletionTime.isEmpty() && endCompletionTime.isPresent()) {
         instants = Collections.singletonList(instants.get(instants.size() - 1));
       }
       String lastInstant = instants.get(instants.size() - 1);
-      // null => if starting from earliest, if no beginCompletionTime is specified, start from the latest instant like usual streaming read semantics.
-      // if beginCompletionTime is neither, then use the earliest instant as the start instant.
-      String beginInstant = BEGIN_COMMIT_EARLIEST.equalsIgnoreCase(beginCompletionTime.orElse(null)) ? null :
-          beginCompletionTime.isEmpty() ? lastInstant : instants.get(0);
+      // null => if starting from earliest, if no startCompletionTime is specified, start from the latest instant like usual streaming read semantics.
+      // if startCompletionTime is neither, then use the earliest instant as the start instant.
+      String startInstant = START_COMMIT_EARLIEST.equalsIgnoreCase(startCompletionTime.orElse(null)) ? null :
+          startCompletionTime.isEmpty() ? lastInstant : instants.get(0);
       String endInstant = endCompletionTime.isEmpty() ? null : lastInstant;
-      return QueryContext.create(beginInstant, endInstant, instants, archivedInstants, activeInstants, filteredTimeline, archivedReadTimeline);
+      return QueryContext.create(startInstant, endInstant, instants, archivedInstants, activeInstants, filteredTimeline, archivedReadTimeline);
     }
   }
 
@@ -278,9 +278,9 @@ public class IncrementalQueryAnalyzer {
    */
   public static class Builder {
     /**
-     * Begin completion time.
+     * Start completion time.
      */
-    private String beginCompletionTime;
+    private String startCompletionTime;
     /**
      * End completion time.
      */
@@ -299,8 +299,8 @@ public class IncrementalQueryAnalyzer {
     public Builder() {
     }
 
-    public Builder beginCompletionTime(String beginCompletionTime) {
-      this.beginCompletionTime = beginCompletionTime;
+    public Builder startCompletionTime(String startCompletionTime) {
+      this.startCompletionTime = startCompletionTime;
       return this;
     }
 
@@ -345,7 +345,7 @@ public class IncrementalQueryAnalyzer {
     }
 
     public IncrementalQueryAnalyzer build() {
-      return new IncrementalQueryAnalyzer(Objects.requireNonNull(this.metaClient), this.beginCompletionTime, this.endCompletionTime,
+      return new IncrementalQueryAnalyzer(Objects.requireNonNull(this.metaClient), this.startCompletionTime, this.endCompletionTime,
           Objects.requireNonNull(this.rangeType), this.skipCompaction, this.skipClustering, this.skipInsertOverwrite, this.readCdcFromChangelog, this.limit);
     }
   }
@@ -360,7 +360,7 @@ public class IncrementalQueryAnalyzer {
     /**
      * An empty option indicates consumption from the earliest instant.
      */
-    private final Option<String> beginInstant;
+    private final Option<String> startInstant;
     /**
      * An empty option indicates consumption to the latest instant.
      */
@@ -378,14 +378,14 @@ public class IncrementalQueryAnalyzer {
     private final List<String> instants;
 
     private QueryContext(
-        @Nullable String beginInstant,
+        @Nullable String startInstant,
         @Nullable String endInstant,
         List<String> instants,
         List<HoodieInstant> archivedInstants,
         List<HoodieInstant> activeInstants,
         HoodieTimeline activeTimeline,
         @Nullable HoodieTimeline archivedTimeline) {
-      this.beginInstant = Option.ofNullable(beginInstant);
+      this.startInstant = Option.ofNullable(startInstant);
       this.endInstant = Option.ofNullable(endInstant);
       this.archivedInstants = archivedInstants;
       this.activeInstants = activeInstants;
@@ -395,14 +395,14 @@ public class IncrementalQueryAnalyzer {
     }
 
     public static QueryContext create(
-        @Nullable String beginInstant,
+        @Nullable String startInstant,
         @Nullable String endInstant,
         List<String> instants,
         List<HoodieInstant> archivedInstants,
         List<HoodieInstant> activeInstants,
         HoodieTimeline activeTimeline,
         @Nullable HoodieTimeline archivedTimeline) {
-      return new QueryContext(beginInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline);
+      return new QueryContext(startInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline);
     }
 
     public boolean isEmpty() {
@@ -413,8 +413,8 @@ public class IncrementalQueryAnalyzer {
       return this.instants;
     }
 
-    public Option<String> getBeginInstant() {
-      return beginInstant;
+    public Option<String> getStartInstant() {
+      return startInstant;
     }
 
     public Option<String> getEndInstant() {
@@ -442,7 +442,7 @@ public class IncrementalQueryAnalyzer {
     }
 
     public boolean isConsumingFromEarliest() {
-      return beginInstant.isEmpty();
+      return startInstant.isEmpty();
     }
 
     public boolean isConsumingToLatest() {
@@ -468,7 +468,7 @@ public class IncrementalQueryAnalyzer {
           return Option.empty();
         }
         return Option.of(InstantRange.builder()
-                .startInstant(beginInstant.orElse(null))
+            .startInstant(startInstant.orElse(null))
                 .endInstant(endInstant.orElse(null))
                 .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
                 .nullableBoundary(true)

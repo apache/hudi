@@ -101,8 +101,8 @@ case class HoodieFileIndex(spark: SparkSession,
     queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache,
-    beginInstantTime = options.get(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key),
-    endInstantTime = options.get(DataSourceReadOptions.END_COMPLETION_TIME.key),
+    startCompletionTime = options.get(DataSourceReadOptions.START_COMMIT.key),
+    endCompletionTime = options.get(DataSourceReadOptions.END_COMMIT.key),
     shouldUseStringTypeForTimestampPartitionKeyType = shouldUseStringTypeForTimestampPartitionKeyType
   )
     with FileIndex {

@@ -135,7 +135,7 @@ public class IncrementalInputSplits implements Serializable {
 
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .beginCompletionTime(this.conf.getString(FlinkOptions.READ_START_COMMIT))
+        .startCompletionTime(this.conf.getString(FlinkOptions.READ_START_COMMIT))
         .endCompletionTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
         .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)
@@ -246,7 +246,7 @@ public class IncrementalInputSplits implements Serializable {
     metaClient.reloadActiveTimeline();
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .beginCompletionTime(issuedOffset != null ? issuedOffset : this.conf.getString(FlinkOptions.READ_START_COMMIT))
+        .startCompletionTime(issuedOffset != null ? issuedOffset : this.conf.getString(FlinkOptions.READ_START_COMMIT))
         .endCompletionTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
         .rangeType(issuedOffset != null ? InstantRange.RangeType.OPEN_CLOSED : InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)

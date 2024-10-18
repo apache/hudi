@@ -88,8 +88,8 @@ class CopyToTableProcedure extends BaseProcedure with ProcedureBuilder with Logg
         sparkSession.read
           .format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, beginInstance)
-          .option(DataSourceReadOptions.END_COMPLETION_TIME.key, endInstance)
+          .option(DataSourceReadOptions.START_COMMIT.key, beginInstance)
+          .option(DataSourceReadOptions.END_COMMIT.key, endInstance)
           .load(tablePath)
       case DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL =>
         sparkSession.read

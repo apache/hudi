@@ -23,7 +23,6 @@ import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -71,9 +70,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
-  if (!optParams.contains(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key)) {
-    throw new HoodieException(s"Specify the begin instant time to pull from using " +
-      s"option ${DataSourceReadOptions.BEGIN_COMPLETION_TIME.key}")
+  if (!optParams.contains(DataSourceReadOptions.START_COMMIT.key)) {
+    throw new HoodieException(s"Specify the start completion time to pull from using " +
+      s"option ${DataSourceReadOptions.START_COMMIT.key}")
   }
 
   if (!metaClient.getTableConfig.populateMetaFields()) {
@@ -83,8 +82,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val queryContext: IncrementalQueryAnalyzer.QueryContext =
     IncrementalQueryAnalyzer.builder()
       .metaClient(metaClient)
-      .beginCompletionTime(optParams(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key))
-      .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_COMPLETION_TIME.key, null))
+      .startCompletionTime(optParams(DataSourceReadOptions.START_COMMIT.key))
+      .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_COMMIT.key, null))
       .rangeType(rangeType)
       .build()
       .analyze()
@@ -206,7 +205,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 
-      val startInstantTime = queryContext.getBeginInstant.get()
+      val startInstantTime = queryContext.getStartInstant.get()
       val startInstantArchived = !queryContext.getArchivedInstants.isEmpty
       val endInstantTime = queryContext.getEndInstant.get()
 
