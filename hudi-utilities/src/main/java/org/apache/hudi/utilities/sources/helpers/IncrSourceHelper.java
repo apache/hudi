@@ -60,7 +60,7 @@ import static org.apache.spark.sql.functions.sum;
 public class IncrSourceHelper {
 
   private static final Logger LOG = LoggerFactory.getLogger(IncrSourceHelper.class);
-  public static final String DEFAULT_BEGIN_TIMESTAMP = HoodieTimeline.INIT_INSTANT_TS;
+  public static final String DEFAULT_START_TIMESTAMP = HoodieTimeline.INIT_INSTANT_TS;
   private static final String CUMULATIVE_COLUMN_NAME = "cumulativeSize";
 
   /**
@@ -117,9 +117,9 @@ public class IncrSourceHelper {
           Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
           return lastInstant.map(
               hoodieInstant -> instantTimeMinusMillis(timestampForLastInstant.apply(hoodieInstant), 1))
-              .orElse(DEFAULT_BEGIN_TIMESTAMP);
+              .orElse(DEFAULT_START_TIMESTAMP);
         } else {
-          return DEFAULT_BEGIN_TIMESTAMP;
+          return DEFAULT_START_TIMESTAMP;
         }
       } else {
         throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
@@ -130,8 +130,8 @@ public class IncrSourceHelper {
     // When `beginInstantTime` is present, `previousInstantTime` is set to the completed commit before `beginInstantTime` if that exists.
     // If there is no completed commit before `beginInstantTime`, e.g., `beginInstantTime` is the first commit in the active timeline,
     // `previousInstantTime` is set to `DEFAULT_BEGIN_TIMESTAMP`.
-    String previousInstantTime = DEFAULT_BEGIN_TIMESTAMP;
-    if (!beginInstantTime.equals(DEFAULT_BEGIN_TIMESTAMP)) {
+    String previousInstantTime = DEFAULT_START_TIMESTAMP;
+    if (!beginInstantTime.equals(DEFAULT_START_TIMESTAMP)) {
       Option<HoodieInstant> previousInstant = activeCommitTimeline.findInstantBefore(beginInstantTime);
       if (previousInstant.isPresent()) {
         previousInstantTime = previousInstant.get().getTimestamp();
@@ -181,29 +181,29 @@ public class IncrSourceHelper {
         .setLoadActiveTimelineOnLoad(true)
         .build();
 
-    String beginCompletionTime;
+    String startCompletionTime;
     RangeType rangeType;
 
     if (lastCkptStr.isPresent() && !lastCkptStr.get().isEmpty()) {
-      beginCompletionTime = lastCkptStr.get();
+      startCompletionTime = lastCkptStr.get();
       rangeType = RangeType.OPEN_CLOSED;
     } else if (missingCheckpointStrategy != null) {
       rangeType = RangeType.CLOSED_CLOSED;
       switch (missingCheckpointStrategy) {
         case READ_UPTO_LATEST_COMMIT:
-          beginCompletionTime = DEFAULT_BEGIN_TIMESTAMP;
+          startCompletionTime = DEFAULT_START_TIMESTAMP;
           // disrespect numInstantsFromConfig when reading up to latest
           numInstantsFromConfig = -1;
           break;
         case READ_LATEST:
           // rely on IncrementalQueryAnalyzer to use the latest completed instant
-          beginCompletionTime = null;
+          startCompletionTime = null;
           break;
         default:
           throw new IllegalArgumentException("Unknown missing checkpoint strategy: " + missingCheckpointStrategy);
       }
     } else {
-      throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
+      throw new IllegalArgumentException("Missing start completion time for incremental pull. For reading from latest "
           + "committed instant set hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
     }
 
@@ -218,7 +218,7 @@ public class IncrSourceHelper {
 
     return IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .startCompletionTime(beginCompletionTime)
+        .startCompletionTime(startCompletionTime)
         .endCompletionTime(null)
         .rangeType(rangeType)
         .limit(numInstantsPerFetch)
@@ -297,7 +297,7 @@ public class IncrSourceHelper {
   }
 
   /**
-   * Determine the policy to choose if a checkpoint is missing (detected by the absence of a beginInstant),
+   * Determine the policy to choose if a checkpoint is missing (detected by the absence of a start commit),
    * during a run of a {@link HoodieIncrSource}.
    *
    * @param props the usual Hudi props object
