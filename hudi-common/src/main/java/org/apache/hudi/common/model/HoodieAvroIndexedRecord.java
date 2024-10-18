@@ -65,7 +65,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       HoodieKey key,
       IndexedRecord data,
       HoodieOperation operation,
-      Option<Map<String, Object>> metaData) {
+      Option<Map<String, String>> metaData) {
     super(key, data, operation, metaData);
   }
 
@@ -189,7 +189,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public Option<Map<String, Object>> getMetadata() {
+  public Option<Map<String, String>> getMetadata() {
     return Option.empty();
   }
 

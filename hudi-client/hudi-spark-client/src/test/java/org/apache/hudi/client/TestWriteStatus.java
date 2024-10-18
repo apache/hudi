@@ -71,7 +71,7 @@ public class TestWriteStatus {
     WriteStatus status = new WriteStatus(false, 1.0);
     status.setStat(new HoodieWriteStat());
     for (int i = 0; i < 1000; i++) {
-      Map<String, Object> metadata = new HashMap<>();
+      Map<String, String> metadata = new HashMap<>();
       metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, "");
       status.markSuccess(mock(HoodieRecord.class), Option.of(metadata));
     }
@@ -84,7 +84,7 @@ public class TestWriteStatus {
     status = new WriteStatus(false, 1.0);
     status.setStat(new HoodieWriteStat());
     for (int i = 0; i < 1000; i++) {
-      Map<String, Object> metadata = new HashMap<>();
+      Map<String, String> metadata = new HashMap<>();
       metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, null);
       status.markSuccess(mock(HoodieRecord.class), Option.of(metadata));
     }
@@ -99,7 +99,7 @@ public class TestWriteStatus {
     long minSeconds = 0L;
     long maxSeconds = 0L;
     for (int i = 0; i < 1000; i++) {
-      Map<String, Object> metadata = new HashMap<>();
+      Map<String, String> metadata = new HashMap<>();
       long eventTime = System.currentTimeMillis() / 1000;
       if (i == 0) {
         minSeconds = eventTime;
@@ -120,7 +120,7 @@ public class TestWriteStatus {
     minSeconds = 0L;
     maxSeconds = 0L;
     for (int i = 0; i < 1000; i++) {
-      Map<String, Object> metadata = new HashMap<>();
+      Map<String, String> metadata = new HashMap<>();
       long eventTime = System.currentTimeMillis();
       if (i == 0) {
         minSeconds = eventTime;
@@ -139,7 +139,7 @@ public class TestWriteStatus {
     status = new WriteStatus(false, 1.0);
     status.setStat(new HoodieWriteStat());
     for (int i = 0; i < 1000; i++) {
-      Map<String, Object> metadata = new HashMap<>();
+      Map<String, String> metadata = new HashMap<>();
       metadata.put(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY, String.valueOf(i));
       status.markSuccess(mock(HoodieRecord.class), Option.of(metadata));
     }

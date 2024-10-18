@@ -34,14 +34,14 @@ import java.util.Map.Entry;
  */
 public class MetadataMergeWriteStatus extends WriteStatus {
 
-  private Map<String, Object> mergedMetadataMap = new HashMap<>();
+  private Map<String, String> mergedMetadataMap = new HashMap<>();
 
   public MetadataMergeWriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
     super(trackSuccessRecords, failureFraction);
   }
 
-  public static Map<String, Object> mergeMetadataForWriteStatuses(List<WriteStatus> writeStatuses) {
-    Map<String, Object> allWriteStatusMergedMetadataMap = new HashMap<>();
+  public static Map<String, String> mergeMetadataForWriteStatuses(List<WriteStatus> writeStatuses) {
+    Map<String, String> allWriteStatusMergedMetadataMap = new HashMap<>();
     for (WriteStatus writeStatus : writeStatuses) {
       MetadataMergeWriteStatus.mergeMetadataMaps(((MetadataMergeWriteStatus) writeStatus).getMergedMetadataMap(),
           allWriteStatusMergedMetadataMap);
@@ -49,13 +49,13 @@ public class MetadataMergeWriteStatus extends WriteStatus {
     return allWriteStatusMergedMetadataMap;
   }
 
-  private static void mergeMetadataMaps(Map<String, Object> mergeFromMap, Map<String, Object> mergeToMap) {
-    for (Entry<String, Object> entry : mergeFromMap.entrySet()) {
+  private static void mergeMetadataMaps(Map<String, String> mergeFromMap, Map<String, String> mergeToMap) {
+    for (Entry<String, String> entry : mergeFromMap.entrySet()) {
       String key = entry.getKey();
       if (!mergeToMap.containsKey(key)) {
         mergeToMap.put(key, "0");
       }
-      mergeToMap.put(key, addStrsAsInt((String) entry.getValue(), (String) mergeToMap.get(key)));
+      mergeToMap.put(key, addStrsAsInt(entry.getValue(), mergeToMap.get(key)));
     }
   }
 
@@ -64,7 +64,7 @@ public class MetadataMergeWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markSuccess(HoodieRecord record, Option<Map<String, Object>> recordMetadata) {
+  public void markSuccess(HoodieRecord record, Option<Map<String, String>> recordMetadata) {
     super.markSuccess(record, recordMetadata);
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
@@ -72,14 +72,14 @@ public class MetadataMergeWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, Object>> recordMetadata) {
+  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> recordMetadata) {
     super.markFailure(record, t, recordMetadata);
     if (recordMetadata.isPresent()) {
       mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
     }
   }
 
-  private Map<String, Object> getMergedMetadataMap() {
+  private Map<String, String> getMergedMetadataMap() {
     return mergedMetadataMap;
   }
 }
