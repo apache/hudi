@@ -558,7 +558,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     addRecordMerger(recordType, cfg.configs);
     cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
     cfg.recordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
-    cfg.recordMergeMode = RecordMergeMode.CUSTOM;
+    cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
     cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source.avsc");
     cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source.avsc");
     cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
