@@ -18,14 +18,12 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata, HollowCommitHandling}
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
+import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -67,7 +65,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     } else {
       val completeTimeline =
         metaClient.getCommitsTimeline.filterCompletedInstants()
-          .findInstantsInRangeByCompletionTime(startTimestamp, endTimestamp)
+          .findInstantsInRangeByCompletionTime(startCompletionTime, endCompletionTime)
 
       // Need to add pending compaction instants to avoid data missing, see HUDI-5990 for details.
       val pendingCompactionTimeline = metaClient.getCommitsAndCompactionTimeline.filterPendingMajorOrMinorCompactionTimeline()
@@ -95,7 +93,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits,
-      includedInstantTimeSet = includedCommits.map(_.getTimestamp).toSet)
+      includedInstantTimeSet = Option(includedCommits.map(_.getTimestamp).toSet))
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -179,11 +177,9 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   // Validate this Incremental implementation is properly configured
   validate()
 
-  protected val hollowCommitHandling: HollowCommitHandling = getHollowCommitHandling(optParams)
+  protected def startCompletionTime: String = optParams(DataSourceReadOptions.START_COMMIT.key)
 
-  protected def startTimestamp: String = optParams(DataSourceReadOptions.START_COMMIT.key)
-
-  protected def endTimestamp: String = optParams.getOrElse(
+  protected def endCompletionTime: String = optParams.getOrElse(
     DataSourceReadOptions.END_COMMIT.key, super.timeline.getLatestCompletionTime.get)
 
   protected def startInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty
@@ -249,10 +245,6 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
     if (!this.tableConfig.populateMetaFields()) {
       throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
-    }
-
-    if (hollowCommitHandling == USE_TRANSITION_TIME && fullTableScan) {
-      throw new HoodieException("Cannot use stateTransitionTime while enables full table scan")
     }
   }
 

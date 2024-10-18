@@ -416,7 +416,7 @@ public interface HoodieTimeline extends Serializable {
   boolean isBeforeTimelineStarts(String ts);
 
   /**
-   * @return true if the passed in completion time is before the first completion time in the timeline
+   * @return true if the passed-in completion time is smaller than the minimum completion time in the timeline
    */
   boolean isBeforeTimelineStartsByCompletionTime(String completionTime);
 

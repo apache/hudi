@@ -195,17 +195,18 @@ object CDCRelation {
       throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePath}")
     }
 
-    val startingInstant = options.getOrElse(DataSourceReadOptions.START_COMMIT.key(),
-      throw new HoodieException("CDC Query should provide the valid start version or timestamp")
+    val startCompletionTime = options.getOrElse(DataSourceReadOptions.START_COMMIT.key(),
+      throw new HoodieException(s"CDC Query should provide the valid start completion time "
+        + s"through the option ${DataSourceReadOptions.START_COMMIT.key()}")
     )
-    val endingInstant = options.getOrElse(DataSourceReadOptions.END_COMMIT.key(),
+    val endCompletionTime = options.getOrElse(DataSourceReadOptions.END_COMMIT.key(),
       getTimestampOfLatestInstant(metaClient)
     )
-    if (startingInstant > endingInstant) {
-      throw new HoodieException(s"This is not a valid range between $startingInstant and $endingInstant")
+    if (startCompletionTime > endCompletionTime) {
+      throw new HoodieException(s"This is not a valid range between $startCompletionTime and $endCompletionTime")
     }
 
-    new CDCRelation(sqlContext, metaClient, startingInstant, endingInstant, options, rangeType)
+    new CDCRelation(sqlContext, metaClient, startCompletionTime, endCompletionTime, options, rangeType)
   }
 
   def getTimestampOfLatestInstant(metaClient: HoodieTableMetaClient): String = {

@@ -469,10 +469,10 @@ public class IncrementalQueryAnalyzer {
         }
         return Option.of(InstantRange.builder()
             .startInstant(startInstant.orElse(null))
-                .endInstant(endInstant.orElse(null))
-                .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
-                .nullableBoundary(true)
-                .build());
+            .endInstant(endInstant.orElse(null))
+            .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
+            .nullableBoundary(true)
+            .build());
       } else {
         return Option.of(InstantRange.builder()
                 .rangeType(InstantRange.RangeType.EXACT_MATCH)

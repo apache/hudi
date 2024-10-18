@@ -205,13 +205,12 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 
-      val startInstantTime = queryContext.getStartInstant.get()
       val startInstantArchived = !queryContext.getArchivedInstants.isEmpty
       val endInstantTime = queryContext.getEndInstant.get()
 
       val scanDf = if (fallbackToFullTableScan && startInstantArchived) {
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived")
-        fullTableScanDataFrame(startInstantTime, endInstantTime)
+        fullTableScanDataFrame(commitsToReturn)
       } else {
         if (filteredRegularFullPaths.isEmpty && filteredMetaBootstrapFullPaths.isEmpty) {
           sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
@@ -243,7 +242,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
           }
 
           if (doFullTableScan) {
-            fullTableScanDataFrame(startInstantTime, endInstantTime)
+            fullTableScanDataFrame(commitsToReturn)
           } else {
             if (metaBootstrapFileIdToFullPath.nonEmpty) {
               df = sqlContext.sparkSession.read
@@ -282,13 +281,13 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
   }
 
-  private def fullTableScanDataFrame(startInstantTime: String, endInstantTime: String): DataFrame = {
-    val commitTimesToReturn = commitsToReturn.map(_.getTimestamp)
+  private def fullTableScanDataFrame(commitsToFilter: List[HoodieInstant]): DataFrame = {
+    val commitTimesToFilter = commitsToFilter.map(_.getTimestamp)
     val hudiDF = sqlContext.read
       .format("hudi_v1")
       .schema(usedSchema)
       .load(basePath.toString)
-      .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToReturn: _*))
+      .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToFilter: _*))
 
     // schema enforcement does not happen in above spark.read with hudi. hence selecting explicitly w/ right column order
     val fieldNames = usedSchema.fieldNames

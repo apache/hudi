@@ -105,9 +105,9 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   /**
    * Returns whether the instant is completed.
    */
-  public boolean isCompleted(String startInstantTime) {
+  public boolean isCompleted(String instantTime) {
     // archival does not proceed beyond the first savepoint, so any instant before that is completed.
-    return this.instantTimeToCompletionTimeMap.containsKey(startInstantTime) || isArchived(startInstantTime);
+    return this.instantTimeToCompletionTimeMap.containsKey(instantTime) || isArchived(instantTime);
   }
 
   /**
@@ -205,11 +205,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
       InstantRange.RangeType rangeType) {
     // assumes any instant/transaction lasts at most 1 day to optimize the query efficiency.
     return getInstantTimes(
-        timeline,
-        startCompletionTime,
-        endCompletionTime,
-        rangeType,
-        GET_INSTANT_ONE_DAY_BEFORE);
+        timeline, startCompletionTime, endCompletionTime, rangeType, GET_INSTANT_ONE_DAY_BEFORE);
   }
 
   /**
@@ -323,9 +319,9 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   }
 
   /**
-   * This is method to read instant completion time.
+   * This is the method to read completion time.
    * This would also update 'instantTimeToCompletionTimeMap' map with instant time/completion time pairs.
-   * Only instants starts from 'startInstant' (inclusive) are considered.
+   * Only instants starts from 'startCompletionTime' (inclusive) are considered.
    */
   private void load() {
     // load active instants first.
@@ -345,12 +341,12 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
     setCompletionTime(instantTime, completionTime);
   }
 
-  private void setCompletionTime(String startInstantTime, String completionTime) {
+  private void setCompletionTime(String instantTime, String completionTime) {
     if (completionTime == null) {
       // the meta-server instant does not have completion time
-      completionTime = startInstantTime;
+      completionTime = instantTime;
     }
-    this.instantTimeToCompletionTimeMap.putIfAbsent(startInstantTime, completionTime);
+    this.instantTimeToCompletionTimeMap.putIfAbsent(instantTime, completionTime);
   }
 
   public String getCursorInstant() {

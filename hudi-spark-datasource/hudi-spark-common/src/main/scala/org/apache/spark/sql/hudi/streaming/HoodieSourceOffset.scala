@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.hudi.streaming
 
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
 
 case class HoodieSourceOffset(completionTime: String) extends Offset {
@@ -31,8 +32,8 @@ case class HoodieSourceOffset(completionTime: String) extends Offset {
 
   override def equals(obj: Any): Boolean = {
     obj match {
-      case HoodieSourceOffset(otherCommitTime) =>
-        otherCommitTime == completionTime
+      case HoodieSourceOffset(otherCompletionTime) =>
+        otherCompletionTime == completionTime
       case _=> false
     }
   }

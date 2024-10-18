@@ -18,7 +18,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
+import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
 import org.apache.hudi.HoodieMergeOnReadRDD.CONFIG_INSTANTIATION_LOCK
 import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
 import org.apache.hudi.common.model.HoodieRecord
@@ -27,9 +27,9 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompac
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
+import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 
 import java.io.Closeable
 import java.util.function.Predicate
@@ -59,15 +59,15 @@ private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: Base
 /**
  * RDD enabling Hudi's Merge-on-Read (MOR) semantic
  *
- * @param sc spark's context
- * @param config hadoop configuration
- * @param fileReaders suite of base file readers
- * @param tableSchema table's full schema
- * @param requiredSchema expected (potentially) projected schema
- * @param tableState table's state
- * @param mergeType type of merge performed
- * @param fileSplits target file-splits this RDD will be iterating over
- * @param includedInstantTimeSet timestamps used to filter records
+ * @param sc                     spark's context
+ * @param config                 hadoop configuration
+ * @param fileReaders            suite of base file readers
+ * @param tableSchema            table's full schema
+ * @param requiredSchema         expected (potentially) projected schema
+ * @param tableState             table's state
+ * @param mergeType              type of merge performed
+ * @param fileSplits             target file-splits this RDD will be iterating over
+ * @param includedInstantTimeSet instant time set used to filter records
  */
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
@@ -77,7 +77,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            tableState: HoodieTableState,
                            mergeType: String,
                            @transient fileSplits: Seq[HoodieMergeOnReadFileSplit],
-                           includedInstantTimeSet: Set[String] = null)
+                           includedInstantTimeSet: Option[Set[String]] = Option.empty)
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
@@ -122,12 +122,12 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
 
     val commitTimeMetadataFieldIdx = requiredSchema.structTypeSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-    val needsFiltering = commitTimeMetadataFieldIdx >= 0 && includedInstantTimeSet != null
+    val needsFiltering = commitTimeMetadataFieldIdx >= 0 && includedInstantTimeSet.isDefined
     if (needsFiltering) {
       val filterT: Predicate[InternalRow] = new Predicate[InternalRow] {
         override def test(row: InternalRow): Boolean = {
           val commitTime = row.getString(commitTimeMetadataFieldIdx)
-          includedInstantTimeSet.contains(commitTime)
+          includedInstantTimeSet.get.contains(commitTime)
         }
       }
       iter.filter(filterT.test)
