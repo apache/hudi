@@ -80,6 +80,7 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
       val newRelationOpt: Option[BaseRelation] = lr.relation match {
         case mor: MergeOnReadSnapshotRelation =>
           // Try to rebuild relation with [HadoopFsRelation]
+          // TODO: need check if there exist a base-file with empty data. HadoopFsRelation will filter out empty files but HoodieBaseRelation will not.
           Some(mor.considerConvertToHadoopFsRelation)
         case _ =>
           None
