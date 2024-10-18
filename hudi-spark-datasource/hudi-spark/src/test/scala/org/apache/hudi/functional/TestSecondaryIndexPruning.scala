@@ -327,7 +327,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
         Seq(1, "row1", "xyz", "p1")
       )
-      verifyQueryPredicate(hudiOpts, "not_record_key_col")
+      verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
     }
   }
 
@@ -610,7 +610,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
         Seq(1, "row1", "xyz", "p1")
       )
-      verifyQueryPredicate(hudiOpts, "not_record_key_col")
+      verifyQueryPredicate(hudiOpts, "not_record_key_col","abc")
     }
   }
 
@@ -780,10 +780,11 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(query).collect().sortBy(_.toString()))
   }
 
-  private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String): Unit = {
+  private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String, nonExistantKey: String = "abcdefghi"): Unit = {
     mergedDfList = spark.read.format("hudi").options(hudiOpts).load(basePath).repartition(1).cache() :: mergedDfList
-    val secondaryKey = mergedDfList.last.limit(1).collect().map(row => row.getAs(columnName).toString)
-    val dataFilter = EqualTo(attribute(columnName), Literal(secondaryKey(0)))
+    val secondaryKey = mergedDfList.last.limit(2).collect().filter(row => !row.getAs(columnName).toString.equals(nonExistantKey))
+      .map(row => row.getAs(columnName).toString).head
+    val dataFilter = EqualTo(attribute(columnName), Literal(secondaryKey))
     verifyFilePruning(hudiOpts, dataFilter)
   }
 
