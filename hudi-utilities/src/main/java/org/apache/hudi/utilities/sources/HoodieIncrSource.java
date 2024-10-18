@@ -225,7 +225,7 @@ public class HoodieIncrSource extends RowSource {
       List<String> instantTimeList = queryContext.getInstantTimeList();
       if (snapshotLoadQuerySplitter.isPresent()) {
         Option<SnapshotLoadQuerySplitter.CheckpointWithPredicates> newCheckpointAndPredicate =
-            snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryContext, sourceProfileSupplier);
+            snapshotLoadQuerySplitter.get().getNextCheckpointWithPredicates(snapshot, queryContext);
         if (newCheckpointAndPredicate.isPresent()) {
           endCompletionTime = newCheckpointAndPredicate.get().endInstant;
           predicate = Option.of(newCheckpointAndPredicate.get().predicateFilter);
