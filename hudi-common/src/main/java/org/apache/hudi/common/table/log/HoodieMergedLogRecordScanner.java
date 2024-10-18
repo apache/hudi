@@ -105,7 +105,8 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
         HoodieRecord finalRecord = latestHoodieRecord.copy();
 
         // Handle delete lost for MOR tables.
-        if (prevRecord.isDelete(readerSchema, this.getPayloadProps())) {
+        if (prevRecord.isDelete(readerSchema, this.getPayloadProps())
+            || (prevRecord.getMetadata().isPresent() && prevRecord.getMetaDataInfo(INTERNAL_META_ORDERING_FIELD).isPresent())) {
           finalRecord.addMetadata(INTERNAL_META_ORDERING_FIELD, HoodieReaderContext.maxValue(orderingFieldType));
         }
         records.put(key, finalRecord);
