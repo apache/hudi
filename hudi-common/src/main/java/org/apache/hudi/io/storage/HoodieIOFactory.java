@@ -32,6 +32,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+
+import java.util.Properties;
+import java.util.function.Function;
+
 /**
  * Base class to get {@link HoodieFileReaderFactory}, {@link HoodieFileWriterFactory}, and {@link FileFormatUtils}
  */
@@ -115,4 +121,22 @@ public abstract class HoodieIOFactory {
     }
     throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");
   }
+
+  /**
+   * @param recordSchema   schema of the record to convert
+   * @param properties     options to pass in
+   * @param recordType     type of the record payload
+   * @return mapping function from hoodie record of type recordType to Indexed record
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract Function<HoodieRecord<?>, IndexedRecord> toIndexedRecord(Schema recordSchema,
+                                                                           Properties properties,
+                                                                           HoodieRecord.HoodieRecordType recordType);
+
+  /**
+   * @param recordType type of the record payload
+   * @return mapping function from indexed record to HoodieRecord with recordType payload
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract Function<IndexedRecord, HoodieRecord<?>> fromIndexedRecord(HoodieRecord.HoodieRecordType recordType);
 }
