@@ -288,13 +288,17 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     return rows;
   }
 
-  @Test
-  public void testPartitionStatsValidation() {
+  @ParameterizedTest
+  @ValueSource(strings = {"MERGE_ON_READ", "COPY_ON_WRITE"})
+  public void testPartitionStatsValidation(String tableType) {
     // TODO: Add validation for compaction and clustering cases
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put("hoodie.table.name", "test_table");
-    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
+    if (tableType.equals("COPY_ON_WRITE")) {
+      writeOptions.put(HoodieMetadataConfig.PARTITION_STATS_INDEX_CONSOLIDATE_ON_EVERY_WRITE.key(), "true");
+    }
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
     writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");

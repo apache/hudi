@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
 import org.apache.hudi.HoodieBaseRelation.projectSchema
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
@@ -26,17 +27,16 @@ import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
 
 import org.apache.avro.Schema
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.BaseRelation
-import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 
 import scala.collection.JavaConverters._
 import scala.math.abs
@@ -245,7 +245,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
         fail("Only Spark 3 is currently supported")
 
     val incrementalOpts: Map[String, String] = Map(
-      DataSourceReadOptions.BEGIN_INSTANTTIME.key -> "001"
+      DataSourceReadOptions.START_COMMIT.key -> "001"
     )
 
     // Test MOR / Incremental / Skip-merge
@@ -281,8 +281,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     val readOpts = defaultWriteOpts ++ Map(
       "path" -> tablePath,
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-      DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startUnarchivedCommitTs,
-      DataSourceReadOptions.END_INSTANTTIME.key -> endUnarchivedCommitTs
+      DataSourceReadOptions.START_COMMIT.key -> startUnarchivedCommitTs,
+      DataSourceReadOptions.END_COMMIT.key -> endUnarchivedCommitTs
     )
 
     val inputDf = spark.read.format("hudi")
@@ -307,8 +307,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     val readOpts = defaultWriteOpts ++ Map(
       "path" -> tablePath,
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-      DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startUnarchivedCommitTs,
-      DataSourceReadOptions.END_INSTANTTIME.key -> endUnarchivedCommitTs
+      DataSourceReadOptions.START_COMMIT.key -> startUnarchivedCommitTs,
+      DataSourceReadOptions.END_COMMIT.key -> endUnarchivedCommitTs
     )
 
     val inputDf = spark.read.format("hudi")

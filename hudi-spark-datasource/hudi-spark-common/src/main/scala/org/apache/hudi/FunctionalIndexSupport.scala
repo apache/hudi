@@ -62,7 +62,7 @@ class FunctionalIndexSupport(spark: SparkSession,
     if (isIndexAvailable && queryFilters.nonEmpty && functionalIndexPartitionOpt.nonEmpty) {
       val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
       val indexDf = loadFunctionalIndexDataFrame(functionalIndexPartitionOpt.get, readInMemory)
-      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
+      val prunedFileNames = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)._2
       Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
     } else {
       Option.empty

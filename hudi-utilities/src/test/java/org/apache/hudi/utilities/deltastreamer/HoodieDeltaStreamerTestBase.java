@@ -679,7 +679,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
-    static String assertCommitMetadata(String expected, String tablePath, int totalCommits)
+    static HoodieInstant assertCommitMetadata(String expected, String tablePath, int totalCommits)
         throws IOException {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
@@ -688,7 +688,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(lastInstant).get(), HoodieCommitMetadata.class);
       assertEquals(totalCommits, timeline.countInstants());
       assertEquals(expected, commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));
-      return lastInstant.getTimestamp();
+      return lastInstant;
     }
 
     static void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs) throws Exception {
