@@ -66,7 +66,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import scala.Function1;
-import scala.collection.Seq;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_DFS_STREAM_BUFFER_SIZE;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
