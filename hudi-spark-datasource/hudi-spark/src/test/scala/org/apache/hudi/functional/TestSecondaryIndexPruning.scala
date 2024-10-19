@@ -785,7 +785,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   }
 
   private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String): Unit = {
-    mergedDfList = spark.read.format("hudi").options(hudiOpts).load(basePath).repartition(1).cache() :: mergedDfList
+    mergedDfList = mergedDfList :+ spark.read.format("hudi").options(hudiOpts).load(basePath).repartition(1).cache()
     val secondaryKey = mergedDfList.last.limit(1).collect().map(row => row.getAs(columnName).toString)
     val dataFilter = EqualTo(attribute(columnName), Literal(secondaryKey(0)))
     verifyFilePruning(hudiOpts, dataFilter)
