@@ -123,8 +123,9 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathPairs, HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient,
-                                                               int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf, String instantTime) {
+  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
+                                                               HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               String instantTime) {
     throw new HoodieNotSupportedException("Functional index not supported for Java metadata table writer yet.");
   }
 

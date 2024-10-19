@@ -403,9 +403,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     for (MetadataPartitionType partitionType : partitionsToInit) {
       // Find the commit timestamp to use for this partition. Each initialization should use its own unique commit time.
-      String commitTimeForPartition = generateUniqueCommitInstantTime(initializationTime);
+      String instantTimeForPartition = generateUniqueInstantTime(initializationTime);
       String partitionTypeName = partitionType.name();
-      LOG.info("Initializing MDT partition {} at instant {}", partitionTypeName, commitTimeForPartition);
+      LOG.info("Initializing MDT partition {} at instant {}", partitionTypeName, instantTimeForPartition);
       String partitionName;
       Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair;
       try {
@@ -433,7 +433,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             }
             ValidationUtils.checkState(functionalIndexPartitionsToInit.size() == 1, "Only one functional index at a time is supported for now");
             partitionName = functionalIndexPartitionsToInit.iterator().next();
-            fileGroupCountAndRecordsPair = initializeFunctionalIndexPartition(partitionName, commitTimeForPartition);
+            fileGroupCountAndRecordsPair = initializeFunctionalIndexPartition(partitionName, instantTimeForPartition);
             break;
           case PARTITION_STATS:
             fileGroupCountAndRecordsPair = initializePartitionStatsIndex(partitionInfoList);
@@ -469,11 +469,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Generate the file groups
       final int fileGroupCount = fileGroupCountAndRecordsPair.getKey();
       ValidationUtils.checkArgument(fileGroupCount > 0, "FileGroup count for MDT partition " + partitionTypeName + " should be > 0");
-      initializeFileGroups(dataMetaClient, partitionType, commitTimeForPartition, fileGroupCount, partitionName);
+      initializeFileGroups(dataMetaClient, partitionType, instantTimeForPartition, fileGroupCount, partitionName);
 
       // Perform the commit using bulkCommit
       HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
-      bulkCommit(commitTimeForPartition, partitionName, records, fileGroupCount);
+      bulkCommit(instantTimeForPartition, partitionName, records, fileGroupCount);
       metadataMetaClient.reloadActiveTimeline();
 
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionName, true);
@@ -495,7 +495,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param initializationTime Timestamp from dataset to use for initialization
    * @return a unique timestamp for MDT
    */
-  private String generateUniqueCommitInstantTime(String initializationTime) {
+  private String generateUniqueInstantTime(String initializationTime) {
     // If it's initialized via Async indexer, we don't need to alter the init time.
     // otherwise yields the timestamp on the fly.
     // This function would be called multiple times in a single application if multiple indexes are being
@@ -537,7 +537,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return Pair.of(fileGroupCount, records);
   }
 
-  protected abstract HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathPairs,
+  protected abstract HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
                                                                         HoodieIndexDefinition indexDefinition,
                                                                         HoodieTableMetaClient metaClient,
                                                                         int parallelism, Schema readerSchema,
@@ -554,24 +554,24 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexName);
     ValidationUtils.checkState(indexDefinition != null, "Functional Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
-    List<Pair<String, Pair<String, Long>>> partitionFilePathPairs = new ArrayList<>();
+    List<Pair<String, Pair<String, Long>>> partitionFilePathSizeTriplet = new ArrayList<>();
     partitionFileSlicePairs.forEach(entry -> {
       if (entry.getValue().getBaseFile().isPresent()) {
-        partitionFilePathPairs.add(Pair.of(entry.getKey(), Pair.of(entry.getValue().getBaseFile().get().getPath(), entry.getValue().getBaseFile().get().getFileLen())));
+        partitionFilePathSizeTriplet.add(Pair.of(entry.getKey(), Pair.of(entry.getValue().getBaseFile().get().getPath(), entry.getValue().getBaseFile().get().getFileLen())));
       }
       entry.getValue().getLogFiles().forEach(hoodieLogFile -> {
         if (entry.getValue().getLogFiles().count() > 0) {
           entry.getValue().getLogFiles().forEach(logfile -> {
-            partitionFilePathPairs.add(Pair.of(entry.getKey(), Pair.of(logfile.getPath().toString(), logfile.getFileSize())));
+            partitionFilePathSizeTriplet.add(Pair.of(entry.getKey(), Pair.of(logfile.getPath().toString(), logfile.getFileSize())));
           });
         }
       });
     });
 
     int fileGroupCount = dataWriteConfig.getMetadataConfig().getFunctionalIndexFileGroupCount();
-    int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
+    int parallelism = Math.min(partitionFilePathSizeTriplet.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
     Schema readerSchema = getProjectedSchemaForFunctionalIndex(indexDefinition, dataMetaClient);
-    return Pair.of(fileGroupCount, getFunctionalIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime));
+    return Pair.of(fileGroupCount, getFunctionalIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime));
   }
 
   private HoodieIndexDefinition getFunctionalIndexDefinition(String indexName) {

@@ -169,7 +169,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathPairs,
+  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
                                                                HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
                                                                Schema readerSchema, StorageConfiguration<?> storageConf,
@@ -186,7 +186,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     SQLContext sqlContext = sparkEngineContext.getSqlContext();
 
     // Read records and append functional index metadata to every row
-    HoodieData<Row> rowData = sparkEngineContext.parallelize(partitionFilePathPairs, parallelism)
+    HoodieData<Row> rowData = sparkEngineContext.parallelize(partitionFilePathAndSizeTriplet, parallelism)
         .flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<Row>>) entry -> {
           String partition = entry.getKey();
           Pair<String, Long> filePathSizePair = entry.getValue();
