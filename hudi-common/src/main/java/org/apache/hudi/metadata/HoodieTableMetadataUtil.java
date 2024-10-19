@@ -2201,7 +2201,7 @@ public class HoodieTableMetadataUtil {
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient)
-          && (metadataConfig.isPartitionStatsIndexTightBoundEnabledOnEveryCommit() || WriteOperationType.isPartitionStatsTightBoundRequired(commitMetadata.getOperationType()));
+          && (metadataConfig.isPartitionStatsIndexConsolidationEnabledOnEveryWrite() || shouldConsolidatePartitionStats(commitMetadata, dataMetaClient));
       HoodieTableMetadata tableMetadata;
       if (shouldScanColStatsForTightBound) {
         tableMetadata = HoodieTableMetadata.create(engineContext, dataMetaClient.getStorage(), metadataConfig, dataMetaClient.getBasePath().toString());
@@ -2243,6 +2243,31 @@ public class HoodieTableMetadataUtil {
       });
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);
+    }
+  }
+
+  private static boolean shouldConsolidatePartitionStats(HoodieCommitMetadata commitMetadata, HoodieTableMetaClient metaClient) {
+    if (WriteOperationType.isPartitionStatsTightBoundRequired(commitMetadata.getOperationType())) {
+      return true;
+    }
+    // if not for compaction or clustering, lets check for any new base file added.
+    HoodieTableFileSystemView fsv = getFileSystemView(metaClient);
+    try {
+      fsv.loadPartitions(new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet()));
+      // Collect already existing filegroupIds.
+      Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
+      commitMetadata.getPartitionToWriteStats().keySet().forEach(partition -> {
+        partitionToExistingFileIds.put(partition, fsv.getLatestBaseFiles(partition).map(baseFile -> baseFile.getFileId()).collect(Collectors.toList()));
+      });
+      // check if new base file is added to any of existing file groups.
+      // as of now, if any one partition has a new base file added, we are triggering tighter bound computation for all partitions touched in this commit.
+      return commitMetadata.getPartitionToWriteStats().entrySet().stream().filter(entry -> {
+        List<String> existingFileIds = partitionToExistingFileIds.get(entry.getKey());
+        return entry.getValue().stream().filter(writeStat -> writeStat.getPath().contains(".parquet"))
+            .filter(writeStat -> existingFileIds.contains(writeStat.getFileId())).findAny().isPresent();
+      }).findAny().isPresent();
+    } finally {
+      fsv.close();
     }
   }
 

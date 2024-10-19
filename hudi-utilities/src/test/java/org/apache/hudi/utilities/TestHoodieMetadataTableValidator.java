@@ -297,7 +297,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
     if (tableType.equals("COPY_ON_WRITE")) {
-      writeOptions.put(HoodieMetadataConfig.PARTITION_STATS_INDEX_TIGHT_BOUND_EVERY_COMMIT.key(), "true");
+      writeOptions.put(HoodieMetadataConfig.PARTITION_STATS_INDEX_CONSOLIDATE_ON_EVERY_WRITE.key(), "true");
     }
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
