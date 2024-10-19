@@ -144,7 +144,8 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
-      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(),
+        if (tableType.equals("MERGE_ON_READ")) "true" else "false").
       option(OPERATION.key(), "upsert").
       options(opts).
       mode(SaveMode.Append).
