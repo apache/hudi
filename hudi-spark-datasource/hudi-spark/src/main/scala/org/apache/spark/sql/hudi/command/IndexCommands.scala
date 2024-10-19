@@ -29,7 +29,7 @@ import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.{Row, SparkSession}
 
@@ -62,10 +62,7 @@ case class CreateIndexCommand(table: CatalogTable,
 
     // Invalidate cached table for queries do not access related table
     // through {@code DefaultSource}
-    val qualifiedTableName = QualifiedTableName(
-      tableId.database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase),
-      tableId.table)
-    sparkSession.sessionState.catalog.invalidateCachedTable(qualifiedTableName)
+    sparkSession.sessionState.catalog.invalidateCachedTable(tableId)
     Seq.empty
   }
 }
@@ -88,10 +85,7 @@ case class DropIndexCommand(table: CatalogTable,
 
     // Invalidate cached table for queries do not access related table
     // through {@code DefaultSource}
-    val qualifiedTableName = QualifiedTableName(
-      tableId.database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase),
-      tableId.table)
-    sparkSession.sessionState.catalog.invalidateCachedTable(qualifiedTableName)
+    sparkSession.sessionState.catalog.invalidateCachedTable(tableId)
     Seq.empty
   }
 }
