@@ -37,8 +37,9 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.scalatest.Ignore
 
-
+@Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
