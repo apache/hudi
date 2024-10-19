@@ -410,6 +410,54 @@ public class TestCleaner extends HoodieCleanerTestBase {
     }
   }
 
+  @Test
+  void testEmptyClean() throws IOException {
+    // validate that an empty cleaner plan does not throw any errors at execution time
+    HoodieWriteConfig writeConfig = getConfigBuilder().withPath(basePath)
+        .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+            .withEnableBackupForRemoteFileSystemView(false)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS)
+            .retainCommits(1)
+            .build())
+        .withEmbeddedTimelineServerEnabled(false).build();
+    // datagen for non-partitioned table
+    initTestDataGenerator(new String[] {NO_PARTITION_PATH});
+    // init non-partitioned table
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET,
+        true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", true);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 1);
+      client.startCommitWithTime(instantTime);
+      client.insert(jsc.parallelize(records, 1), instantTime).collect();
+
+      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      HoodieTable table = HoodieSparkTable.create(writeConfig, context);
+
+      HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+      HoodieInstant hoodieInstant = timeline.firstInstant().get();
+      HoodieCleanerPlan cleanerPlan = HoodieCleanerPlan.newBuilder()
+          .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.name())
+          .setVersion(CleanPlanner.LATEST_CLEAN_PLAN_VERSION)
+          .setEarliestInstantToRetain(new HoodieActionInstant(hoodieInstant.getTimestamp(), hoodieInstant.getAction(), hoodieInstant.getState().name()))
+          .setLastCompletedCommitTimestamp(timeline.lastInstant().get().getTimestamp())
+          .setFilePathsToBeDeletedPerPartition(Collections.emptyMap())
+          .build();
+      final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, instantTime);
+      table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+
+      table.getMetaClient().reloadActiveTimeline();
+      // clean
+      HoodieCleanMetadata cleanMetadata = table.clean(context, instantTime);
+      // check the cleaned files are empty
+      assertTrue(cleanMetadata.getPartitionMetadata().isEmpty());
+    }
+  }
+
   /**
    * Tests no more than 1 clean is scheduled if hoodie.clean.allow.multiple config is set to false.
    */
