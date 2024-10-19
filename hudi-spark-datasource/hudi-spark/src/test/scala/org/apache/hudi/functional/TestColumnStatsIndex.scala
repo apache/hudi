@@ -247,6 +247,42 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
+    simulateFailureForLatestCommit(tableType, partitionCol)
+
+    val metadataOpts1 = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
+    //       deferred updates), diverging from COW
+
+    val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-bootstrap-rollback1-column-stats-index-table.json"
+    } else {
+      "index/colstats/mor-bootstrap-rollback1-column-stats-index-table.json"
+    }
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+
+    // updates a subset which are not deleted and enable col stats and validate bootstrap
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+      dataSourcePath = "index/colstats/update3-input-table-json",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      true,
+      latestCompletedCommit,
+      numPartitions =  1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
+  }
+
+  def simulateFailureForLatestCommit(tableType: HoodieTableType, partitionCol: String) : Unit = {
     // simulate failure for latest commit.
     metaClient = HoodieTableMetaClient.reload(metaClient)
     var baseFileName : String = null
@@ -288,37 +324,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       }
     }
 
-    val metadataOpts1 = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
-    )
-
-    // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
-    //       deferred updates), diverging from COW
-
-    val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
-      "index/colstats/cow-bootstrap-rollback1-column-stats-index-table.json"
-    } else {
-      "index/colstats/mor-bootstrap-rollback1-column-stats-index-table.json"
-    }
-
-    metaClient = HoodieTableMetaClient.reload(metaClient)
-    val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
-
-    // updates a subset which are not deleted and enable col stats and validate bootstrap
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
-      dataSourcePath = "index/colstats/update3-input-table-json",
-      expectedColStatsSourcePath = expectedColStatsSourcePath,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append,
-      true,
-      latestCompletedCommit,
-      numPartitions =  1,
-      parquetMaxFileSize = 100 * 1024 * 1024,
-      smallFileLimit = 0))
-
-    metaClient = HoodieTableMetaClient.reload(metaClient)
-    assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
   }
 
   @Test
@@ -410,15 +415,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
-
-    // lets keep track of the first parquet file created. It will be deleted by the cleaner eventually.
-    val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
-      metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/"))
-    } else {
-      metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/9/"))
-    }
-    val baseFileFileStatus = dataFiles.stream().findFirst().get()
-    val baseFileName = baseFileFileStatus.getPath.getName
 
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
