@@ -364,3 +364,8 @@ ac2cb4d95e [ENG-14712][HUDI-8126] Support proto messages for spark kryo serializ
 0c9cb2c74b [ENG-15012][HUDI-8331] Remove excessive table validity check (#967)
 f21f1807b2 [ENG-15634][INTERNAL] Fixing failure handling with HoodieMetadataTableValidator (#961)
 b74c97d91c [AUDIT-993] Changelog for release-v1.37.1 (#960)
+
+---[2024-10-19 16:22:46] [release-v1.39.0] ---
+186d43b625c [ENG-12790][INTERNAL] Adding support for empty cleans (#972)
+3b938bd2fbc [ENG-10226][HUDI-8378] Fix Avro schema deserializer failing with schema evolution (#971)
+b2543229a2f [AUDIT-993] Change log for release-v1.38.0 (#969)
