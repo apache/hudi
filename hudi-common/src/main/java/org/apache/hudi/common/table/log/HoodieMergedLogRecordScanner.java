@@ -42,8 +42,7 @@ import java.util.stream.Collectors;
 import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
-import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_IN_BETWEEN;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
+import static org.apache.hudi.common.engine.HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -103,10 +102,9 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
         //       it since these records will be put into records(Map).
         HoodieRecord finalRecord = latestHoodieRecord.copy();
 
-        // Reserve the delete information.
-        if (prevRecord.isDelete(readerSchema, this.getPayloadProps())
-            || (prevRecord.getMetadata().isPresent() && prevRecord.getMetaDataInfo(INTERNAL_META_OPERATION).isPresent())) {
-          finalRecord.addMetadata(INTERNAL_META_OPERATION, DELETE_IN_BETWEEN);
+        // If processing time based delete is found, we need to preserve the information.
+        if (hasProcessingTimeBasedDelete(prevRecord)) {
+          finalRecord.addMetadata(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
         }
         records.put(key, finalRecord);
       }
@@ -117,6 +115,17 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
       //       it since these records will be put into records(Map).
       records.put(key, newRecord.copy());
     }
+  }
+
+  /**
+   * Processing time based delete is found when
+   * 1. The current record is a delete whose orderingVal is default value, or
+   * 2. The current record's metadata contains the flag: PROCESSING_TIME_BASED_DELETE_FOUND.
+   */
+  private <T> boolean hasProcessingTimeBasedDelete(HoodieRecord<T> record) throws IOException {
+    return (record.isDelete(readerSchema, getPayloadProps())
+        && record.getOrderingValue(readerSchema, getPayloadProps()).equals(orderingFieldDefault))
+        || (record.getMetadata().isPresent() && record.getMetaDataInfo(PROCESSING_TIME_BASED_DELETE_FOUND).isPresent());
   }
 
   /**

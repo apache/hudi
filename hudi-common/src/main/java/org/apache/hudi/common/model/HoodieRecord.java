@@ -433,7 +433,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   public void addMetadata(String key, String value) {
-    if (metaData.isEmpty()) {
+    if (metaData == null || metaData.isEmpty()) {
       initMetadata();
     }
     metaData.get().put(key, value);
