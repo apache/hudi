@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.read
 
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger}
 import org.apache.spark.sql.SaveMode
@@ -144,6 +144,7 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true").
       option(OPERATION.key(), "upsert").
       options(opts).
       mode(SaveMode.Append).

@@ -301,8 +301,11 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
     // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
     //       on the record from the Delta Log
 
-    // Delete records are in-between; no merge is needed.
-    if (newRecord.getMetaDataInfo(HoodieReaderContext.INTERNAL_META_OPERATION).isPresent) {
+    // Given a processing time based delete, the merging between the log record and the base file record is skipped.
+    // E.g., given a row key RK, it appears in base file (bf) and multiple log files (lf1, lf2, lf3).
+    // Then we have records bfr, lfr1, lfr2, lfr3.
+    // If lfr2 is the delete, then lfr3 should be returned without merging with bfr.
+    if (newRecord.getMetaDataInfo(HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND).isPresent) {
       recordMerger.getRecordType match {
         case HoodieRecordType.SPARK => {
           val schema = HoodieInternalRowUtils.getCachedSchema(logFileReaderAvroSchema)

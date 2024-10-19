@@ -50,9 +50,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_IN_BETWEEN;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
+import static org.apache.hudi.common.engine.HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -198,19 +197,16 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
     if (deleteRecord.getOrderingValue() == null && existingRecordMetadataPair != null) {
-      existingRecordMetadataPair.getRight().put(INTERNAL_META_OPERATION, DELETE_IN_BETWEEN);
+      existingRecordMetadataPair.getRight().put(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
       return;
     }
 
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
       String recordKey = recordOpt.get().getRecordKey();
-      Comparable orderingVal = readerContext.getOrderingValue(
-          Option.empty(), Collections.EMPTY_MAP, readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
-      Comparable orderingValApplied =
-          recordOpt.get().getOrderingValue() == null ? orderingVal : recordOpt.get().getOrderingValue();
+      Comparable orderingVal = recordOpt.get().getOrderingValue() == null ? orderingFieldDefault : recordOpt.get().getOrderingValue();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), orderingValApplied, orderingFieldTypeOpt)));
+          recordKey, recordOpt.get().getPartitionPath(), orderingVal, orderingFieldTypeOpt)));
     }
   }
 
