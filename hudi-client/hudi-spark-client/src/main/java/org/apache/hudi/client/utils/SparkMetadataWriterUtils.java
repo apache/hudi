@@ -63,7 +63,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 import scala.Function1;
@@ -100,12 +99,12 @@ public class SparkMetadataWriterUtils {
   @NotNull
   public static List<Row> getRowsWithFunctionalIndexMetadata(List<Row> rowsForFilePath, String partition, String filePath, long fileSize) {
     return rowsForFilePath.stream().map(row -> {
-      Seq<Object> indexMetadata = JavaScalaConverters.convertJavaListToScalaSeq(Arrays.asList(partition, filePath, fileSize));
+      scala.collection.immutable.Seq<Object> indexMetadata = JavaScalaConverters.convertJavaListToScalaList(Arrays.asList(partition, filePath, fileSize));
       Row functionalIndexRow = Row.fromSeq(indexMetadata);
       List<Row> rows = new ArrayList<>(2);
       rows.add(row);
       rows.add(functionalIndexRow);
-      Seq<Row> rowSeq = JavaScalaConverters.convertJavaListToScalaSeq(rows);
+      scala.collection.immutable.Seq<Row> rowSeq = JavaScalaConverters.convertJavaListToScalaList(rows);
       return Row.merge(rowSeq);
     }).collect(Collectors.toList());
   }
@@ -147,8 +146,8 @@ public class SparkMetadataWriterUtils {
               totalUncompressedSize
           );
           return createColumnStatsRecords(partitionName, Collections.singletonList(rangeMetadata), false, functionalIndex.getIndexName(),
-              COLUMN_STATS.getRecordType()).collect(Collectors.toList()).iterator();}
-    );
+              COLUMN_STATS.getRecordType()).collect(Collectors.toList()).iterator();
+        });
   }
 
   public static HoodieData<HoodieRecord> getFunctionalIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex,
@@ -165,17 +164,18 @@ public class SparkMetadataWriterUtils {
             bloomFilter.add(key);
           });
           ByteBuffer bloomByteBuffer = ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString()));
-          return Collections.singletonList((HoodieRecord) createBloomFilterMetadataRecord(partition, filePath, instantTime, metadataWriteConfig.getBloomFilterType(), bloomByteBuffer, false)).iterator();
+          HoodieRecord bloomFilterRecord = createBloomFilterMetadataRecord(partition, filePath, instantTime, metadataWriteConfig.getBloomFilterType(), bloomByteBuffer, false);
+          return Collections.singletonList(bloomFilterRecord).iterator();
         }), Encoders.kryo(HoodieRecord.class));
     return HoodieJavaRDD.of(bloomFilterRecords.javaRDD());
   }
 
   public static List<Row> readRecordsAsRows(StoragePath[] paths, SQLContext sqlContext,
                                             HoodieTableMetaClient metaClient, Schema schema,
-                                            boolean isBaseFile) {
+                                            HoodieWriteConfig dataWriteConfig, boolean isBaseFile) {
     List<HoodieRecord> records = isBaseFile ? getBaseFileRecords(new HoodieBaseFile(paths[0].toString()), metaClient, schema)
         : getUnmergedLogFileRecords(Arrays.stream(paths).map(StoragePath::toString).collect(Collectors.toList()), metaClient, schema);
-    return toRows(records, schema, sqlContext, paths[0].toString());
+    return toRows(records, schema, dataWriteConfig, sqlContext, paths[0].toString());
   }
 
   private static List<HoodieRecord> getUnmergedLogFileRecords(List<String> logFilePaths, HoodieTableMetaClient metaClient, Schema readerSchema) {
@@ -207,20 +207,19 @@ public class SparkMetadataWriterUtils {
     }
   }
 
-  private static List<Row> toRows(List<HoodieRecord> records, Schema schema, SQLContext sqlContext, String path) {
+  private static List<Row> toRows(List<HoodieRecord> records, Schema schema, HoodieWriteConfig dataWriteConfig, SQLContext sqlContext, String path) {
     StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
     Function1<GenericRecord, Row> converterToRow = AvroConversionUtils.createConverterToRow(schema, structType);
     List<Row> avroRecords = records.stream()
         .map(r -> {
           try {
             return (GenericRecord) (r.getData() instanceof GenericRecord ? r.getData()
-                : ((HoodieRecordPayload) r.getData()).getInsertValue(schema, new Properties()).get());
+                : ((HoodieRecordPayload) r.getData()).getInsertValue(schema, dataWriteConfig.getProps()).get());
           } catch (IOException e) {
             throw new HoodieIOException("Could not fetch record payload");
           }
         })
         .map(converterToRow::apply)
-        // .map(row -> RowFactory.create(path, row))
         .collect(Collectors.toList());
     return avroRecords;
   }
