@@ -516,6 +516,13 @@ public class TestCleanPlanner {
         Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)), Option.empty(),
         activeInstantsPartitionsMap2, Collections.emptyList(), threePartitionsInActiveTimeline, true, Collections.emptyMap()));
 
+    // Empty cleaner plan case
+    arguments.add(Arguments.of(true, getCleanByHoursConfig(), earliestInstant, lastCompletedInLastClean, lastCleanInstant,
+        earliestInstantInLastClean, Collections.emptyList(), Collections.emptyMap(), Option.of(earliestInstant),
+        activeInstantsPartitionsMap2, Collections.emptyMap(), twoPartitionsInActiveTimeline, false));
+    arguments.add(Arguments.of(false, getCleanByHoursConfig(), earliestInstant, lastCompletedInLastClean, lastCleanInstant,
+        earliestInstantInLastClean, Collections.emptyList(), Collections.emptyMap(), Option.of(earliestInstant),
+        activeInstantsUnPartitionsMap, Collections.emptyMap(), unPartitionsInActiveTimeline, false));
     return arguments.stream();
   }
 
@@ -608,6 +615,11 @@ public class TestCleanPlanner {
           Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false)));
       Map<String, String> extraMetadata = new HashMap<>();
       extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointsToTrack.stream().collect(Collectors.joining(",")));
+      /* to be fixed
+      if (earliestCommitToNotArchive.isPresent()) {
+          extraMetadata.put(EARLIEST_COMMIT_TO_NOT_ARCHIVE, earliestCommitToNotArchive.get());
+        }
+       */
       HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(instantTime, 100L, 10, earliestCommitToRetain, lastCompletedTime, partitionMetadata,
           CLEAN_METADATA_VERSION_2, Collections.EMPTY_MAP, extraMetadata.isEmpty() ? null : extraMetadata);
       return Pair.of(cleanMetadata, TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
