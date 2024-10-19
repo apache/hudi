@@ -980,7 +980,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()), metadataTableBasedContext.getMetadataConfig(),
         metaClient, false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
-        partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(metadataTableBasedContext.allColumnNameList).asScala().toSeq(), false);
+        partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false);
     JavaRDD<HoodieMetadataColumnStats> diffRDD = HoodieJavaRDD.getJavaRDD(partitionStats).subtract(HoodieJavaRDD.getJavaRDD(partitionStatsUsingColStats));
     if (!diffRDD.isEmpty()) {
       List<HoodieMetadataColumnStats> diff = diffRDD.collect();
