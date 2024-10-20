@@ -51,7 +51,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
-import static org.apache.hudi.common.engine.HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND;
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -197,7 +197,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
     if (deleteRecord.getOrderingValue() == null && existingRecordMetadataPair != null) {
-      existingRecordMetadataPair.getRight().put(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+      existingRecordMetadataPair.getRight().put(DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
       return;
     }
 
@@ -209,7 +209,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
           recordKey, recordOpt.get().getPartitionPath(), orderingVal, orderingFieldTypeOpt)));
 
       if (recordOpt.get().getOrderingValue() == null) {
-        records.get(recordKey).getRight().put(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+        records.get(recordPosition).getRight().put(DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
       }
     }
   }

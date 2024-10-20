@@ -305,12 +305,16 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
     // E.g., given a row key RK, it appears in base file (bf) and multiple log files (lf1, lf2, lf3).
     // Then we have records bfr, lfr1, lfr2, lfr3.
     // If lfr2 is the delete, then lfr3 should be returned without merging with bfr.
-    if (newRecord.getMetaDataInfo(HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND).isPresent) {
+    if (newRecord.getMetaDataInfo(HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE).isPresent) {
       recordMerger.getRecordType match {
         case HoodieRecordType.SPARK => {
           val schema = HoodieInternalRowUtils.getCachedSchema(logFileReaderAvroSchema)
           val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
-          Some(projection.apply(newRecord.getData.asInstanceOf[InternalRow]))
+          if (newRecord.getData != null) {
+            Some(projection.apply(newRecord.getData.asInstanceOf[InternalRow]))
+          } else {
+            None
+          }
         }
         case _ => {
           val avroRecordOpt = newRecord.toIndexedRecord(logFileReaderAvroSchema, payloadProps)

@@ -236,7 +236,7 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     }
 
     if (deleteRecord.getOrderingValue() == null) {
-      records.get((K) key).addMetadata(HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+      records.get((K) key).addMetadata(HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
     }
   }
 

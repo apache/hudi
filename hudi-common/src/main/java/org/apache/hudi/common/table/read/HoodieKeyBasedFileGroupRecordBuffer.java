@@ -40,7 +40,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND;
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -88,6 +88,10 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordKey) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
+    if (existingRecordMetadataPair.getRight().containsKey(DELETE_FOUND_WITHOUT_ORDERING_VALUE)) {
+      return;
+    }
+
     Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
         doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
     if (mergedRecordAndMetadata.isPresent()) {
@@ -111,7 +115,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
     if (deleteRecord.getOrderingValue() == null && existingRecordMetadataPair != null) {
-      existingRecordMetadataPair.getRight().put(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+      existingRecordMetadataPair.getRight().put(DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
       return;
     }
 
@@ -122,7 +126,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
           (String) recordKey, recordOpt.get().getPartitionPath(), orderingVal, orderingFieldTypeOpt)));
 
       if (recordOpt.get().getOrderingValue() == null) {
-        records.get(recordKey).getRight().put(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+        records.get(recordKey).getRight().put(DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
       }
     }
   }
