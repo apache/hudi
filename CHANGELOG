@@ -369,3 +369,6 @@ b74c97d91c [AUDIT-993] Changelog for release-v1.37.1 (#960)
 186d43b625c [ENG-12790][INTERNAL] Adding support for empty cleans (#972)
 3b938bd2fbc [ENG-10226][HUDI-8378] Fix Avro schema deserializer failing with schema evolution (#971)
 b2543229a2f [AUDIT-993] Change log for release-v1.38.0 (#969)
+
+---[2024-10-20 10:21:48] [release-v1.40.0] ---
+a3a099bba34 [AUDIT-1011]: Changelog for release-v1.39.0 (#973)
