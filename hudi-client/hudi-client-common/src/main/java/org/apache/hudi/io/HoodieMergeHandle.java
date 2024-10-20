@@ -67,6 +67,8 @@ import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND;
+
 @SuppressWarnings("Duplicates")
 /**
  * Handle to merge incoming records to those in storage.
@@ -355,22 +357,28 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
-        Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
-        Option<HoodieRecord> combinedRecord = mergeResult.map(Pair::getLeft);
-        if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(combineRecordSchema, props)) {
-          // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
-          copyOldRecord = true;
-        } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
-          /*
-           * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully
-           * write the combined new value
-           *
-           * We no longer need to copy the old record over.
-           */
-          copyOldRecord = false;
+        if (keyToNewRecords.get(key).getMetaDataInfo(PROCESSING_TIME_BASED_DELETE_FOUND).isPresent()) {
+          if (writeUpdateRecord(newRecord, oldRecord, Option.empty(), newSchema)) {
+            copyOldRecord = false;
+          }
+        } else {
+          Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
+          Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
+          Option<HoodieRecord> combinedRecord = mergeResult.map(Pair::getLeft);
+          if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(combineRecordSchema, props)) {
+            // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
+            copyOldRecord = true;
+          } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
+            /*
+             * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully
+             * write the combined new value
+             *
+             * We no longer need to copy the old record over.
+             */
+            copyOldRecord = false;
+          }
+          writtenRecordKeys.add(key);
         }
-        writtenRecordKeys.add(key);
       } catch (Exception e) {
         throw new HoodieUpsertException("Failed to combine/merge new record with old value in storage, for new record {"
             + keyToNewRecords.get(key) + "}, old value {" + oldRecord + "}", e);

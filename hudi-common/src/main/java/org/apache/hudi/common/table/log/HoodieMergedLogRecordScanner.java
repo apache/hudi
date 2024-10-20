@@ -90,23 +90,29 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
     String key = newRecord.getRecordKey();
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
-      // Merge and store the combined record
-      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
-          newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
-      // If pre-combine returns existing record, no need to update it
-      if (combinedRecord.getData() != prevRecord.getData()) {
-        HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
+      if (prevRecord.isDelete(readerSchema, getPayloadProps())
+          && prevRecord.getMetaDataInfo(PROCESSING_TIME_BASED_DELETE_FOUND).isPresent()) {
+        newRecord.addMetadata(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+        records.put(key, newRecord);
+      } else {
+        // Merge and store the combined record
+        HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
+            newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
+        // If pre-combine returns existing record, no need to update it
+        if (combinedRecord.getData() != prevRecord.getData()) {
+          HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
 
-        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-        //       it since these records will be put into records(Map).
-        HoodieRecord finalRecord = latestHoodieRecord.copy();
+          // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+          //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+          //       it since these records will be put into records(Map).
+          HoodieRecord finalRecord = latestHoodieRecord.copy();
 
-        // If processing time based delete is found, we need to preserve the information.
-        if (hasProcessingTimeBasedDelete(prevRecord)) {
-          finalRecord.addMetadata(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+          // If processing time based delete is found, we need to preserve the information.
+          if (hasProcessingTimeBasedDelete(prevRecord)) {
+            finalRecord.addMetadata(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+          }
+          records.put(key, finalRecord);
         }
-        records.put(key, finalRecord);
       }
     } else {
       // Put the record as is
@@ -119,13 +125,13 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
 
   /**
    * Processing time based delete is found when
-   * 1. The current record is a delete whose orderingVal is default value, or
-   * 2. The current record's metadata contains the flag: PROCESSING_TIME_BASED_DELETE_FOUND.
+   * 1. The current record's metadata contains the flag: PROCESSING_TIME_BASED_DELETE_FOUND.
+   * 2. The current record is a delete whose orderingVal is default value, or
    */
   private <T> boolean hasProcessingTimeBasedDelete(HoodieRecord<T> record) throws IOException {
-    return (record.isDelete(readerSchema, getPayloadProps())
-        && record.getOrderingValue(readerSchema, getPayloadProps()).equals(orderingFieldDefault))
-        || (record.getMetadata().isPresent() && record.getMetaDataInfo(PROCESSING_TIME_BASED_DELETE_FOUND).isPresent());
+    return (record.getMetadata().isPresent() && record.getMetaDataInfo(PROCESSING_TIME_BASED_DELETE_FOUND).isPresent())
+        || (record.isDelete(readerSchema, getPayloadProps())
+        && record.getOrderingValue(readerSchema, getPayloadProps()).equals(orderingFieldDefault));
   }
 
   /**

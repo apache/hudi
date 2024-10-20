@@ -120,6 +120,10 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       Comparable orderingVal = recordOpt.get().getOrderingValue() == null ? orderingFieldDefault : recordOpt.get().getOrderingValue();
       records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
           (String) recordKey, recordOpt.get().getPartitionPath(), orderingVal, orderingFieldTypeOpt)));
+
+      if (recordOpt.get().getOrderingValue() == null) {
+        records.get(recordKey).getRight().put(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+      }
     }
   }
 
