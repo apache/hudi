@@ -88,7 +88,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordKey) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
-    if (existingRecordMetadataPair.getRight().containsKey(DELETE_FOUND_WITHOUT_ORDERING_VALUE)) {
+    if (existingRecordMetadataPair != null && existingRecordMetadataPair.getRight().containsKey(DELETE_FOUND_WITHOUT_ORDERING_VALUE)) {
       return;
     }
 
