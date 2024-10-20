@@ -313,8 +313,13 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
           Some(projection.apply(newRecord.getData.asInstanceOf[InternalRow]))
         }
         case _ => {
-          val avroRecord = newRecord.toIndexedRecord(logFileReaderAvroSchema, payloadProps).get.getData.asInstanceOf[GenericRecord]
-          Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
+          val avroRecordOpt = newRecord.toIndexedRecord(logFileReaderAvroSchema, payloadProps)
+          if (avroRecordOpt.isPresent) {
+            val record = avroRecordOpt.get().getData.asInstanceOf[GenericRecord]
+            Some(deserialize(requiredSchemaAvroProjection(record)))
+          } else {
+            None
+          }
         }
       }
     } else {

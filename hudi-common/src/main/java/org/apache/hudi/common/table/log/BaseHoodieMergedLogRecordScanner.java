@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -232,6 +233,10 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     } else {
       HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteOrderingVal, recordType);
       records.put((K) key, record);
+    }
+
+    if (deleteRecord.getOrderingValue() == null) {
+      records.get((K) key).addMetadata(HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND, "true");
     }
   }
 

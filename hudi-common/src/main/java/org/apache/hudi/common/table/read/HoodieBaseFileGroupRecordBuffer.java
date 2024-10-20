@@ -316,7 +316,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           // Here existing record represents newer record with the same key, which can be a delete or non-delete record.
           // Therefore, we should use event time based merging if possible. So, the newer record is returned if
           // 1. the delete is processing time based, or
-          // 2. the delete is event time based, and has higher value.
+          // 2. delete is event time based, and the existing record has higher value.
           if (isProcessingTimeBasedDelete(deleteOrderingVal)) {
             existingRecordMetadataPair.getRight().put(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
             return Option.empty();

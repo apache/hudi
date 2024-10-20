@@ -21,7 +21,8 @@ package org.apache.hudi.common.table.read
 
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger}
 import org.apache.spark.sql.SaveMode
@@ -60,6 +61,7 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
@@ -73,6 +75,7 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -84,6 +87,9 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "delete").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "1").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -97,6 +103,7 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -110,6 +117,7 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "delete").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -121,6 +129,7 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -134,9 +143,18 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "delete").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
+
+    var metaClient = HoodieTableMetaClient.builder().setBasePath(basePath()).setConf(storageConf()).build()
+    if (tableType.equals("MERGE_ON_READ")) {
+      val activeTimeline = metaClient.getActiveTimeline
+      val compactionNum = activeTimeline.getAllCommitsTimeline
+        .getInstantsAsStream.filter(t => t.isCompleted() && t.getAction.equals("commit")).count()
+      assertTrue(compactionNum == 0)
+    }
 
     val fourUpdateData = Seq((-9, "4", "rider-DDDD", "driver-DDDD", 20.00, 1))
     val fourUpdates = spark.createDataFrame(fourUpdateData).toDF(columns: _*)
@@ -146,10 +164,19 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(TABLE_TYPE.key(), tableType).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(),
         if (tableType.equals("MERGE_ON_READ")) "true" else "false").
+      option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
       option(OPERATION.key(), "upsert").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    if (tableType.equals("MERGE_ON_READ")) {
+      val activeTimeline = metaClient.getActiveTimeline
+      val compactionNum = activeTimeline.getAllCommitsTimeline
+        .getInstantsAsStream.filter(t => t.isCompleted() && t.getAction.equals("commit")).count()
+      assertTrue(compactionNum == 1)
+    }
 
     // Read data to compare.
     val df = spark.read.format("hudi").options(opts).load(basePath)
