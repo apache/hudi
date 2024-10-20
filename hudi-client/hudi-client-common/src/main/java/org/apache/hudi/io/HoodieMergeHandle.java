@@ -67,7 +67,7 @@ import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND;
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE;
 
 @SuppressWarnings("Duplicates")
 /**
@@ -357,7 +357,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        if (keyToNewRecords.get(key).getMetaDataInfo(PROCESSING_TIME_BASED_DELETE_FOUND).isPresent()) {
+        if (keyToNewRecords.get(key).getMetaDataInfo(DELETE_FOUND_WITHOUT_ORDERING_VALUE).isPresent()) {
           if (writeUpdateRecord(newRecord, oldRecord, Option.empty(), newSchema)) {
             copyOldRecord = false;
           }
