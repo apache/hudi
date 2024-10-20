@@ -230,7 +230,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                   HoodieMetadataBloomFilter metadataBloomFilter,
                                   HoodieMetadataColumnStats columnStats,
                                   HoodieRecordIndexInfo recordIndexMetadata,
-                                  HoodieSecondaryIndexInfo secondaryIndexMetadata, boolean isDeletedRecord) {
+                                  HoodieSecondaryIndexInfo secondaryIndexMetadata,
+                                  boolean isDeletedRecord) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
