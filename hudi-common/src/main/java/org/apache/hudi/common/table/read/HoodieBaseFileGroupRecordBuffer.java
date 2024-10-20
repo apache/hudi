@@ -61,7 +61,7 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_ME
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
-import static org.apache.hudi.common.engine.HoodieReaderContext.PROCESSING_TIME_BASED_DELETE_FOUND;
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.read.HoodieFileGroupReader.getRecordMergeMode;
 
@@ -178,11 +178,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                                                          Map<String, Object> metadata,
                                                                          Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) throws IOException {
     if (existingRecordMetadataPair != null) {
-      // If this is a processing time based delete already, no need for further merging.
-      if (existingRecordMetadataPair.getRight().containsKey(PROCESSING_TIME_BASED_DELETE_FOUND)) {
-        return Option.of(Pair.of(existingRecordMetadataPair.getLeft().get(), existingRecordMetadataPair.getRight()));
-      }
-
       if (enablePartialMerging) {
         // TODO(HUDI-7843): decouple the merging logic from the merger
         //  and use the record merge mode to control how to merge partial updates
@@ -294,7 +289,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           // 1. the delete is processing time based, or
           // 2. delete is event time based, and the existing record has higher value.
           if (isProcessingTimeBasedDelete(deleteOrderingVal)) {
-            existingRecordMetadataPair.getRight().put(PROCESSING_TIME_BASED_DELETE_FOUND, "true");
+            existingRecordMetadataPair.getRight().put(DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
             return Option.empty();
           }
           if (ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal) && deleteOrderingVal.compareTo(existingOrderingVal) <= 0) {
@@ -402,7 +397,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             return Option.empty();
           }
           // If a processing time based delete is found, the newer record is returned.
-          if (newerInfoMap.containsKey(PROCESSING_TIME_BASED_DELETE_FOUND)) {
+          if (newerInfoMap.containsKey(DELETE_FOUND_WITHOUT_ORDERING_VALUE)) {
             return newer;
           }
           if (oldOrderingValue.compareTo(newOrderingValue) > 0) {

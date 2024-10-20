@@ -21,17 +21,23 @@ package org.apache.hudi.common.table.read
 
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger}
-import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
-  val expected = Seq(
+  val expected1 = Seq(
+    (14, "5", "rider-Z", "driver-Z", 17.85, 3),
+    (10, "3", "rider-C", "driver-C", 33.9, 10),
+    (10, "2", "rider-B", "driver-B", 27.7, 1))
+
+  val expected2 = Seq(
     (14, "5", "rider-Z", "driver-Z", 17.85, 3),
     (-9, "4", "rider-DDDD", "driver-DDDD", 20.0, 1),
     (10, "3", "rider-C", "driver-C", 33.9, 10),
@@ -154,6 +160,12 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       val compactionNum = activeTimeline.getAllCommitsTimeline
         .getInstantsAsStream.filter(t => t.isCompleted() && t.getAction.equals("commit")).count()
       assertTrue(compactionNum == 0)
+
+      val df = spark.read.format("hudi").options(opts).load(basePath)
+      val actualDf = df.select("ts", "key", "rider", "driver", "fare", "number").sort("ts")
+      actualDf.show(false)
+      val expectedDf = spark.createDataFrame(expected1).toDF(columns: _*).sort("ts")
+      TestDeleteRecordLogic.validate(expectedDf, actualDf)
     }
 
     val fourUpdateData = Seq((-9, "4", "rider-DDDD", "driver-DDDD", 20.00, 1))
@@ -178,19 +190,12 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       assertTrue(compactionNum == 1)
     }
 
-    // Read data to compare.
+    // Validate in the end.
     val df = spark.read.format("hudi").options(opts).load(basePath)
     val finalDf = df.select("ts", "key", "rider", "driver", "fare", "number").sort("ts")
     finalDf.show(false)
-
-    val expectedDf = spark.createDataFrame(expected).toDF(columns: _*).sort("ts")
-    val expectedMinusActual = expectedDf.except(finalDf)
-    val actualMinusExpected = finalDf.except(expectedDf)
-
-    expectedMinusActual.show(false)
-    actualMinusExpected.show(false)
-
-    assertTrue(expectedMinusActual.isEmpty && actualMinusExpected.isEmpty)
+    val expectedDf = spark.createDataFrame(expected2).toDF(columns: _*).sort("ts")
+    TestDeleteRecordLogic.validate(expectedDf, finalDf)
   }
 }
 
@@ -205,5 +210,15 @@ object TestDeleteRecordLogic {
       Arguments.of("true", "COPY_ON_WRITE", "SPARK"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO"),
       Arguments.of("true", "MERGE_ON_READ", "SPARK"))
+  }
+
+  def validate(expectedDf: Dataset[Row], actualDf: Dataset[Row]): Unit = {
+    val expectedMinusActual = expectedDf.except(actualDf)
+    val actualMinusExpected = actualDf.except(expectedDf)
+
+    expectedMinusActual.show(false)
+    actualMinusExpected.show(false)
+
+    assertTrue(expectedMinusActual.isEmpty && actualMinusExpected.isEmpty)
   }
 }
