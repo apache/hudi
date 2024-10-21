@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -48,6 +49,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +66,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -165,6 +169,19 @@ public class TestHoodieTableSource {
     HoodieTableSource copiedSource = (HoodieTableSource) tableSource.copy();
     DataPruner dataPruner = copiedSource.getDataPruner();
     assertNotNull(dataPruner);
+  }
+
+  @ParameterizedTest
+  @MethodSource("filtersAndResults")
+  void testDataSkippingWithPartitionStatsPruning(List<ResolvedExpression> filters, List<String> expectedPartitions) throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    conf = TestConfigurations.getDefaultConf(path);
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
+    conf.set(FlinkOptions.READ_PARTITION_DATA_SKIPPING_ENABLED, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    HoodieTableSource hoodieTableSource = createHoodieTableSource(conf);
+    hoodieTableSource.applyFilters(filters);
+    assertEquals(expectedPartitions, hoodieTableSource.getReadPartitions());
   }
 
   @ParameterizedTest
@@ -323,6 +340,38 @@ public class TestHoodieTableSource {
     tableSource.applyFilters(expectedFilters);
     String actualPredicates = tableSource.getPredicates().toString();
     assertEquals(ExpressionPredicates.fromExpression(expectedFilters).toString(), actualPredicates);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  private static Stream<Arguments> filtersAndResults() {
+    CallExpression filter1 =
+        new CallExpression(
+            BuiltInFunctionDefinitions.GREATER_THAN,
+            Arrays.asList(
+                new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+                new ValueLiteralExpression( "id5", DataTypes.STRING().notNull())),
+            DataTypes.BOOLEAN());
+
+    CallExpression filter2 =
+        new CallExpression(
+            BuiltInFunctionDefinitions.LESS_THAN,
+            Arrays.asList(
+                new FieldReferenceExpression("partition", DataTypes.STRING(), 4, 4),
+                new ValueLiteralExpression( "par4", DataTypes.STRING().notNull())),
+            DataTypes.BOOLEAN());
+
+    Object[][] data = new Object[][] {
+        // pruned by partition stats pruner only.
+        {Arrays.asList(filter1), Arrays.asList("par3", "par4")},
+        // pruned by dynamic partition pruner only.
+        {Arrays.asList(filter2), Arrays.asList("par1", "par2", "par3")},
+        // pruned by dynamic pruner and stats pruner.
+        {Arrays.asList(filter1, filter2), Arrays.asList("par3")},
+    };
+    return Stream.of(data).map(Arguments::of);
   }
 
   private HoodieTableSource getEmptyStreamingSource() {

@@ -31,9 +31,11 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.util.RowDataProjection;
 
@@ -44,6 +46,8 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -60,8 +64,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
- * Utilities for abstracting away heavy-lifting of interactions with Metadata Table's Column Stats Index,
- * providing convenient interfaces to read it, transpose, etc.
+ * Utilities for abstracting away heavy-lifting of interactions with Metadata Table's Column Stats Index
+ * or Partition Stats Index, providing convenient interfaces to read it, transpose, etc.
  */
 public class ColumnStatsIndices {
   private static final DataType METADATA_DATA_TYPE = getMetadataDataType();
@@ -69,7 +73,7 @@ public class ColumnStatsIndices {
   private static final int[] COL_STATS_TARGET_POS = getColStatsTargetPos();
 
   // the column schema:
-  // |- file_name: string
+  // |- file_name: string -- file name for column stats and partition name for partition stats
   // |- min_val: row
   // |- max_val: row
   // |- null_cnt: long
@@ -85,14 +89,107 @@ public class ColumnStatsIndices {
   private ColumnStatsIndices() {
   }
 
-  public static List<RowData> readColumnStatsIndex(String basePath, HoodieMetadataConfig metadataConfig, String[] targetColumns) {
+  public static Set<String> candidatePartitionsInMetadataTable(
+      String basePath,
+      HoodieMetadataConfig metadataConfig,
+      RowType rowType,
+      @Nullable DataPruner dataPruner,
+      List<String> filesOrPartitions) {
+    if (dataPruner == null) {
+      return null;
+    }
+    final List<RowData> indexRows =
+        ColumnStatsIndices.readPartitionStatsIndex(basePath, metadataConfig, dataPruner.getReferencedCols());
+    return candidatesInMetadataTable(rowType, dataPruner, indexRows, filesOrPartitions);
+  }
+
+  public static Set<String> candidateFilesInMetadataTable(
+      String basePath,
+      HoodieMetadataConfig metadataConfig,
+      RowType rowType,
+      @Nullable DataPruner dataPruner,
+      List<String> filesOrPartitions) {
+    if (dataPruner == null) {
+      return null;
+    }
+    final List<RowData> indexRows =
+        ColumnStatsIndices.readFileColumnStatsIndex(basePath, metadataConfig, dataPruner.getReferencedCols());
+    return candidatesInMetadataTable(rowType, dataPruner, indexRows, filesOrPartitions);
+  }
+
+  /**
+   * Computes pruned list of candidate base-files' names based on provided list of data filters.
+   * conditions, by leveraging Metadata Table's Column Statistics index (hereon referred as ColStats for brevity)
+   * bearing "min", "max", "num_nulls" statistics for all columns.
+   *
+   * <p>NOTE: This method has to return complete set of candidate files, since only provided candidates will
+   * ultimately be scanned as part of query execution. Hence, this method has to maintain the
+   * invariant of conservatively including every base-file's name, that is NOT referenced in its index.
+   *
+   * <p>The {@code filters} must all be simple.
+   *
+   * @param dataPruner the data pruner built from push-down filters.
+   * @param filesOrPartitions the original files or partitions to be pruned.
+   * @return set of pruned (data-skipped) candidate base-files' names
+   */
+  private static Set<String> candidatesInMetadataTable(
+      RowType rowType,
+      @Nullable DataPruner dataPruner,
+      List<RowData> indexRows,
+      List<String> filesOrPartitions) {
+    if (dataPruner == null) {
+      return null;
+    }
+    String[] referencedCols = dataPruner.getReferencedCols();
+    final Pair<List<RowData>, String[]> colStatsTable =
+        ColumnStatsIndices.transposeColumnStatsIndex(indexRows, referencedCols, rowType);
+    List<RowData> transposedColStats = colStatsTable.getLeft();
+    String[] queryCols = colStatsTable.getRight();
+    if (queryCols.length == 0) {
+      // the indexed columns have no intersection with the referenced columns, returns early
+      return null;
+    }
+    RowType.RowField[] queryFields = DataTypeUtils.projectRowFields(rowType, queryCols);
+
+    Set<String> allIndexedFileOrPartitions = transposedColStats.stream().parallel()
+        .map(row -> row.getString(0).toString())
+        .collect(Collectors.toSet());
+    Set<String> candidateFilesOrPartitions = transposedColStats.stream().parallel()
+        .filter(row -> dataPruner.test(row, queryFields))
+        .map(row -> row.getString(0).toString())
+        .collect(Collectors.toSet());
+
+    // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
+    //       base-file: since it's bound to clustering, which could occur asynchronously
+    //       at arbitrary point in time, and is not likely to be touching all the base files.
+    //
+    //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
+    //       files and all outstanding base-files, and make sure that all base files not
+    //       represented w/in the index are included in the output of this method
+    //
+    //       Partition-Stats isn't guaranteed to have all partitions either, e.g., some partitions
+    //       maybe written with Partition-Stats config disabled.
+    filesOrPartitions.removeAll(allIndexedFileOrPartitions);
+    candidateFilesOrPartitions.addAll(filesOrPartitions);
+    return candidateFilesOrPartitions;
+  }
+
+  public static List<RowData> readColumnStatsIndex(String basePath, HoodieMetadataConfig metadataConfig, String[] targetColumns, String metaPartitionName) {
     // NOTE: If specific columns have been provided, we can considerably trim down amount of data fetched
     //       by only fetching Column Stats Index records pertaining to the requested columns.
     //       Otherwise, we fall back to read whole Column Stats Index
     ValidationUtils.checkArgument(targetColumns.length > 0,
         "Column stats is only valid when push down filters have referenced columns");
-    final List<RowData> metadataRows = readColumnStatsIndexByColumns(basePath, targetColumns, metadataConfig);
+    final List<RowData> metadataRows = readColumnStatsIndexByColumns(basePath, targetColumns, metadataConfig, metaPartitionName);
     return projectNestedColStatsColumns(metadataRows);
+  }
+
+  public static List<RowData> readFileColumnStatsIndex(String basePath, HoodieMetadataConfig metadataConfig, String[] targetColumns) {
+    return readColumnStatsIndex(basePath, metadataConfig, targetColumns, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+  }
+
+  public static List<RowData> readPartitionStatsIndex(String basePath, HoodieMetadataConfig metadataConfig, String[] targetColumns) {
+    return readColumnStatsIndex(basePath, metadataConfig, targetColumns, HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS);
   }
 
   private static List<RowData> projectNestedColStatsColumns(List<RowData> rows) {
@@ -281,7 +378,8 @@ public class ColumnStatsIndices {
   private static List<RowData> readColumnStatsIndexByColumns(
       String basePath,
       String[] targetColumns,
-      HoodieMetadataConfig metadataConfig) {
+      HoodieMetadataConfig metadataConfig,
+      String metaPartitionName) {
 
     // Read Metadata Table's Column Stats Index into Flink's RowData list by
     //    - Fetching the records from CSI by key-prefixes (encoded column names)
@@ -295,7 +393,7 @@ public class ColumnStatsIndices {
         .map(colName -> new ColumnIndexID(colName).asBase64EncodedString()).collect(Collectors.toList());
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
-        metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, false);
+        metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames, metaPartitionName, false);
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
         AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());

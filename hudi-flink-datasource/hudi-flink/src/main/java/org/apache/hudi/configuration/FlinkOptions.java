@@ -378,6 +378,14 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by "
           + "skipping over files");
 
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> READ_PARTITION_DATA_SKIPPING_ENABLED = ConfigOptions
+      .key("read.partition.data.skipping.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Enables partition-data-skipping allowing queries to leverage partition stats indexes to "
+          + "reduce the search space by skipping over partitions");
+
   // ------------------------------------------------------------------------
   //  Write Options
   // ------------------------------------------------------------------------

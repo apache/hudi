@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utils.TestConfigurations;
@@ -56,9 +57,11 @@ import static org.apache.hudi.configuration.FlinkOptions.KEYGEN_CLASS_NAME;
 import static org.apache.hudi.configuration.FlinkOptions.METADATA_ENABLED;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_DEFAULT_NAME;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_PATH_FIELD;
+import static org.apache.hudi.configuration.FlinkOptions.READ_PARTITION_DATA_SKIPPING_ENABLED;
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -155,6 +158,47 @@ public class TestFileIndex {
 
     List<StoragePathInfo> files = fileIndex.getFilesInPartitions();
     assertThat(files.size(), is(2));
+  }
+
+  @Test
+  void testFileListingWithPartitionStatsPruning() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(READ_PARTITION_DATA_SKIPPING_ENABLED, true);
+    conf.set(METADATA_ENABLED, true);
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
+    DataPruner dataPruner =
+        DataPruner.newInstance(Arrays.asList(
+            new CallExpression(
+                FunctionIdentifier.of("greaterThan"),
+                BuiltInFunctionDefinitions.GREATER_THAN,
+                Arrays.asList(
+                    new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+                    new ValueLiteralExpression("id5", DataTypes.STRING().notNull())
+                ),
+                DataTypes.BOOLEAN()),
+            new CallExpression(
+                FunctionIdentifier.of("lessThan"),
+                BuiltInFunctionDefinitions.LESS_THAN,
+                Arrays.asList(
+                    new FieldReferenceExpression("age", DataTypes.INT(), 2, 2),
+                    new ValueLiteralExpression(30, DataTypes.INT().notNull())
+                ),
+                DataTypes.BOOLEAN())));
+
+    FileIndex fileIndex =
+        FileIndex.builder()
+            .path(new StoragePath(tempFile.getAbsolutePath()))
+            .conf(conf)
+            .rowType(TestConfigurations.ROW_TYPE)
+            .partitionPruner(PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(tempFile.getAbsolutePath()).conf(conf).dataPruner(dataPruner).build())
+            .build();
+
+    List<String> p = fileIndex.getOrBuildPartitionPaths();
+    assertEquals(Arrays.asList("par3"), p);
   }
 
   private void writeBigintDataset(Configuration conf) throws Exception {
