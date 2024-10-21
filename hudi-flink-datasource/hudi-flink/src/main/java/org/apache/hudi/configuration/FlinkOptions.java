@@ -559,6 +559,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.ignore.failed")
       .booleanType()
       .defaultValue(false)
+      .withFallbackKeys("hoodie.write.ignore.failed")
       .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. \n"
           + "By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead. \n"
           + "So, would recommend users to use this with caution.");

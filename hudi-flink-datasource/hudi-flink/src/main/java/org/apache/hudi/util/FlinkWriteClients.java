@@ -242,7 +242,8 @@ public class FlinkWriteClients {
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAllowOperationMetadataField(conf.get(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
-            .withSchema(getSourceSchema(conf).toString());
+            .withSchema(getSourceSchema(conf).toString())
+            .withWriteIgnoreFailed(conf.get(FlinkOptions.IGNORE_FAILED));
 
     // <merge_mode, payload_class, merge_strategy_id>
     Triple<RecordMergeMode, String, String> mergingBehavior = StreamerUtil.inferMergingBehavior(conf);
