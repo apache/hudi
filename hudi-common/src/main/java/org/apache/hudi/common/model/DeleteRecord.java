@@ -88,6 +88,13 @@ public class DeleteRecord implements Serializable {
     return orderingVal;
   }
 
+  public Comparable<?> getOrderingVal(Comparable<?> defaultVal) {
+    if (orderingVal == null) {
+      return defaultVal;
+    }
+    return orderingVal;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {

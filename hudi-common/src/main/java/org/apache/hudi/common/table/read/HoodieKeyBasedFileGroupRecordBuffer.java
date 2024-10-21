@@ -88,6 +88,9 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordKey) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
+    // The order of merging within file group reader is from latest to the oldest.
+    // When a delete is found without ordering value, all older records can be skipped without merging.
+    // Therefore, when the flag is found, we can safely skip all rest records with the same key.
     if (existingRecordMetadataPair != null && existingRecordMetadataPair.getRight().containsKey(DELETE_FOUND_WITHOUT_ORDERING_VALUE)) {
       return;
     }
@@ -121,7 +124,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
-      Comparable orderingVal = recordOpt.get().getOrderingValue() == null ? orderingFieldDefault : recordOpt.get().getOrderingValue();
+      Comparable orderingVal = recordOpt.get().getOrderingVal(orderingFieldDefault);
       records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
           (String) recordKey, recordOpt.get().getPartitionPath(), orderingVal, orderingFieldTypeOpt)));
 
