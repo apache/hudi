@@ -21,9 +21,8 @@ package org.apache.hudi.common.table.read
 
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
-import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger}
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
@@ -93,8 +92,6 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "delete").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "1").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Append).
@@ -160,13 +157,13 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
       val compactionNum = activeTimeline.getAllCommitsTimeline
         .getInstantsAsStream.filter(t => t.isCompleted() && t.getAction.equals("commit")).count()
       assertTrue(compactionNum == 0)
-
-      val df = spark.read.format("hudi").options(opts).load(basePath)
-      val actualDf = df.select("ts", "key", "rider", "driver", "fare", "number").sort("ts")
-      actualDf.show(false)
-      val expectedDf = spark.createDataFrame(expected1).toDF(columns: _*).sort("ts")
-      TestDeleteRecordLogic.validate(expectedDf, actualDf)
     }
+
+    val DfBeforeFinish = spark.read.format("hudi").options(opts).load(basePath)
+    val actualDfBeforeFinish = DfBeforeFinish.select("ts", "key", "rider", "driver", "fare", "number").sort("ts")
+    actualDfBeforeFinish.show(false)
+    val expectedDfBeforeFinish = spark.createDataFrame(expected1).toDF(columns: _*).sort("ts")
+    TestDeleteRecordLogic.validate(expectedDfBeforeFinish, actualDfBeforeFinish)
 
     val fourUpdateData = Seq((-9, "4", "rider-DDDD", "driver-DDDD", 20.00, 1))
     val fourUpdates = spark.createDataFrame(fourUpdateData).toDF(columns: _*)
