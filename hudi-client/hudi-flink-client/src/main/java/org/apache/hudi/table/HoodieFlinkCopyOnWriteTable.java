@@ -32,6 +32,7 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.CompactionContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -44,6 +45,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.sort.merge.HoodieSortMergeJoinCreateHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
@@ -413,15 +415,15 @@ public class HoodieFlinkCopyOnWriteTable<T>
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(
       String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile, CompactionContext compactionContext) throws IOException {
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
-    return handleUpdateInternal(upsertHandle, instantTime, fileId);
+    return handleUpdateInternal(upsertHandle, instantTime, fileId, compactionContext);
   }
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
-                                                             String fileId) throws IOException {
-    runMerge(upsertHandle, instantTime, fileId);
+                                                             String fileId, CompactionContext compactionContext) throws IOException {
+    runMerge(upsertHandle, instantTime, fileId, Option.of(compactionContext));
     return upsertHandle.getWriteStatusesAsIterator();
   }
 
@@ -443,10 +445,42 @@ public class HoodieFlinkCopyOnWriteTable<T>
   @Override
   public Iterator<List<WriteStatus>> handleInsert(
       String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<?>> recordMap) {
+      Map<String, HoodieRecord<?>> recordMap, CompactionContext compactionContext) {
     HoodieCreateHandle<?, ?, ?, ?> createHandle =
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleInsertWithUnMergedIterator(String instantTime, String partitionPath, String fileId, Iterator<HoodieRecord> unMergedRecordsItr,
+                                                                      CompactionContext context) throws IOException {
+    HoodieCreateHandle<?, ?, ?, ?> createHandle =
+        new HoodieSortMergeJoinCreateHandle<>(config, instantTime, this, partitionPath, fileId, unMergedRecordsItr, taskContextSupplier);
+    createHandle.write();
+    return Collections.singletonList(createHandle.close()).iterator();
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleUpdateWithUnMergedIterator(String instantTime, String partitionPath, String fileId, Iterator<HoodieRecord> unMergedRecordsItr,
+                                                                      HoodieBaseFile oldDataFile, CompactionContext compactionContext) throws IOException {
+    HoodieMergeHandle upsertHandle = getUpdateHandleForSortedMerge(instantTime, partitionPath, fileId, unMergedRecordsItr, oldDataFile);
+    return handleUpdateInternal(upsertHandle, instantTime, fileId, compactionContext);
+  }
+
+  protected HoodieMergeHandle getUpdateHandleForSortedMerge(String instantTime, String partitionPath, String fileId,
+                                                            Iterator<HoodieRecord> iterator, HoodieBaseFile dataFileToBeMerged) {
+    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
+    if (!config.populateMetaFields()) {
+      try {
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+      } catch (IOException e) {
+        throw new HoodieIOException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
+            + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
+      }
+    }
+    return HoodieMergeHandleFactory.create(config, instantTime, this, iterator, partitionPath, fileId,
+        dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+  }
+
 }
