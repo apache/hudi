@@ -206,23 +206,23 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   protected HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
-    this(key, type, filesystemMetadata, null, null, null, null);
+    this(key, type, filesystemMetadata, null, null, null, null, false);
   }
 
   protected HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
-    this(key, MetadataPartitionType.BLOOM_FILTERS.getRecordType(), null, metadataBloomFilter, null, null, null);
+    this(key, MetadataPartitionType.BLOOM_FILTERS.getRecordType(), null, metadataBloomFilter, null, null, null, metadataBloomFilter.getIsDeleted());
   }
 
   protected HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats, int recordType) {
-    this(key, recordType, null, null, columnStats, null, null);
+    this(key, recordType, null, null, columnStats, null, null, columnStats.getIsDeleted());
   }
 
   private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexMetadata) {
-    this(key, MetadataPartitionType.RECORD_INDEX.getRecordType(), null, null, null, recordIndexMetadata, null);
+    this(key, MetadataPartitionType.RECORD_INDEX.getRecordType(), null, null, null, recordIndexMetadata, null, false);
   }
 
   private HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
-    this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata);
+    this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata, secondaryIndexMetadata.getIsDeleted());
   }
 
   protected HoodieMetadataPayload(String key, int type,
@@ -230,7 +230,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                   HoodieMetadataBloomFilter metadataBloomFilter,
                                   HoodieMetadataColumnStats columnStats,
                                   HoodieRecordIndexInfo recordIndexMetadata,
-                                  HoodieSecondaryIndexInfo secondaryIndexMetadata) {
+                                  HoodieSecondaryIndexInfo secondaryIndexMetadata,
+                                  boolean isDeletedRecord) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
@@ -238,6 +239,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this.columnStatMetadata = columnStats;
     this.recordIndexMetadata = recordIndexMetadata;
     this.secondaryIndexMetadata = secondaryIndexMetadata;
+    this.isDeletedRecord = isDeletedRecord;
   }
 
   /**
