@@ -44,12 +44,13 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
 
   @ParameterizedTest
   @MethodSource(Array("provideParams"))
-  def testDeleteLogic(useFgReader: String, tableType: String, recordType: String): Unit = {
+  def testDeleteLogic(useFgReader: String, tableType: String, recordType: String, positionUsed: String): Unit = {
     val sparkOpts: Map[String, String] = Map(
       HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
       HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName)
     val fgReaderOpts: Map[String, String] = Map(
-      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> useFgReader)
+      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> useFgReader,
+      HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> positionUsed)
 
     val opts = if (recordType.equals("SPARK")) sparkOpts ++ fgReaderOpts else fgReaderOpts
     val columns = Seq("ts", "key", "rider", "driver", "fare", "number")
@@ -199,23 +200,27 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
 object TestDeleteRecordLogic {
   def provideParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      Arguments.of("false", "COPY_ON_WRITE", "AVRO"),
-      Arguments.of("false", "COPY_ON_WRITE", "SPARK"),
-      Arguments.of("false", "MERGE_ON_READ", "AVRO"),
-      Arguments.of("false", "MERGE_ON_READ", "SPARK"),
-      Arguments.of("true", "COPY_ON_WRITE", "AVRO"),
-      Arguments.of("true", "COPY_ON_WRITE", "SPARK"),
-      Arguments.of("true", "MERGE_ON_READ", "AVRO"),
-      Arguments.of("true", "MERGE_ON_READ", "SPARK"))
+      Arguments.of("false", "COPY_ON_WRITE", "AVRO", "false"),
+      Arguments.of("false", "COPY_ON_WRITE", "SPARK", "false"),
+      Arguments.of("false", "MERGE_ON_READ", "AVRO", "false"),
+      Arguments.of("false", "MERGE_ON_READ", "SPARK", "false"),
+      Arguments.of("true", "COPY_ON_WRITE", "AVRO", "false"),
+      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "AVRO", "false"),
+      Arguments.of("true", "MERGE_ON_READ", "SPARK", "false"),
+      Arguments.of("false", "COPY_ON_WRITE", "AVRO", "true"),
+      Arguments.of("false", "COPY_ON_WRITE", "SPARK", "true"),
+      Arguments.of("false", "MERGE_ON_READ", "AVRO", "true"),
+      Arguments.of("false", "MERGE_ON_READ", "SPARK", "true"),
+      Arguments.of("true", "COPY_ON_WRITE", "AVRO", "true"),
+      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "true"),
+      Arguments.of("true", "MERGE_ON_READ", "AVRO", "true"),
+      Arguments.of("true", "MERGE_ON_READ", "SPARK", "true"))
   }
 
   def validate(expectedDf: Dataset[Row], actualDf: Dataset[Row]): Unit = {
     val expectedMinusActual = expectedDf.except(actualDf)
     val actualMinusExpected = actualDf.except(expectedDf)
-
-    expectedMinusActual.show(false)
-    actualMinusExpected.show(false)
-
     assertTrue(expectedMinusActual.isEmpty && actualMinusExpected.isEmpty)
   }
 }
