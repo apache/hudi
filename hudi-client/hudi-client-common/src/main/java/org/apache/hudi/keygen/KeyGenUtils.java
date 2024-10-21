@@ -35,6 +35,7 @@ import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -48,7 +49,7 @@ public class KeyGenUtils {
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
-  public static final String DEFAULT_COMPOSITE_KEY_FILED_VALUE = ":";
+  public static final String DEFAULT_COLUMN_VALUE_SEPARATOR = ":";
 
   public static final String RECORD_KEY_GEN_PARTITION_ID_CONFIG = "_hoodie.record.key.gen.partition.id";
   public static final String RECORD_KEY_GEN_INSTANT_TIME_CONFIG = "_hoodie.record.key.gen.instant.time";
@@ -133,20 +134,64 @@ public class KeyGenUtils {
   }
 
   public static String[] extractRecordKeysByFields(String recordKey, List<String> fields) {
-    String[] fieldKV = recordKey.split(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
-    return Arrays.stream(fieldKV).map(kv -> kv.split(DEFAULT_COMPOSITE_KEY_FILED_VALUE, 2))
-        .filter(kvArray -> kvArray.length == 1 || fields.isEmpty() || (fields.contains(kvArray[0])))
-        .map(kvArray -> {
-          if (kvArray.length == 1) {
-            return kvArray[0];
-          } else if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
-            return null;
-          } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
-            return "";
-          } else {
-            return kvArray[1];
+    // if there is no ',' and ':', then it's a key value
+    if (!recordKey.contains(DEFAULT_RECORD_KEY_PARTS_SEPARATOR) || !recordKey.contains(DEFAULT_COLUMN_VALUE_SEPARATOR)) {
+      return new String[] {recordKey};
+    }
+    // complex key case
+    // Here we're reducing memory allocation for substrings and use index positions,
+    // because for bucket index this will be called for each record, which leads to GC overhead
+    int keyValueSep1;
+    int keyValueSep2;
+    int commaPosition;
+    String currentField;
+    String currentValue;
+    List<String> values = new ArrayList<>();
+    int processed = 0;
+    while (processed < recordKey.length()) {
+      // note that keyValueSeps and commaPosition are absolute
+      keyValueSep1 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, processed);
+      currentField = recordKey.substring(processed, keyValueSep1);
+      keyValueSep2 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, keyValueSep1 + 1);
+      if (fields.isEmpty() || fields.contains(currentField)) {
+        if (keyValueSep2 < 0) {
+          // there is no next key value pair
+          currentValue = recordKey.substring(keyValueSep1 + 1);
+          processed = recordKey.length();
+        } else {
+          // looking for ',' in reverse order to support ',' in key values by looking for the latest ','
+          commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
+          try {
+            currentValue = recordKey.substring(keyValueSep1 + 1, commaPosition);
+          } catch (StringIndexOutOfBoundsException ex) {
+            throw new HoodieKeyException("Couldn't extract values from complex key: '" + recordKey + "', probably due to used ':' character as key value", ex);
           }
-        }).toArray(String[]::new);
+          processed = commaPosition + 1;
+        }
+        // here could be any logic of conditional replacing of currentValue
+        if (currentValue.equals(NULL_RECORDKEY_PLACEHOLDER)) {
+          values.add(null);
+        } else if (currentValue.equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
+          values.add("");
+        } else {
+          values.add(currentValue);
+        }
+      } else {
+        if (keyValueSep2 < 0) {
+          processed = recordKey.length();
+        } else {
+          commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
+          if (commaPosition < 0) {
+            // if something went wrong, and there is no ',', we should stop here, and pass the whole recordKey,
+            // otherwise processed = commaPosition + 1 would lead to infinite loop
+            processed = recordKey.length();
+          } else {
+            processed = commaPosition + 1;
+          }
+        }
+      }
+    }
+    return values.isEmpty() ? new String[] {recordKey} : values.toArray(new String[0]);
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
@@ -161,11 +206,11 @@ public class KeyGenUtils {
         throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
       }
       if (recordKeyValue == null) {
-        recordKey.append(recordKeyField).append(DEFAULT_COMPOSITE_KEY_FILED_VALUE).append(NULL_RECORDKEY_PLACEHOLDER);
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER);
       } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField).append(DEFAULT_COMPOSITE_KEY_FILED_VALUE).append(EMPTY_RECORDKEY_PLACEHOLDER);
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(EMPTY_RECORDKEY_PLACEHOLDER);
       } else {
-        recordKey.append(recordKeyField).append(DEFAULT_COMPOSITE_KEY_FILED_VALUE).append(recordKeyValue);
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(recordKeyValue);
         keyIsNullEmpty = false;
       }
       if (i != recordKeyFields.size() - 1) {

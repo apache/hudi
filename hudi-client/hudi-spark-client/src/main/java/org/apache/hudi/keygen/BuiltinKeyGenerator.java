@@ -51,7 +51,7 @@ import java.util.function.Supplier;
 import scala.Function1;
 
 import static org.apache.hudi.common.util.CollectionUtils.tail;
-import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_COMPOSITE_KEY_FILED_VALUE;
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_COLUMN_VALUE_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
@@ -70,8 +70,6 @@ import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements SparkKeyGeneratorInterface {
 
   private static final Logger LOG = LoggerFactory.getLogger(BuiltinKeyGenerator.class);
-
-  private static final String COMPOSITE_KEY_FIELD_VALUE_INFIX = ":";
 
   protected static final String FIELDS_SEP = ",";
 
@@ -220,7 +218,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
     PartitionPathFormatterBase.StringBuilder<S> sb = builderFactory.get();
     for (int i = 0; i < recordKeyParts.size(); ++i) {
-      sb.appendJava(fieldNames.get(i)).appendJava(DEFAULT_COMPOSITE_KEY_FILED_VALUE);
+      sb.appendJava(fieldNames.get(i)).appendJava(DEFAULT_COLUMN_VALUE_SEPARATOR);
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
       sb.append(emptyKeyPartHandler.apply(converter.apply(recordKeyParts.get(i))));
 
@@ -248,7 +246,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
       if (recordKeyParts.length > 1) {
         sb.appendJava(recordKeyFields.get(i));
-        sb.appendJava(COMPOSITE_KEY_FIELD_VALUE_INFIX);
+        sb.appendJava(DEFAULT_COLUMN_VALUE_SEPARATOR);
       }
       sb.append(convertedKeyPart);
       // This check is to validate that overall composite-key has at least one non-null, non-empty

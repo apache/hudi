@@ -19,6 +19,7 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.junit.jupiter.api.Assertions;
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestKeyGenUtils {
 
@@ -112,25 +114,28 @@ public class TestKeyGenUtils {
 
   @Test
   public void testExtractRecordKeys() {
-    // test complex key form: field1:val1,field2:val2,...
+    // we don't extract key values if they contain only ':', because it could be a timestamp, for instance, '2014-10-21 12:23'
     String[] s1 = KeyGenUtils.extractRecordKeys("id:1");
-    Assertions.assertArrayEquals(new String[] {"1"}, s1);
+    Assertions.assertArrayEquals(new String[] {"id:1"}, s1);
 
+    // test complex key form: field1:val1,field2:val2,...
     String[] s2 = KeyGenUtils.extractRecordKeys("id:1,id:2");
     Assertions.assertArrayEquals(new String[] {"1", "2"}, s2);
 
     String[] s3 = KeyGenUtils.extractRecordKeys("id:1,id2:__null__,id3:__empty__");
     Assertions.assertArrayEquals(new String[] {"1", null, ""}, s3);
 
-    String[] s4 = KeyGenUtils.extractRecordKeys("id:ab:cd,id2:ef");
-    Assertions.assertArrayEquals(new String[] {"ab:cd", "ef"}, s4);
+    // keys with ':' are not supported
+    String wrongKeyValues = "id:ab:cd,id2:ef";
+    Throwable ex = assertThrows(HoodieKeyException.class, () -> KeyGenUtils.extractRecordKeys(wrongKeyValues));
+    assertEquals("Couldn't extract values from complex key: '" + wrongKeyValues + "', probably due to used ':' character as key value", ex.getMessage());
 
     // test simple key form: val1
     String[] s5 = KeyGenUtils.extractRecordKeys("1");
     Assertions.assertArrayEquals(new String[] {"1"}, s5);
 
     String[] s6 = KeyGenUtils.extractRecordKeys("id:1,id2:2,2");
-    Assertions.assertArrayEquals(new String[]{"1", "2", "2"}, s6);
+    Assertions.assertArrayEquals(new String[]{"1", "2,2"}, s6);
   }
 
   @Test
@@ -142,6 +147,9 @@ public class TestKeyGenUtils {
     Assertions.assertArrayEquals(new String[] {"2"}, s1);
 
     String[] s2 = KeyGenUtils.extractRecordKeysByFields("id1:1,id2:2,2,id3:3", fields);
-    Assertions.assertArrayEquals(new String[] {"2", "2"}, s2);
+    Assertions.assertArrayEquals(new String[] {"2,2"}, s2);
+
+    String[] s3 = KeyGenUtils.extractRecordKeysByFields("id1:1,1,1,id2:,2,2,,id3:3", fields);
+    Assertions.assertArrayEquals(new String[] {",2,2,"}, s3);
   }
 }
