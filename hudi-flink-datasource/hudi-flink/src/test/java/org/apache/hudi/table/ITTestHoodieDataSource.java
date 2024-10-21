@@ -517,13 +517,13 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.METADATA_ENABLED, true)
         .option(FlinkOptions.READ_AS_STREAMING, execMode == ExecMode.STREAM)
         .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true)
-        .option(FlinkOptions.READ_PARTITION_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
-    conf.set(FlinkOptions.READ_PARTITION_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     // write one commit
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
@@ -550,7 +550,7 @@ public class ITTestHoodieDataSource {
                 + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]",
             "[+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
                 + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]");
-    for (int i = 0 ; i < sqls.size(); i++) {
+    for (int i = 0; i < sqls.size(); i++) {
       List<Row> result;
       final String sql = sqls.get(i);
       if (execMode == ExecMode.BATCH) {

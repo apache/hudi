@@ -57,7 +57,7 @@ import static org.apache.hudi.configuration.FlinkOptions.KEYGEN_CLASS_NAME;
 import static org.apache.hudi.configuration.FlinkOptions.METADATA_ENABLED;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_DEFAULT_NAME;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_PATH_FIELD;
-import static org.apache.hudi.configuration.FlinkOptions.READ_PARTITION_DATA_SKIPPING_ENABLED;
+import static org.apache.hudi.configuration.FlinkOptions.READ_DATA_SKIPPING_ENABLED;
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -136,7 +136,7 @@ public class TestFileIndex {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), TestConfigurations.ROW_DATA_TYPE_BIGINT);
     conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
-    conf.setBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setBoolean(READ_DATA_SKIPPING_ENABLED, true);
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
 
     writeBigintDataset(conf);
@@ -163,7 +163,7 @@ public class TestFileIndex {
   @Test
   void testFileListingWithPartitionStatsPruning() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.set(READ_PARTITION_DATA_SKIPPING_ENABLED, true);
+    conf.set(READ_DATA_SKIPPING_ENABLED, true);
     conf.set(METADATA_ENABLED, true);
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
 

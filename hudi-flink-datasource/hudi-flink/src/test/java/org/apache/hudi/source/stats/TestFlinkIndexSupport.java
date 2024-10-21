@@ -43,9 +43,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Test cases for {@link ColumnStatsIndices}.
+ * Test cases for {@link FlinkIndexSupport}.
  */
-public class TestColumnStatsIndices {
+public class TestFlinkIndexSupport {
   @TempDir
   File tempFile;
 
@@ -62,7 +62,8 @@ public class TestColumnStatsIndices {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     String[] queryColumns = {"uuid", "age"};
-    List<RowData> indexRows = ColumnStatsIndices.readPartitionStatsIndex(path, metadataConfig, queryColumns);
+    PartitionStatsIndexSupport indexSupport = new PartitionStatsIndexSupport(path, TestConfigurations.ROW_TYPE, metadataConfig);
+    List<RowData> indexRows = indexSupport.readColumnStatsIndexByColumns(queryColumns);
     List<String> results = indexRows.stream().map(Object::toString).sorted(String::compareTo).collect(Collectors.toList());
     List<String> expected = Arrays.asList(
         "+I(par1,+I(23),+I(33),0,2,age)",
@@ -75,8 +76,7 @@ public class TestColumnStatsIndices {
         "+I(par4,+I(id7),+I(id8),0,2,uuid)");
     assertEquals(expected, results);
 
-    Pair<List<RowData>, String[]> transposedIndexTable = ColumnStatsIndices.transposeColumnStatsIndex(
-        indexRows, queryColumns, TestConfigurations.ROW_TYPE);
+    Pair<List<RowData>, String[]> transposedIndexTable = indexSupport.transposeColumnStatsIndex(indexRows, queryColumns);
     List<String> transposed = transposedIndexTable.getLeft().stream().map(Object::toString).sorted(String::compareTo).collect(Collectors.toList());
     assertThat(transposed.size(), is(4));
     assertArrayEquals(new String[] {"age", "uuid"}, transposedIndexTable.getRight());
@@ -104,9 +104,9 @@ public class TestColumnStatsIndices {
 
     // explicit query columns
     String[] queryColumns1 = {"uuid", "age"};
-    List<RowData> indexRows1 = ColumnStatsIndices.readFileColumnStatsIndex(path, metadataConfig, queryColumns1);
-    Pair<List<RowData>, String[]> transposedIndexTable1 = ColumnStatsIndices
-        .transposeColumnStatsIndex(indexRows1, queryColumns1, TestConfigurations.ROW_TYPE);
+    ColumnStatsIndexSupport indexSupport = new ColumnStatsIndexSupport(path, TestConfigurations.ROW_TYPE, metadataConfig);
+    List<RowData> indexRows1 = indexSupport.readColumnStatsIndexByColumns(queryColumns1);
+    Pair<List<RowData>, String[]> transposedIndexTable1 = indexSupport.transposeColumnStatsIndex(indexRows1, queryColumns1);
     assertThat("The schema columns should sort by natural order",
         Arrays.toString(transposedIndexTable1.getRight()), is("[age, uuid]"));
     List<RowData> transposed1 = filterOutFileNames(transposedIndexTable1.getLeft());
@@ -120,7 +120,7 @@ public class TestColumnStatsIndices {
 
     // no query columns, only for tests
     assertThrows(IllegalArgumentException.class,
-        () -> ColumnStatsIndices.readFileColumnStatsIndex(path, metadataConfig, new String[0]));
+        () -> indexSupport.readColumnStatsIndexByColumns(new String[0]));
   }
 
   private static List<RowData> filterOutFileNames(List<RowData> indexRows) {

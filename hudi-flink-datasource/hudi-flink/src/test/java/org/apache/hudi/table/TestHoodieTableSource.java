@@ -177,7 +177,7 @@ public class TestHoodieTableSource {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
-    conf.set(FlinkOptions.READ_PARTITION_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     HoodieTableSource hoodieTableSource = createHoodieTableSource(conf);
     hoodieTableSource.applyFilters(filters);
@@ -352,7 +352,7 @@ public class TestHoodieTableSource {
             BuiltInFunctionDefinitions.GREATER_THAN,
             Arrays.asList(
                 new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
-                new ValueLiteralExpression( "id5", DataTypes.STRING().notNull())),
+                new ValueLiteralExpression("id5", DataTypes.STRING().notNull())),
             DataTypes.BOOLEAN());
 
     CallExpression filter2 =
@@ -360,7 +360,7 @@ public class TestHoodieTableSource {
             BuiltInFunctionDefinitions.LESS_THAN,
             Arrays.asList(
                 new FieldReferenceExpression("partition", DataTypes.STRING(), 4, 4),
-                new ValueLiteralExpression( "par4", DataTypes.STRING().notNull())),
+                new ValueLiteralExpression("par4", DataTypes.STRING().notNull())),
             DataTypes.BOOLEAN());
 
     Object[][] data = new Object[][] {

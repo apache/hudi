@@ -28,7 +28,7 @@ import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
-import org.apache.hudi.source.stats.ColumnStatsIndices;
+import org.apache.hudi.source.stats.ColumnStatsIndexSupport;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -71,6 +71,7 @@ public class FileIndex implements Serializable {
   private final DataPruner dataPruner;                            // for data skipping
   private final int dataBucket;                                   // for bucket pruning
   private List<String> partitionPaths;                            // cache of partition paths
+  private final ColumnStatsIndexSupport columnStatsIndexSupport;
 
   private FileIndex(StoragePath path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruners.PartitionPruner partitionPruner, int dataBucket) {
     this.path = path;
@@ -81,6 +82,7 @@ public class FileIndex implements Serializable {
     this.dataPruner = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? dataPruner : null;
     this.partitionPruner = partitionPruner;
     this.dataBucket = dataBucket;
+    this.columnStatsIndexSupport = new ColumnStatsIndexSupport(path.toString(), rowType, metadataConfig);
   }
 
   /**
@@ -174,8 +176,8 @@ public class FileIndex implements Serializable {
     }
 
     // data skipping
-    Set<String> candidateFiles = ColumnStatsIndices.candidateFilesInMetadataTable(path.toString(), metadataConfig,
-        rowType, dataPruner, allFiles.stream().map(StoragePathInfo::toString).collect(Collectors.toList()));
+    Set<String> candidateFiles = columnStatsIndexSupport.computeCandidateFiles(
+        dataPruner, allFiles.stream().map(f -> f.getPath().getName()).collect(Collectors.toList()));
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
       return allFiles;

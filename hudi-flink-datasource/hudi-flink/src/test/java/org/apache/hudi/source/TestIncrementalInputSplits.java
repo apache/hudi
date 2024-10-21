@@ -362,7 +362,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
   void testInputSplitsWithPartitionStatsPruner() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
     conf.set(FlinkOptions.READ_AS_STREAMING, true);
-    conf.set(FlinkOptions.READ_PARTITION_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 

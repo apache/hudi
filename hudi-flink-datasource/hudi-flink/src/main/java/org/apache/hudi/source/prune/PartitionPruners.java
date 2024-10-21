@@ -24,7 +24,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.ExpressionEvaluators.Evaluator;
 import org.apache.hudi.source.stats.ColumnStats;
-import org.apache.hudi.source.stats.ColumnStatsIndices;
+import org.apache.hudi.source.stats.PartitionStatsIndexSupport;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
@@ -33,8 +33,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Preconditions;
-
-import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -145,26 +143,22 @@ public class PartitionPruners {
    * filter conditions.
    */
   public static class ColumnStatsPartitionPruner implements PartitionPruner {
-    private final String basePath;
-    private final HoodieMetadataConfig metadataConfig;
-    private final DataPruner dataPruner;
-    private final RowType rowType;
+    private static final long serialVersionUID = 1L;
+    private final DataPruner colStatsPruner;
+    private final PartitionStatsIndexSupport partitionStatsIndexSupport;
 
     public ColumnStatsPartitionPruner(
         RowType rowType,
         String basePath,
         HoodieMetadataConfig metadataConfig,
-        DataPruner dataPruner) {
-      this.rowType = rowType;
-      this.basePath = basePath;
-      this.metadataConfig = metadataConfig;
-      this.dataPruner = dataPruner;
+        DataPruner colStatsPruner) {
+      this.colStatsPruner = colStatsPruner;
+      this.partitionStatsIndexSupport = new PartitionStatsIndexSupport(basePath, rowType, metadataConfig);
     }
 
     @Override
     public Set<String> filter(Collection<String> partitions) {
-      Set<String> candidatePartitions = ColumnStatsIndices.candidatePartitionsInMetadataTable(
-          basePath, metadataConfig, rowType, dataPruner, new ArrayList<>(partitions));
+      Set<String> candidatePartitions = partitionStatsIndexSupport.computeCandidatePartitions(colStatsPruner, new ArrayList<>(partitions));
       if (candidatePartitions == null) {
         return new HashSet<>(partitions);
       }
@@ -176,6 +170,7 @@ public class PartitionPruners {
    * Chained partition pruner for hoodie table source which combines multiple partition pruners.
    */
   public static class ChainedPartitionPruner implements PartitionPruner {
+    private static final long serialVersionUID = 1L;
     private final List<PartitionPruner> pruners;
 
     public ChainedPartitionPruner(List<PartitionPruner> pruners) {
@@ -267,20 +262,30 @@ public class PartitionPruners {
       }
       PartitionPruner dynamicPruner = null;
       if (partitionEvaluators != null && !partitionEvaluators.isEmpty()) {
-        Preconditions.checkArgument(partitionKeys != null && partitionTypes != null && defaultParName != null);
+        Preconditions.checkArgument(partitionKeys != null && partitionTypes != null && defaultParName != null,
+            "Invalid parameters for dynamic partition pruner, partitionKeys:%s, partitionTypes:%s, defaultParName:%s",
+            partitionKeys, partitionTypes, defaultParName);
         dynamicPruner = new DynamicPartitionPruner(partitionEvaluators, partitionKeys, partitionTypes, defaultParName, hivePartition);
       }
       PartitionPruner columnStatsPruner = null;
       if (dataPruner != null
-          && conf.get(FlinkOptions.READ_PARTITION_DATA_SKIPPING_ENABLED)
+          && conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)
           && conf.get(FlinkOptions.METADATA_ENABLED)) {
-        Preconditions.checkArgument(rowType != null && basePath != null && conf != null);
+        Preconditions.checkArgument(rowType != null && basePath != null && conf != null,
+            "Invalid parameters for column stats partition pruner, rowType:%s, basePath:%s, conf:%s",
+            rowType, basePath, conf);
         columnStatsPruner = new ColumnStatsPartitionPruner(rowType, basePath, StreamerUtil.metadataConfig(conf), dataPruner);
       }
       List<PartitionPruner> partitionPruners =
           Stream.of(staticPruner, dynamicPruner, columnStatsPruner)
               .filter(Objects::nonNull)
               .collect(Collectors.toList());
+      if (partitionPruners.size() < 1) {
+        return null;
+      }
+      if (partitionPruners.size() < 2) {
+        return partitionPruners.get(0);
+      }
       return new ChainedPartitionPruner(partitionPruners);
     }
   }
