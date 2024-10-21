@@ -81,7 +81,7 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
     HoodieBootstrapMORSplit(dataFile, skeletonFile, fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList)
   }
 
-  protected override def composeRDD(fileSplits: Seq[FileSplit],
+  protected override def composeRDD(partitions: Seq[HoodieDefaultFilePartition],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
@@ -97,7 +97,7 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
       regularFileReader = regularFileReader,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
-      tableState = tableState, fileSplits)
+      tableState = tableState, partitions)
   }
 
 

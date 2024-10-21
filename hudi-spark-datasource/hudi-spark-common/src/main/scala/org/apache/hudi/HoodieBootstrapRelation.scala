@@ -96,6 +96,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
 
   override type FileSplit = BaseHoodieBootstrapSplit
+  override type Partition = HoodieDefaultFilePartition
 
   private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
@@ -130,6 +131,13 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     }
   }
 
+
+  protected override def mergeSplitsToPartitions(splits: Seq[FileSplit]): Seq[Partition] = {
+    splits.zipWithIndex.map { case (split, index) =>
+      HoodieDefaultFilePartition(index, Seq(split))
+    }
+  }
+
   /**
    * get all the file readers required for composeRDD
    */
@@ -147,7 +155,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     (bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader)
   }
 
-  protected override def composeRDD(fileSplits: Seq[FileSplit],
+  protected override def composeRDD(partitions: Seq[Partition],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
@@ -156,7 +164,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     val (bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader) = getFileReaders(tableSchema,
       requiredSchema, requestedColumns, filters)
     new HoodieBootstrapRDD(sqlContext.sparkSession, bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader,
-      requiredSchema, fileSplits)
+      requiredSchema, partitions)
   }
 
   /**

@@ -26,7 +26,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
-
+import org.apache.spark.Partition
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -75,6 +75,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
 
   override type FileSplit = HoodieMergeOnReadFileSplit
+  override type Partition = HoodieDefaultFilePartition
 
   /**
    * NOTE: These are the fields that are required to properly fulfil Merge-on-Read (MOR)
@@ -106,7 +107,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   override def canPruneRelationSchema: Boolean =
     super.canPruneRelationSchema && isProjectionCompatible(tableState)
 
-  protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
+  protected override def composeRDD(partitions: Seq[HoodieDefaultFilePartition],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
@@ -123,7 +124,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
-      fileSplits = fileSplits)
+      partitions = partitions)
   }
 
   protected def createBaseFileReaders(tableSchema: HoodieTableSchema,
@@ -225,6 +226,12 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
     } else {
       val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
       buildSplits(fileSlices)
+    }
+  }
+
+  protected override def mergeSplitsToPartitions(splits: Seq[HoodieMergeOnReadFileSplit]): Seq[HoodieDefaultFilePartition] = {
+    splits.zipWithIndex.map { case (split, index) =>
+      HoodieDefaultFilePartition(index, Seq(split))
     }
   }
 

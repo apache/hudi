@@ -48,12 +48,12 @@ import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapred.JobConf
+import org.apache.spark.Partition
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -74,6 +74,10 @@ import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
 trait HoodieFileSplit {}
+
+trait HoodieFilePartition extends Partition
+
+case class HoodieDefaultFilePartition(index: Int, fileSplits: Seq[HoodieFileSplit]) extends HoodieFilePartition
 
 case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String, internalSchema: Option[InternalSchema] = None)
 
@@ -102,6 +106,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   type FileSplit <: HoodieFileSplit
   type Relation <: HoodieBaseRelation
+  type Partition <: HoodieFilePartition
 
   imbueConfigs(sqlContext)
 
@@ -371,6 +376,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
+    // use different strategy to combine splits to partitions
+    val partitions = mergeSplitsToPartitions(fileSplits)
+
     val tableAvroSchemaStr = tableAvroSchema.toString
 
     val tableSchema = HoodieTableSchema(tableStructSchema, tableAvroSchemaStr, internalSchemaOpt)
@@ -379,7 +387,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
     } else {
-      val rdd = composeRDD(fileSplits, tableSchema, requiredSchema, targetColumns, filters)
+      val rdd = composeRDD(partitions, tableSchema, requiredSchema, targetColumns, filters)
 
       // Here we rely on a type erasure, to workaround inherited API restriction and pass [[RDD[InternalRow]]] back as [[RDD[Row]]]
       // Please check [[needConversion]] scala-doc for more details
@@ -397,7 +405,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * @param filters          data filters to be applied
    * @return instance of RDD (holding [[InternalRow]]s)
    */
-  protected def composeRDD(fileSplits: Seq[FileSplit],
+  protected def composeRDD(partitions: Seq[Partition],
                            tableSchema: HoodieTableSchema,
                            requiredSchema: HoodieTableSchema,
                            requestedColumns: Array[String],
@@ -412,6 +420,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * @return list of [[FileSplit]] to fetch records from
    */
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit]
+
+  protected def mergeSplitsToPartitions(splits: Seq[FileSplit]): Seq[Partition]
 
   protected def listLatestFileSlices(globPaths: Seq[StoragePath], partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
     queryTimestamp match {

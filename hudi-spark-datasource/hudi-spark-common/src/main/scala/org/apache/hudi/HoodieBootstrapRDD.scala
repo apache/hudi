@@ -20,7 +20,6 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -34,8 +33,8 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
                          bootstrapSkeletonFileReader: BaseFileReader,
                          regularFileReader: BaseFileReader,
                          requiredSchema: HoodieTableSchema,
-                         @transient splits: Seq[BaseHoodieBootstrapSplit])
-  extends RDD[InternalRow](spark.sparkContext, Nil) {
+                         @transient partitions: Seq[HoodieDefaultFilePartition])
+  extends HoodieBaseRDD(spark.sparkContext, partitions) {
 
 
   protected def getSkeletonIteratorSchema(dataFile: PartitionedFile, skeletonFile: PartitionedFile): (Iterator[InternalRow], StructType) = {
@@ -67,31 +66,43 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
     iterator.map(unsafeProjection)
   }
 
-  protected def maybeLog(bootstrapPartition: HoodieBootstrapPartition): Unit = {
+  protected def maybeLog(bootstrapPartition: HoodieDefaultFilePartition): Unit = {
     if (log.isDebugEnabled) {
-      var msg = "Got Split => Index: " + bootstrapPartition.index + ", Data File: " +
-        bootstrapPartition.split.dataFile.filePath
-      if (bootstrapPartition.split.skeletonFile.isDefined) {
-        msg += ", Skeleton File: " + bootstrapPartition.split.skeletonFile.get.filePath
-      }
+      var msg = "Got Partition => Index: " + bootstrapPartition.index + ", Splits: "
+      bootstrapPartition.fileSplits.foreach(split => msg += logStrForSplit(split) + ", ")
       logDebug(msg)
     }
   }
 
-  protected def getIterator(bootstrapPartition: HoodieBootstrapPartition): Iterator[InternalRow] = {
-    bootstrapPartition.split.skeletonFile match {
+  private def logStrForSplit(split: HoodieFileSplit): String = {
+    val bootstrapSplit = split.asInstanceOf[BaseHoodieBootstrapSplit]
+    var msg = "Data File: " + bootstrapSplit.dataFile.filePath
+    if (bootstrapSplit.skeletonFile.isDefined) {
+      msg += ", Skeleton File: " + bootstrapSplit.skeletonFile.get.filePath
+    } else {
+      msg += ", No Skeleton File"
+    }
+    msg
+  }
+
+  private def getIterator(bootstrapPartition: HoodieDefaultFilePartition): Iterator[InternalRow] = {
+    bootstrapPartition.fileSplits.iterator.flatMap((split) => splitToIter(split.asInstanceOf[BaseHoodieBootstrapSplit]))
+  }
+
+  protected def splitToIter(bootstrapSplit: BaseHoodieBootstrapSplit): Iterator[InternalRow] = {
+    bootstrapSplit.skeletonFile match {
       case Some(skeletonFile) =>
         // It is a bootstrap split. Check both skeleton and data files.
-        val (iterator, schema) = getSkeletonIteratorSchema(bootstrapPartition.split.dataFile, skeletonFile)
+        val (iterator, schema) = getSkeletonIteratorSchema(bootstrapSplit.dataFile, skeletonFile)
         unsafeProjectIterator(iterator, schema)
       case _ =>
         // NOTE: Regular file-reader is already projected into the required schema
-        regularFileReader.read(bootstrapPartition.split.dataFile)
+        regularFileReader.read(bootstrapSplit.dataFile)
     }
   }
 
-  override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
-    val bootstrapPartition = split.asInstanceOf[HoodieBootstrapPartition]
+  override def compute(partition: Partition, context: TaskContext): Iterator[InternalRow] = {
+    val bootstrapPartition = partition.asInstanceOf[HoodieDefaultFilePartition]
     maybeLog(bootstrapPartition)
     getIterator(bootstrapPartition)
   }
@@ -112,18 +123,4 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
     }
   }
 
-  override protected def getPartitions: Array[Partition] = {
-    splits.zipWithIndex.map(file => {
-      if (file._1.skeletonFile.isDefined) {
-        logDebug("Forming partition with => Index: " + file._2 + ", Files: " + file._1.dataFile.filePath
-          + "," + file._1.skeletonFile.get.filePath)
-        HoodieBootstrapPartition(file._2, file._1)
-      } else {
-        logDebug("Forming partition with => Index: " + file._2 + ", File: " + file._1.dataFile.filePath)
-        HoodieBootstrapPartition(file._2, file._1)
-      }
-    }).toArray
-  }
 }
-
-case class HoodieBootstrapPartition(index: Int, split: BaseHoodieBootstrapSplit) extends Partition

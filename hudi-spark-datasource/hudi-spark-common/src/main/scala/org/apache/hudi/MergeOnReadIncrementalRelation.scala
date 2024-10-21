@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
@@ -70,7 +69,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     }
   }
 
-  protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
+  protected override def composeRDD(partitions: Seq[HoodieDefaultFilePartition],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
@@ -89,7 +88,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
-      fileSplits = fileSplits,
+      partitions = partitions,
       includeStartTime = includeStartTime,
       startTimestamp = startTs,
       endTimestamp = endTs)

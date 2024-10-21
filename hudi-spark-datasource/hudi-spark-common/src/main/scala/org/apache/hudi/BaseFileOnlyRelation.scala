@@ -56,10 +56,12 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema)
     with SparkAdapterSupport {
 
-  case class HoodieBaseFileSplit(filePartition: FilePartition) extends HoodieFileSplit
+  case class HoodieBaseFileSplit(fileSplit: PartitionedFile) extends HoodieFileSplit
+  case class HoodieBaseFilePartition(override val index: Int, filePartition: FilePartition) extends HoodieFilePartition
 
   override type FileSplit = HoodieBaseFileSplit
   override type Relation = BaseFileOnlyRelation
+  override type Partition = HoodieBaseFilePartition
 
   // TODO(HUDI-3204) this is to override behavior (exclusively) for COW tables to always extract
   //                 partition values from partition path
@@ -78,7 +80,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
-  protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
+  protected override def composeRDD(partitions: Seq[HoodieBaseFilePartition],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
@@ -107,13 +109,14 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
     val projectedReader = projectReader(baseFileReader, requiredSchema.structTypeSchema)
 
     // SPARK-37273 FileScanRDD constructor changed in SPARK 3.3
-    sparkAdapter.createHoodieFileScanRDD(sparkSession, projectedReader.apply, fileSplits.map(_.filePartition), requiredSchema.structTypeSchema)
-      .asInstanceOf[HoodieUnsafeRDD]
+    sparkAdapter.createHoodieFileScanRDD(sparkSession, projectedReader.apply,
+        partitions.map(partition => partition.filePartition),
+      requiredSchema.structTypeSchema).asInstanceOf[HoodieUnsafeRDD]
   }
 
   protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[HoodieBaseFileSplit] = {
     val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
-    val fileSplits = fileSlices.flatMap { fileSlice =>
+    fileSlices.flatMap { fileSlice =>
       // TODO fix, currently assuming parquet as underlying format
       val pathInfo: StoragePathInfo = fileSlice.getBaseFile.get.getPathInfo
       HoodieDataSourceHelper.splitFiles(
@@ -124,12 +127,16 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
     }
       // NOTE: It's important to order the splits in the reverse order of their
       //       size so that we can subsequently bucket them in an efficient manner
-      .sortBy(_.length)(implicitly[Ordering[Long]].reverse)
+      .sortBy(_.length)(implicitly[Ordering[Long]].reverse).map(HoodieBaseFileSplit)
+  }
 
+  override def mergeSplitsToPartitions(splits: Seq[HoodieBaseFileSplit]): Seq[HoodieBaseFilePartition] = {
     val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
 
-    sparkAdapter.getFilePartitions(sparkSession, fileSplits, maxSplitBytes)
-      .map(HoodieBaseFileSplit.apply)
+    sparkAdapter.getFilePartitions(sparkSession, splits.map(_.fileSplit), maxSplitBytes).zipWithIndex.map {
+      case (filePartition, index) =>
+        HoodieBaseFilePartition(index, filePartition)
+    }
   }
 
   /**
