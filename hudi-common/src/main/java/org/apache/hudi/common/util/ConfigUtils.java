@@ -97,7 +97,7 @@ public class ConfigUtils {
   }
 
   public static List<String> split2List(String param) {
-    return Arrays.stream(param.split(","))
+    return StringUtils.split(param, ",").stream()
         .map(String::trim).distinct().collect(Collectors.toList());
   }
 

@@ -21,22 +21,10 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.exception.HoodieException;
 
 public abstract class HoodieSparkRecordMerger implements HoodieRecordMerger {
   @Override
   public HoodieRecord.HoodieRecordType getRecordType() {
     return HoodieRecord.HoodieRecordType.SPARK;
-  }
-
-  static HoodieRecordMerger getRecordMerger(String mergerStrategy) {
-    switch (mergerStrategy) {
-      case DEFAULT_MERGER_STRATEGY_UUID:
-        return new DefaultSparkRecordMerger();
-      case OVERWRITE_MERGER_STRATEGY_UUID:
-        return new OverwriteWithLatestSparkRecordMerger();
-      default:
-        throw new HoodieException("This merger strategy UUID is not supported: " + mergerStrategy);
-    }
   }
 }

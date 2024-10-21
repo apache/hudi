@@ -662,7 +662,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY -> "true"
           )
 
-          val (writeOpt, readOpt) = getWriterReaderOpts(getRecordType(), hudiOptions)
+          val (writeOpt, readOpt) = getWriterReaderOpts(HoodieRecordType.SPARK, hudiOptions)
           orgStringDf.write
             .format("org.apache.hudi")
             .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)

@@ -20,6 +20,7 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -60,11 +61,11 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   private final transient HoodieMetaserverClient metaserverClient;
 
   public HoodieTableMetaserverClient(HoodieStorage storage, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
-                                     String mergerStrategy, HoodieTimeGeneratorConfig timeGeneratorConfig,
-                                     FileSystemRetryConfig fileSystemRetryConfig,
+                                     RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy,
+                                     HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig,
                                      Option<String> databaseName, Option<String> tableName, HoodieMetaserverConfig config) {
     super(storage, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
-        config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, timeGeneratorConfig, fileSystemRetryConfig);
+        recordMergeMode, payloadClassName, recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig);
     this.databaseName = databaseName.isPresent() ? databaseName.get() : tableConfig.getDatabaseName();
     this.tableName = tableName.isPresent() ? tableName.get() : tableConfig.getTableName();
     this.metaserverConfig = config;

@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -44,9 +43,14 @@ import java.util.List;
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface HoodieRecordMerger extends Serializable {
 
+  // Uses event time ordering to determine which record is chosen
   String DEFAULT_MERGER_STRATEGY_UUID = "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5";
 
+  // Always chooses the most recently written record
   String OVERWRITE_MERGER_STRATEGY_UUID = "ce9acb64-bde0-424c-9b91-f6ebba25356d";
+
+  // Use avro payload to merge records
+  String PAYLOAD_BASED_MERGER_STRATEGY_UUID = "00000000-0000-0000-0000-000000000000";
 
   /**
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.
@@ -167,17 +171,4 @@ public interface HoodieRecordMerger extends Serializable {
    */
   String getMergingStrategy();
 
-  /**
-   * The record merge mode that corresponds to this record merger
-   */
-  default RecordMergeMode getRecordMergeMode() {
-    switch (getMergingStrategy()) {
-      case DEFAULT_MERGER_STRATEGY_UUID:
-        return RecordMergeMode.EVENT_TIME_ORDERING;
-      case OVERWRITE_MERGER_STRATEGY_UUID:
-        return RecordMergeMode.OVERWRITE_WITH_LATEST;
-      default:
-        return RecordMergeMode.CUSTOM;
-    }
-  }
 }

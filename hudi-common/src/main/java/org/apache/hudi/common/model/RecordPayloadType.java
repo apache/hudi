@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_TYPE;
 
 /**
  * Payload to use for record.
@@ -98,12 +97,10 @@ public enum RecordPayloadType {
     String payloadClassName;
     if (config.contains(PAYLOAD_CLASS_NAME)) {
       payloadClassName = config.getString(PAYLOAD_CLASS_NAME);
-    } else if (config.contains(PAYLOAD_TYPE)) {
-      payloadClassName = RecordPayloadType.valueOf(config.getString(PAYLOAD_TYPE)).getClassName();
     } else if (config.contains("hoodie.datasource.write.payload.class")) {
       payloadClassName = config.getString("hoodie.datasource.write.payload.class");
     } else {
-      payloadClassName = RecordPayloadType.valueOf(PAYLOAD_TYPE.defaultValue()).getClassName();
+      return DefaultHoodieRecordPayload.class.getName();
     }
     // There could be tables written with payload class from com.uber.hoodie.
     // Need to transparently change to org.apache.hudi.

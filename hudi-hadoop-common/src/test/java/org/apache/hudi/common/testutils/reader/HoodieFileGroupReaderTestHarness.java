@@ -87,9 +87,13 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
     return HoodieTableType.MERGE_ON_READ;
   }
 
+  protected Properties getMetaProps() {
+    return new Properties();
+  }
+
   @Override
   protected void initMetaClient() throws IOException {
-    Properties metaProps = new Properties();
+    Properties metaProps = getMetaProps();
     metaProps.setProperty(POPULATE_META_FIELDS.key(), "false");
     if (basePath == null) {
       initPath();

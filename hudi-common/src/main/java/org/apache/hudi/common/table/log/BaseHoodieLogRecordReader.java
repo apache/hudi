@@ -19,13 +19,11 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -96,10 +94,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
   private final Option<String> partitionNameOverrideOpt;
   // Pre-combining field
   protected final String preCombineField;
-  // Stateless component for merging records
-  protected final HoodieRecordMerger recordMerger;
-  // Record merge mode
-  protected final RecordMergeMode recordMergeMode;
   private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
@@ -135,7 +129,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // Populate meta fields for the records
   private final boolean populateMetaFields;
   // Record type read from log block
-  protected final HoodieRecord.HoodieRecordType recordType;
   // Collect all the block instants after scanning all the log files.
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
@@ -150,8 +143,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
                                       Option<String> partitionNameOverride,
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
-                                      HoodieRecordMerger recordMerger,
-                                      RecordMergeMode recordMergeMode,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
     this.readerContext = readerContext;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
@@ -169,8 +160,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
     }
     this.payloadProps = props;
-    this.recordMerger = recordMerger;
-    this.recordMergeMode = recordMergeMode;
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
@@ -204,7 +193,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
     }
 
     this.partitionNameOverrideOpt = partitionNameOverride;
-    this.recordType = recordMerger.getRecordType();
     this.recordBuffer = recordBuffer;
   }
 
@@ -864,12 +852,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
     public Builder withOperationField(boolean withOperationField) {
       throw new UnsupportedOperationException();
     }
-
-    public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
-      throw new UnsupportedOperationException();
-    }
-
-    public abstract Builder withRecordMergeMode(RecordMergeMode recordMergeMode);
 
     public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       throw new UnsupportedOperationException();

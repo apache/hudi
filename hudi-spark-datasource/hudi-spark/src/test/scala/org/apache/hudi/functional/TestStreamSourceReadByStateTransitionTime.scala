@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.engine.EngineType
@@ -43,7 +43,6 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
           .setTableName(s"test_stream_${tableType.name()}")
-          .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
           .setPreCombineField("timestamp")
           .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
