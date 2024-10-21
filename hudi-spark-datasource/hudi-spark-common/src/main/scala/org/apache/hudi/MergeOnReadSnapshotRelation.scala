@@ -26,7 +26,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
-
+import org.apache.spark.Partition
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -106,7 +106,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   override def canPruneRelationSchema: Boolean =
     super.canPruneRelationSchema && isProjectionCompatible(tableState)
 
-  protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
+  protected override def composeRDD(partitions: Seq[HoodieFilePartition],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
@@ -123,7 +123,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
-      fileSplits = fileSplits)
+      partitions = partitions)
   }
 
   protected def createBaseFileReaders(tableSchema: HoodieTableSchema,

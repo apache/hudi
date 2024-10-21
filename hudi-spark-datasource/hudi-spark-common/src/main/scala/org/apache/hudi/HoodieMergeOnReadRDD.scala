@@ -27,14 +27,13 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 
 import java.io.Closeable
 import java.util.function.Predicate
 
-case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
+case class HoodieMergeOnReadPartition(index: Int, splits: Seq[HoodieMergeOnReadFileSplit]) extends Partition
 
 /**
  * Class holding base-file readers for 3 different use-cases:
@@ -78,11 +77,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            requiredSchema: HoodieTableSchema,
                            tableState: HoodieTableState,
                            mergeType: String,
-                           @transient fileSplits: Seq[HoodieMergeOnReadFileSplit],
+                           @transient partitions: Seq[HoodieFilePartition],
                            includeStartTime: Boolean = false,
                            startTimestamp: String = null,
                            endTimestamp: String = null)
-  extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
+  extends HoodieBaseRDD(sc, partitions) with HoodieUnsafeRDD {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
@@ -90,7 +89,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
-    val iter = partition.split match {
+    partition.splits.zipWithIndex.flatMap { case (split, splitIndex) =>
+      splitToIter(partition.index, splitIndex, split)
+    }.toIterator
+  }
+
+  private def splitToIter(partitionIndex: Int, splitIndex: Int, split: HoodieMergeOnReadFileSplit): Iterator[InternalRow] = {
+    val iter = split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
         val projectedReader = projectReader(fileReaders.requiredSchemaReaderSkipMerging, requiredSchema.structTypeSchema)
         projectedReader(dataFileOnlySplit.dataFile.get)
@@ -112,10 +117,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         }
 
       case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
-        s"file path: ${partition.split.dataFile.get.filePath}" +
-        s"log paths: ${partition.split.logFiles.toString}" +
+        s"file path: ${split.dataFile.get.filePath}" +
+        s"log paths: ${split.logFiles.toString}" +
         s"hoodie table path: ${tableState.tablePath}" +
-        s"spark partition Index: ${partition.index}" +
+        s"spark partition Index: ${partitionIndex}" +
+        s"split index in partition: ${splitIndex}" +
         s"merge type: ${mergeType}")
     }
 
@@ -168,9 +174,6 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       fileReaders.fullSchemaReader
     }
   }
-
-  override protected def getPartitions: Array[Partition] =
-    fileSplits.zipWithIndex.map(file => HoodieMergeOnReadPartition(file._2, file._1)).toArray
 
   private def getHadoopConf: Configuration = {
     val conf = hadoopConfBroadcast.value.value
