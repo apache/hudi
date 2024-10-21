@@ -261,6 +261,16 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline findInstantsAfterOrEquals(String commitTime);
 
   /**
+   * Create a new Timeline with all the instants completed after specified completion time.
+   */
+  HoodieTimeline findInstantsAfterOrEqualsByCompletionTime(String completionTime, int numCommits);
+
+  /**
+   * Create a new Timeline with all the instants completed after specified completion time.
+   */
+  HoodieTimeline findInstantsAfterOrEqualsByCompletionTime(String completionTime);
+
+  /**
    * Create a new Timeline with instants after startTs and before or on endTs.
    */
   HoodieTimeline findInstantsInRange(String startTs, String endTs);
@@ -292,6 +302,16 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline findInstantsAfter(String instantTime);
 
   /**
+   * Create a new Timeline with all the instants completed after specified completion time.
+   */
+  HoodieTimeline findInstantsAfterByCompletionTime(String completionTime);
+
+  /**
+   * Create a new Timeline with all the instants completed after specified completion time.
+   */
+  HoodieTimeline findInstantsAfterByCompletionTime(String completionTime, int numCommits);
+
+  /**
    * Create a new Timeline with all instants before specified time.
    */
   HoodieTimeline findInstantsBefore(String instantTime);
@@ -300,6 +320,11 @@ public interface HoodieTimeline extends Serializable {
    * Finds the instant before specified time.
    */
   Option<HoodieInstant> findInstantBefore(String instantTime);
+
+  /**
+   * Find the last completed instant before specified completion time
+   */
+  Option<HoodieInstant> findInstantBeforeByCompletionTime(String completionTime);
 
   /**
    * Create new timeline with all instants before or equals specified time.
