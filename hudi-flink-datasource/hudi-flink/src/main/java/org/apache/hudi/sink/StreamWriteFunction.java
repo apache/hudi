@@ -19,11 +19,8 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
@@ -218,33 +215,18 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   protected static class DataBucket {
     private final List<HoodieRecord> records;
     private final BufferSizeDetector detector;
-    private final String partitionPath;
-    private final String fileID;
 
-    private DataBucket(Double batchSize, HoodieRecord<?> hoodieRecord) {
+    private DataBucket(Double batchSize) {
       this.records = new ArrayList<>();
       this.detector = new BufferSizeDetector(batchSize);
-      this.partitionPath = hoodieRecord.getPartitionPath();
-      this.fileID = hoodieRecord.getCurrentLocation().getFileId();
     }
 
     public List<HoodieRecord> getRecords() {
       return records;
     }
 
-    /**
-     * Sets up before flush: patch up the first record with correct partition path and fileID.
-     *
-     * <p>Note: the method may modify the given records {@code records}.
-     */
-    public void preWrite(List<HoodieRecord> records) {
-      // rewrite the first record with expected fileID
-      HoodieRecord<?> first = records.get(0);
-      HoodieRecord<?> record = new HoodieAvroRecord<>(first.getKey(), (HoodieRecordPayload) first.getData(), first.getOperation());
-      HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
-      record.setCurrentLocation(newLoc);
-
-      records.set(0, record);
+    public boolean isEmpty() {
+      return records.isEmpty();
     }
 
     public void reset() {
@@ -351,7 +333,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     final String bucketID = getBucketID(value);
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
-        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value));
+        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE)));
     bucket.records.add(value);
 
     boolean flushBucket = bucket.detector.detect(value);
@@ -392,11 +374,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       return false;
     }
 
-    List<HoodieRecord> records = bucket.getRecords();
-    ValidationUtils.checkState(!records.isEmpty(), "Data bucket to flush has no buffering records");
-    records = deduplicateRecordsIfNeeded(records);
-    final List<WriteStatus> writeStatus = writeBucket(instant, bucket, records);
-    records.clear();
+    ValidationUtils.checkState(!bucket.isEmpty(), "Data bucket to flush has no buffering records");
+    final List<WriteStatus> writeStatus = writeRecords(instant, bucket.getRecords());
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
@@ -425,11 +404,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
           // The records are partitioned by the bucket ID and each batch sent to
           // the writer belongs to one bucket.
           .forEach(bucket -> {
-            List<HoodieRecord> records = bucket.getRecords();
-            if (!records.isEmpty()) {
-              records = deduplicateRecordsIfNeeded(records);
-              writeStatus.addAll(writeBucket(currentInstant, bucket, records));
-              records.clear();
+            if (!bucket.isEmpty()) {
+              writeStatus.addAll(writeRecords(currentInstant, bucket.getRecords()));
               bucket.reset();
             }
           });
@@ -463,16 +439,15 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     writeMetrics.registerMetrics();
   }
 
-  protected List<WriteStatus> writeBucket(String instant, DataBucket bucket, List<HoodieRecord> records) {
-    bucket.preWrite(records);
+  protected List<WriteStatus> writeRecords(String instant, List<HoodieRecord> records) {
     writeMetrics.startFileFlush();
-    List<WriteStatus> statuses = writeFunction.apply(records, instant);
+    List<WriteStatus> statuses = writeFunction.apply(deduplicateRecordsIfNeeded(records), instant);
     writeMetrics.endFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
   }
 
-  private List<HoodieRecord> deduplicateRecordsIfNeeded(List<HoodieRecord> records) {
+  protected List<HoodieRecord> deduplicateRecordsIfNeeded(List<HoodieRecord> records) {
     if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
       return FlinkWriteHelper.newInstance()
           .deduplicateRecords(records, null, -1, this.writeClient.getConfig().getSchema(), this.writeClient.getConfig().getProps(), recordMerger);

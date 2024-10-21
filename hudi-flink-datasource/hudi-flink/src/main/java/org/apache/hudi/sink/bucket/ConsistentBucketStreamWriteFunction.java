@@ -71,11 +71,10 @@ public class ConsistentBucketStreamWriteFunction<I> extends StreamWriteFunction<
   }
 
   @Override
-  protected List<WriteStatus> writeBucket(String instant, DataBucket bucket, List<HoodieRecord> records) {
+  protected List<WriteStatus> writeRecords(String instant, List<HoodieRecord> records) {
     updateStrategy.initialize(this.writeClient);
-    bucket.preWrite(records);
     Pair<List<Pair<List<HoodieRecord>, String>>, Set<HoodieFileGroupId>> recordListFgPair =
-        updateStrategy.handleUpdate(Collections.singletonList(Pair.of(records, instant)));
+        updateStrategy.handleUpdate(Collections.singletonList(Pair.of(deduplicateRecordsIfNeeded(records), instant)));
     return recordListFgPair.getKey().stream().flatMap(
         recordsInstantPair -> writeFunction.apply(recordsInstantPair.getLeft(), recordsInstantPair.getRight()).stream()
     ).collect(Collectors.toList());
