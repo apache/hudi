@@ -147,7 +147,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     (bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader)
   }
 
-  protected override def composeRDD(fileSplits: Seq[FileSplit],
+  protected override def composeRDD(partitions: Seq[HoodieFilePartition],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
@@ -156,7 +156,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
     val (bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader) = getFileReaders(tableSchema,
       requiredSchema, requestedColumns, filters)
     new HoodieBootstrapRDD(sqlContext.sparkSession, bootstrapDataFileReader, bootstrapSkeletonFileReader, regularFileReader,
-      requiredSchema, fileSplits)
+      requiredSchema, partitions)
   }
 
   /**
