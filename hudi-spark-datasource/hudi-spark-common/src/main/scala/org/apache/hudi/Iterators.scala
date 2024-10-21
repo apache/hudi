@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator.{getPartitionPath, scanLog}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
+import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext, HoodieReaderContext}
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieOperation, HoodieRecord, HoodieSparkRecord}
@@ -37,7 +37,6 @@ import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMeta
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.CachingIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -49,7 +48,6 @@ import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -302,33 +300,61 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
   private def merge(curRow: InternalRow, newRecord: HoodieRecord[_]): Option[InternalRow] = {
     // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
     //       on the record from the Delta Log
-    recordMerger.getRecordType match {
-      case HoodieRecordType.SPARK =>
-        val curRecord = new HoodieSparkRecord(curRow, readerSchema)
-        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        toScalaOption(result)
-          .flatMap { r =>
-            val data = r.getLeft.getData.asInstanceOf[InternalRow]
-            if (isDeleteOperation(data)) {
-              None
-            } else {
-              val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
-              val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
-              Some(projection.apply(data))
-            }
+
+    // Given a processing time based delete, the merging between the log record and the base file record is skipped.
+    // E.g., given a row key RK, it appears in base file (bf) and multiple log files (lf1, lf2, lf3).
+    // Then we have records bfr, lfr1, lfr2, lfr3.
+    // If lfr2 is the delete, then lfr3 should be returned without merging with bfr.
+    if (newRecord.getMetaDataInfo(HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE).isPresent) {
+      recordMerger.getRecordType match {
+        case HoodieRecordType.SPARK => {
+          val schema = HoodieInternalRowUtils.getCachedSchema(logFileReaderAvroSchema)
+          val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
+          if (newRecord.getData != null) {
+            Some(projection.apply(newRecord.getData.asInstanceOf[InternalRow]))
+          } else {
+            None
           }
-      case _ =>
-        val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
-        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        toScalaOption(result)
-          .flatMap { r =>
-            val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
-            if (isDeleteOperation(avroRecord)) {
-              None
-            } else {
-              Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
-            }
+        }
+        case _ => {
+          val avroRecordOpt = newRecord.toIndexedRecord(logFileReaderAvroSchema, payloadProps)
+          if (avroRecordOpt.isPresent) {
+            val record = avroRecordOpt.get().getData.asInstanceOf[GenericRecord]
+            Some(deserialize(requiredSchemaAvroProjection(record)))
+          } else {
+            None
           }
+        }
+      }
+    } else {
+      recordMerger.getRecordType match {
+        case HoodieRecordType.SPARK =>
+          val curRecord = new HoodieSparkRecord(curRow, readerSchema)
+          val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
+          toScalaOption(result)
+            .flatMap { r =>
+              val data = r.getLeft.getData.asInstanceOf[InternalRow]
+              if (isDeleteOperation(data)) {
+                None
+              } else {
+                val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
+                val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
+                Some(projection.apply(data))
+              }
+            }
+        case _ =>
+          val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
+          val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
+          toScalaOption(result)
+            .flatMap { r =>
+              val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
+              if (isDeleteOperation(avroRecord)) {
+                None
+              } else {
+                Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
+              }
+            }
+      }
     }
   }
 }

@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -166,6 +167,15 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
         String key = record.getRecordKey();
         if (deltaRecordMap.containsKey(key)) {
           deltaRecordKeys.remove(key);
+
+          // When we find a processing time based delete, e.g., a delete record without valid ordering value,
+          // or with default ordering value, i.e., 0, we can safely ignore records before the delete record.
+          // That means, we can return the log record without merging with the record from base file.
+          if (deltaRecordMap.get(key).getMetaDataInfo(DELETE_FOUND_WITHOUT_ORDERING_VALUE).isPresent()) {
+            mergedRecords.add(deltaRecordMap.get(key));
+            continue;
+          }
+
           Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger
               .merge(record, readerSchema, deltaRecordMap.get(key), readerSchema, config.getPayloadConfig().getProps());
           if (!mergeResult.isPresent()) {
