@@ -287,6 +287,19 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline findInstantsAfterByCompletionTime(String completionTime, int numCommits) {
+    return new HoodieDefaultTimeline(getInstantsOrderedByCompletionTime()
+        .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN, completionTime))
+        .limit(numCommits), details);
+  }
+
+  @Override
+  public HoodieTimeline findInstantsAfterByCompletionTime(String completionTime) {
+    return new HoodieDefaultTimeline(getInstantsOrderedByCompletionTime()
+        .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN, completionTime)), details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsAfterOrEquals(String commitTime, int numCommits) {
     return new HoodieDefaultTimeline(getInstantsAsStream()
         .filter(s -> compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, commitTime))
@@ -297,6 +310,19 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public HoodieTimeline findInstantsAfterOrEquals(String commitTime) {
     return new HoodieDefaultTimeline(getInstantsAsStream()
         .filter(s -> compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, commitTime)), details);
+  }
+
+  @Override
+  public HoodieDefaultTimeline findInstantsAfterOrEqualsByCompletionTime(String completionTime, int numCommits) {
+    return new HoodieDefaultTimeline(getInstantsOrderedByCompletionTime()
+        .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN_OR_EQUALS, completionTime))
+        .limit(numCommits), details);
+  }
+
+  @Override
+  public HoodieDefaultTimeline findInstantsAfterOrEqualsByCompletionTime(String completionTime) {
+    return new HoodieDefaultTimeline(getInstantsOrderedByCompletionTime()
+        .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN_OR_EQUALS, completionTime)), details);
   }
 
   @Override
@@ -311,6 +337,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return Option.fromJavaOptional(instants.stream()
         .filter(instant -> compareTimestamps(instant.getTimestamp(), LESSER_THAN, instantTime))
         .max(Comparator.comparing(HoodieInstant::getTimestamp)));
+  }
+
+  @Override
+  public Option<HoodieInstant> findInstantBeforeByCompletionTime(String completionTime) {
+    return Option.fromJavaOptional(getInstantsOrderedByCompletionTime()
+        .filter(instant -> compareTimestamps(instant.getCompletionTime(), LESSER_THAN, completionTime))
+        .max(Comparator.comparing(HoodieInstant::getCompletionTime)));
   }
 
   @Override

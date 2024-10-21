@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.CloudDataColumnInfo;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -44,11 +45,8 @@ import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.function.Function;
-
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis;
-import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
+import static org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.START_COMMIT_EARLIEST;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -82,89 +80,113 @@ public class IncrSourceHelper {
    *
    * @param jssc                      Java Spark Context
    * @param srcBasePath               Base path of Hudi source table
-   * @param numInstantsPerFetch       Max Instants per fetch
+   * @param numInstantsFromConfig       Max Instants per fetch
    * @param beginInstant              Last Checkpoint String
    * @param missingCheckpointStrategy when begin instant is missing, allow reading based on missing checkpoint strategy
-   * @param handlingMode              Hollow Commit Handling Mode
-   * @param orderColumn               Column to order by (used for size based incr source)
-   * @param keyColumn                 Key column (used for size based incr source)
-   * @param limitColumn               Limit column (used for size based incr source)
    * @param sourceLimitBasedBatching  When sourceLimit based batching is used, we need to fetch the current commit as well,
    *                                  this flag is used to indicate that.
    * @param lastCheckpointKey         Last checkpoint key (used in the upgrade code path)
    * @return begin and end instants along with query type and other information.
    */
-  public static QueryInfo generateQueryInfo(JavaSparkContext jssc, String srcBasePath,
-                                            int numInstantsPerFetch, Option<String> beginInstant,
+  public static IncrementalQueryAnalyzer generateQueryInfo(JavaSparkContext jssc, String srcBasePath,
+                                            int numInstantsFromConfig, Option<String> beginInstant,
                                             MissingCheckpointStrategy missingCheckpointStrategy,
-                                            HollowCommitHandling handlingMode,
-                                            String orderColumn, String keyColumn, String limitColumn,
                                             boolean sourceLimitBasedBatching,
                                             Option<String> lastCheckpointKey) {
-    ValidationUtils.checkArgument(numInstantsPerFetch > 0,
+    // TODO: checkpoint key: completionTime#key (previous: timestamp#key)
+    ValidationUtils.checkArgument(numInstantsFromConfig > 0,
         "Make sure the config hoodie.streamer.source.hoodieincr.num_instants is set to a positive value");
-    HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder()
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()))
         .setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
-    HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
-    final HoodieTimeline activeCommitTimeline = handleHollowCommitIfNeeded(completedCommitTimeline, srcMetaClient, handlingMode);
-    Function<HoodieInstant, String> timestampForLastInstant = instant -> handlingMode == HollowCommitHandling.USE_TRANSITION_TIME
-        ? instant.getCompletionTime() : instant.getTimestamp();
-    String beginInstantTime = beginInstant.orElseGet(() -> {
-      if (missingCheckpointStrategy != null) {
-        if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
-          Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-          return lastInstant.map(
-              hoodieInstant -> instantTimeMinusMillis(timestampForLastInstant.apply(hoodieInstant), 1))
-              .orElse(DEFAULT_START_TIMESTAMP);
-        } else {
-          return DEFAULT_START_TIMESTAMP;
-        }
-      } else {
-        throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
-            + "committed instant set hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
-      }
-    });
+    final HoodieTimeline completedCommitTimeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
+    String startCompletionTime;
+    RangeType rangeType;
 
+    if (beginInstant.isPresent() && !beginInstant.get().isEmpty()) {
+      startCompletionTime = beginInstant.get();
+      rangeType = RangeType.OPEN_CLOSED;
+    } else if (missingCheckpointStrategy != null) {
+      rangeType = RangeType.CLOSED_CLOSED;
+      switch (missingCheckpointStrategy) {
+        case READ_UPTO_LATEST_COMMIT:
+          startCompletionTime = DEFAULT_START_TIMESTAMP;
+          break;
+        case READ_LATEST:
+          // rely on IncrementalQueryAnalyzer to use the latest completed instant
+          startCompletionTime = null;
+          break;
+        default:
+          throw new IllegalArgumentException("Unknown missing checkpoint strategy: " + missingCheckpointStrategy);
+      }
+    } else {
+      throw new IllegalArgumentException("Missing start completion time for incremental pull. For reading from latest "
+          + "committed instant, set " + MISSING_CHECKPOINT_STRATEGY.key() + " to a valid value");
+    }
+
+    // TODO: why is previous instant time needed? It's not used anywhere
     // When `beginInstantTime` is present, `previousInstantTime` is set to the completed commit before `beginInstantTime` if that exists.
     // If there is no completed commit before `beginInstantTime`, e.g., `beginInstantTime` is the first commit in the active timeline,
     // `previousInstantTime` is set to `DEFAULT_BEGIN_TIMESTAMP`.
-    String previousInstantTime = DEFAULT_START_TIMESTAMP;
-    if (!beginInstantTime.equals(DEFAULT_START_TIMESTAMP)) {
-      Option<HoodieInstant> previousInstant = activeCommitTimeline.findInstantBefore(beginInstantTime);
-      if (previousInstant.isPresent()) {
-        previousInstantTime = previousInstant.get().getTimestamp();
+    String previousInstantTime = DEFAULT_START_TIMESTAMP; // TODO: this should be removed
+    if (startCompletionTime != null && !startCompletionTime.equals(DEFAULT_START_TIMESTAMP)) {
+      // has a valid start completion time, try to find previous instant
+      Option<HoodieInstant> previousCompletedInstant = completedCommitTimeline.findInstantBeforeByCompletionTime(startCompletionTime);
+      if (previousCompletedInstant.isPresent()) {
+        previousInstantTime = previousCompletedInstant.get().getTimestamp();
       } else {
         // if begin instant time matches first entry in active timeline, we can set previous = beginInstantTime - 1
-        if (activeCommitTimeline.filterCompletedInstants().firstInstant().isPresent()
-            && activeCommitTimeline.filterCompletedInstants().firstInstant().get().getTimestamp().equals(beginInstantTime)) {
-          previousInstantTime = String.valueOf(Long.parseLong(beginInstantTime) - 1);
+        Option<HoodieInstant> firstCompletedInstant = completedCommitTimeline.filterCompletedInstants().firstInstant();
+        if (firstCompletedInstant.isPresent()
+            && firstCompletedInstant.get().getCompletionTime().equals(startCompletionTime)) {
+          previousInstantTime = String.valueOf(Long.parseLong(startCompletionTime) - 1);
         }
       }
     }
 
-    if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST || !activeCommitTimeline.isBeforeTimelineStarts(beginInstantTime)) {
-      Option<HoodieInstant> nthInstant;
+    IncrementalQueryAnalyzer.Builder analyzerBuilder = IncrementalQueryAnalyzer.builder();
+
+    if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST
+        || !completedCommitTimeline.isBeforeTimelineStartsByCompletionTime(startCompletionTime)) {
+      Option<HoodieInstant> nthInstant; // TODO: remove this
       // When we are in the upgrade code path from non-sourcelimit-based batching to sourcelimit-based batching, we need to avoid fetching the commit
       // that is read already. Else we will have duplicates in append-only use case if we use "findInstantsAfterOrEquals".
       // As soon as we have a new format of checkpoint and a key we will move to the new code of fetching the current commit as well.
       if (sourceLimitBasedBatching && lastCheckpointKey.isPresent()) {
-        nthInstant = Option.fromJavaOptional(activeCommitTimeline
-            .findInstantsAfterOrEquals(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
+        //        nthInstant = Option.fromJavaOptional(completedCommitTimeline
+        //            .findInstantsAfterOrEqualsByCompletionTime(beginCompletionTime, numInstantsFromConfig).getInstantsAsStream().reduce((x, y) -> y));
+
+        // range stays as CLOSED_CLOSED to include the start instant
+        rangeType = RangeType.CLOSED_CLOSED;
       } else {
-        nthInstant = Option.fromJavaOptional(activeCommitTimeline
-            .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
+        // set the range type to OPEN_CLOSED to avoid duplicates
+        rangeType = RangeType.OPEN_CLOSED;
       }
-      return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), previousInstantTime,
-          beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime),
-          orderColumn, keyColumn, limitColumn);
+
+      return analyzerBuilder
+          .metaClient(metaClient)
+          .startCompletionTime(startCompletionTime)
+          .endCompletionTime(null)
+          .rangeType(rangeType)
+          .limit(numInstantsFromConfig)
+          .build();
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
-      Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-      return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(),
-          previousInstantTime, beginInstantTime, lastInstant.get().getTimestamp(),
-          orderColumn, keyColumn, limitColumn);
+      return analyzerBuilder
+          .metaClient(metaClient)
+          .startCompletionTime(START_COMMIT_EARLIEST)
+          .endCompletionTime(null)
+          .rangeType(rangeType)
+          .limit(-1) // snapshot query, disrespect limit
+          .build();
+
+      // TODO: Revisit this, maybe we can remove this check and have IncrementalQueryAnalyzer to handle
+
+      //      Option<HoodieInstant> lastInstant = completedCommitTimeline.lastInstant();
+      //      return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(),
+      //          previousInstantTime, beginCompletionTime, lastInstant.get().getTimestamp(),
+      //          orderColumn, keyColumn, limitColumn);
     }
   }
 
@@ -230,24 +252,29 @@ public class IncrSourceHelper {
    *
    * @param sourceData  Source dataset
    * @param sourceLimit Max number of bytes to be read from source
-   * @param queryInfo   Query Info
+   * @param endCheckpoint  New checkpoint using completion time
    * @return end instants along with filtered rows.
    */
-  public static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
-                                                                                                                    long sourceLimit, QueryInfo queryInfo,
-                                                                                                                    CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
+  public static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(
+      Dataset<Row> sourceData,
+      long sourceLimit,
+      String endCheckpoint,
+      CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint,
+      CloudDataColumnInfo cloudDataColumnInfo
+  ) {
     if (sourceData.isEmpty()) {
       // There is no file matching the prefix.
       CloudObjectIncrCheckpoint updatedCheckpoint =
-              queryInfo.getEndInstant().equals(cloudObjectIncrCheckpoint.getCommit())
+              endCheckpoint.equals(cloudObjectIncrCheckpoint.getCommit())
                       ? cloudObjectIncrCheckpoint
-                      : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
+                      : new CloudObjectIncrCheckpoint(endCheckpoint, null);
       return Pair.of(updatedCheckpoint, Option.empty());
     }
     // Let's persist the dataset to avoid triggering the dag repeatedly
     sourceData.persist(StorageLevel.MEMORY_AND_DISK());
+
     // Set ordering in query to enable batching
-    Dataset<Row> orderedDf = QueryRunner.applyOrdering(sourceData, queryInfo.getOrderByColumns());
+    Dataset<Row> orderedDf = QueryRunner.applyOrdering(sourceData, cloudDataColumnInfo.getOrderByColumns());
     Option<String> lastCheckpoint = Option.of(cloudObjectIncrCheckpoint.getCommit());
     Option<String> lastCheckpointKey = Option.ofNullable(cloudObjectIncrCheckpoint.getKey());
     Option<String> concatenatedKey = lastCheckpoint.flatMap(checkpoint -> lastCheckpointKey.map(key -> checkpoint + key));
@@ -255,41 +282,42 @@ public class IncrSourceHelper {
     // Filter until last checkpoint key
     if (concatenatedKey.isPresent()) {
       orderedDf = orderedDf.withColumn("commit_key",
-          functions.concat(functions.col(queryInfo.getOrderColumn()), functions.col(queryInfo.getKeyColumn())));
+          functions.concat(
+              functions.col(cloudDataColumnInfo.getOrderColumn()), functions.col(cloudDataColumnInfo.getKeyColumn())));
       // Apply incremental filter
       orderedDf = orderedDf.filter(functions.col("commit_key").gt(concatenatedKey.get())).drop("commit_key");
       // If there are no more files where commit_key is greater than lastCheckpointCommit#lastCheckpointKey
       if (orderedDf.isEmpty()) {
-        LOG.info("Empty ordered source, returning endpoint:" + queryInfo.getEndInstant());
+        LOG.info("Empty ordered source, returning endpoint:" + endCheckpoint);
         sourceData.unpersist();
-        // queryInfo.getEndInstant() represents source table's last completed instant
-        // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c1, return c1#abc.
-        // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c2, return c2.
+        // endCheckpoint represents source table's last completed instant
+        // If current checkpoint is c1#abc and endCheckpoint is c1, return c1#abc.
+        // If current checkpoint is c1#abc and endCheckpoint is c2, return c2.
         CloudObjectIncrCheckpoint updatedCheckpoint =
-            queryInfo.getEndInstant().equals(cloudObjectIncrCheckpoint.getCommit())
+            endCheckpoint.equals(cloudObjectIncrCheckpoint.getCommit())
                 ? cloudObjectIncrCheckpoint
-                : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
+                : new CloudObjectIncrCheckpoint(endCheckpoint, null);
         return Pair.of(updatedCheckpoint, Option.empty());
       }
     }
 
     // Limit based on sourceLimit
-    WindowSpec windowSpec = Window.orderBy(col(queryInfo.getOrderColumn()), col(queryInfo.getKeyColumn()));
+    WindowSpec windowSpec = Window.orderBy(col(cloudDataColumnInfo.getOrderColumn()), col(cloudDataColumnInfo.getKeyColumn()));
     // Add the 'cumulativeSize' column with running sum of 'limitColumn'
     Dataset<Row> aggregatedData = orderedDf.withColumn(CUMULATIVE_COLUMN_NAME,
-        sum(col(queryInfo.getLimitColumn())).over(windowSpec));
+        sum(col(cloudDataColumnInfo.getLimitColumn())).over(windowSpec)); // TODO: replace this
     Dataset<Row> collectedRows = aggregatedData.filter(col(CUMULATIVE_COLUMN_NAME).leq(sourceLimit));
 
-    Row row = null;
+    Row row;
     if (collectedRows.isEmpty()) {
       // If the first element itself exceeds limits then return first element
       LOG.info("First object exceeding source limit: " + sourceLimit + " bytes");
-      row = aggregatedData.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).first();
+      row = aggregatedData.select(cloudDataColumnInfo.getOrderColumn(), cloudDataColumnInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).first();
       collectedRows = aggregatedData.limit(1);
     } else {
       // Get the last row and form composite key
-      row = collectedRows.select(queryInfo.getOrderColumn(), queryInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).orderBy(
-          col(queryInfo.getOrderColumn()).desc(), col(queryInfo.getKeyColumn()).desc()).first();
+      row = collectedRows.select(cloudDataColumnInfo.getOrderColumn(), cloudDataColumnInfo.getKeyColumn(), CUMULATIVE_COLUMN_NAME).orderBy(
+          col(cloudDataColumnInfo.getOrderColumn()).desc(), col(cloudDataColumnInfo.getKeyColumn()).desc()).first();
     }
     LOG.info("Processed batch size: " + row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)) + " bytes");
     sourceData.unpersist();

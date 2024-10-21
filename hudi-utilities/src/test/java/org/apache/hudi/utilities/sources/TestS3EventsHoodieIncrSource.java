@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -88,6 +89,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+// TODO: remove QueryInfo from this test
 @ExtendWith(MockitoExtension.class)
 public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarness {
   private static final Schema S3_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
@@ -556,7 +558,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
   private void setMockQueryRunner(Dataset<Row> inputDs, Option<String> nextCheckPointOpt) {
 
-    when(mockQueryRunner.run(Mockito.any(QueryInfo.class), Mockito.any())).thenAnswer(invocation -> {
+    when(mockQueryRunner.run(Mockito.any(QueryContext.class), Mockito.any())).thenAnswer(invocation -> {
       QueryInfo queryInfo = invocation.getArgument(0);
       QueryInfo updatedQueryInfo = nextCheckPointOpt.map(nextCheckPoint ->
               queryInfo.withUpdatedEndInstant(nextCheckPoint))

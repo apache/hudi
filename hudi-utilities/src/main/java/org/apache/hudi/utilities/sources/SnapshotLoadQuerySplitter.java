@@ -24,8 +24,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.utilities.sources.helpers.QueryInfo;
-import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -56,8 +54,8 @@ public abstract class SnapshotLoadQuerySplitter {
    * Checkpoint returned for the SnapshotLoadQuerySplitter.
    */
   public static class CheckpointWithPredicates {
-    String endCompletionTime;
-    String predicateFilter;
+    private String endCompletionTime;
+    private String predicateFilter;
 
     public CheckpointWithPredicates(String endCompletionTime, String predicateFilter) {
       this.endCompletionTime = endCompletionTime;
@@ -90,21 +88,6 @@ public abstract class SnapshotLoadQuerySplitter {
    * @return The next checkpoint with predicates for partitionPath etc. to optimise snapshot query.
    */
   public abstract Option<CheckpointWithPredicates> getNextCheckpointWithPredicates(Dataset<Row> df, QueryContext queryContext);
-
-  /**
-   * Retrieves the next checkpoint based on query information and a SourceProfileSupplier.
-   *
-   * @param df The dataset to process.
-   * @param queryInfo The query information object.
-   * @param sourceProfileSupplier An Option of a SourceProfileSupplier to use in load splitting implementation
-   * @return Updated query information with the next checkpoint, in case of empty checkpoint,
-   * returning endPoint same as queryInfo.getEndInstant().
-   */
-  @Deprecated
-  public QueryInfo getNextCheckpoint(Dataset<Row> df, QueryInfo queryInfo, Option<SourceProfileSupplier> sourceProfileSupplier) {
-    // TODO(HUDI-8354): fix related usage in the event incremental source
-    throw new UnsupportedOperationException("getNextCheckpoint is no longer supported with instant time.");
-  }
 
   public static Option<SnapshotLoadQuerySplitter> getInstance(TypedProperties props) {
     return props.getNonEmptyStringOpt(SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, null)
