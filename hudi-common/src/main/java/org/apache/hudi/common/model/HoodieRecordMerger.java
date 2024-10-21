@@ -141,7 +141,19 @@ public interface HoodieRecordMerger extends Serializable {
     throw new UnsupportedOperationException("Partial merging logic is not implemented.");
   }
 
-  default String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg) {
+  /**
+   * If false, whenever we have log files, we will need to read all columns
+   * If true, mor merging can be done without all columns. The columns required can be configured
+   * by overriding getMandatoryFieldsForMerging
+   */
+  default boolean isProjectionCompatible() {
+    return false;
+  }
+
+  /**
+   * Returns a list of fields required for mor merging. The default implementation will return the recordkey field and the precombine
+   */
+  default String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
     ArrayList<String> requiredFields = new ArrayList<>();
 
     if (cfg.populateMetaFields()) {

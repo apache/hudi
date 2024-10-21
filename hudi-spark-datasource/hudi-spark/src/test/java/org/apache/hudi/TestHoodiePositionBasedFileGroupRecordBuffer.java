@@ -119,7 +119,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
       ctx.setRecordMerger(Option.empty());
     }
     ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
-        Option.empty(), metaClient.getTableConfig()));
+        Option.empty(), metaClient.getTableConfig(), new TypedProperties()));
     TypedProperties props = new TypedProperties();
     props.put("hoodie.write.record.merge.mode", mergeMode.name());
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
