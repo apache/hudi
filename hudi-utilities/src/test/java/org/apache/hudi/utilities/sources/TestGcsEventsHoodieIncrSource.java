@@ -327,20 +327,14 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   private void setMockQueryRunner(Dataset<Row> inputDs, Option<String> nextCheckPointOpt) {
-
     when(queryRunner.run(any(QueryContext.class), any())).thenAnswer(invocation -> {
-      QueryInfo queryInfo = invocation.getArgument(0);
-      QueryInfo updatedQueryInfo = nextCheckPointOpt.map(nextCheckPoint ->
-              queryInfo.withUpdatedEndInstant(nextCheckPoint))
-          .orElse(queryInfo);
-      if (updatedQueryInfo.isSnapshot()) {
-        return Pair.of(updatedQueryInfo,
-            inputDs.filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                    updatedQueryInfo.getStartInstant()))
-                .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                    updatedQueryInfo.getEndInstant())));
+      QueryContext queryContext = invocation.getArgument(0);
+      if (queryContext.getInstantRange().isEmpty()) {
+        return Pair.of(queryContext.getMaxCompletionTime(),
+            inputDs.filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+                String.join("','", queryContext.getInstantTimeList()))));
       }
-      return Pair.of(updatedQueryInfo, inputDs);
+      return Pair.of(nextCheckPointOpt.orElse(queryContext.getMaxCompletionTime()), inputDs);
     });
   }
 

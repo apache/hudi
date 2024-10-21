@@ -170,7 +170,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
         missingCheckpointStrategy,  true,
         Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
     QueryContext queryContext = analyzer.analyze();
-    LOG.info("Querying GCS with:" + cloudObjectIncrCheckpoint + " and queryInfo:" + analyzer);
+    LOG.info("Querying GCS with:" + cloudObjectIncrCheckpoint + " and queryContext:" + queryContext);
 
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryContext.isEmpty()) {
       LOG.info("Source of file names is empty. Returning empty result and lastCheckpoint: "
