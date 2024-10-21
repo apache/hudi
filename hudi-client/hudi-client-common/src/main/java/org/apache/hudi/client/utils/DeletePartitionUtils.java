@@ -64,7 +64,7 @@ public class DeletePartitionUtils {
 
     fileSystemView.getFileGroupsInPendingClustering()
         .filter(fgIdInstantPair -> partitionsToDrop.contains(fgIdInstantPair.getLeft().getPartitionPath()))
-        .forEach(x -> instantsOfOffendingPendingTableServiceAction.add(x.getRight().getTimestamp()));
+        .forEach(x -> instantsOfOffendingPendingTableServiceAction.add(x.getRight().getRequestTime()));
 
     if (instantsOfOffendingPendingTableServiceAction.size() > 0) {
       throw new HoodieDeletePartitionPendingTableServiceException("Failed to drop partitions. "

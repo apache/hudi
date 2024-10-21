@@ -90,6 +90,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getRelativePartitionPath;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfig.RECREATE_HIVE_TABLE_ON_ERROR;
@@ -463,7 +464,7 @@ public class TestHiveSyncTool {
     assertEquals(
         Arrays.asList("400", "700", "800"),
         metaClient.getActiveTimeline().getInstants().stream()
-            .map(HoodieInstant::getTimestamp).sorted()
+            .map(HoodieInstant::getRequestTime).sorted()
             .collect(Collectors.toList()));
 
     reInitHiveSyncClient();
@@ -1780,9 +1781,9 @@ public class TestHiveSyncTool {
     HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, getHiveConf());
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + hiveClient.getActiveTimeline().getInstantsAsStream()
-        .filter(inst -> inst.getTimestamp().equals(commitTime2))
-        .findFirst().get().getFileName());
+        + INSTANT_FILE_NAME_FACTORY.getFileName(hiveClient.getActiveTimeline().getInstantsAsStream()
+        .filter(inst -> inst.getRequestTime().equals(commitTime2))
+        .findFirst().get()));
     assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));
 
     try {
@@ -1824,9 +1825,9 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + hiveClient.getActiveTimeline().getInstantsAsStream()
-        .filter(inst -> inst.getTimestamp().equals(commitTime2))
-        .findFirst().get().getFileName());
+        + INSTANT_FILE_NAME_FACTORY.getFileName(hiveClient.getActiveTimeline().getInstantsAsStream()
+        .filter(inst -> inst.getRequestTime().equals(commitTime2))
+        .findFirst().get()));
     assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));
     try {
       reSyncHiveTable();

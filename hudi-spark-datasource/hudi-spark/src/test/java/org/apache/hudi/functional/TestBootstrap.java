@@ -35,8 +35,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -106,6 +105,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
 import static org.apache.spark.sql.functions.callUDF;
@@ -276,11 +277,11 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
 
     // Rollback Bootstrap
     metaClient.getActiveTimeline().reload().getInstantsAsStream()
-        .filter(s -> s.equals(new HoodieInstant(State.COMPLETED,
+        .filter(s -> s.equals(INSTANT_FACTORY.createNewInstant(State.COMPLETED,
             deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION,
             bootstrapCommitInstantTs)))
-        .forEach(instant -> HoodieActiveTimeline.deleteInstantFile(
-            metaClient.getStorage(), metaClient.getMetaPath(), instant));
+        .forEach(instant -> ActiveTimelineUtils.deleteInstantFile(
+            metaClient.getStorage(), metaClient.getMetaPath(), instant, INSTANT_FILE_NAME_FACTORY));
     metaClient.reloadActiveTimeline();
     client.getTableServiceClient().rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();
@@ -379,7 +380,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     metaClient.reloadActiveTimeline();
     assertEquals(expNumInstants, metaClient.getCommitsTimeline().filterCompletedInstants().countInstants());
     assertEquals(instant, metaClient.getActiveTimeline()
-        .getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
+        .getCommitsTimeline().filterCompletedInstants().lastInstant().get().getRequestTime());
     verifyNoMarkerInTempFolder();
 
     Dataset<Row> bootstrapped = sqlContext.read().format("parquet").load(basePath);

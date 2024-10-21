@@ -30,6 +30,9 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+
 /**
  * Bootstrap Index Interface.
  */
@@ -68,7 +71,7 @@ public abstract class BootstrapIndex implements Serializable {
   public final boolean useIndex() {
     if (isPresent()) {
       boolean validInstantTime = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant()
-          .map(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
+          .map(i -> compareTimestamps(i.getRequestTime(), GREATER_THAN_OR_EQUALS,
               HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)).orElse(false);
       return validInstantTime && metaClient.getTableConfig().getBootstrapBasePath().isPresent();
     } else {

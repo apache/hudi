@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -173,14 +174,15 @@ public class WriteProfiles {
       HoodieTimeline timeline) {
     try {
       byte[] data = timeline.getInstantDetails(instant).get();
-      return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
+      TimelineLayout layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion());
+      return Option.of(layout.getCommitMetadataSerDe().deserialize(instant, data, HoodieCommitMetadata.class));
     } catch (FileNotFoundException fe) {
       // make this fail safe.
-      LOG.warn("Instant {} was deleted by the cleaner, ignore", instant.getTimestamp());
+      LOG.warn("Instant {} was deleted by the cleaner, ignore", instant.getRequestTime());
       return Option.empty();
     } catch (Throwable throwable) {
       LOG.error("Get write metadata for table {} with instant {} and path: {} error",
-          tableName, instant.getTimestamp(), basePath);
+          tableName, instant.getRequestTime(), basePath);
       return Option.empty();
     }
   }
@@ -203,7 +205,7 @@ public class WriteProfiles {
       return TimelineUtils.getCommitMetadata(instant, timeline);
     } catch (IOException e) {
       LOG.error("Get write metadata for table {} with instant {} and path: {} error",
-          tableName, instant.getTimestamp(), basePath);
+          tableName, instant.getRequestTime(), basePath);
       throw new HoodieException(e);
     }
   }

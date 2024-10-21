@@ -24,6 +24,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFactory;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -239,9 +240,9 @@ public class HoodieFlinkCompactor {
         return;
       }
 
-      List<String> compactionInstantTimes = requested.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+      List<String> compactionInstantTimes = requested.stream().map(HoodieInstant::getRequestTime).collect(Collectors.toList());
       compactionInstantTimes.forEach(timestamp -> {
-        HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(timestamp);
+        HoodieInstant inflightInstant = table.getInstantFactory().getCompactionInflightInstant(timestamp);
         if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
           LOG.info("Rollback inflight compaction instant: [" + timestamp + "]");
           table.rollbackInflightCompaction(inflightInstant);
@@ -269,7 +270,8 @@ public class HoodieFlinkCompactor {
         return;
       }
 
-      List<HoodieInstant> instants = compactionInstantTimes.stream().map(HoodieTimeline::getCompactionRequestedInstant).collect(Collectors.toList());
+      InstantFactory instantFactory = table.getInstantFactory();
+      List<HoodieInstant> instants = compactionInstantTimes.stream().map(instantFactory::getCompactionRequestedInstant).collect(Collectors.toList());
 
       int totalOperations = Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum());
 

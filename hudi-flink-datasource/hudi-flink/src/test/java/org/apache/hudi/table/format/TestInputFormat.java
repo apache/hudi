@@ -77,6 +77,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -579,9 +580,9 @@ public class TestInputFormat {
     List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(instants.size(), is(2));
 
-    String c2 = oriInstants.get(1).getTimestamp();
-    String c3 = oriInstants.get(2).getTimestamp();
-    String c4 = oriInstants.get(3).getTimestamp();
+    String c2 = oriInstants.get(1).getRequestTime();
+    String c3 = oriInstants.get(2).getRequestTime();
+    String c4 = oriInstants.get(3).getRequestTime();
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
@@ -1204,8 +1205,8 @@ public class TestInputFormat {
     assertTrue(firstCommit.isPresent());
     assertThat(firstCommit.get().getAction(), is(HoodieTimeline.DELTA_COMMIT_ACTION));
 
-    java.nio.file.Path metaFilePath = Paths.get(metaClient.getMetaPath().toString(), firstCommit.get().getFileName());
-    String newCompletionTime = TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().getTimestamp());
+    java.nio.file.Path metaFilePath = Paths.get(metaClient.getMetaPath().toString(), INSTANT_FILE_NAME_FACTORY.getFileName(firstCommit.get()));
+    String newCompletionTime = TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().getRequestTime());
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));

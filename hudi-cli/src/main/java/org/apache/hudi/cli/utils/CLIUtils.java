@@ -21,9 +21,10 @@ package org.apache.hudi.cli.utils;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.AbstractHoodieBaseTimeline;
 
 import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -35,14 +36,14 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  */
 public class CLIUtils {
   /**
-   * Gets a {@link HoodieDefaultTimeline} instance containing the instants in the specified range.
+   * Gets a {@link HoodieTimeline} instance containing the instants in the specified range.
    *
    * @param startTs                 Start instant time.
    * @param endTs                   End instant time.
    * @param includeArchivedTimeline Whether to include intants from the archived timeline.
-   * @return a {@link HoodieDefaultTimeline} instance containing the instants in the specified range.
+   * @return a {@link AbstractHoodieBaseTimeline} instance containing the instants in the specified range.
    */
-  public static HoodieDefaultTimeline getTimelineInRange(String startTs, String endTs, boolean includeArchivedTimeline) {
+  public static HoodieTimeline getTimelineInRange(String startTs, String endTs, boolean includeArchivedTimeline) {
     if (isNullOrEmpty(startTs)) {
       startTs = getTimeDaysAgo(10);
     }
@@ -56,7 +57,7 @@ public class CLIUtils {
     if (includeArchivedTimeline) {
       HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
-      return archivedTimeline.findInstantsInRange(startTs, endTs).mergeTimeline(activeTimeline);
+      return ((HoodieTimeline)archivedTimeline.findInstantsInRange(startTs, endTs)).mergeTimeline(activeTimeline);
     }
     return activeTimeline;
   }

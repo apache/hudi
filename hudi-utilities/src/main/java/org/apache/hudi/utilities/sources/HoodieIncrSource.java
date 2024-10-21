@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -60,6 +60,8 @@ import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.DataSourceReadOptions.START_COMMIT;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -230,9 +232,9 @@ public class HoodieIncrSource extends RowSource {
           endCompletionTime = newCheckpointAndPredicate.get().endCompletionTime;
           predicate = Option.of(newCheckpointAndPredicate.get().predicateFilter);
           instantTimeList = queryContext.getInstants().stream()
-              .filter(instant -> HoodieTimeline.compareTimestamps(
-                  instant.getCompletionTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, newCheckpointAndPredicate.get().endCompletionTime))
-              .map(HoodieInstant::getTimestamp)
+              .filter(instant -> compareTimestamps(
+                  instant.getCompletionTime(), LESSER_THAN_OR_EQUALS, newCheckpointAndPredicate.get().endCompletionTime))
+              .map(HoodieInstant::getRequestTime)
               .collect(Collectors.toList());
         } else {
           endCompletionTime = queryContext.getMaxCompletionTime();
@@ -246,8 +248,9 @@ public class HoodieIncrSource extends RowSource {
               String.join("','", instantTimeList)));
     } else {
       // normal incremental query
+      TimelineLayout layout = TimelineLayout.getLayout(queryContext.getActiveTimeline().getTimelineLayoutVersion());
       String inclusiveStartCompletionTime = queryContext.getInstants().stream()
-          .min(HoodieInstant.COMPLETION_TIME_COMPARATOR)
+          .min(layout.getInstantComparator().getCompletionTimePrimaryOrderingComparator())
           .map(HoodieInstant::getCompletionTime)
           .get();
 

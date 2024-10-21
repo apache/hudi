@@ -234,7 +234,9 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> TIMELINE_LAYOUT_VERSION_NUM = ConfigProperty
       .key("hoodie.timeline.layout.version")
       .defaultValue(Integer.toString(TimelineLayoutVersion.CURR_VERSION))
-      .withValidValues(Integer.toString(TimelineLayoutVersion.VERSION_0), Integer.toString(TimelineLayoutVersion.VERSION_1))
+      .withValidValues(Integer.toString(TimelineLayoutVersion.VERSION_0),
+          Integer.toString(TimelineLayoutVersion.VERSION_1),
+          Integer.toString(TimelineLayoutVersion.VERSION_2))
       .markAdvanced()
       .sinceVersion("0.5.1")
       .withDocumentation("Controls the layout of the timeline. Version 0 relied on renames, Version 1 (default) models "
@@ -2872,8 +2874,9 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withWriteTableVersion(int writeVersion) {
-      writeConfig.setValue(WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.fromVersionCode(writeVersion).versionCode()));
-      return this;
+      HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(writeVersion);
+      writeConfig.setValue(WRITE_TABLE_VERSION, String.valueOf(tableVersion.versionCode()));
+      return withTimelineLayoutVersion(tableVersion.getTimelineLayoutVersion().getVersion());
     }
 
     public Builder withAutoUpgradeVersion(boolean enable) {
