@@ -120,7 +120,7 @@
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.4</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
-    <hive.avro.version>1.8.2</hive.avro.version>
+    <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>390</trino.version>
     <hive.exec.classifier>core</hive.exec.classifier>
@@ -148,7 +148,7 @@
     <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
     <flink.bundle.version>1.20</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
-    <flink.avro.version>1.11.3</flink.avro.version>
+    <flink.avro.version>1.11.4</flink.avro.version>
     <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
     <!-- check kafka version -->
     <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version> 
@@ -168,7 +168,7 @@
     <spark35.version>3.5.3</spark35.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
-    <avro.version>1.8.2</avro.version>
+    <avro.version>1.11.4</avro.version>
     <bijection-avro.version>0.9.7</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <commons.io.version>2.11.0</commons.io.version>
