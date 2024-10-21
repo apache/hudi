@@ -210,7 +210,7 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     String key = deleteRecord.getRecordKey();
     HoodieRecord oldRecord = records.get(key);
 
-    Comparable deleteOrderingVal = deleteRecord.getOrderingValue() == null ? orderingFieldDefault : deleteRecord.getOrderingValue();
+    Comparable deleteOrderingVal = deleteRecord.getOrderingVal(orderingFieldDefault);
     if (oldRecord != null) {
       // Merge and store the merged record. The ordering val is taken to decide whether the same key record
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.

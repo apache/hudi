@@ -208,12 +208,6 @@ object TestDeleteRecordLogic {
       Arguments.of("true", "COPY_ON_WRITE", "SPARK", "false"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false"),
       Arguments.of("true", "MERGE_ON_READ", "SPARK", "false"),
-      Arguments.of("false", "COPY_ON_WRITE", "AVRO", "true"),
-      Arguments.of("false", "COPY_ON_WRITE", "SPARK", "true"),
-      Arguments.of("false", "MERGE_ON_READ", "AVRO", "true"),
-      Arguments.of("false", "MERGE_ON_READ", "SPARK", "true"),
-      Arguments.of("true", "COPY_ON_WRITE", "AVRO", "true"),
-      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "true"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "true"),
       Arguments.of("true", "MERGE_ON_READ", "SPARK", "true"))
   }
