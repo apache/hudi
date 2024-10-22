@@ -77,7 +77,8 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
           nextRecord = currentRecord;
           return true;
         }
-        if (logRecord.get().getMetaDataInfo(HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE).isPresent()) {
+        if (logRecord.get().getMetaDataInfo(HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE).isPresent()
+            && !logRecord.get().isDelete(schema, props)) {
           nextRecord = logRecord.get();
           return true;
         }
