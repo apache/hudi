@@ -165,10 +165,10 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
     IncrementalQueryAnalyzer analyzer =
         IncrSourceHelper.generateQueryInfo(
-        sparkContext, srcPath, numInstantsPerFetch,
-        Option.of(cloudObjectIncrCheckpoint.getCommit()),
-        missingCheckpointStrategy,  true,
-        Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
+            sparkContext, srcPath, numInstantsPerFetch,
+            Option.of(cloudObjectIncrCheckpoint.getCommit()),
+            missingCheckpointStrategy,  true,
+            Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
     QueryContext queryContext = analyzer.analyze();
     LOG.info("Querying GCS with:" + cloudObjectIncrCheckpoint + " and queryContext:" + queryContext);
 
@@ -177,8 +177,11 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
           + lastCheckpoint.orElse(null));
       return Pair.of(Option.empty(), lastCheckpoint.orElse(null));
     }
+    boolean shouldFullScan =
+        missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT
+            && queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(analyzer.getStartCompletionTime().get());
     return cloudDataFetcher.fetchPartitionedSource(
         GCS, cloudObjectIncrCheckpoint, this.sourceProfileSupplier,
-        queryRunner.run(queryContext, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);
+        queryRunner.run(queryContext, snapshotLoadQuerySplitter, shouldFullScan), this.schemaProvider, sourceLimit);
   }
 }

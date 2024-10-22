@@ -28,6 +28,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectIncrCheckpoint;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
+import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
@@ -120,8 +121,11 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       LOG.warn("Already caught up. No new data to process");
       return Pair.of(Option.empty(), lastCheckpoint.orElse(null));
     }
+    boolean shouldFullScan =
+        missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT
+            && queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(analyzer.getStartCompletionTime().get());
     return cloudDataFetcher.fetchPartitionedSource(
         S3, cloudObjectIncrCheckpoint, this.sourceProfileSupplier,
-        queryRunner.run(queryContext, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);
+        queryRunner.run(queryContext, snapshotLoadQuerySplitter, shouldFullScan), this.schemaProvider, sourceLimit);
   }
 }

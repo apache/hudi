@@ -88,12 +88,12 @@ public class IncrSourceHelper {
    * @param lastCheckpointKey         Last checkpoint key (used in the upgrade code path)
    * @return begin and end instants along with query type and other information.
    */
+  //TODO rename this method
   public static IncrementalQueryAnalyzer generateQueryInfo(JavaSparkContext jssc, String srcBasePath,
                                             int numInstantsFromConfig, Option<String> beginInstant,
                                             MissingCheckpointStrategy missingCheckpointStrategy,
                                             boolean sourceLimitBasedBatching,
                                             Option<String> lastCheckpointKey) {
-    // TODO: checkpoint key: completionTime#key (previous: timestamp#key)
     ValidationUtils.checkArgument(numInstantsFromConfig > 0,
         "Make sure the config hoodie.streamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
@@ -175,7 +175,7 @@ public class IncrSourceHelper {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       return analyzerBuilder
           .metaClient(metaClient)
-          .startCompletionTime(START_COMMIT_EARLIEST)
+          .startCompletionTime(startCompletionTime)
           .endCompletionTime(null)
           .rangeType(rangeType)
           .limit(-1) // snapshot query, disrespect limit
@@ -260,8 +260,7 @@ public class IncrSourceHelper {
       long sourceLimit,
       String endCheckpoint,
       CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint,
-      CloudDataColumnInfo cloudDataColumnInfo
-  ) {
+      CloudDataColumnInfo cloudDataColumnInfo) {
     if (sourceData.isEmpty()) {
       // There is no file matching the prefix.
       CloudObjectIncrCheckpoint updatedCheckpoint =
@@ -305,7 +304,7 @@ public class IncrSourceHelper {
     WindowSpec windowSpec = Window.orderBy(col(cloudDataColumnInfo.getOrderColumn()), col(cloudDataColumnInfo.getKeyColumn()));
     // Add the 'cumulativeSize' column with running sum of 'limitColumn'
     Dataset<Row> aggregatedData = orderedDf.withColumn(CUMULATIVE_COLUMN_NAME,
-        sum(col(cloudDataColumnInfo.getLimitColumn())).over(windowSpec)); // TODO: replace this
+        sum(col(cloudDataColumnInfo.getLimitColumn())).over(windowSpec));
     Dataset<Row> collectedRows = aggregatedData.filter(col(CUMULATIVE_COLUMN_NAME).leq(sourceLimit));
 
     Row row;
@@ -321,6 +320,7 @@ public class IncrSourceHelper {
     }
     LOG.info("Processed batch size: " + row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)) + " bytes");
     sourceData.unpersist();
+    // TODO: row.getString(0) is the commit time, not the completion time
     return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)), Option.of(collectedRows));
   }
 

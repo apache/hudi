@@ -68,9 +68,11 @@ public class QueryRunner {
    * @param queryContext all meta info about the query to be executed.
    * @return the output of the query as Dataset < Row >.
    */
-  public Pair<String, Dataset<Row>> run(QueryContext queryContext, Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption) {
-    // no need to check if it's incremental
-    if (queryContext.getInstantRange().isEmpty()) {
+  public Pair<String, Dataset<Row>> run(
+      QueryContext queryContext,
+      Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption,
+      boolean shouldFullScan) {
+    if (queryContext.getInstantRange().isEmpty() || shouldFullScan) {
       return runSnapshotQuery(queryContext, snapshotLoadQuerySplitterOption);
     } else {
       return runIncrementalQuery(queryContext);

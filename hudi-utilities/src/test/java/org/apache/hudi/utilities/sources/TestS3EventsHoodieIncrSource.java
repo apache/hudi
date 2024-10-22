@@ -557,20 +557,15 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
   }
 
   private void setMockQueryRunner(Dataset<Row> inputDs, Option<String> nextCheckPointOpt) {
-
-    when(mockQueryRunner.run(Mockito.any(QueryContext.class), Mockito.any())).thenAnswer(invocation -> {
-      QueryInfo queryInfo = invocation.getArgument(0);
-      QueryInfo updatedQueryInfo = nextCheckPointOpt.map(nextCheckPoint ->
-              queryInfo.withUpdatedEndInstant(nextCheckPoint))
-          .orElse(queryInfo);
-      if (updatedQueryInfo.isSnapshot()) {
-        return Pair.of(updatedQueryInfo,
-            inputDs.filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                    updatedQueryInfo.getStartInstant()))
-                .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                    updatedQueryInfo.getEndInstant())));
+    when(mockQueryRunner.run(Mockito.any(QueryContext.class), Mockito.any(), Mockito.any(Boolean.class))).thenAnswer(invocation -> {
+      QueryContext queryContext = invocation.getArgument(0);
+      boolean shouldFullScan = invocation.getArgument(2);
+      if (queryContext.getInstantRange().isEmpty() || shouldFullScan) {
+        return Pair.of(queryContext.getMaxCompletionTime(),
+            inputDs.filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+                String.join("','", queryContext.getInstantTimeList()))));
       }
-      return Pair.of(updatedQueryInfo, inputDs);
+      return Pair.of(nextCheckPointOpt.orElse(queryContext.getMaxCompletionTime()), inputDs);
     });
   }
 
