@@ -43,6 +43,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -170,6 +171,23 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
     rec.put(DebeziumConstants.INCOMING_AFTER_FIELD, afterRecord);
 
     return generateMetaFields(rec);
+  }
+
+  @Test
+  public void testDatasetRowSchemaWithoutData() throws Exception {
+    String sourceClass = getSourceClass();
+
+    // topic setup without message
+    testUtils.createTopic(testTopicName, 2);
+    TypedProperties props = createPropsForJsonSource();
+
+    SchemaProvider schemaProvider = new MockSchemaRegistryProvider(props, jsc, this);
+    SourceFormatAdapter debeziumSource = new SourceFormatAdapter(UtilHelpers.createSource(sourceClass, props, jsc, sparkSession, metrics, new DefaultStreamContext(schemaProvider, Option.empty())));
+    InputBatch<Dataset<Row>> fetch = debeziumSource.fetchNewDataInRowFormat(Option.empty(), 10);
+    Dataset<Row> result = fetch.getBatch().get();
+
+    assertEquals(result.count(), 0);
+    assertTrue(result.columns().length > 0);
   }
 
   private static class MockSchemaRegistryProvider extends SchemaRegistryProvider {
