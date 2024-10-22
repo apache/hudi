@@ -52,6 +52,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -172,6 +173,12 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
     // NO_OP
+  }
+
+  protected void ignoreWriteFailed(Throwable throwable) {
+    if (config.getIgnoreWriteFailed()) {
+      throw new HoodieException(throwable.getMessage(), throwable);
+    }
   }
 
   /**
