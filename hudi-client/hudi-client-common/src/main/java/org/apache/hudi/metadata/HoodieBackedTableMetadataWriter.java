@@ -121,7 +121,6 @@ import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.getEnabledPartitions;
-import static org.apache.hudi.metadata.MetadataPartitionType.getEnabledAndInitializedPartitions;
 
 /**
  * Writer implementation backed by an internal hudi table. Partition and file listing are saved within an internal MOR table
@@ -154,7 +153,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected StorageConfiguration<?> storageConf;
   protected final transient HoodieEngineContext engineContext;
   protected final List<MetadataPartitionType> enabledPartitionTypes;
-  protected List<MetadataPartitionType> initializedPartitionTypes;
   // Is the MDT bootstrapped and ready to be read from
   private boolean initialized = false;
   private HoodieMetadataFileSystemView metadataView;
@@ -181,7 +179,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .setBasePath(dataWriteConfig.getBasePath())
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
     this.enabledPartitionTypes = getEnabledPartitions(dataWriteConfig.getProps(), dataMetaClient);
-    this.initializedPartitionTypes = new ArrayList<>(enabledPartitionTypes.size());
     if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
       try {
@@ -265,26 +262,17 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         // No partitions left to initialize, since all the metadata enabled partitions are either initialized before
         // or current in the process of initialization.
         initMetadataReader();
-        this.initializedPartitionTypes = getEnabledAndInitializedPartitions(dataWriteConfig.getProps(), dataMetaClient);
         return true;
       }
 
       // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
       // Otherwise, we use the timestamp of the latest completed action.
       String initializationTime = dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
-      boolean initializedAllPendingPartitions = initializeFromFilesystem(initializationTime, partitionsToInit, inflightInstantTimestamp);
+      initializeFromFilesystem(initializationTime, partitionsToInit, inflightInstantTimestamp);
       if (!this.dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES)) {
         LOG.error("Failed to initialize MDT from filesystem");
         return false;
       }
-
-      // if FILES partition is available, we should proceed regardless if any new partition were successfully able to initiailize or not. for eg,
-      // if data table has any pending instant, we may not initialize a new partition. but we should still proceed with other partitions which are
-      // ready to take in writes. So, lets initialize the metadata reader.
-      if (!initializedAllPendingPartitions) {
-        initMetadataReader();
-      }
-      this.initializedPartitionTypes = getEnabledAndInitializedPartitions(dataWriteConfig.getProps(), dataMetaClient);
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       return true;
     } catch (IOException e) {
@@ -1070,7 +1058,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       Map<String, HoodieData<HoodieRecord>> partitionToRecordMap =
           HoodieTableMetadataUtil.convertMetadataToRecords(
               engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient,
-              initializedPartitionTypes, dataWriteConfig.getBloomFilterType(),
+              enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
               dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(), dataWriteConfig.getMetadataConfig());
 
@@ -1094,7 +1082,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       Map<String, HoodieData<HoodieRecord>> partitionToRecordMap =
           HoodieTableMetadataUtil.convertMetadataToRecords(
               engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient,
-              initializedPartitionTypes, dataWriteConfig.getBloomFilterType(),
+              enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
               dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(), dataWriteConfig.getMetadataConfig());
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(records, commitMetadata);
@@ -1231,7 +1219,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   @Override
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
-        cleanMetadata, instantTime, dataMetaClient, initializedPartitionTypes,
+        cleanMetadata, instantTime, dataMetaClient, enabledPartitionTypes,
         dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
         dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex()));
     closeInternal();

@@ -155,6 +155,14 @@ public class FSUtils {
   }
 
   /**
+   * @param filePath
+   * @returns the filename from the given path. Path could be the absolute path or just partition path and file name.
+   */
+  public static String getFileNameFromFilePath(String filePath) {
+    return filePath.substring(filePath.lastIndexOf("/") + 1);
+  }
+
+  /**
    * Gets all partition paths assuming date partitioning (year, month, day) three levels down.
    * TODO: (Lin) Delete this function after we remove the assume.date.partitioning config completely.
    */
