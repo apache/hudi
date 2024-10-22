@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -76,7 +77,11 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
           nextRecord = currentRecord;
           return true;
         }
-        Option<Pair<HoodieRecord, Schema>> mergedRecordOpt =  merger.merge(currentRecord, schema, logRecord.get(), schema, payloadProps);
+        if (logRecord.get().getMetaDataInfo(HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE).isPresent()) {
+          nextRecord = logRecord.get();
+          return true;
+        }
+        Option<Pair<HoodieRecord, Schema>> mergedRecordOpt = merger.merge(currentRecord, schema, logRecord.get(), schema, payloadProps);
         if (mergedRecordOpt.isPresent()) {
           HoodieRecord<T> mergedRecord = (HoodieRecord<T>) mergedRecordOpt.get().getLeft();
           nextRecord = mergedRecord.wrapIntoHoodieRecordPayloadWithParams(schema, props, simpleKeyGenFieldsOpt, scanner.isWithOperationField(),
