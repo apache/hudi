@@ -40,7 +40,6 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -316,7 +315,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             existingRecordMetadataPair.getRight().put(DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
             return Option.empty();
           }
-          if (ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal) && deleteOrderingVal.compareTo(existingOrderingVal) <= 0) {
+          if (deleteOrderingVal.compareTo(existingOrderingVal) <= 0) {
             return Option.empty();
           }
       }
