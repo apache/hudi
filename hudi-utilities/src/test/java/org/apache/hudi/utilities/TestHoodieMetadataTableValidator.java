@@ -23,6 +23,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -46,9 +47,13 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import jodd.io.FileUtil;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -76,6 +81,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hadoop.fs.FileUtil.copy;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
@@ -100,10 +106,10 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
   private static Stream<Arguments> viewStorageArgs() {
     return Stream.of(
-        Arguments.of(null, null),
-        Arguments.of(FileSystemViewStorageType.MEMORY.name(), FileSystemViewStorageType.MEMORY.name()),
-        Arguments.of(FileSystemViewStorageType.SPILLABLE_DISK.name(), FileSystemViewStorageType.SPILLABLE_DISK.name()),
-        Arguments.of(FileSystemViewStorageType.MEMORY.name(), FileSystemViewStorageType.SPILLABLE_DISK.name())
+        Arguments.of(null, null, false),
+        Arguments.of(FileSystemViewStorageType.MEMORY.name(), FileSystemViewStorageType.MEMORY.name(), true),
+        Arguments.of(FileSystemViewStorageType.SPILLABLE_DISK.name(), FileSystemViewStorageType.SPILLABLE_DISK.name(), false),
+        Arguments.of(FileSystemViewStorageType.MEMORY.name(), FileSystemViewStorageType.SPILLABLE_DISK.name(), true)
     );
   }
 
@@ -150,7 +156,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
   @ParameterizedTest
   @MethodSource("viewStorageArgs")
-  public void testMetadataTableValidation(String viewStorageTypeForFSListing, String viewStorageTypeForMDTListing) {
+  public void testMetadataTableValidation(String viewStorageTypeForFSListing, String viewStorageTypeForMDTListing, boolean includeUncommittedLogFiles) throws Exception {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
@@ -175,6 +181,19 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .mode(SaveMode.Append)
         .save(basePath);
 
+    if (includeUncommittedLogFiles) {
+      // add uncommitted log file to simulate task retry
+      for (StoragePathInfo storagePathInfo : storage.listFiles(new StoragePath(basePath))) {
+        StoragePath path = storagePathInfo.getPath();
+        if (FSUtils.isLogFile(path)) {
+          String modifiedPath = path.toString().substring(0, path.toString().lastIndexOf("-") + 1) + "000";
+          FileSystem fs = HadoopFSUtils.getFs(path, new Configuration(false));
+          fs.copyFromLocalFile(new Path(path.toString()), new Path(modifiedPath));
+          break;
+        }
+      }
+    }
+
     // validate MDT
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
     config.basePath = basePath;
@@ -188,6 +207,57 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertTrue(validator.run());
     assertFalse(validator.hasValidationFailure());
     assertTrue(validator.getThrowables().isEmpty());
+  }
+
+  @Test
+  void missingLogFileFailsValidation() throws Exception {
+    FileSystem fs = HadoopFSUtils.getFs(tempDir.toString(), new Configuration(false));
+
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+
+    Dataset<Row> inserts = makeInsertDf("000", 5).cache();
+    inserts.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
+        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+
+    // copy the metadata dir to a separate dir before update and then replace the proper table with this out of date version
+    String metadataPath = basePath + "/.hoodie/metadata";
+    String backupDir = tempDir.resolve("backup").toString();
+    copy(fs, new Path(metadataPath), fs, new Path(backupDir), false, fs.getConf());
+
+    Dataset<Row> updates = makeUpdateDf("001", 5).cache();
+    updates.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
+        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .mode(SaveMode.Append)
+        .save(basePath);
+
+    // clear MDT and replace with old copy
+    fs.delete(new Path(metadataPath), true);
+    copy(fs, new Path(backupDir), fs, new Path(metadataPath), true, fs.getConf());
+
+    // validate MDT is out of date
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    config.ignoreFailed = true;
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    assertFalse(validator.run());
+    assertTrue(validator.hasValidationFailure());
+    assertFalse(validator.getThrowables().isEmpty());
   }
 
   @Test
