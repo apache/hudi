@@ -276,7 +276,7 @@ trait ProvidesHoodieConfig extends Logging {
     // w/o specifying any value for insert dup policy, legacy configs will be honored. But on all other cases (i.e when neither of the configs is set,
     // or when both configs are set, or when only insert dup policy is set), we honor insert dup policy and ignore the insert mode.
     val useLegacyInsertDropDupFlow = insertModeSet && !insertDupPolicySet
-    val payloadClassName = if (useLegacyInsertDropDupFlow) {
+    val deducedPayloadClassName = if (useLegacyInsertDropDupFlow) {
       deducePayloadClassNameLegacy(operation, tableType, insertMode)
     } else {
       if (insertDupPolicy == FAIL_INSERT_DUP_POLICY) {
@@ -286,7 +286,7 @@ trait ProvidesHoodieConfig extends Logging {
       }
     }
 
-    val (recordMergeMode, recordMergeStrategy) = if (payloadClassName.equals(classOf[ValidateDuplicateKeyPayload].getCanonicalName)) {
+    val (recordMergeMode, recordMergeStrategy) = if (deducedPayloadClassName.equals(classOf[ValidateDuplicateKeyPayload].getCanonicalName)) {
       (RecordMergeMode.CUSTOM.name(), HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)
     } else {
       (RecordMergeMode.EVENT_TIME_ORDERING.name(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
@@ -296,13 +296,13 @@ trait ProvidesHoodieConfig extends Logging {
         tableConfig.getRecordMergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING)) {
       tableConfig.clearValue(HoodieTableConfig.PAYLOAD_CLASS_NAME)
       tableConfig.clearValue(HoodieTableConfig.RECORD_MERGE_MODE)
-      tableConfig.clearValue(HoodieTableConfig.RECORD_MERGER_STRATEGY)
+      tableConfig.clearValue(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID)
     }
 
     val defaultOpts = Map(
-      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> payloadClassName,
+      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> deducedPayloadClassName,
       DataSourceWriteOptions.RECORD_MERGE_MODE.key -> recordMergeMode,
-      DataSourceWriteOptions.RECORD_MERGER_STRATEGY_ID.key() -> recordMergeStrategy,
+      DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key() -> recordMergeStrategy,
       // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
       //       for the table
       HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(combineBeforeInsert),

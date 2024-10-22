@@ -745,9 +745,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[ExpressionPayload].getCanonicalName,
-      RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
+      RECORD_MERGE_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
       RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
-      RECORD_MERGER_STRATEGY_ID.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID,
+      RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID,
 
       // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
       //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'

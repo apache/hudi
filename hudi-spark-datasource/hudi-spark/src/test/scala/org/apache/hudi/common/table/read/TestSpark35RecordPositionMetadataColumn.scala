@@ -58,7 +58,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "userid")
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(HoodieWriteConfig.TBL_NAME.key, "user_to_country")
-      .option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, SPARK_MERGER)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPLS.key, SPARK_MERGER)
       .option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key, "true")
       .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key, PARQUET_FORMAT)
       .option(

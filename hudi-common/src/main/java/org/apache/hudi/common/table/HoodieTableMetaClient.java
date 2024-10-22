@@ -77,7 +77,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
@@ -878,7 +878,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String archiveLogFolder;
     private RecordMergeMode recordMergeMode;
     private String payloadClassName;
-    private String recordMergerStrategy;
+    private String recordMergerStrategyId;
     private Integer timelineLayoutVersion;
     private String baseFileFormat;
     private String preCombineField;
@@ -970,8 +970,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setRecordMergerStrategy(String recordMergerStrategy) {
-      this.recordMergerStrategy = recordMergerStrategy;
+    public TableBuilder setRecordMergerStrategyId(String recordMergerStrategyId) {
+      this.recordMergerStrategyId = recordMergerStrategyId;
       return this;
     }
 
@@ -1108,7 +1108,7 @@ public class HoodieTableMetaClient implements Serializable {
           .setArchiveLogFolder(metaClient.getTableConfig().getArchivelogFolder())
           .setRecordMergeMode(metaClient.getTableConfig().getRecordMergeMode())
           .setPayloadClassName(metaClient.getTableConfig().getPayloadClass())
-          .setRecordMergerStrategy(metaClient.getTableConfig().getRecordMergerStrategy());
+          .setRecordMergerStrategyId(metaClient.getTableConfig().getRecordMergerStrategy());
     }
 
     public TableBuilder fromProperties(Properties properties) {
@@ -1148,9 +1148,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME)) {
         setPayloadClassName(hoodieConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
       }
-      if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGER_STRATEGY)) {
-        setRecordMergerStrategy(
-            hoodieConfig.getString(HoodieTableConfig.RECORD_MERGER_STRATEGY));
+      if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID)) {
+        setRecordMergerStrategyId(
+            hoodieConfig.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID));
       }
       if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_LAYOUT_VERSION)) {
         setTimelineLayoutVersion(hoodieConfig.getInt(HoodieTableConfig.TIMELINE_LAYOUT_VERSION));
@@ -1255,10 +1255,10 @@ public class HoodieTableMetaClient implements Serializable {
       }
 
       Triple<RecordMergeMode, String, String> mergeConfigs =
-          HoodieTableConfig.inferCorrectMergingBehavior(recordMergeMode, payloadClassName, recordMergerStrategy);
+          HoodieTableConfig.inferCorrectMergingBehavior(recordMergeMode, payloadClassName, recordMergerStrategyId);
       tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
       tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
-      tableConfig.setValue(RECORD_MERGER_STRATEGY, mergeConfigs.getRight());
+      tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
 
       if (null != tableCreateSchema) {
         tableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA, tableCreateSchema);

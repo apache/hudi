@@ -195,9 +195,9 @@ public class HoodieStreamer implements Serializable {
       // Explicitly set the table type
       hoodieConfig.setValue(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     }
-    if (!hoodieConfig.contains(HoodieWriteConfig.RECORD_MERGER_IMPLS)
+    if (!hoodieConfig.contains(HoodieWriteConfig.RECORD_MERGE_IMPLS)
         && !StringUtils.isNullOrEmpty(cfg.recordMergerImpls)) {
-      hoodieConfig.setValue(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), cfg.recordMergerImpls);
+      hoodieConfig.setValue(HoodieWriteConfig.RECORD_MERGE_IMPLS.key(), cfg.recordMergerImpls);
     }
 
     return hoodieConfig.getProps(true);
@@ -278,10 +278,10 @@ public class HoodieStreamer implements Serializable {
     @Parameter(names = {"--merge-mode", "--record-merge-mode"}, description = "mode to merge records with")
     public RecordMergeMode recordMergeMode = null;
     
-    @Parameter(names = {"--merger-strategy", "--record-merger-strategy"}, description = "only set this if you are using custom merge mode")
+    @Parameter(names = {"--merge-strategy-id", "--record-merge-strategy-id"}, description = "only set this if you are using custom merge mode")
     public String recordMergerStrategy = null;
 
-    @Parameter(names = {"--merger-impls", "--record-merger-impls"}, description = "Comma separated list of classes that implement the record merger strategy")
+    @Parameter(names = {"--merge-impls", "--record-merge-impls"}, description = "Comma separated list of classes that implement the record merger strategy")
     public String recordMergerImpls = null;
 
     @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"

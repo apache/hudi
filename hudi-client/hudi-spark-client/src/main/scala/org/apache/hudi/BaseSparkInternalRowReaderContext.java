@@ -66,11 +66,11 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         if (mergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)) {
           return Option.of(HoodieAvroRecordMerger.INSTANCE);
         }
-        Option<HoodieRecordMerger> returnVal = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergerImpls, mergerStrategy);
-        if (returnVal.isEmpty()) {
+        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergerImpls, mergerStrategy);
+        if (mergerClass.isEmpty()) {
           throw new IllegalArgumentException("No valid spark merger implementation set for `hoodie.write.record.merge.custom.impl.classes`");
         }
-        return returnVal;
+        return mergerClass;
     }
   }
 

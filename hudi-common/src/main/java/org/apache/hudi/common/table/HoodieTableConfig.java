@@ -209,7 +209,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
-  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
+  public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
       .key("hoodie.record.merge.custom.strategy")
       .noDefaultValue()
       .withAlternatives("hoodie.compaction.record.merger.strategy")
@@ -369,9 +369,9 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(RECORD_MERGE_MODE, recordMergeMode.name());
         needStore = true;
       }
-      if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
-          && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
-        setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
+      if (contains(RECORD_MERGE_STRATEGY_ID) && recordMergerStrategyId != null
+          && !getString(RECORD_MERGE_STRATEGY_ID).equals(recordMergerStrategyId)) {
+        setValue(RECORD_MERGE_STRATEGY_ID, recordMergerStrategyId);
         needStore = true;
       }
       if (needStore) {
@@ -682,7 +682,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public String getRecordMergerStrategy() {
-    return getString(RECORD_MERGER_STRATEGY);
+    return getString(RECORD_MERGE_STRATEGY_ID);
   }
 
   /**

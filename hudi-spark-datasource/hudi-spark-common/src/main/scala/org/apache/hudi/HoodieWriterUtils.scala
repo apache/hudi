@@ -152,6 +152,31 @@ object HoodieWriterUtils {
     }
   }
 
+  private val expressionPayloadClassName = "org.apache.spark.sql.hudi.command.payload.ExpressionPayload"
+  private val validateDuplicateKeyPayloadClassName = "org.apache.spark.sql.hudi.command.ValidateDuplicateKeyPayload"
+
+  /**
+   * Logic to skip validation of configs vs table configs
+   * In nearly all cases we should make sure that the input config matches the table config
+   * But there are a few times where it is allowed to be different
+   */
+  private def shouldIgnoreConfig(key: String, value: String, params: Map[String, String]): Boolean = {
+    var ignoreConfig = false
+    // Base file format can change between writes, so ignore it.
+    ignoreConfig = ignoreConfig || HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)
+
+    //expression payload will never be the table config so skip validation of merge configs
+    ignoreConfig = ignoreConfig || (params.getOrElse(PAYLOAD_CLASS_NAME.key(), "").equals(expressionPayloadClassName)
+      && (key.equals(PAYLOAD_CLASS_NAME.key()) || key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key())
+      || key.equals(RECORD_MERGE_MODE.key())
+      || key.equals(RECORD_MERGE_STRATEGY_ID.key())))
+
+    //don't validate the payload only in the case that insert into is using fallback to some legacy configs
+    ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) &&  value.equals(validateDuplicateKeyPayloadClassName))
+
+    ignoreConfig
+  }
+
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
                           tableConfig: HoodieConfig): Unit = {
     validateTableConfig(spark, params, tableConfig, false)
@@ -166,21 +191,8 @@ object HoodieWriterUtils {
     if (!isOverWriteMode) {
       val resolver = spark.sessionState.conf.resolver
       val diffConfigs = StringBuilder.newBuilder
-      val payloadIsExpressionPayload = params.getOrElse(PAYLOAD_CLASS_NAME.key(), "").equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")
       params.foreach { case (key, value) =>
-        var ignoreConfig = false
-        // Base file format can change between writes, so ignore it.
-        ignoreConfig = ignoreConfig || HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)
-
-        //expression payload will never be the table config so skip validation of merge configs
-        ignoreConfig = ignoreConfig || (payloadIsExpressionPayload && (key.equals(PAYLOAD_CLASS_NAME.key())
-          || key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()) || key.equals(RECORD_MERGE_MODE.key())
-          || key.equals(RECORD_MERGER_STRATEGY_ID.key())))
-
-        //don't validate the payload only in the case that insert into is using fallback to some legacy configs
-        ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) &&  value.equals("org.apache.spark.sql.hudi.command.ValidateDuplicateKeyPayload"))
-
-        if (!ignoreConfig) {
+        if (!shouldIgnoreConfig(key, value, params)) {
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
           if (null != existingValue && !resolver(existingValue, value)) {
             diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
@@ -296,7 +308,7 @@ object HoodieWriterUtils {
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
     PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
-    RECORD_MERGER_STRATEGY_ID -> HoodieTableConfig.RECORD_MERGER_STRATEGY,
+    RECORD_MERGE_STRATEGY_ID -> HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
     RECORD_MERGE_MODE -> HoodieTableConfig.RECORD_MERGE_MODE
   )
 

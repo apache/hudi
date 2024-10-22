@@ -183,7 +183,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
-  protected val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS, Some(""))).asScala.toList
+  protected val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGE_IMPLS, Some(""))).asScala.toList
 
   protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
     // Controls whether partition columns (which are the source for the partition path values) should

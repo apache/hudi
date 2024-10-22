@@ -262,7 +262,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       FileStatusCache.getOrCreate(sparkSession), shouldIncludeLogFiles())
 
   lazy val tableState: HoodieTableState = {
-    val recordMergerImpls = optParams.get(HoodieWriteConfig.RECORD_MERGER_IMPLS.key()).map(impls => ConfigUtils.split2List(impls).asScala.toList).getOrElse(List.empty)
+    val recordMergerImpls = optParams.get(HoodieWriteConfig.RECORD_MERGE_IMPLS.key()).map(impls => ConfigUtils.split2List(impls).asScala.toList).getOrElse(List.empty)
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(
       tablePath = basePath.toString,

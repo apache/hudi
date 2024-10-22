@@ -68,7 +68,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
-    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGE_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 
@@ -1047,7 +1047,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.datasource.write.row.writer.enable" -> "false"
     )
     if (recordType.equals(HoodieRecordType.SPARK)) {
-      writeOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
+      writeOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet") ++ writeOpts
     }
     val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).asScala.toSeq
@@ -1089,7 +1089,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.datasource.write.row.writer.enable" -> "false"
     )
     if (recordType.equals(HoodieRecordType.SPARK)) {
-      writeOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
+      writeOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet") ++ writeOpts
     }
     val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).asScala.toSeq
@@ -1441,7 +1441,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY_ID.key(), mergerStrategyName)
+      .option(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), mergerStrategyName)
       .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
       .mode(SaveMode.Overwrite)
       .save(basePath)

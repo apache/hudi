@@ -227,7 +227,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
       }
       val config = Map(
-        HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> merger,
+        HoodieWriteConfig.RECORD_MERGE_IMPLS.key -> merger,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> format) ++ recordConfig.getOrElse(recordType, Map.empty)
       withSQLConf(config.toList: _*) {
         f
