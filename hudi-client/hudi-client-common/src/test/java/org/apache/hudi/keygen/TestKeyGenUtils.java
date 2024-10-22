@@ -19,17 +19,16 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestKeyGenUtils {
 
@@ -126,9 +125,8 @@ public class TestKeyGenUtils {
     Assertions.assertArrayEquals(new String[] {"1", null, ""}, s3);
 
     // keys with ':' are not supported
-    String wrongKeyValues = "id:ab:cd,id2:ef";
-    Throwable ex = assertThrows(HoodieKeyException.class, () -> KeyGenUtils.extractRecordKeys(wrongKeyValues));
-    assertEquals("Couldn't extract values from complex key: '" + wrongKeyValues + "', probably due to used ':' character as key value", ex.getMessage());
+    String[] s4 = KeyGenUtils.extractRecordKeys("id:ab:cd,id2:ef");
+    Assertions.assertArrayEquals(new String[] {"ab:cd", "ef"}, s4);
 
     // test simple key form: val1
     String[] s5 = KeyGenUtils.extractRecordKeys("1");
@@ -151,5 +149,10 @@ public class TestKeyGenUtils {
 
     String[] s3 = KeyGenUtils.extractRecordKeysByFields("id1:1,1,1,id2:,2,2,,id3:3", fields);
     Assertions.assertArrayEquals(new String[] {",2,2,"}, s3);
+
+    fields.addAll(Arrays.asList("id1", "id3", "id4"));
+    // tough case with a lot of ',' and ':'
+    String[] s4 = KeyGenUtils.extractRecordKeysByFields("id1:1,,,id2:2024-10-22 14:11:53,id3:,,3,id4:::1:2::4::", fields);
+    Assertions.assertArrayEquals(new String[] {"1,,", "2024-10-22 14:11:53", ",,3", "::1:2::4::"}, s4);
   }
 }

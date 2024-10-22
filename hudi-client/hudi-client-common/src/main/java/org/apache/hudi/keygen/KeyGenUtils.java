@@ -159,14 +159,32 @@ public class KeyGenUtils {
           currentValue = recordKey.substring(keyValueSep1 + 1);
           processed = recordKey.length();
         } else {
-          // looking for ',' in reverse order to support ',' in key values by looking for the latest ','
+          // looking for ',' in reverse order to support multiple ',' in key values by looking for the latest ','
           commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
-          try {
-            currentValue = recordKey.substring(keyValueSep1 + 1, commaPosition);
-          } catch (StringIndexOutOfBoundsException ex) {
-            throw new HoodieKeyException("Couldn't extract values from complex key: '" + recordKey + "', probably due to used ':' character as key value", ex);
+          // commaPosition could be -1 if didn't find ',', or we could find ',' from previous key-value pair ('col1:val1,...')
+          // also we could have the last value with ':', so need to check if keyValueSep2 > 0
+          while (commaPosition < keyValueSep1 && keyValueSep2 > 0) {
+            // If we have key value as a timestamp with ':',
+            // then we continue to skip ':' until before the next ':' there is a ',' character.
+            // For instance, 'col1:val1,col2:2014-10-22 13:50:42,col3:val3'
+            //                              ^             ^  ^       ^
+            //   1)              keyValueSep1          skip  skip    keyValueSep2
+            //                                                  ^
+            //                                                  commaPosition
+            //   2)                         |   currentValue    |
+            //                                                  ^
+            //   3)                                             processed
+            keyValueSep2 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, keyValueSep2 + 1);
+            commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
           }
-          processed = commaPosition + 1;
+          if (commaPosition > 0) {
+            currentValue = recordKey.substring(keyValueSep1 + 1, commaPosition);
+            processed = commaPosition + 1;
+          } else {
+            // it could be the last value with many ':', in this case we wouldn't find any ',' before
+            currentValue = recordKey.substring(keyValueSep1 + 1);
+            processed = recordKey.length();
+          }
         }
         // here could be any logic of conditional replacing of currentValue
         if (currentValue.equals(NULL_RECORDKEY_PLACEHOLDER)) {
@@ -181,6 +199,11 @@ public class KeyGenUtils {
           processed = recordKey.length();
         } else {
           commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
+          while (commaPosition < keyValueSep1) {
+            // described above
+            keyValueSep2 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, keyValueSep2 + 1);
+            commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
+          }
           if (commaPosition < 0) {
             // if something went wrong, and there is no ',', we should stop here, and pass the whole recordKey,
             // otherwise processed = commaPosition + 1 would lead to infinite loop
