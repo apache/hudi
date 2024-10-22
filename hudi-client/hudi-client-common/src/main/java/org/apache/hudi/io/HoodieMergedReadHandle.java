@@ -172,7 +172,9 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
           // or with default ordering value, i.e., 0, we can safely ignore records before the delete record.
           // That means, we can return the log record without merging with the record from base file.
           if (deltaRecordMap.get(key).getMetaDataInfo(DELETE_FOUND_WITHOUT_ORDERING_VALUE).isPresent()) {
-            mergedRecords.add(deltaRecordMap.get(key));
+            if (!deltaRecordMap.get(key).isDelete(readerSchema, config.getProps())) {
+              mergedRecords.add(deltaRecordMap.get(key));
+            }
             continue;
           }
 
