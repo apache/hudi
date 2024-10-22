@@ -67,6 +67,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -333,56 +334,56 @@ public class StreamSync implements Serializable, Closeable {
    *
    * @throws IOException in case of any IOException
    */
-  public void refreshTimeline() throws IOException {
-    if (storage.exists(new StoragePath(cfg.targetBasePath))) {
-      try {
-        HoodieTableMetaClient metaClient = getMetaClient();
-        switch (metaClient.getTableType()) {
-          case COPY_ON_WRITE:
-          case MERGE_ON_READ:
-            // we can use getCommitsTimeline for both COW and MOR here, because for COW there is no deltacommit
-            this.commitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-            this.allCommitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getAllCommitsTimeline());
-            break;
-          default:
-            throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
-        }
-      } catch (HoodieIOException e) {
-        LOG.warn("Full exception msg " + e.getMessage());
-        if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
-          String basePathWithForwardSlash = cfg.targetBasePath.endsWith("/") ? cfg.targetBasePath :
-              String.format("%s/", cfg.targetBasePath);
-          String pathToHoodieProps = String.format("%s%s/%s", basePathWithForwardSlash,
-              HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-          String pathToHoodiePropsBackup = String.format("%s%s/%s", basePathWithForwardSlash,
-              HoodieTableMetaClient.METAFOLDER_NAME,
-              HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
-          boolean hoodiePropertiesExists =
-              storage.exists(new StoragePath(basePathWithForwardSlash))
-                  && storage.exists(new StoragePath(pathToHoodieProps))
-                  && storage.exists(new StoragePath(pathToHoodiePropsBackup));
-          if (!hoodiePropertiesExists) {
-            LOG.warn("Base path exists, but table is not fully initialized. Re-initializing again");
-            initializeEmptyTable();
-            // reload the timeline from metaClient and validate that its empty table. If there are any instants found, then we should fail the pipeline, bcoz hoodie.properties got deleted by mistake.
-            HoodieTableMetaClient metaClientToValidate = getMetaClient();
-            if (metaClientToValidate.reloadActiveTimeline().countInstants() > 0) {
-              // Deleting the recreated hoodie.properties and throwing exception.
-              storage.deleteDirectory(new StoragePath(String.format("%s%s/%s", basePathWithForwardSlash,
-                  HoodieTableMetaClient.METAFOLDER_NAME,
-                  HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
-              throw new HoodieIOException(
-                  "hoodie.properties is missing. Likely due to some external entity. Please populate the hoodie.properties and restart the pipeline. ",
-                  e.getIOException());
-            }
-          }
-        } else {
-          throw e;
-        }
+  public HoodieTableMetaClient refreshTimeline() throws IOException {
+    HoodieTableMetaClient metaClient = null;
+    try {
+      metaClient = getMetaClient();
+      switch (metaClient.getTableType()) {
+        case COPY_ON_WRITE:
+        case MERGE_ON_READ:
+          // we can use getCommitsTimeline for both COW and MOR here, because for COW there is no deltacommit
+          this.commitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+          this.allCommitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getAllCommitsTimeline());
+          break;
+        default:
+          throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
       }
-    } else {
+    } catch (TableNotFoundException e) {
       initializeEmptyTable();
+    } catch (HoodieIOException e) {
+      LOG.warn("Full exception msg " + e.getMessage());
+      if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
+        String basePathWithForwardSlash = cfg.targetBasePath.endsWith("/") ? cfg.targetBasePath :
+            String.format("%s/", cfg.targetBasePath);
+        String pathToHoodieProps = String.format("%s%s/%s", basePathWithForwardSlash,
+            HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+        String pathToHoodiePropsBackup = String.format("%s%s/%s", basePathWithForwardSlash,
+            HoodieTableMetaClient.METAFOLDER_NAME,
+            HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+        boolean hoodiePropertiesExists =
+            storage.exists(new StoragePath(basePathWithForwardSlash))
+                && storage.exists(new StoragePath(pathToHoodieProps))
+                && storage.exists(new StoragePath(pathToHoodiePropsBackup));
+        if (!hoodiePropertiesExists) {
+          LOG.warn("Base path exists, but table is not fully initialized. Re-initializing again");
+          initializeEmptyTable();
+          // reload the timeline from metaClient and validate that its empty table. If there are any instants found, then we should fail the pipeline, bcoz hoodie.properties got deleted by mistake.
+          HoodieTableMetaClient metaClientToValidate = getMetaClient();
+          if (metaClientToValidate.reloadActiveTimeline().countInstants() > 0) {
+            // Deleting the recreated hoodie.properties and throwing exception.
+            storage.deleteDirectory(new StoragePath(String.format("%s%s/%s", basePathWithForwardSlash,
+                HoodieTableMetaClient.METAFOLDER_NAME,
+                HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
+            throw new HoodieIOException(
+                "hoodie.properties is missing. Likely due to some external entity. Please populate the hoodie.properties and restart the pipeline. ",
+                e.getIOException());
+          }
+        }
+      } else {
+        throw e;
+      }
     }
+    return metaClient;
   }
 
   private HoodieTableMetaClient getMetaClient() {
@@ -440,8 +441,7 @@ public class StreamSync implements Serializable, Closeable {
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
     // Refresh Timeline
-    refreshTimeline();
-    HoodieTableMetaClient metaClient = getMetaClient();
+    HoodieTableMetaClient metaClient = Option.ofNullable(refreshTimeline()).orElseGet(this::getMetaClient);
     String instantTime = metaClient.createNewInstantTime();
 
     Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
