@@ -357,11 +357,4 @@ public abstract class HoodieReaderContext<T> {
   public boolean supportsParquetRowIndex() {
     return false;
   }
-
-  /**
-   * Constructs engine specific delete record.
-   */
-  public T constructRawDeleteRecord(Map<String, Object> metadata) {
-    return null;
-  }
 }
