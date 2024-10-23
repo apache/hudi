@@ -279,6 +279,12 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       currentFiles += split
     }
     closePartition()
+
+    logInfo(s"MaxPartitionBytes: $maxPartitionBytes, MaxPartitionBytesFraction: $maxPartitionBytesFraction, MaxPartitionBytesForMor: $maxPartitionBytesForMor" +
+      s"OpenCostInBytes: $openCostInBytes" +
+      s"Merged ${splits.size} splits into ${partitions.size} partitions"
+    )
+
     partitions.toSeq
   }
 
