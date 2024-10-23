@@ -75,6 +75,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.OVERWRITE_WITH_LATEST;
@@ -216,7 +217,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withAlternatives("hoodie.compaction.record.merger.strategy")
       .sinceVersion("0.13.0")
-      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.write.record.merge.custom.impl.classes which has the same merger strategy id");
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in `"
+          + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "` which has the same merger strategy id");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")

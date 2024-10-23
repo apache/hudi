@@ -104,6 +104,8 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
@@ -180,10 +182,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation(RecordMergeMode.class);
 
   public static final ConfigProperty<String> RECORD_MERGE_IMPLS = ConfigProperty
-      .key("hoodie.write.record.merge.custom.impl.classes")
+      .key(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY)
       .noDefaultValue()
       .markAdvanced()
-      .withAlternatives("hoodie.datasource.write.record.merger.impls")
+      .withAlternatives(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY)
       .sinceVersion("0.13.0")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
           + "These merger impls will filter by hoodie.write.record.merge.strategy "
@@ -195,7 +197,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withAlternatives("hoodie.datasource.write.record.merger.strategy")
       .sinceVersion("0.13.0")
-      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.write.record.merge.custom.impl.classes which has the same merger strategy id");
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in `"
+          + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "` which has the same merger strategy id");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")

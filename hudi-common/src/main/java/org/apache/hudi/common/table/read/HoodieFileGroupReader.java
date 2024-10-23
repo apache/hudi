@@ -51,6 +51,8 @@ import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 
@@ -99,9 +101,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.start = start;
     this.length = length;
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    readerContext.setRecordMerger(readerContext.getRecordMerger(tableConfig.getRecordMergeMode(),
-        tableConfig.getRecordMergerStrategy(), props.getString("hoodie.write.record.merge.custom.impl.classes",
-            props.getString("hoodie.datasource.write.record.merger.impls", ""))));
+    readerContext.setRecordMerger(readerContext.getRecordMerger(
+        tableConfig.getRecordMergeMode(),
+        tableConfig.getRecordMergerStrategy(),
+        props.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
+            props.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, ""))));
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);

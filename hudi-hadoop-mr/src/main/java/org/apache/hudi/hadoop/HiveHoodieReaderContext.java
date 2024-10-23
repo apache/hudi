@@ -69,6 +69,8 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+
 /**
  * {@link HoodieReaderContext} for Hive-specific {@link HoodieFileGroupReaderBasedRecordReader}.
  */
@@ -182,7 +184,8 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         }
         Option<HoodieRecordMerger> mergerClass =  HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergerImpls, mergerStrategy);
         if (mergerClass.isEmpty()) {
-          throw new IllegalArgumentException("No valid hive merger implementation set for `hoodie.write.record.merge.custom.impl.classes`");
+          throw new IllegalArgumentException("No valid hive merger implementation set for `"
+              + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
         }
         return mergerClass;
     }

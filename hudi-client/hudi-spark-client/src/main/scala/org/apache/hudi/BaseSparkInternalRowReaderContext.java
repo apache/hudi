@@ -43,6 +43,7 @@ import java.util.function.UnaryOperator;
 
 import scala.Function1;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
@@ -68,7 +69,8 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         }
         Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergerImpls, mergerStrategy);
         if (mergerClass.isEmpty()) {
-          throw new IllegalArgumentException("No valid spark merger implementation set for `hoodie.write.record.merge.custom.impl.classes`");
+          throw new IllegalArgumentException("No valid spark merger implementation set for `"
+              + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
         }
         return mergerClass;
     }
