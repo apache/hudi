@@ -194,6 +194,8 @@ public class DataSourceUtils {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(inlineCompact).build())
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+            // For Spark SQL INSERT INTO and MERGE INTO, custom payload classes are used
+            // to realize the SQL functionality, so the write config needs to be fetched first.
             .withPayloadClass(parameters.getOrDefault(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
                 parameters.getOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME)))
             .withPayloadOrderingField(parameters.get(DataSourceWriteOptions.PRECOMBINE_FIELD().key()))
