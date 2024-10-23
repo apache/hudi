@@ -139,7 +139,7 @@ public class BootstrapExecutor implements Serializable {
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withRecordMergerImpls(cfg.recordMergerImpls)
+            .withRecordMergerImpls(cfg.recordMergeImplClasses)
             .withAutoCommit(true)
             .withProps(props);
 
@@ -216,7 +216,7 @@ public class BootstrapExecutor implements Serializable {
             ARCHIVELOG_FOLDER.key(), ARCHIVELOG_FOLDER.defaultValue()))
         .setPayloadClassName(cfg.payloadClassName)
         .setRecordMergeMode(cfg.recordMergeMode)
-        .setRecordMergerStrategyId(cfg.recordMergerStrategy)
+        .setRecordMergerStrategyId(cfg.recordMergeStrategyId)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)
         .setBootstrapBasePath(bootstrapBasePath)

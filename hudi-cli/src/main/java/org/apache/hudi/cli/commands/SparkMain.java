@@ -489,7 +489,7 @@ public class SparkMain {
   private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,
                                  String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
                                  String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
-                                 String recordMergeMode, String payloadClassName, String recordMergeStrategy, String recordMergerImpls,
+                                 String recordMergeMode, String payloadClassName, String recordMergeStrategyId, String recordMergeImplClasses,
                                  String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? buildProperties(configs)
@@ -517,8 +517,8 @@ public class SparkMain {
     cfg.bootstrapIndexClass = bootstrapIndexClass;
     cfg.payloadClassName = payloadClassName;
     cfg.recordMergeMode = RecordMergeMode.getValue(recordMergeMode);
-    cfg.recordMergerStrategy = recordMergeStrategy;
-    cfg.recordMergerImpls = recordMergerImpls;
+    cfg.recordMergeStrategyId = recordMergeStrategyId;
+    cfg.recordMergeImplClasses = recordMergeImplClasses;
     cfg.enableHiveSync = Boolean.valueOf(enableHiveSync);
 
     new BootstrapExecutor(cfg, jsc, HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration()),

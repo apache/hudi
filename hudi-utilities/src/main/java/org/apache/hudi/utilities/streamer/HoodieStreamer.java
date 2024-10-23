@@ -153,10 +153,11 @@ public class HoodieStreamer implements Serializable {
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
-    Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergerStrategy);
+    Triple<RecordMergeMode, String, String> mergingConfigs =
+        HoodieTableConfig.inferCorrectMergingBehavior(cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId);
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.payloadClassName = mergingConfigs.getMiddle();
-    cfg.recordMergerStrategy = mergingConfigs.getRight();
+    cfg.recordMergeStrategyId = mergingConfigs.getRight();
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
@@ -196,8 +197,8 @@ public class HoodieStreamer implements Serializable {
       hoodieConfig.setValue(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     }
     if (!hoodieConfig.contains(HoodieWriteConfig.RECORD_MERGE_IMPLS)
-        && !StringUtils.isNullOrEmpty(cfg.recordMergerImpls)) {
-      hoodieConfig.setValue(HoodieWriteConfig.RECORD_MERGE_IMPLS.key(), cfg.recordMergerImpls);
+        && !StringUtils.isNullOrEmpty(cfg.recordMergeImplClasses)) {
+      hoodieConfig.setValue(HoodieWriteConfig.RECORD_MERGE_IMPLS.key(), cfg.recordMergeImplClasses);
     }
 
     return hoodieConfig.getProps(true);
@@ -279,10 +280,11 @@ public class HoodieStreamer implements Serializable {
     public RecordMergeMode recordMergeMode = null;
     
     @Parameter(names = {"--merge-strategy-id", "--record-merge-strategy-id"}, description = "only set this if you are using custom merge mode")
-    public String recordMergerStrategy = null;
+    public String recordMergeStrategyId = null;
 
-    @Parameter(names = {"--merge-impls", "--record-merge-impls"}, description = "Comma separated list of classes that implement the record merger strategy")
-    public String recordMergerImpls = null;
+    @Parameter(names = {"--merge-impl-classes", "--record-merge-custom-implementation-classes"},
+        description = "Comma separated list of classes that implement the record merger strategy")
+    public String recordMergeImplClasses = null;
 
     @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"
         + ".SchemaProvider to attach schemas to input & target table data, built in options: "

@@ -616,10 +616,11 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         cfg.schemaProviderClassName = defaultSchemaProviderClassName;
       }
       cfg.allowCommitOnNoCheckpointChange = allowCommitOnNoCheckpointChange;
-      Triple<RecordMergeMode, String, String> mergeCfgs = HoodieTableConfig.inferCorrectMergingBehavior(cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergerStrategy);
+      Triple<RecordMergeMode, String, String> mergeCfgs =
+          HoodieTableConfig.inferCorrectMergingBehavior(cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId);
       cfg.recordMergeMode = mergeCfgs.getLeft();
       cfg.payloadClassName = mergeCfgs.getMiddle();
-      cfg.recordMergerStrategy = mergeCfgs.getRight();
+      cfg.recordMergeStrategyId = mergeCfgs.getRight();
       return cfg;
     }
 
