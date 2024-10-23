@@ -103,15 +103,12 @@ public class TestBucketIdentifier {
   @Test
   public void testGetHashKeys() {
     BucketIdentifier identifier = new BucketIdentifier();
+    // if for recordKey one column only is used, then there is no added column name before value
     List<String> keys = identifier.getHashKeys(new HoodieKey("abc", "partition"), "");
     assertEquals(1, keys.size());
     assertEquals("abc", keys.get(0));
 
-    // we don't extract key values if they contain only ':', because it could be a timestamp, for instance, '2014-10-21 12:23'
-    keys = identifier.getHashKeys(new HoodieKey("f1:abc", "partition"), "f1");
-    assertEquals(1, keys.size());
-    assertEquals("f1:abc", keys.get(0));
-
+    // complex keys, composite from key-value pairs
     keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd", "partition"), "f2");
     assertEquals(1, keys.size());
     assertEquals("bcd", keys.get(0));

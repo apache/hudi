@@ -113,9 +113,9 @@ public class TestKeyGenUtils {
 
   @Test
   public void testExtractRecordKeys() {
-    // we don't extract key values if they contain only ':', because it could be a timestamp, for instance, '2014-10-21 12:23'
-    String[] s1 = KeyGenUtils.extractRecordKeys("id:1");
-    Assertions.assertArrayEquals(new String[] {"id:1"}, s1);
+    // if for recordKey one column only is used, then there is no added column name before value
+    String[] s1 = KeyGenUtils.extractRecordKeys("2024-10-22 14:11:53.023");
+    Assertions.assertArrayEquals(new String[] {"2024-10-22 14:11:53.023"}, s1);
 
     // test complex key form: field1:val1,field2:val2,...
     String[] s2 = KeyGenUtils.extractRecordKeys("id:1,id:2");
@@ -152,7 +152,7 @@ public class TestKeyGenUtils {
 
     fields.addAll(Arrays.asList("id1", "id3", "id4"));
     // tough case with a lot of ',' and ':'
-    String[] s4 = KeyGenUtils.extractRecordKeysByFields("id1:1,,,id2:2024-10-22 14:11:53,id3:,,3,id4:::1:2::4::", fields);
-    Assertions.assertArrayEquals(new String[] {"1,,", "2024-10-22 14:11:53", ",,3", "::1:2::4::"}, s4);
+    String[] s4 = KeyGenUtils.extractRecordKeysByFields("id1:1,,,id2:2024-10-22 14:11:53.023,id3:,,3,id4:::1:2::4::", fields);
+    Assertions.assertArrayEquals(new String[] {"1,,", "2024-10-22 14:11:53.023", ",,3", "::1:2::4::"}, s4);
   }
 }
