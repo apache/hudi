@@ -175,6 +175,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
+  // This ConfigProperty is also used in SQL options which expect String type
   public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.write.record.merge.mode")
       .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
