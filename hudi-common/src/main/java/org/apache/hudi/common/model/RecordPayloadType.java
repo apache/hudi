@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
@@ -100,7 +101,7 @@ public enum RecordPayloadType {
     } else if (config.contains("hoodie.datasource.write.payload.class")) {
       payloadClassName = config.getString("hoodie.datasource.write.payload.class");
     } else {
-      return DefaultHoodieRecordPayload.class.getName();
+      return HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
     }
     // There could be tables written with payload class from com.uber.hoodie.
     // Need to transparently change to org.apache.hudi.
