@@ -40,7 +40,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
   @Override
   public String getMergingStrategy() {
-    return HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+    return HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
   }
 
   @Override

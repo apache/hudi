@@ -142,7 +142,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> RECORD_MERGER_STRATEGY_ID = ConfigOptions
       .key("record.merger.strategy")
       .stringType()
-      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .defaultValue(HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID)
       .withFallbackKeys(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key())
       .withDescription("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in record.merger.impls which has the same merger strategy id");
 

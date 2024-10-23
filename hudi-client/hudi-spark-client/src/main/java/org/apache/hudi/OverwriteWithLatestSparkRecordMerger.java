@@ -35,7 +35,7 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
 
   @Override
   public String getMergingStrategy() {
-    return OVERWRITE_MERGER_STRATEGY_UUID;
+    return OVERWRITE_MERGE_STRATEGY_UUID;
   }
 
   @Override

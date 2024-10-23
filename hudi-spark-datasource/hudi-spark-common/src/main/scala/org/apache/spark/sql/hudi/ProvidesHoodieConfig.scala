@@ -29,7 +29,7 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWr
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
-import org.apache.hudi.keygen.{BaseKeyGenerator, ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
+import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 
@@ -287,9 +287,9 @@ trait ProvidesHoodieConfig extends Logging {
     }
 
     val (recordMergeMode, recordMergeStrategy) = if (deducedPayloadClassName.equals(classOf[ValidateDuplicateKeyPayload].getCanonicalName)) {
-      (RecordMergeMode.CUSTOM.name(), HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)
+      (RecordMergeMode.CUSTOM.name(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)
     } else {
-      (RecordMergeMode.EVENT_TIME_ORDERING.name(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      (RecordMergeMode.EVENT_TIME_ORDERING.name(), HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID)
     }
 
     if (tableConfig.getPayloadClass.equals(classOf[DefaultHoodieRecordPayload].getCanonicalName) &&

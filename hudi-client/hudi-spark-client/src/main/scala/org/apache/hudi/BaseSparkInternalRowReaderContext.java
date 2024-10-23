@@ -64,7 +64,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         return Option.of(new OverwriteWithLatestSparkRecordMerger());
       case CUSTOM:
       default:
-        if (mergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)) {
+        if (mergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
           return Option.of(HoodieAvroRecordMerger.INSTANCE);
         }
         Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergerImpls, mergerStrategy);

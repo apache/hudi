@@ -179,7 +179,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         return Option.of(new OverwriteWithLatestHiveRecordMerger());
       case CUSTOM:
       default:
-        if (mergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)) {
+        if (mergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
           return Option.of(HoodieAvroRecordMerger.INSTANCE);
         }
         Option<HoodieRecordMerger> mergerClass =  HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergerImpls, mergerStrategy);

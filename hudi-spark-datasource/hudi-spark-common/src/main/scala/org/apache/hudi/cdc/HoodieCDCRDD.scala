@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cdc
 
+import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
@@ -25,20 +26,20 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
-import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieFileIndex, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, HoodieUnsafeRDD, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hadoop.fs.Path
+import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -48,7 +49,6 @@ import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
-import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 
 import java.io.Closeable
 import java.util.Properties
@@ -153,7 +153,7 @@ class HoodieCDCRDD(
         metadataConfig,
         // TODO support CDC with spark record
         recordMergerImpls = List(classOf[HoodieAvroRecordMerger].getName),
-        recordMergerStrategy = HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID
+        recordMergerStrategy = HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
       )
     }
 

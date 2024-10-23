@@ -57,9 +57,9 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.OVERWRITE_WITH_LATEST;
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
@@ -303,32 +303,36 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     Stream<Arguments> arguments = Stream.of(
         //test empty args with both null and ""
-        arguments(null, null, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
-        arguments(null, "", "", false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+        arguments(null, null, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+        arguments(null, "", "", false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
 
         //test legal event time ordering combos
-        arguments(EVENT_TIME_ORDERING, null, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
-        arguments(EVENT_TIME_ORDERING, defaultPayload, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
-        arguments(EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
-        arguments(EVENT_TIME_ORDERING, null, DEFAULT_MERGER_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
-        arguments(null, defaultPayload, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
-        arguments(null, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
-        arguments(null, null, DEFAULT_MERGER_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGER_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, null, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, defaultPayload, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload,
+            DEFAULT_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, null, DEFAULT_MERGE_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+        arguments(null, defaultPayload, null, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+        arguments(null, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+        arguments(null, null, DEFAULT_MERGE_STRATEGY_UUID, false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
 
         //test legal overwrite combos
-        arguments(OVERWRITE_WITH_LATEST, null, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
-        arguments(OVERWRITE_WITH_LATEST, overwritePayload, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
-        arguments(OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
-        arguments(OVERWRITE_WITH_LATEST, null, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
-        arguments(null, overwritePayload, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
-        arguments(null, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
-        arguments(null, null, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
+        arguments(OVERWRITE_WITH_LATEST, null, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGE_STRATEGY_UUID),
+        arguments(OVERWRITE_WITH_LATEST, overwritePayload, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGE_STRATEGY_UUID),
+        arguments(OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGE_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload,
+            OVERWRITE_MERGE_STRATEGY_UUID),
+        arguments(OVERWRITE_WITH_LATEST, null, OVERWRITE_MERGE_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload,
+            OVERWRITE_MERGE_STRATEGY_UUID),
+        arguments(null, overwritePayload, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGE_STRATEGY_UUID),
+        arguments(null, overwritePayload, OVERWRITE_MERGE_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload,
+            OVERWRITE_MERGE_STRATEGY_UUID),
+        arguments(null, null, OVERWRITE_MERGE_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGE_STRATEGY_UUID),
 
         //test legal custom payload combos
-        arguments(CUSTOM, customPayload, null, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID),
-        arguments(CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID),
-        arguments(null, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID),
-        arguments(null, customPayload, null, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID),
+        arguments(CUSTOM, customPayload, null, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, customPayload, null, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
 
         //test legal custom merger combos
         arguments(CUSTOM, null, customStrategy, false, CUSTOM, defaultPayload, customStrategy),
@@ -337,31 +341,31 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
         //test illegal combos due to missing info
         arguments(CUSTOM, null, null, true, null, null, null),
-        arguments(CUSTOM, null, PAYLOAD_BASED_MERGER_STRATEGY_UUID, true, null, null, null),
+        arguments(CUSTOM, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
 
         //test illegal combos
         arguments(EVENT_TIME_ORDERING, overwritePayload, null, true, null, null, null),
         arguments(EVENT_TIME_ORDERING, customPayload, null, true, null, null, null),
-        arguments(EVENT_TIME_ORDERING, null, OVERWRITE_MERGER_STRATEGY_UUID, true, null, null, null),
+        arguments(EVENT_TIME_ORDERING, null, OVERWRITE_MERGE_STRATEGY_UUID, true, null, null, null),
         arguments(EVENT_TIME_ORDERING, null, customStrategy, true, null, null, null),
-        arguments(EVENT_TIME_ORDERING, null, PAYLOAD_BASED_MERGER_STRATEGY_UUID, true, null, null, null),
+        arguments(EVENT_TIME_ORDERING, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
         arguments(OVERWRITE_WITH_LATEST, defaultPayload, null, true, null, null, null),
         arguments(OVERWRITE_WITH_LATEST, customPayload, null, true, null, null, null),
-        arguments(OVERWRITE_WITH_LATEST, null, DEFAULT_MERGER_STRATEGY_UUID, true, null, null, null),
+        arguments(OVERWRITE_WITH_LATEST, null, DEFAULT_MERGE_STRATEGY_UUID, true, null, null, null),
         arguments(OVERWRITE_WITH_LATEST, null, customStrategy, true, null, null, null),
-        arguments(OVERWRITE_WITH_LATEST, null, PAYLOAD_BASED_MERGER_STRATEGY_UUID, true, null, null, null),
+        arguments(OVERWRITE_WITH_LATEST, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
         arguments(CUSTOM, defaultPayload, null, true, null, null, null),
         arguments(CUSTOM, overwritePayload, null, true, null, null, null),
-        arguments(CUSTOM, null, DEFAULT_MERGER_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, null, OVERWRITE_MERGER_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, defaultPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, overwritePayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, defaultPayload, OVERWRITE_MERGER_STRATEGY_UUID, true, null, null, null),
-        arguments(CUSTOM, overwritePayload, DEFAULT_MERGER_STRATEGY_UUID, true, null, null, null),
-        arguments(null, defaultPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID, true, null, null, null),
-        arguments(null, overwritePayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID, true, null, null, null),
-        arguments(null, defaultPayload, OVERWRITE_MERGER_STRATEGY_UUID, true, null, null, null),
-        arguments(null, overwritePayload, DEFAULT_MERGER_STRATEGY_UUID, true, null, null, null));
+        arguments(CUSTOM, null, DEFAULT_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(CUSTOM, null, OVERWRITE_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(CUSTOM, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(CUSTOM, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(CUSTOM, defaultPayload, OVERWRITE_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(CUSTOM, overwritePayload, DEFAULT_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(null, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(null, overwritePayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(null, defaultPayload, OVERWRITE_MERGE_STRATEGY_UUID, true, null, null, null),
+        arguments(null, overwritePayload, DEFAULT_MERGE_STRATEGY_UUID, true, null, null, null));
     return arguments;
   }
 
