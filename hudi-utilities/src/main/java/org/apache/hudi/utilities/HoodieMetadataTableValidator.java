@@ -1205,12 +1205,12 @@ public class HoodieMetadataTableValidator implements Serializable {
                                                                             HoodieTableFileSystemView fsView) throws IOException {
     String latestInstant = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
         .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
-      // Collect the list of latest file slices present in each partition
-      List<String> partitions = tableMetadata.getAllPartitionPaths();
-      fsView.loadAllPartitions();
-      List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-      partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
-          .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+    // Collect the list of latest file slices present in each partition
+    List<String> partitions = tableMetadata.getAllPartitionPaths();
+    fsView.loadAllPartitions();
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+    partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
+        .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
     List<Pair<String, Pair<String, Long>>> partitionFilePathSizeTriplet = new ArrayList<>();
     partitionFileSlicePairs.forEach(entry -> {
       if (entry.getValue().getBaseFile().isPresent()) {
