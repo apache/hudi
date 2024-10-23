@@ -1179,17 +1179,12 @@ public class HoodieMetadataTableValidator implements Serializable {
           break;
         }
         // test for log files equality
-        if (!fileSlice1.getLogFiles().collect(Collectors.toList()).equals(fileSlice2.getLogFiles().collect(Collectors.toList()))) {
-          mismatch = true;
-          break;
-        }
-        if (!areFileSliceCommittedLogFilesMatching(
-            fileSlice1, fileSlice2, metaClient, committedFilesMap)) {
+        if (!areFileSliceCommittedLogFilesMatching(fileSlice1, fileSlice2, metaClient, committedFilesMap)) {
           mismatch = true;
           break;
         } else {
-          LOG.warn(String.format("There are uncommitted log files in the latest file slices "
-              + "but the committed log files match: %s %s", fileSlice1, fileSlice2));
+          LOG.warn("There are uncommitted log files in the latest file slices "
+              + "but the committed log files match: {} {}", fileSlice1, fileSlice2);
         }
       }
     }
