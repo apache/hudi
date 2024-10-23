@@ -209,6 +209,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
+  // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
   public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
 
   public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
