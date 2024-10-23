@@ -70,14 +70,14 @@ object HoodieOptionConfig {
     .withTableConfigKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key)
     .build()
 
-  val SQL_MERGE_MODE: HoodieSQLOption[String] = buildConf()
-    .withSqlKey("mergeMode")
+  val SQL_RECORD_MERGE_MODE: HoodieSQLOption[String] = buildConf()
+    .withSqlKey("recordMergeMode")
     .withHoodieKey(HoodieWriteConfig.RECORD_MERGE_MODE.key)
     .withTableConfigKey(HoodieTableConfig.RECORD_MERGE_MODE.key)
     .build()
 
-  val SQL_RECORD_MERGER_STRATEGY: HoodieSQLOption[String] = buildConf()
-    .withSqlKey("recordMergeStrategy")
+  val SQL_RECORD_MERGE_STRATEGY_ID: HoodieSQLOption[String] = buildConf()
+    .withSqlKey("recordMergeStrategyId")
     .withHoodieKey(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key)
     .withTableConfigKey(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key)
     .build()
@@ -201,7 +201,7 @@ object HoodieOptionConfig {
   // extract primaryKey, preCombineField, type options
   def extractSqlOptions(options: Map[String, String]): Map[String, String] = {
     val sqlOptions = mapHoodieConfigsToSqlOptions(options)
-    val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName, SQL_RECORD_MERGER_STRATEGY.sqlKeyName, SQL_MERGE_MODE.sqlKeyName)
+    val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName, SQL_RECORD_MERGE_STRATEGY_ID.sqlKeyName, SQL_RECORD_MERGE_MODE.sqlKeyName)
     sqlOptions.filterKeys(targetOptions.contains).toMap
   }
 
@@ -247,7 +247,7 @@ object HoodieOptionConfig {
   def makeOptionsCaseInsensitive(sqlOptions: Map[String, String]): Map[String, String] = {
     // Make Keys Case Insensitive
     val standardOptions = Seq(SQL_KEY_TABLE_PRIMARY_KEY, SQL_KEY_PRECOMBINE_FIELD,
-    SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGER_STRATEGY, SQL_MERGE_MODE).map(key => key.sqlKeyName)
+      SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGE_STRATEGY_ID, SQL_RECORD_MERGE_MODE).map(key => key.sqlKeyName)
 
     sqlOptions.map(option => {
       standardOptions.find(x => x.toLowerCase().contains(option._1.toLowerCase())) match {
