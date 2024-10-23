@@ -46,7 +46,7 @@ import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
-import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.rebalance.partitioner.StreamReadAppendPartitioner;
@@ -154,7 +154,7 @@ public class HoodieTableSource implements
   private int[] requiredPos;
   private long limit;
   private List<Predicate> predicates;
-  private DataPruner dataPruner;
+  private ColumnStatsProbe columnStatsProbe;
   private PartitionPruners.PartitionPruner partitionPruner;
   private int dataBucket;
   private transient FileIndex fileIndex;
@@ -175,7 +175,7 @@ public class HoodieTableSource implements
       String defaultPartName,
       Configuration conf,
       @Nullable List<Predicate> predicates,
-      @Nullable DataPruner dataPruner,
+      @Nullable ColumnStatsProbe columnStatsProbe,
       @Nullable PartitionPruners.PartitionPruner partitionPruner,
       int dataBucket,
       @Nullable int[] requiredPos,
@@ -189,7 +189,7 @@ public class HoodieTableSource implements
     this.defaultPartName = defaultPartName;
     this.conf = conf;
     this.predicates = Optional.ofNullable(predicates).orElse(Collections.emptyList());
-    this.dataPruner = dataPruner;
+    this.columnStatsProbe = columnStatsProbe;
     this.partitionPruner = partitionPruner;
     this.dataBucket = dataBucket;
     this.requiredPos = Optional.ofNullable(requiredPos).orElseGet(() -> IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
@@ -266,7 +266,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, predicates, dataPruner, partitionPruner, dataBucket, requiredPos, limit, metaClient, internalSchemaManager);
+        conf, predicates, columnStatsProbe, partitionPruner, dataBucket, requiredPos, limit, metaClient, internalSchemaManager);
   }
 
   @Override
@@ -279,8 +279,8 @@ public class HoodieTableSource implements
     List<ResolvedExpression> simpleFilters = filterSimpleCallExpression(filters);
     Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitFilters = splitExprByPartitionCall(simpleFilters, this.partitionKeys, this.tableRowType);
     this.predicates = ExpressionPredicates.fromExpression(splitFilters.f0);
-    this.dataPruner = DataPruner.newInstance(splitFilters.f0);
-    this.partitionPruner = createPartitionPruner(splitFilters.f1, dataPruner);
+    this.columnStatsProbe = ColumnStatsProbe.newInstance(splitFilters.f0);
+    this.partitionPruner = createPartitionPruner(splitFilters.f1, columnStatsProbe);
     this.dataBucket = getDataBucket(splitFilters.f0);
     // refuse all the filters now
     return SupportsFilterPushDown.Result.of(new ArrayList<>(splitFilters.f1), new ArrayList<>(filters));
@@ -341,8 +341,8 @@ public class HoodieTableSource implements
   }
 
   @Nullable
-  private PartitionPruners.PartitionPruner createPartitionPruner(List<ResolvedExpression> partitionFilters, DataPruner dataPruner) {
-    if (!isPartitioned() || partitionFilters.isEmpty() && dataPruner == null) {
+  private PartitionPruners.PartitionPruner createPartitionPruner(List<ResolvedExpression> partitionFilters, ColumnStatsProbe columnStatsProbe) {
+    if (!isPartitioned() || partitionFilters.isEmpty() && columnStatsProbe == null) {
       return null;
     }
     StringJoiner joiner = new StringJoiner(" and ");
@@ -360,7 +360,7 @@ public class HoodieTableSource implements
         .basePath(path.toString())
         .rowType(tableRowType)
         .conf(conf)
-        .dataPruner(dataPruner)
+        .columnStatsProbe(columnStatsProbe)
         .partitionEvaluators(evaluators)
         .partitionKeys(partitionKeys)
         .partitionTypes(partitionTypes)
@@ -613,7 +613,7 @@ public class HoodieTableSource implements
           .path(this.path)
           .conf(this.conf)
           .rowType(this.tableRowType)
-          .dataPruner(this.dataPruner)
+          .columnStatsProbe(this.columnStatsProbe)
           .partitionPruner(this.partitionPruner)
           .dataBucket(this.dataBucket)
           .build();
@@ -694,8 +694,8 @@ public class HoodieTableSource implements
   }
 
   @VisibleForTesting
-  public DataPruner getDataPruner() {
-    return dataPruner;
+  public ColumnStatsProbe getColumnStatsProbe() {
+    return columnStatsProbe;
   }
 
   @VisibleForTesting

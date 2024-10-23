@@ -32,9 +32,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkClientUtil;
@@ -44,7 +43,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
@@ -62,29 +60,37 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_DATA_TYPE;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_TARGET_POS;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.METADATA_DATA_TYPE;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_COL_NAME;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_FILE_NAME;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_MAX_VAL;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_MIN_VAL;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_NULL_CNT;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_VAL_CNT;
 
 /**
  * An index support implementation that leverages Column Stats Index to prune files,
  * including utilities for abstracting away heavy-lifting of interactions with the index,
  * providing convenient interfaces to read it, transpose, etc.
  */
-public class ColumnStatsIndexSupport implements FlinkIndexSupport {
+public class FileStatsIndex implements ColumnStatsIndex {
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(ColumnStatsIndexSupport.class);
-  private final RowType tableRowType;
+  private static final Logger LOG = LoggerFactory.getLogger(FileStatsIndex.class);
+  private final RowType rowType;
   private final String basePath;
   private final HoodieMetadataConfig metadataConfig;
   private HoodieTableMetadata metadataTable;
 
-  public ColumnStatsIndexSupport(
+  public FileStatsIndex(
       String basePath,
-      RowType tableRowType,
+      RowType rowType,
       HoodieMetadataConfig metadataConfig) {
     this.basePath = basePath;
-    this.tableRowType = tableRowType;
+    this.rowType = rowType;
     this.metadataConfig = metadataConfig;
   }
 
@@ -107,14 +113,14 @@ public class ColumnStatsIndexSupport implements FlinkIndexSupport {
   }
 
   @Override
-  public Set<String> computeCandidateFiles(DataPruner dataPruner, List<String> allFiles) {
-    if (dataPruner == null) {
+  public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles) {
+    if (probe == null) {
       return null;
     }
     try {
-      String[] targetColumns = dataPruner.getReferencedCols();
+      String[] targetColumns = probe.getReferencedCols();
       final List<RowData> statsRows = readColumnStatsIndexByColumns(targetColumns);
-      return candidatesInMetadataTable(dataPruner, statsRows, allFiles);
+      return candidatesInMetadataTable(probe, statsRows, allFiles);
     } catch (Throwable t) {
       LOG.warn("Read {} for data skipping error", getIndexName(), t);
       return null;
@@ -122,34 +128,35 @@ public class ColumnStatsIndexSupport implements FlinkIndexSupport {
   }
 
   @Override
-  public Set<String> computeCandidatePartitions(DataPruner dataPruner, List<String> allPartitions) {
+  public Set<String> computeCandidatePartitions(ColumnStatsProbe probe, List<String> allPartitions) {
     throw new UnsupportedOperationException("This method is not supported by " + this.getClass().getSimpleName());
   }
 
   /**
-   * Computes pruned list of candidate base-files' names based on provided list of data filters.
+   * Computes pruned list of candidates' names based on provided list of data filters.
    * conditions, by leveraging Metadata Table's Column Statistics index (hereon referred as ColStats for brevity)
    * bearing "min", "max", "num_nulls" statistics for all columns.
    *
-   * <p>NOTE: This method has to return complete set of candidate files, since only provided candidates will
+   * <p>NOTE: This method has to return complete set of the candidates, since only provided candidates will
    * ultimately be scanned as part of query execution. Hence, this method has to maintain the
-   * invariant of conservatively including every base-file's name, that is NOT referenced in its index.
+   * invariant of conservatively including every candidate's name, that is NOT referenced in its index.
    *
    * <p>The {@code filters} must all be simple.
    *
-   * @param dataPruner the data pruner built from push-down filters.
-   * @param indexRows the raw column stats records.
-   * @param allFiles the original files to be pruned.
-   * @return set of pruned (data-skipped) candidate base-files' names
+   * @param probe         The column stats probe built from push-down filters.
+   * @param indexRows     The raw column stats records.
+   * @param oriCandidates The original candidates to be pruned.
+   *
+   * @return set of pruned (data-skipped) candidate names
    */
   protected Set<String> candidatesInMetadataTable(
-      @Nullable DataPruner dataPruner,
+      @Nullable ColumnStatsProbe probe,
       List<RowData> indexRows,
-      List<String> allFiles) {
-    if (dataPruner == null) {
+      List<String> oriCandidates) {
+    if (probe == null) {
       return null;
     }
-    String[] referencedCols = dataPruner.getReferencedCols();
+    String[] referencedCols = probe.getReferencedCols();
     final Pair<List<RowData>, String[]> colStatsTable =
         transposeColumnStatsIndex(indexRows, referencedCols);
     List<RowData> transposedColStats = colStatsTable.getLeft();
@@ -158,13 +165,13 @@ public class ColumnStatsIndexSupport implements FlinkIndexSupport {
       // the indexed columns have no intersection with the referenced columns, returns early
       return null;
     }
-    RowType.RowField[] queryFields = DataTypeUtils.projectRowFields(tableRowType, queryCols);
+    RowType.RowField[] queryFields = DataTypeUtils.projectRowFields(rowType, queryCols);
 
     Set<String> allIndexedFiles = transposedColStats.stream().parallel()
         .map(row -> row.getString(0).toString())
         .collect(Collectors.toSet());
     Set<String> candidateFiles = transposedColStats.stream().parallel()
-        .filter(row -> dataPruner.test(row, queryFields))
+        .filter(row -> probe.test(row, queryFields))
         .map(row -> row.getString(0).toString())
         .collect(Collectors.toSet());
 
@@ -175,8 +182,8 @@ public class ColumnStatsIndexSupport implements FlinkIndexSupport {
     //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
     //       files and all outstanding base-files, and make sure that all base files not
     //       represented w/in the index are included in the output of this method
-    allFiles.removeAll(allIndexedFiles);
-    candidateFiles.addAll(allFiles);
+    oriCandidates.removeAll(allIndexedFiles);
+    candidateFiles.addAll(oriCandidates);
     return candidateFiles;
   }
 
@@ -230,7 +237,7 @@ public class ColumnStatsIndexSupport implements FlinkIndexSupport {
   @VisibleForTesting
   public Pair<List<RowData>, String[]> transposeColumnStatsIndex(List<RowData> colStats, String[] queryColumns) {
 
-    Map<String, LogicalType> tableFieldTypeMap = tableRowType.getFields().stream()
+    Map<String, LogicalType> tableFieldTypeMap = rowType.getFields().stream()
         .collect(Collectors.toMap(RowType.RowField::getName, RowType.RowField::getType));
 
     // NOTE: We have to collect list of indexed columns to make sure we properly align the rows
@@ -395,55 +402,5 @@ public class ColumnStatsIndexSupport implements FlinkIndexSupport {
         }
     ).collect(Collectors.toList());
     return projectNestedColStatsColumns(rows);
-  }
-
-  // -------------------------------------------------------------------------
-  //  Utilities
-  // -------------------------------------------------------------------------
-  private static final DataType METADATA_DATA_TYPE = getMetadataDataType();
-  private static final DataType COL_STATS_DATA_TYPE = getColStatsDataType();
-  private static final int[] COL_STATS_TARGET_POS = getColStatsTargetPos();
-
-  // the column schema:
-  // |- file_name: string
-  // |- min_val: row
-  // |- max_val: row
-  // |- null_cnt: long
-  // |- val_cnt: long
-  // |- column_name: string
-  private static final int ORD_FILE_NAME = 0;
-  private static final int ORD_MIN_VAL = 1;
-  private static final int ORD_MAX_VAL = 2;
-  private static final int ORD_NULL_CNT = 3;
-  private static final int ORD_VAL_CNT = 4;
-  private static final int ORD_COL_NAME = 5;
-
-  private static DataType getMetadataDataType() {
-    return AvroSchemaConverter.convertToDataType(HoodieMetadataRecord.SCHEMA$);
-  }
-
-  private static DataType getColStatsDataType() {
-    int pos = HoodieMetadataRecord.SCHEMA$.getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).pos();
-    return METADATA_DATA_TYPE.getChildren().get(pos);
-  }
-
-  // the column schema:
-  // |- file_name: string
-  // |- min_val: row
-  // |- max_val: row
-  // |- null_cnt: long
-  // |- val_cnt: long
-  // |- column_name: string
-  private static int[] getColStatsTargetPos() {
-    RowType colStatsRowType = (RowType) COL_STATS_DATA_TYPE.getLogicalType();
-    return Stream.of(
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME)
-        .mapToInt(colStatsRowType::getFieldIndex)
-        .toArray();
   }
 }

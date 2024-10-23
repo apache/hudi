@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionPredicates;
-import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -167,8 +167,8 @@ public class TestHoodieTableSource {
     List<ResolvedExpression> expectedFilters = Collections.singletonList(filterExpr);
     tableSource.applyFilters(expectedFilters);
     HoodieTableSource copiedSource = (HoodieTableSource) tableSource.copy();
-    DataPruner dataPruner = copiedSource.getDataPruner();
-    assertNotNull(dataPruner);
+    ColumnStatsProbe columnStatsProbe = copiedSource.getColumnStatsProbe();
+    assertNotNull(columnStatsProbe);
   }
 
   @ParameterizedTest

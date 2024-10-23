@@ -25,10 +25,10 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.bucket.BucketIdentifier;
-import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
-import org.apache.hudi.source.stats.ColumnStatsIndexSupport;
+import org.apache.hudi.source.stats.FileStatsIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -63,26 +63,30 @@ public class FileIndex implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(FileIndex.class);
 
   private final StoragePath path;
-  private final RowType rowType;
   private final boolean tableExists;
   private final HoodieMetadataConfig metadataConfig;
   private final org.apache.hadoop.conf.Configuration hadoopConf;
   private final PartitionPruners.PartitionPruner partitionPruner; // for partition pruning
-  private final DataPruner dataPruner;                            // for data skipping
+  private final ColumnStatsProbe colStatsProbe;                   // for probing column stats
   private final int dataBucket;                                   // for bucket pruning
   private List<String> partitionPaths;                            // cache of partition paths
-  private final ColumnStatsIndexSupport columnStatsIndexSupport;
+  private final FileStatsIndex fileStatsIndex;                    // for data skipping
 
-  private FileIndex(StoragePath path, Configuration conf, RowType rowType, DataPruner dataPruner, PartitionPruners.PartitionPruner partitionPruner, int dataBucket) {
+  private FileIndex(
+      StoragePath path,
+      Configuration conf,
+      RowType rowType,
+      ColumnStatsProbe colStatsProbe,
+      PartitionPruners.PartitionPruner partitionPruner,
+      int dataBucket) {
     this.path = path;
-    this.rowType = rowType;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     this.tableExists = StreamerUtil.tableExists(path.toString(), hadoopConf);
     this.metadataConfig = StreamerUtil.metadataConfig(conf);
-    this.dataPruner = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? dataPruner : null;
+    this.colStatsProbe = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? colStatsProbe : null;
     this.partitionPruner = partitionPruner;
     this.dataBucket = dataBucket;
-    this.columnStatsIndexSupport = new ColumnStatsIndexSupport(path.toString(), rowType, metadataConfig);
+    this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, metadataConfig);
   }
 
   /**
@@ -176,8 +180,8 @@ public class FileIndex implements Serializable {
     }
 
     // data skipping
-    Set<String> candidateFiles = columnStatsIndexSupport.computeCandidateFiles(
-        dataPruner, allFiles.stream().map(f -> f.getPath().getName()).collect(Collectors.toList()));
+    Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(
+        colStatsProbe, allFiles.stream().map(f -> f.getPath().getName()).collect(Collectors.toList()));
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
       return allFiles;
@@ -280,7 +284,7 @@ public class FileIndex implements Serializable {
     private StoragePath path;
     private Configuration conf;
     private RowType rowType;
-    private DataPruner dataPruner;
+    private ColumnStatsProbe columnStatsProbe;
     private PartitionPruners.PartitionPruner partitionPruner;
     private int dataBucket = PrimaryKeyPruners.BUCKET_ID_NO_PRUNING;
 
@@ -302,8 +306,8 @@ public class FileIndex implements Serializable {
       return this;
     }
 
-    public Builder dataPruner(DataPruner dataPruner) {
-      this.dataPruner = dataPruner;
+    public Builder columnStatsProbe(ColumnStatsProbe columnStatsProbe) {
+      this.columnStatsProbe = columnStatsProbe;
       return this;
     }
 
@@ -319,7 +323,7 @@ public class FileIndex implements Serializable {
 
     public FileIndex build() {
       return new FileIndex(Objects.requireNonNull(path), Objects.requireNonNull(conf), Objects.requireNonNull(rowType),
-          dataPruner, partitionPruner, dataBucket);
+          columnStatsProbe, partitionPruner, dataBucket);
     }
   }
 }

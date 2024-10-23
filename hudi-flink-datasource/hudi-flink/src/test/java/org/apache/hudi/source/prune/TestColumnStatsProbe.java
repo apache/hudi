@@ -37,7 +37,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
-class TestDataPruner {
+class TestColumnStatsProbe {
 
   @ParameterizedTest
   @MethodSource("testTypes")
@@ -45,7 +45,7 @@ class TestDataPruner {
     DataType rowDataType = getDataRowDataType(dataType);
     DataType indexRowDataType = getIndexRowDataType(dataType);
 
-    Map<String, ColumnStats> stats1 = DataPruner.convertColumnStats(
+    Map<String, ColumnStats> stats1 = ColumnStatsProbe.convertColumnStats(
         getIndexRow(indexRowDataType, minValue, maxValue),
         getDataFields(rowDataType)
     );

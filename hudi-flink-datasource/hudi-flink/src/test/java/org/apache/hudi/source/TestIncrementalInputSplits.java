@@ -37,7 +37,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
-import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -367,8 +367,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
-    DataPruner dataPruner =
-        DataPruner.newInstance(Arrays.asList(
+    ColumnStatsProbe columnStatsProbe =
+        ColumnStatsProbe.newInstance(Arrays.asList(
             new CallExpression(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
@@ -387,7 +387,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
                 DataTypes.BOOLEAN())));
 
     PartitionPruners.PartitionPruner partitionPruner =
-        PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(basePath).conf(conf).dataPruner(dataPruner).build();
+        PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(basePath).conf(conf).columnStatsProbe(columnStatsProbe).build();
     IncrementalInputSplits iis = IncrementalInputSplits.builder()
         .conf(conf)
         .path(new Path(basePath))

@@ -39,15 +39,15 @@ import java.util.Map;
 import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
 
 /**
- * Utility to do data skipping.
+ * Utility for filtering the column stats metadata payloads.
  */
-public class DataPruner implements Serializable {
+public class ColumnStatsProbe implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final String[] referencedCols;
   private final List<ExpressionEvaluators.Evaluator> evaluators;
 
-  private DataPruner(String[] referencedCols, List<ExpressionEvaluators.Evaluator> evaluators) {
+  private ColumnStatsProbe(String[] referencedCols, List<ExpressionEvaluators.Evaluator> evaluators) {
     this.referencedCols = referencedCols;
     this.evaluators = evaluators;
   }
@@ -74,7 +74,7 @@ public class DataPruner implements Serializable {
   }
 
   @Nullable
-  public static DataPruner newInstance(List<ResolvedExpression> filters) {
+  public static ColumnStatsProbe newInstance(List<ResolvedExpression> filters) {
     if (filters.isEmpty()) {
       return null;
     }
@@ -83,7 +83,7 @@ public class DataPruner implements Serializable {
       return null;
     }
     List<ExpressionEvaluators.Evaluator> evaluators = fromExpression(filters);
-    return new DataPruner(referencedCols, evaluators);
+    return new ColumnStatsProbe(referencedCols, evaluators);
   }
 
   public static Map<String, ColumnStats> convertColumnStats(RowData indexRow, RowType.RowField[] queryFields) {

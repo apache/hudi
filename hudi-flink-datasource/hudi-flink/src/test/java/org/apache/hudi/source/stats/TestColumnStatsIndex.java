@@ -43,9 +43,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Test cases for {@link FlinkIndexSupport}.
+ * Test cases for {@link ColumnStatsIndex}.
  */
-public class TestFlinkIndexSupport {
+public class TestColumnStatsIndex {
   @TempDir
   File tempFile;
 
@@ -62,7 +62,7 @@ public class TestFlinkIndexSupport {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     String[] queryColumns = {"uuid", "age"};
-    PartitionStatsIndexSupport indexSupport = new PartitionStatsIndexSupport(path, TestConfigurations.ROW_TYPE, metadataConfig);
+    PartitionStatsIndex indexSupport = new PartitionStatsIndex(path, TestConfigurations.ROW_TYPE, metadataConfig);
     List<RowData> indexRows = indexSupport.readColumnStatsIndexByColumns(queryColumns);
     List<String> results = indexRows.stream().map(Object::toString).sorted(String::compareTo).collect(Collectors.toList());
     List<String> expected = Arrays.asList(
@@ -104,7 +104,7 @@ public class TestFlinkIndexSupport {
 
     // explicit query columns
     String[] queryColumns1 = {"uuid", "age"};
-    ColumnStatsIndexSupport indexSupport = new ColumnStatsIndexSupport(path, TestConfigurations.ROW_TYPE, metadataConfig);
+    FileStatsIndex indexSupport = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, metadataConfig);
     List<RowData> indexRows1 = indexSupport.readColumnStatsIndexByColumns(queryColumns1);
     Pair<List<RowData>, String[]> transposedIndexTable1 = indexSupport.transposeColumnStatsIndex(indexRows1, queryColumns1);
     assertThat("The schema columns should sort by natural order",

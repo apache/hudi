@@ -19,12 +19,11 @@
 package org.apache.hudi.source.prune;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionEvaluators;
 import org.apache.hudi.source.ExpressionEvaluators.Evaluator;
 import org.apache.hudi.source.stats.ColumnStats;
-import org.apache.hudi.source.stats.PartitionStatsIndexSupport;
+import org.apache.hudi.source.stats.PartitionStatsIndex;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
@@ -32,11 +31,9 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.util.Preconditions;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -144,21 +141,21 @@ public class PartitionPruners {
    */
   public static class ColumnStatsPartitionPruner implements PartitionPruner {
     private static final long serialVersionUID = 1L;
-    private final DataPruner colStatsPruner;
-    private final PartitionStatsIndexSupport partitionStatsIndexSupport;
+    private final ColumnStatsProbe probe;
+    private final PartitionStatsIndex partitionStatsIndex;
 
     public ColumnStatsPartitionPruner(
         RowType rowType,
         String basePath,
         HoodieMetadataConfig metadataConfig,
-        DataPruner colStatsPruner) {
-      this.colStatsPruner = colStatsPruner;
-      this.partitionStatsIndexSupport = new PartitionStatsIndexSupport(basePath, rowType, metadataConfig);
+        ColumnStatsProbe probe) {
+      this.probe = probe;
+      this.partitionStatsIndex = new PartitionStatsIndex(basePath, rowType, metadataConfig);
     }
 
     @Override
     public Set<String> filter(Collection<String> partitions) {
-      Set<String> candidatePartitions = partitionStatsIndexSupport.computeCandidatePartitions(colStatsPruner, new ArrayList<>(partitions));
+      Set<String> candidatePartitions = partitionStatsIndex.computeCandidatePartitions(probe, new ArrayList<>(partitions));
       if (candidatePartitions == null) {
         return new HashSet<>(partitions);
       }
@@ -167,7 +164,7 @@ public class PartitionPruners {
   }
 
   /**
-   * Chained partition pruner for hoodie table source which combines multiple partition pruners.
+   * Chained partition pruner for hoodie table source combining multiple partition pruners with predicate '&'.
    */
   public static class ChainedPartitionPruner implements PartitionPruner {
     private static final long serialVersionUID = 1L;
@@ -194,7 +191,7 @@ public class PartitionPruners {
     private RowType rowType;
     private String basePath;
     private Configuration conf;
-    private DataPruner dataPruner;
+    private ColumnStatsProbe probe;
     private List<ExpressionEvaluators.Evaluator> partitionEvaluators;
     private List<String> partitionKeys;
     private List<DataType> partitionTypes;
@@ -220,8 +217,8 @@ public class PartitionPruners {
       return this;
     }
 
-    public Builder dataPruner(DataPruner dataPruner) {
-      this.dataPruner = dataPruner;
+    public Builder columnStatsProbe(ColumnStatsProbe probe) {
+      this.probe = probe;
       return this;
     }
 
@@ -262,25 +259,22 @@ public class PartitionPruners {
       }
       PartitionPruner dynamicPruner = null;
       if (partitionEvaluators != null && !partitionEvaluators.isEmpty()) {
-        Preconditions.checkArgument(partitionKeys != null && partitionTypes != null && defaultParName != null,
-            "Invalid parameters for dynamic partition pruner, partitionKeys:%s, partitionTypes:%s, defaultParName:%s",
-            partitionKeys, partitionTypes, defaultParName);
-        dynamicPruner = new DynamicPartitionPruner(partitionEvaluators, partitionKeys, partitionTypes, defaultParName, hivePartition);
+        dynamicPruner = new DynamicPartitionPruner(partitionEvaluators, Objects.requireNonNull(partitionKeys),
+            Objects.requireNonNull(partitionTypes), Objects.requireNonNull(defaultParName),
+            hivePartition);
       }
       PartitionPruner columnStatsPruner = null;
-      if (dataPruner != null
+      if (probe != null
           && conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)
           && conf.get(FlinkOptions.METADATA_ENABLED)) {
-        Preconditions.checkArgument(rowType != null && basePath != null && conf != null,
-            "Invalid parameters for column stats partition pruner, rowType:%s, basePath:%s, conf:%s",
-            rowType, basePath, conf);
-        columnStatsPruner = new ColumnStatsPartitionPruner(rowType, basePath, StreamerUtil.metadataConfig(conf), dataPruner);
+        columnStatsPruner = new ColumnStatsPartitionPruner(Objects.requireNonNull(rowType), Objects.requireNonNull(basePath),
+            StreamerUtil.metadataConfig(Objects.requireNonNull(conf)), probe);
       }
       List<PartitionPruner> partitionPruners =
           Stream.of(staticPruner, dynamicPruner, columnStatsPruner)
               .filter(Objects::nonNull)
               .collect(Collectors.toList());
-      if (partitionPruners.size() < 1) {
+      if (partitionPruners.isEmpty()) {
         return null;
       }
       if (partitionPruners.size() < 2) {
@@ -288,26 +282,5 @@ public class PartitionPruners {
       }
       return new ChainedPartitionPruner(partitionPruners);
     }
-  }
-
-  @Deprecated
-  public static PartitionPruner getInstance(
-      List<ExpressionEvaluators.Evaluator> partitionEvaluators,
-      List<String> partitionKeys,
-      List<DataType> partitionTypes,
-      String defaultParName,
-      boolean hivePartition) {
-    ValidationUtils.checkState(!partitionEvaluators.isEmpty());
-    return new DynamicPartitionPruner(partitionEvaluators, partitionKeys, partitionTypes, defaultParName, hivePartition);
-  }
-
-  @Deprecated
-  public static PartitionPruner getInstance(Collection<String> candidatePartitions) {
-    return new StaticPartitionPruner(candidatePartitions);
-  }
-
-  @Deprecated
-  public static PartitionPruner getInstance(String... candidatePartitions) {
-    return new StaticPartitionPruner(Arrays.asList(candidatePartitions));
   }
 }

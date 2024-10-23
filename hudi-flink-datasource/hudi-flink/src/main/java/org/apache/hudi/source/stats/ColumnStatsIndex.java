@@ -19,7 +19,7 @@
 package org.apache.hudi.source.stats;
 
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 
 import java.io.Serializable;
 import java.util.List;
@@ -29,13 +29,13 @@ import java.util.Set;
  * Base support that leverages Metadata Table's indexes, such as Column Stats Index
  * and Partition Stats Index, to prune files and partitions.
  */
-public interface FlinkIndexSupport extends Serializable {
+public interface ColumnStatsIndex extends Serializable {
 
   String getIndexName();
 
   HoodieTableMetadata getMetadataTable();
 
-  Set<String> computeCandidateFiles(DataPruner dataPruner, List<String> allFile);
+  Set<String> computeCandidateFiles(ColumnStatsProbe columnStatsProbe, List<String> allFile);
 
-  Set<String> computeCandidatePartitions(DataPruner dataPruner, List<String> allPartitions);
+  Set<String> computeCandidatePartitions(ColumnStatsProbe columnStatsProbe, List<String> allPartitions);
 }

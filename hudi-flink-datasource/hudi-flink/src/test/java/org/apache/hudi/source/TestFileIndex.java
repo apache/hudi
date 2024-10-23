@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
-import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -145,7 +145,7 @@ public class TestFileIndex {
         FileIndex.builder()
             .path(new StoragePath(tempFile.getAbsolutePath()))
             .conf(conf).rowType(TestConfigurations.ROW_TYPE_BIGINT)
-            .dataPruner(DataPruner.newInstance(Collections.singletonList(new CallExpression(
+            .columnStatsProbe(ColumnStatsProbe.newInstance(Collections.singletonList(new CallExpression(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
                 Arrays.asList(
@@ -170,8 +170,8 @@ public class TestFileIndex {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
-    DataPruner dataPruner =
-        DataPruner.newInstance(Arrays.asList(
+    ColumnStatsProbe columnStatsProbe =
+        ColumnStatsProbe.newInstance(Arrays.asList(
             new CallExpression(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
@@ -194,7 +194,7 @@ public class TestFileIndex {
             .path(new StoragePath(tempFile.getAbsolutePath()))
             .conf(conf)
             .rowType(TestConfigurations.ROW_TYPE)
-            .partitionPruner(PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(tempFile.getAbsolutePath()).conf(conf).dataPruner(dataPruner).build())
+            .partitionPruner(PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(tempFile.getAbsolutePath()).conf(conf).columnStatsProbe(columnStatsProbe).build())
             .build();
 
     List<String> p = fileIndex.getOrBuildPartitionPaths();
