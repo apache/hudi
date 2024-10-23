@@ -174,12 +174,6 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     // NO_OP
   }
 
-  protected void ignoreWriteFailed(Throwable throwable) {
-    if (config.getIgnoreWriteFailed()) {
-      throw new HoodieException(throwable.getMessage(), throwable);
-    }
-  }
-
   /**
    * Perform the actual writing of the given record into the backing file.
    */
