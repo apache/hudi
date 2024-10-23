@@ -19,27 +19,35 @@
 
 package org.apache.spark.sql.hudi.command.index
 
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.HiveSyncConfigHolder._
 import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
-import org.apache.hudi.metadata.MetadataPartitionType
+import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.spark.sql.catalyst.analysis.Analyzer
+import org.apache.hudi.util.JFunction
+import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, FromUnixTime, Literal}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.scalatest.Ignore
 
-@Ignore
+import scala.collection.JavaConverters
+
+//@Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
@@ -650,6 +658,68 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     assertResult(expectedTableName)(catalogTable.identifier.table)
   }
 
+  test("Test Functional Index Insert after Initialization") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val isPartitioned = true
+          val tableName = generateTableName + s"_init_$tableType$isPartitioned"
+          val partitionByClause = if (isPartitioned) "partitioned by(price)" else ""
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long,
+               |  price int
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | $partitionByClause
+               | location '$basePath'
+       """.stripMargin)
+
+          writeRecordsAndValidateFunctionalIndex(tableName, basePath, "update", isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = false)
+        }
+      }
+    }
+  }
+
+  test("Test Functional Index Rollback") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val isPartitioned = true
+          val tableName = generateTableName + s"_rollback_$tableType$isPartitioned"
+          val partitionByClause = if (isPartitioned) "partitioned by(price)" else ""
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long,
+               |  price int
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | $partitionByClause
+               | location '$basePath'
+       """.stripMargin)
+
+          writeRecordsAndValidateFunctionalIndex(tableName, basePath, "update", isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = true)
+        }
+      }
+    }
+  }
+
   /**
    * Write records to the table with the given operation type and do updates or deletes, and then validate functional index.
    */
@@ -659,43 +729,125 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                                                      isDelete: Boolean,
                                                      shouldCompact: Boolean,
                                                      shouldCluster: Boolean,
-                                                     shouldRollback: Boolean): Unit = {
-    spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-    spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
-    spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-
+                                                     shouldRollback: Boolean,
+                                                     shouldValidate: Boolean = true): Unit = {
+    // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2020-09-26
+    spark.sql(s"insert into $tableName values(1, 'a1', 1601098924, 10)")
+    // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2021-09-26
+    spark.sql(s"insert into $tableName values(2, 'a2', 1632634924, 100)")
+    // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2022-09-26
+    spark.sql(s"insert into $tableName values(3, 'a3', 1664170924, 1000)")
     // create functional index
     spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')")
     val metaClient = createMetaClient(spark, basePath)
-    assertTrue(metaClient.getIndexMetadata.isPresent)
-    val functionalIndexMetadata = metaClient.getIndexMetadata.get()
-    assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
-    assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+    // verify file pruning with filter on from_unixtime(ts, 'yyyy-MM-dd') = 2020-09-26
+    val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
+    val dataFilter = {
+      val tsColumn = UnresolvedAttribute("ts")
+
+      // Define the format "yyyy-MM-dd" as a literal
+      val format = Literal("yyyy-MM-dd")
+
+      // Create the from_unixtime(ts, 'yyyy-MM-dd') expression
+      val fromUnixTimeExpr = FromUnixTime(tsColumn, format)
+
+      // Define the date to compare against as a literal
+      val targetDate = Literal("2024-03-26")
+
+      // Create the equality expression from_unixtime(ts, 'yyyy-MM-dd') = '2024-03-26'
+      EqualTo(fromUnixTimeExpr, targetDate)
+    }
+    verifyFilePruning(opts, dataFilter, metaClient)
 
     // do the operation
     if (isDelete) {
       spark.sql(s"delete from $tableName where id=1")
     } else {
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
+      spark.sql(s"insert into $tableName values(4, 'a4', 1727329324, 10000)")
     }
 
     // validate the functional index
-    val metadataSql = s"select ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') where type=3"
+    val metadataSql = s"select ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value, ColumnStatsMetadata.isDeleted from hudi_metadata('$tableName') where type=3"
+    // validate the functional index
+    checkAnswer(metadataSql)(
+      Seq("2020-09-26", "2020-09-26", false),
+      Seq("2021-09-26", "2021-09-26", false),
+      Seq("2022-09-26", "2022-09-26", false),
+      Seq("2024-09-26", "2024-09-26", false)
+    )
+
     if (shouldRollback) {
       // rollback the operation
-      spark.sql(s"rollback $operationType on $tableName")
+      val lastCompletedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant()
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), getWriteConfig(Map.empty, metaClient.getBasePath.toString))
+      writeClient.rollback(lastCompletedInstant.get().getTimestamp)
       // validate the functional index
       checkAnswer(metadataSql)(
-        Seq("2020-09-26", "2021-09-26"), // for file in name=a1
-        Seq("2022-09-26", "2022-09-26") // for file in name=a2
-      )
-    } else {
-      // validate the functional index
-      checkAnswer(metadataSql)(
-        Seq("2020-09-26", "2021-09-26"), // for file in name=a1
-        Seq("2022-09-26", "2022-09-26"), // for file in name=a2
-        Seq("2023-09-26", "2023-09-26") // for file in name=a3
+        // the last commit is rolledback so no records for that
+        Seq("2020-09-26", "2020-09-26", false),
+        Seq("2021-09-26", "2021-09-26", false),
+        Seq("2022-09-26", "2022-09-26", false)
       )
     }
+  }
+
+  private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient, isDataSkippingExpected: Boolean = false, isNoScanExpected: Boolean = false): Unit = {
+    // with data skipping
+    val commonOpts = opts + ("path" -> metaClient.getBasePath.toString)
+    var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
+    try {
+      val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
+      val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
+      val latestDataFilesCount = getLatestDataFilesCount(metaClient = metaClient)
+      if (isDataSkippingExpected) {
+        assertTrue(filteredFilesCount < latestDataFilesCount)
+        if (isNoScanExpected) {
+          assertTrue(filteredFilesCount == 0)
+        } else {
+          assertTrue(filteredFilesCount > 0)
+        }
+      } else {
+        assertTrue(filteredFilesCount == latestDataFilesCount)
+      }
+
+      // with no data skipping
+      fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
+      val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
+      assertTrue(filesCountWithNoSkipping == latestDataFilesCount)
+    } finally {
+      fileIndex.close()
+    }
+  }
+
+  private def getLatestDataFilesCount(includeLogFiles: Boolean = true, metaClient: HoodieTableMetaClient) = {
+    var totalLatestDataFiles = 0L
+    val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(metaClient)
+    try {
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+        .values()
+        .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
+          (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
+            slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)
+              + (if (slice.getBaseFile.isPresent) 1 else 0)))))
+    } finally {
+      fsView.close()
+    }
+    totalLatestDataFiles
+  }
+
+  private def getTableFileSystemView(metaClient: HoodieTableMetaClient): HoodieMetadataFileSystemView = {
+    new HoodieMetadataFileSystemView(
+      new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
+      metaClient,
+      metaClient.getActiveTimeline,
+      HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build())
+  }
+
+  private def getWriteConfig(hudiOpts: Map[String, String], basePath: String): HoodieWriteConfig = {
+    val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
+    HoodieWriteConfig.newBuilder()
+      .withProps(props)
+      .withPath(basePath)
+      .build()
   }
 }
