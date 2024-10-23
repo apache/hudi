@@ -24,10 +24,9 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.model.HoodieFileGroup;
-import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -36,9 +35,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -82,6 +80,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hadoop.fs.FileUtil.copy;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
@@ -493,7 +492,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
   @ParameterizedTest
   @MethodSource("lastNFileSlicesTestArgs")
-  public void testAdditionalFilesinMetadata(Integer lastNFileSlices) throws IOException {
+  public void testAdditionalFilesinMetadata(Integer lastNFileSlices) throws Exception {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
@@ -506,7 +505,31 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .mode(SaveMode.Overwrite)
         .save(basePath);
 
-    for (int i = 0; i < 6; i++) {
+    // Perform updates to generate log files
+    inserts.write().format("hudi").options(writeOptions)
+        .mode(SaveMode.Append)
+        .save(basePath);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(engineContext.getStorageConf()).build();
+
+    // let's add a log file entry to the commit history and filesystem by directly modifying the commit so FS based listing and MDT based listing diverges.
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    HoodieInstant instantToOverwrite = timeline.getInstants().get(1);
+    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(instantToOverwrite).get(), HoodieCommitMetadata.class);
+    HoodieWriteStat writeStatToCopy = commitMetadata.getPartitionToWriteStats().entrySet().stream().flatMap(entry -> entry.getValue().stream())
+        .filter(writeStat -> FSUtils.isLogFile(writeStat.getPath())).findFirst().get();
+    String newLogFilePath = writeStatToCopy.getPath() + "1";
+    HoodieWriteStat writeStatCopy = SerializationUtils.deserialize(SerializationUtils.serialize(writeStatToCopy));
+    writeStatCopy.setPath(newLogFilePath);
+    commitMetadata.addWriteStat(writeStatCopy.getPartitionPath(), writeStatCopy);
+    FileSystem fs = HadoopFSUtils.getFs(newLogFilePath, new Configuration(false));
+    fs.copyFromLocalFile(new Path(basePath, writeStatToCopy.getPath()), new Path(basePath, newLogFilePath));
+    // remove the existing instant and rewrite with the new metadata
+    assertTrue(fs.delete(new Path(basePath, String.format(".hoodie/%s", instantToOverwrite.getFileName()))));
+    timeline.saveAsComplete(new HoodieInstant(HoodieInstant.State.INFLIGHT, instantToOverwrite.getAction(), instantToOverwrite.getTimestamp(), instantToOverwrite.getCompletionTime()),
+        serializeCommitMetadata(commitMetadata));
+
+    for (int i = 0; i < 5; i++) {
       inserts.write().format("hudi").options(writeOptions)
           .mode(SaveMode.Append)
           .save(basePath);
@@ -517,20 +540,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.validateLatestFileSlices = true;
     config.validateAllFileGroups = true;
     config.ignoreFailed = true;
-    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(engineContext.getStorageConf()).build();
-
-    validator.run();
-    assertFalse(validator.hasValidationFailure());
-
-    // let's delete one of the log files from 1st commit and so FS based listing and MDT based listing diverges.
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
-    HoodieFileGroup fileGroup = fsView.getAllFileGroups(StringUtils.EMPTY_STRING).collect(Collectors.toList()).get(0);
-    List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());
-    FileSlice earliestFileSlice = allFileSlices.get(allFileSlices.size() - 1);
-    HoodieLogFile earliestLogFile = earliestFileSlice.getLogFiles().collect(Collectors.toList()).get(0);
-    metaClient.getStorage().deleteFile(earliestLogFile.getPath());
 
     HoodieMetadataTableValidator.Config finalConfig = config;
     HoodieMetadataTableValidator localValidator = new HoodieMetadataTableValidator(jsc, finalConfig);
@@ -547,7 +556,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       config.validateLastNFileSlices = lastNFileSlices;
     }
     config.ignoreFailed = true;
-    validator = new HoodieMetadataTableValidator(jsc, config);
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     validator.run();
     if (lastNFileSlices != -1 && lastNFileSlices < 4) {
       assertFalse(validator.hasValidationFailure());
