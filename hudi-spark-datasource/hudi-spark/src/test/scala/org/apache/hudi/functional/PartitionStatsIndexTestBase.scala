@@ -200,6 +200,29 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     latestBatchDf
   }
 
+  protected def doWriteAndValidateDataAndPartitionStats(records: mutable.Buffer[String],
+                                                        hudiOpts: Map[String, String],
+                                                        operation: String,
+                                                        saveMode: SaveMode,
+                                                        validate: Boolean): DataFrame = {
+    val latestBatch: mutable.Buffer[String] = records
+    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
+    latestBatchDf.cache()
+    latestBatchDf.write.format("org.apache.hudi")
+      .options(hudiOpts)
+      .option(OPERATION.key, operation)
+      .mode(saveMode)
+      .save(basePath)
+    latestBatchDf.show(false)
+    val deletedDf = calculateMergedDf(latestBatchDf, operation)
+    deletedDf.cache()
+    if (validate) {
+      validateDataAndPartitionStats(deletedDf)
+    }
+    deletedDf.unpersist()
+    latestBatchDf
+  }
+
   /**
    * @return [[DataFrame]] that should not exist as of the latest instant; used for non-existence validation.
    */
