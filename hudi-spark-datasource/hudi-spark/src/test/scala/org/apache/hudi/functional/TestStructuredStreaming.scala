@@ -147,8 +147,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, destPath, "000"))
       val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, destPath)
       // Read RO View
-      val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
-        .load(destPath + "/*/*/*/*")
+      val hoodieROViewDF1 = spark.read.format("org.apache.hudi").load(destPath)
       assert(hoodieROViewDF1.count() == 100)
 
       inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
@@ -170,8 +169,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       }
       assertEquals(numExpectedCommits, HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").size())
       // Read RO View
-      val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
-        .load(destPath + "/*/*/*/*")
+      val hoodieROViewDF2 = spark.read.format("org.apache.hudi").load(destPath)
       assertEquals(100, hoodieROViewDF2.count()) // still 100, since we only updated
 
       // Read Incremental View
@@ -422,8 +420,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 0)
 
       // Validate data after clustering
-      val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
-        .load(destPath + "/*/*/*/*")
+      val hoodieROViewDF2 = spark.read.format("org.apache.hudi").load(destPath)
       assertEquals(200, hoodieROViewDF2.count())
       val countsPerCommit = hoodieROViewDF2.groupBy("_hoodie_commit_time").count().collect()
       assertEquals(2, countsPerCommit.length)

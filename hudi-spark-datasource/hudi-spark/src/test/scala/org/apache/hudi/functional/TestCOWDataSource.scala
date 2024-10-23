@@ -630,9 +630,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+    val snapshotDF1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(100, snapshotDF1.count())
 
     val records2 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).asScala.toList
@@ -644,9 +642,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+    val snapshotDF2 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(snapshotDF2.count(), 80)
   }
 
@@ -667,8 +663,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*/*/*")
+    val snapshotDF1 = spark.read.format("org.apache.hudi").load(basePath)
     assertEquals(1000, snapshotDF1.count())
 
     val countDownLatch = new CountDownLatch(2)
@@ -679,8 +674,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
     countDownLatch.await(1, TimeUnit.MINUTES)
 
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*/*/*")
+    val snapshotDF2 = spark.read.format("org.apache.hudi").load(basePath)
     if (numRetries > 0) {
       assertEquals(snapshotDF2.count(), 3000)
       assertEquals(HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size(), 3)
@@ -885,7 +879,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val allRecords = spark.read.format("org.apache.hudi").options(readOpts).load(basePath + "/*/*/*")
+    val allRecords = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     allRecords.registerTempTable("tmpTable")
 
     spark.sql(String.format("select count(*) from tmpTable")).show()
@@ -934,7 +928,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val allRecords = spark.read.format("org.apache.hudi").options(readOpts).load(basePath + "/*/*/*")
+    val allRecords = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     allRecords.registerTempTable("tmpTable")
 
     spark.sql(String.format("select count(*) from tmpTable")).show()
@@ -987,9 +981,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+    val hoodieROViewDF1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(insert1Cnt, hoodieROViewDF1.count())
 
     val inserts2 = new java.util.ArrayList[HoodieRecord[_]]
@@ -1003,9 +995,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Append)
       .save(basePath)
     val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
-    val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(basePath + "/*/*/*/*")
+    val hoodieROViewDF2 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(hoodieROViewDF2.count(), totalUniqueKeyToGenerate)
 
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
@@ -1036,9 +1026,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val recordsReadDF = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(basePath + "/*/*")
+    val recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     recordsReadDF.printSchema()
     recordsReadDF.schema.foreach(f => {
       f.name match {
@@ -1088,9 +1076,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     writer.partitionBy("current_ts")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    var recordsReadDF = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(basePath + "/*/*")
+    var recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
 
     assertEquals(0L, recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_ts").cast("string")).count())
 
@@ -1101,9 +1087,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    recordsReadDF = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(basePath + "/*/*")
+    recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
 
     assertEquals(0L, recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count())
@@ -1115,9 +1099,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    recordsReadDF = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(basePath + "/*/*/*")
+    recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!=
       concat(col("driver"), lit("/"), col("rider"), lit("/"), udf_date_format(col("current_ts")))).count() == 0)
 
@@ -1259,9 +1241,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val recordsReadDF = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .load(basePath + "/*/*")
+    val recordsReadDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
   }

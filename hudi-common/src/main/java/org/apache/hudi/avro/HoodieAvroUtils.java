@@ -1246,9 +1246,10 @@ public class HoodieAvroUtils {
       case UNION:
         return recordNeedsRewriteForExtendedAvroTypePromotion(getActualSchemaFromUnion(writerSchema, null), getActualSchemaFromUnion(readerSchema, null));
       case ENUM:
+        return needsRewriteToString(writerSchema, true);
       case STRING:
       case BYTES:
-        return needsRewriteToString(writerSchema);
+        return needsRewriteToString(writerSchema, false);
       default:
         return false;
     }
@@ -1259,7 +1260,7 @@ public class HoodieAvroUtils {
    * int, long, float, double, or bytes because avro doesn't support evolution from those types to
    * string so some intervention is needed
    */
-  private static boolean needsRewriteToString(Schema schema) {
+  private static boolean needsRewriteToString(Schema schema, boolean isEnum) {
     switch (schema.getType()) {
       case INT:
       case LONG:
@@ -1267,6 +1268,8 @@ public class HoodieAvroUtils {
       case DOUBLE:
       case BYTES:
         return true;
+      case ENUM:
+        return !isEnum;
       default:
         return false;
     }

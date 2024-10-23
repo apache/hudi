@@ -75,6 +75,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -285,13 +286,24 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
     Dataset<Row> rows = getRowDataset(1, "row1", "abc", "p1");
     rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
-    rows = getRowDataset(2, "row2", "cde", "p2");
+    rows = getRowDataset(2, "row2", "abc", "p2");
     rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
     rows = getRowDataset(3, "row3", "def", "p2");
     rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
 
     // create secondary index
     sparkSession.sql("create index idx_not_record_key_col on tbl using secondary_index(not_record_key_col)");
+    validateSecondaryIndex();
+
+    // updating record `not_record_key_col` column from `abc` to `cde`
+    rows = getRowDataset(1, "row1", "cde", "p1");
+    rows.write().format("hudi")
+        .option("hoodie.metadata.enable", "true")
+        .option("hoodie.metadata.record.index.enable", "true")
+        .mode(SaveMode.Append)
+        .save(basePath);
+
+    // validate MDT partition stats
     validateSecondaryIndex();
   }
 
@@ -339,10 +351,10 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     for (String secKey : new String[]{"abc", "cde", "def"}) {
       // There is one to one mapping between record key and secondary key
       String recKey = "row" + i++;
-      List<String> recKeys = validator.getFSSecondaryKeyToRecordKeys(new HoodieSparkEngineContext(jsc, sqlContext), basePath,
+      Set<String> recKeys = validator.getFSSecondaryKeyToRecordKeys(new HoodieSparkEngineContext(jsc, sqlContext), basePath,
               metaClient.getActiveTimeline().lastInstant().get().getTimestamp(), "not_record_key_col", Collections.singletonList(secKey))
           .get(secKey);
-      assertEquals(Collections.singletonList(recKey), recKeys);
+      assertEquals(Collections.singleton(recKey), recKeys);
     }
   }
 

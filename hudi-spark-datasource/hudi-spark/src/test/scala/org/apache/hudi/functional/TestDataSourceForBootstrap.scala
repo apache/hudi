@@ -359,7 +359,7 @@ class TestDataSourceForBootstrap {
     val hoodieROViewDF1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(basePath + "/*")
+      .load(basePath)
     assertEquals(numRecords, hoodieROViewDF1.count())
 
     // Perform upsert with clustering
@@ -426,7 +426,7 @@ class TestDataSourceForBootstrap {
     val hoodieROViewDF1 = spark.read.format("hudi")
                             .option(DataSourceReadOptions.QUERY_TYPE.key,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-                            .load(basePath + "/*")
+                            .load(basePath)
     assertEquals(numRecords, hoodieROViewDF1.count())
 
     // Perform upsert
@@ -519,7 +519,7 @@ class TestDataSourceForBootstrap {
     val hoodieROViewDF2 = spark.read.format("hudi")
                             .option(DataSourceReadOptions.QUERY_TYPE.key,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-                            .load(basePath + "/*")
+                            .load(basePath)
     hoodieROViewDF2.collect()
     assertEquals(originalVerificationVal, hoodieROViewDF2.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
 
@@ -544,7 +544,7 @@ class TestDataSourceForBootstrap {
     val hoodieROViewDF3 = spark.read.format("hudi")
                             .option(DataSourceReadOptions.QUERY_TYPE.key,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-                            .load(basePath + "/*")
+                            .load(basePath)
     assertEquals(numRecords, hoodieROViewDF3.count())
     assertEquals(0, hoodieROViewDF3.filter(s"timestamp == $updateTimestamp").count())
   }
