@@ -106,7 +106,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
 
     // Snapshot Read the table
     val hudiDf = spark.read.format("hudi").load(basePath)
-    assertEquals(0, hudiDf.count())
+    assertEquals(20, hudiDf.count())
 
     // Update and generate new slice across partitions.
     val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 10)).asScala.toSeq
@@ -118,7 +118,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
       .save(basePath)
 
     // Snapshot Read the table
-    val hudiDfAfterUpdate = spark.read.format("hudi").load(basePath + "/*")
-    assertEquals(0, hudiDfAfterUpdate.count())
+    val hudiDfAfterUpdate = spark.read.format("hudi").load(basePath)
+    assertEquals(20, hudiDfAfterUpdate.count())
   }
 }
