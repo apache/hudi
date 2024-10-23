@@ -61,11 +61,11 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   private final transient HoodieMetaserverClient metaserverClient;
 
   public HoodieTableMetaserverClient(HoodieStorage storage, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
-                                     RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy,
+                                     RecordMergeMode recordMergeMode, String payloadClassName, String recordMergeStrategyId,
                                      HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig,
                                      Option<String> databaseName, Option<String> tableName, HoodieMetaserverConfig config) {
     super(storage, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
-        recordMergeMode, payloadClassName, recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig);
+        recordMergeMode, payloadClassName, recordMergeStrategyId, timeGeneratorConfig, fileSystemRetryConfig);
     this.databaseName = databaseName.isPresent() ? databaseName.get() : tableConfig.getDatabaseName();
     this.tableName = tableName.isPresent() ? tableName.get() : tableConfig.getTableName();
     this.metaserverConfig = config;

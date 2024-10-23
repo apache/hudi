@@ -393,7 +393,7 @@ object DataSourceWriteOptions {
    * HoodieMerger will replace the payload to process the merge of data
    * and provide the same capabilities as the payload
    */
-  val RECORD_MERGE_IMPLS = HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES
+  val RECORD_MERGE_IMPL_CLASSES = HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES
 
   /**
    * Id of merger strategy

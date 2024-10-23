@@ -90,11 +90,12 @@ public class HoodieRecordUtils {
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
-                                                           List<String> mergerClassList, String recordMergerStrategy) {
-    return Option.fromJavaOptional(mergerClassList.stream()
+                                                                   List<String> mergeImplClassList,
+                                                                   String recordMergeStrategyId) {
+    return Option.fromJavaOptional(mergeImplClassList.stream()
         .map(clazz -> loadRecordMerger(clazz))
         .filter(Objects::nonNull)
-        .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
+        .filter(merger -> merger.getMergingStrategy().equals(recordMergeStrategyId))
         .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
         .findFirst());
   }
