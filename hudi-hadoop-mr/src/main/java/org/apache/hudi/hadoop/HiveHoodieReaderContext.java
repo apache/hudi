@@ -169,7 +169,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergerStrategy, String mergerImpls) {
+  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     // TODO(HUDI-7843):
     // get rid of event time and overwrite with latest. Just return Option.empty
     switch (mergeMode) {
@@ -179,10 +179,10 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         return Option.of(new OverwriteWithLatestHiveRecordMerger());
       case CUSTOM:
       default:
-        if (mergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+        if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
           return Option.of(HoodieAvroRecordMerger.INSTANCE);
         }
-        Option<HoodieRecordMerger> mergerClass =  HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergerImpls, mergerStrategy);
+        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
         if (mergerClass.isEmpty()) {
           throw new IllegalArgumentException("No valid hive merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");

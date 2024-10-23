@@ -54,7 +54,7 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
 
   @Override
-  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergerStrategy, String mergerImpls) {
+  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     // TODO(HUDI-7843):
     // get rid of event time and overwrite with latest. Just return Option.empty
     switch (mergeMode) {
@@ -64,10 +64,10 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         return Option.of(new OverwriteWithLatestSparkRecordMerger());
       case CUSTOM:
       default:
-        if (mergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+        if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
           return Option.of(HoodieAvroRecordMerger.INSTANCE);
         }
-        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergerImpls, mergerStrategy);
+        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergeImplClasses, mergeStrategyId);
         if (mergerClass.isEmpty()) {
           throw new IllegalArgumentException("No valid spark merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");

@@ -187,12 +187,15 @@ public abstract class HoodieReaderContext<T> {
   public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
   public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
-
+  
   /**
-   * @param mergerStrategy Merger strategy UUID.
+   * @param mergeMode        record merge mode
+   * @param mergeStrategyId  record merge strategy ID
+   * @param mergeImplClasses custom implementation classes for record merging
+   *
    * @return {@link HoodieRecordMerger} to use.
    */
-  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergerStrategy, String mergerImpls);
+  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses);
 
   /**
    * Gets the field value.
