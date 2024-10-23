@@ -929,14 +929,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       // Sort it here once so that we don't need to sort individually for base file and for each individual log files.
       Set<String> secondaryKeySet = new HashSet<>(secondaryKeys.size());
       List<String> sortedSecondaryKeys = new ArrayList<>(secondaryKeys);
-      Collections.sort(sortedSecondaryKeys);
       secondaryKeySet.addAll(sortedSecondaryKeys);
+      Collections.sort(sortedSecondaryKeys);
 
       logRecordScanner.getRecords().forEach(record -> {
         HoodieMetadataPayload payload = record.getData();
-        String recordKey = payload.getRecordKeyFromSecondaryIndex();
-        if (secondaryKeySet.contains(recordKey)) {
-          String secondaryKey = payload.getRecordKeyFromSecondaryIndex();
+        String secondaryKey = payload.key;
+        if (secondaryKeySet.contains(secondaryKey)) {
+          String recordKey = payload.getRecordKeyFromSecondaryIndex();
           logRecordsMap.computeIfAbsent(secondaryKey, k -> new HashMap<>()).put(recordKey, record);
         }
       });
