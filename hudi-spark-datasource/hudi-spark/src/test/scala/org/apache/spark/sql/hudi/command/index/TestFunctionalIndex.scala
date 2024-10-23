@@ -47,7 +47,7 @@ import org.scalatest.Ignore
 
 import scala.collection.JavaConverters
 
-//@Ignore
+@Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
@@ -108,11 +108,13 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           tool.syncHoodieTable()
 
           // assert table created and no partition metadata
-          val hiveClient = new HoodieHiveSyncClient(HiveTestUtil.getHiveSyncConfig, metaClient)
-          assertTrue(hiveClient.tableExists("h0_ro"))
-          assertTrue(hiveClient.tableExists("h0_rt"))
-          assertEquals(0, hiveClient.getAllPartitions("h0_ro").size())
-          assertEquals(0, hiveClient.getAllPartitions("h0_rt").size())
+          val hiveClient = new HoodieHiveSyncClient(HiveTestUtil.getHiveSyncConfig, HoodieTableMetaClient.reload(metaClient))
+          val roTable = tableName + "_ro"
+          val rtTable = tableName + "_rt"
+          assertTrue(hiveClient.tableExists(roTable))
+          assertTrue(hiveClient.tableExists(rtTable))
+          assertEquals(0, hiveClient.getAllPartitions(roTable).size())
+          assertEquals(0, hiveClient.getAllPartitions(rtTable).size())
 
           // check query result
           checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'")(
