@@ -225,7 +225,8 @@ public class FlinkWriteClients {
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
-            .withSchema(getSourceSchema(conf).toString());
+            .withSchema(getSourceSchema(conf).toString())
+            .withWriteIgnoreFailed(conf.get(FlinkOptions.IGNORE_FAILED));
 
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);
     if (lockConfig.isPresent()) {
