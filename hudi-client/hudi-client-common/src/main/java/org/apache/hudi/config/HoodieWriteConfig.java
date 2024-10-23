@@ -811,12 +811,6 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public static final String WRITES_FILEID_ENCODING = "_hoodie.writes.fileid.encoding";
 
-  public static final ConfigProperty<Boolean> IGNORE_FAILED = ConfigProperty
-      .key("hoodie.write.ignore.failed")
-      .defaultValue(false)
-      .sinceVersion("")
-      .withDocumentation("Flag to indicate whether to ignore any non exception error (e.g. writestatus error).");
-
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
 
@@ -2794,13 +2788,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getSecondaryIndexParallelism();
   }
 
-  /**
-   * Whether to ignore the write failed.
-   */
-  public boolean getIgnoreWriteFailed() {
-    return getBooleanOrDefault(IGNORE_FAILED);
-  }
-
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -3340,11 +3327,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteRecordPositionsEnabled(boolean shouldWriteRecordPositions) {
       writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(shouldWriteRecordPositions));
-      return this;
-    }
-
-    public Builder withWriteIgnoreFailed(boolean ignoreFailedWriteData) {
-      writeConfig.setValue(IGNORE_FAILED, String.valueOf(ignoreFailedWriteData));
       return this;
     }
 

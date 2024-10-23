@@ -499,7 +499,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // for a single record
       writeStatus.markFailure(record, t, recordMetadata);
       LOG.error("Error writing record " + record, t);
-      ignoreWriteFailed(t);
     }
   }
 

@@ -304,7 +304,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + newRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
       writeStatus.markFailure(newRecord, failureEx, recordMetadata);
-      ignoreWriteFailed(failureEx);
       return false;
     }
     try {
@@ -334,7 +333,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     } catch (Exception e) {
       LOG.error("Error writing record  " + newRecord, e);
       writeStatus.markFailure(newRecord, e, recordMetadata);
-      ignoreWriteFailed(e);
     }
     return false;
   }
