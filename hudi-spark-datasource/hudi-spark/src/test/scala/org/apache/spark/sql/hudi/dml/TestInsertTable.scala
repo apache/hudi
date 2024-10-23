@@ -351,6 +351,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  // TODO(HUDI-8430): revisit the explicit config setting of recordMergeStrategyId
   test("Test Insert Into Non Partitioned Table") {
    withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK), Map(HoodieRecordType.SPARK ->
      // SparkMerger should use "HoodieSparkValidateDuplicateKeyRecordMerger"
@@ -373,7 +374,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           |  type = 'cow',
           |  primaryKey = 'id',
           |  preCombineField = 'ts',
-          |  recordMergeStrategy = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
+          |  recordMergeStrategyId = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
           | )
          """.stripMargin)
      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
@@ -415,7 +416,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           |  type = 'mor',
           |  primaryKey = 'id',
           |  preCombineField = 'ts',
-          |  recordMergeStrategy = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
+          |  recordMergeStrategyId = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
           | )
          """.stripMargin)
      spark.sql(s"insert into $tableName2 select 1, 'a1', 10, 1000")
