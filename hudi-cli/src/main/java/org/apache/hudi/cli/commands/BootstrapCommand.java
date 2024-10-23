@@ -78,7 +78,7 @@ public class BootstrapCommand {
           help = "Merge mode to use. 'EVENT_TIME_ORDERING', 'OVERWRITE_WITH_LATEST', or 'CUSTOM' if you want to set a custom merge strategy and implementation.") final String recordMergeMode,
       @ShellOption(value = {"--merge-strategy-id", "--record-merge-strategy-id"}, defaultValue = "",
           help = "ID of the merge strategy to use. Only set when using 'CUSTOM' merge mode") final String recordMergerStrategy,
-      @ShellOption(value = {"--merge-impls"}, defaultValue = "",
+      @ShellOption(value = {"--merge-impls", "--record-merge-custom-implementation-classes"}, defaultValue = "",
           help = "Comma separated list of classes that implement the record merger strategy") final String recordMergerImpls,
       @ShellOption(value = {"--parallelism"}, defaultValue = "1500", help = "Bootstrap writer parallelism") final int parallelism,
       @ShellOption(value = {"--sparkMaster"}, defaultValue = "", help = "Spark Master") String master,
