@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -133,8 +134,8 @@ public class UtilHelpers {
 
   public static HoodieRecordMerger createRecordMerger(Properties props) {
     return HoodieRecordUtils.createRecordMerger(null, EngineType.SPARK,
-        props.getProperty(HoodieWriteConfig.RECORD_MERGE_IMPLS.key()),
-        props.getProperty(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key()));
+        StringUtils.split(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_IMPLS, null), ","),
+        ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID, null));
   }
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,

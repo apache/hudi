@@ -1252,7 +1252,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public HoodieRecordMerger getRecordMerger() {
     return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH),
-        engineType, getString(RECORD_MERGE_IMPLS), getString(RECORD_MERGE_STRATEGY_ID));
+        engineType, getSplitStrings(RECORD_MERGE_IMPLS), getString(RECORD_MERGE_STRATEGY_ID));
   }
 
   public String getSchema() {

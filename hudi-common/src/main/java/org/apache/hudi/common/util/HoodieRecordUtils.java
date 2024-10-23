@@ -71,11 +71,6 @@ public class HoodieRecordUtils {
     }
   }
 
-  public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
-                                                      String mergerImpls, String recordMergerStrategy) {
-    return createRecordMerger(basePath, engineType, ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
-  }
-
   /**
    * Instantiate a given class with a record merge.
    */
