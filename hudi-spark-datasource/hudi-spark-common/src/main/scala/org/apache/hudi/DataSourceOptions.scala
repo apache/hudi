@@ -220,6 +220,28 @@ object DataSourceReadOptions {
 
   val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 
+  val MOR_SNAPSHOT_QUERY_SPLITS_NOT_MERGE = "not_merge"
+  val MOR_SNAPSHOT_QUERY_SPLITS_FILE_SIZE_BASED_MERGE = "file_size"
+  val MOR_SNAPSHOT_QUERY_SPLITS_BUCKET_BASED_MERGE = "bucket"
+  val MOR_SNAPSHOT_QUERY_SPLITS_MERGE_TYPE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.mor.snapshot.query.splits.merge.type")
+    .defaultValue(MOR_SNAPSHOT_QUERY_SPLITS_FILE_SIZE_BASED_MERGE)
+    .withValidValues(MOR_SNAPSHOT_QUERY_SPLITS_NOT_MERGE, MOR_SNAPSHOT_QUERY_SPLITS_FILE_SIZE_BASED_MERGE, MOR_SNAPSHOT_QUERY_SPLITS_BUCKET_BASED_MERGE)
+    .markAdvanced()
+    .sinceVersion("0.15.0")
+    .withDocumentation("Controls how splits are merged in snapshot queries on MOR tables. " +
+      "When set to 'not_merge', splits are not merged, each split will be regarded as a separate partition. " +
+      "When set to 'file_size', splits are merged based on file size. " +
+      "When set to 'bucket', splits are merged based on bucket.")
+
+  val MOR_SNAPSHOT_QUERY_SPLITS_MERGE_MAX_PARTITION_SIZE_FRACTION: ConfigProperty[Double] = ConfigProperty
+    .key("hoodie.datasource.read.mor.snapshot.query.splits.merge.max.partition.size.fraction")
+    .defaultValue(1.0)
+    .markAdvanced()
+    .sinceVersion("0.15.0")
+    .withDocumentation("Controls the size fraction of `spark.sql.files.maxPartitionBytes` for merging splits in snapshot queries on MOR tables. ")
+
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()

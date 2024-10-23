@@ -134,7 +134,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
 
   protected override def mergeSplitsToPartitions(splits: Seq[FileSplit]): Seq[Partition] = {
     splits.zipWithIndex.map { case (split, index) =>
-      HoodieDefaultFilePartition(index, Seq(split))
+      HoodieDefaultFilePartition(index, Array(split))
     }
   }
 

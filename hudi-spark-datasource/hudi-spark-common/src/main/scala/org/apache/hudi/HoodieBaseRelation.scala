@@ -77,7 +77,7 @@ trait HoodieFileSplit {}
 
 trait HoodieFilePartition extends Partition
 
-case class HoodieDefaultFilePartition(index: Int, fileSplits: Seq[HoodieFileSplit]) extends HoodieFilePartition
+case class HoodieDefaultFilePartition(index: Int, fileSplits: Array[HoodieFileSplit]) extends HoodieFilePartition
 
 case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String, internalSchema: Option[InternalSchema] = None)
 

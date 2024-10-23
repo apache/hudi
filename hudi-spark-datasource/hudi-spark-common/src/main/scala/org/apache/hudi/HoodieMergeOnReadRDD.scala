@@ -92,7 +92,6 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       case (split, splitIndex) =>
         splitToIter(partition.index, splitIndex, split.asInstanceOf[HoodieMergeOnReadFileSplit])
     }
-
   }
 
   private def splitToIter(partitionIndex: Int, splitIndex: Int, split: HoodieMergeOnReadFileSplit): Iterator[InternalRow] = {

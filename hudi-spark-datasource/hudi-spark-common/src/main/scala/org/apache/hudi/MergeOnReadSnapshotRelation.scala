@@ -25,8 +25,8 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isPro
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.storage.StoragePath
-import org.apache.spark.Partition
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -36,6 +36,7 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
                                       logFiles: List[HoodieLogFile]) extends HoodieFileSplit
@@ -230,9 +231,59 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   }
 
   protected override def mergeSplitsToPartitions(splits: Seq[HoodieMergeOnReadFileSplit]): Seq[HoodieDefaultFilePartition] = {
-    splits.zipWithIndex.map { case (split, index) =>
-      HoodieDefaultFilePartition(index, Seq(split))
+    optParams.getOrElse(DataSourceReadOptions.MOR_SNAPSHOT_QUERY_SPLITS_MERGE_TYPE.key(), DataSourceReadOptions.MOR_SNAPSHOT_QUERY_SPLITS_MERGE_TYPE.defaultValue()) match {
+      case DataSourceReadOptions.MOR_SNAPSHOT_QUERY_SPLITS_NOT_MERGE =>
+        splits.zipWithIndex.map { case (split, index) =>
+          HoodieDefaultFilePartition(index, Array(split))
+        }
+      case DataSourceReadOptions.MOR_SNAPSHOT_QUERY_SPLITS_FILE_SIZE_BASED_MERGE =>
+        mergeSplitsToPartitionsByFileSize(splits)
+      case DataSourceReadOptions.MOR_SNAPSHOT_QUERY_SPLITS_BUCKET_BASED_MERGE =>
+        mergeSplitsToPartitionByBucket(splits)
     }
+  }
+
+  private def mergeSplitsToPartitionsByFileSize(splits: Seq[HoodieMergeOnReadFileSplit]): Seq[HoodieDefaultFilePartition] = {
+    val maxPartitionBytes = sqlContext.sparkSession.sessionState.conf.filesMaxPartitionBytes
+    val openCostInBytes = sqlContext.sparkSession.sessionState.conf.filesOpenCostInBytes
+    val maxPartitionBytesFraction = optParams.get(DataSourceReadOptions.MOR_SNAPSHOT_QUERY_SPLITS_MERGE_MAX_PARTITION_SIZE_FRACTION.key())
+      .map(_.toDouble).getOrElse(DataSourceReadOptions.MOR_SNAPSHOT_QUERY_SPLITS_MERGE_MAX_PARTITION_SIZE_FRACTION.defaultValue())
+    val maxPartitionBytesForMor = (maxPartitionBytes * maxPartitionBytesFraction).toLong
+    val partitions = new ArrayBuffer[HoodieDefaultFilePartition]
+    val currentFiles = new ArrayBuffer[HoodieMergeOnReadFileSplit]
+    var currentSize = 0L
+
+    def closePartition(): Unit = {
+      if (currentFiles.nonEmpty) {
+        val newPartition = HoodieDefaultFilePartition(partitions.size, currentFiles.toArray)
+        partitions += newPartition
+      }
+      currentFiles.clear()
+      currentSize = 0
+    }
+
+    // TODO: Implement a better heuristic for merging splits into partitions
+    def splitSize(split: HoodieMergeOnReadFileSplit): Long = {
+      // Calculate the size of current split
+      // 1. base file exist, use the size of base file
+      // 2. base file not exist, use the size of the median log file sorted by log file size
+      split.dataFile.map(_.length).getOrElse(split.logFiles.sortBy(_.getFileSize).apply(split.logFiles.size / 2).getFileSize)
+    }
+
+    splits.foreach { split =>
+      val currentSplitSize = splitSize(split)
+      if (currentSize + currentSplitSize > maxPartitionBytesForMor) {
+        closePartition()
+      }
+      currentSize += currentSplitSize + openCostInBytes
+      currentFiles += split
+    }
+    closePartition()
+    partitions.toSeq
+  }
+
+  private def mergeSplitsToPartitionByBucket(splits: Seq[HoodieMergeOnReadFileSplit]): Seq[HoodieDefaultFilePartition] = {
+    throw new HoodieNotSupportedException("Bucket based merge is not supported yet")
   }
 
   protected def buildSplits(fileSlices: Seq[FileSlice]): List[HoodieMergeOnReadFileSplit] = {
