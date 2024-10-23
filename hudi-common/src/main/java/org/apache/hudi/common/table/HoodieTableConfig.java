@@ -213,7 +213,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
 
   public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
-      .key("hoodie.record.merge.custom.strategy")
+      .key("hoodie.record.merge.strategy.id")
       .noDefaultValue()
       .withAlternatives("hoodie.compaction.record.merger.strategy")
       .sinceVersion("0.13.0")
@@ -356,7 +356,8 @@ public class HoodieTableConfig extends HoodieConfig {
         .collect(Collectors.toList());
   }
 
-  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategyId) {
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
+                           String recordMergeStrategyId) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
@@ -373,9 +374,9 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(RECORD_MERGE_MODE, recordMergeMode.name());
         needStore = true;
       }
-      if (contains(RECORD_MERGE_STRATEGY_ID) && recordMergerStrategyId != null
-          && !getString(RECORD_MERGE_STRATEGY_ID).equals(recordMergerStrategyId)) {
-        setValue(RECORD_MERGE_STRATEGY_ID, recordMergerStrategyId);
+      if (contains(RECORD_MERGE_STRATEGY_ID) && recordMergeStrategyId != null
+          && !getString(RECORD_MERGE_STRATEGY_ID).equals(recordMergeStrategyId)) {
+        setValue(RECORD_MERGE_STRATEGY_ID, recordMergeStrategyId);
         needStore = true;
       }
       if (needStore) {
@@ -693,13 +694,14 @@ public class HoodieTableConfig extends HoodieConfig {
    * Infers the merging behavior based on what the user sets (or doesn't set).
    * Validates that the user has not set an illegal combination of configs
    */
-  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy) {
+  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode, String payloadClassName,
+                                                                                    String recordMergeStrategyId) {
     RecordMergeMode inferRecordMergeMode;
     String inferPayloadClassName;
     String inferRecordMergerStrategy;
 
     if (isNullOrEmpty(payloadClassName)) {
-      if (isNullOrEmpty(recordMergerStrategy)) {
+      if (isNullOrEmpty(recordMergeStrategyId)) {
         // no payload class name or merger strategy. If nothing is set then we default. User cannot set custom because no payload or strategy is set
         checkArgument(recordMergeMode != RecordMergeMode.CUSTOM, "Custom merge mode should only be used if you set a merge strategy");
         if (recordMergeMode == null) {
@@ -718,15 +720,15 @@ public class HoodieTableConfig extends HoodieConfig {
         }
       } else {
         // no payload class but there is a merger strategy set. Need to validate that strategy and merge mode align if both are set
-        inferRecordMergerStrategy = recordMergerStrategy;
-        if (recordMergerStrategy.equals(DEFAULT_MERGE_STRATEGY_UUID)) {
+        inferRecordMergerStrategy = recordMergeStrategyId;
+        if (recordMergeStrategyId.equals(DEFAULT_MERGE_STRATEGY_UUID)) {
           checkArgument(recordMergeMode == null || recordMergeMode == EVENT_TIME_ORDERING, "Default merger strategy can only be used with event time ordering merge mode");
           inferRecordMergeMode = EVENT_TIME_ORDERING;
-        } else if (recordMergerStrategy.equals(OVERWRITE_MERGE_STRATEGY_UUID)) {
+        } else if (recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID)) {
           checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST, "Overwrite with latest merger strategy can only be used with overwrite with latest merge mode");
           inferRecordMergeMode = OVERWRITE_WITH_LATEST;
         } else {
-          checkArgument(!recordMergerStrategy.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+          checkArgument(!recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
               "Payload based strategy should only be used if you have a custom payload");
           checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM, "Record merge mode must be set to custom when using a custom merger strategy");
           inferRecordMergeMode = CUSTOM;
@@ -739,8 +741,8 @@ public class HoodieTableConfig extends HoodieConfig {
         // Default payload matches with EVENT_TIME_ORDERING. However, Custom merge modes still have some gaps (tracked by [HUDI-8317]) so
         // we will use default merger for now the write path if the user has a custom merger. After all gaps have been closed, we will set
         // a dummy payload by default for custom merge mode. Then we can get rid of this if else, and add the validation:
-        // checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
-        if (isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(DEFAULT_MERGE_STRATEGY_UUID)) {
+        // checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(DEFAULT_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
+        if (isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(DEFAULT_MERGE_STRATEGY_UUID)) {
           // Default case, everything should be null or event time ordering / default strategy
           checkArgument(recordMergeMode == null || recordMergeMode == EVENT_TIME_ORDERING, "Only event time ordering record merge mode can be used with default payload");
           inferRecordMergeMode = EVENT_TIME_ORDERING;
@@ -749,21 +751,21 @@ public class HoodieTableConfig extends HoodieConfig {
           // currently for the custom case. This block will be moved below and check if the payload class name is dummy
           checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM, "Record merge mode, payload class, and merge strategy are in an illegal configuration");
           checkArgument(
-              !recordMergerStrategy.equals(OVERWRITE_MERGE_STRATEGY_UUID) && !recordMergerStrategy.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+              !recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID) && !recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
               "Record merger strategy is incompatible with payload class");
           inferRecordMergeMode = CUSTOM;
-          inferRecordMergerStrategy = recordMergerStrategy;
+          inferRecordMergerStrategy = recordMergeStrategyId;
         }
       } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
         // strategy and merge mode must be unset or align with overwrite
-        checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(OVERWRITE_MERGE_STRATEGY_UUID),
+        checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID),
             "Record merge strategy cannot be set if a merge payload is used");
         checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST, "Only overwrite with latest record merge mode can be used with overwrite payload");
         inferRecordMergeMode = OVERWRITE_WITH_LATEST;
         inferRecordMergerStrategy = OVERWRITE_MERGE_STRATEGY_UUID;
       } else {
         // using custom avro payload
-        checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+        checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
             "Record merge strategy cannot be set if a merge payload is used");
         checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM, "Record merge mode must be custom if payload is defined");
         inferRecordMergeMode = CUSTOM;

@@ -182,6 +182,15 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
 
+  public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
+      .key("hoodie.write.record.merge.strategy.id")
+      .noDefaultValue()
+      .markAdvanced()
+      .withAlternatives("hoodie.datasource.write.record.merger.strategy")
+      .sinceVersion("0.13.0")
+      .withDocumentation("ID of record merge strategy. Hudi will pick HoodieRecordMerger implementations in `"
+          + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "` which has the same merge strategy id");
+
   public static final ConfigProperty<String> RECORD_MERGE_IMPL_CLASSES = ConfigProperty
       .key(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY)
       .noDefaultValue()
@@ -189,17 +198,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withAlternatives(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY)
       .sinceVersion("0.13.0")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
-          + "These record merge impls will filter by hoodie.write.record.merge.strategy "
+          + "These record merge impls will filter by " + RECORD_MERGE_STRATEGY_ID.key()
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
-
-  public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
-      .key("hoodie.write.record.merge.strategy")
-      .noDefaultValue()
-      .markAdvanced()
-      .withAlternatives("hoodie.datasource.write.record.merger.strategy")
-      .sinceVersion("0.13.0")
-      .withDocumentation("Id of record merge strategy. Hudi will pick HoodieRecordMerger implementations in `"
-          + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "` which has the same merge strategy id");
 
   public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")
