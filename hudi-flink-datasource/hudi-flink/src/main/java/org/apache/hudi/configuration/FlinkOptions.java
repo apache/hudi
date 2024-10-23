@@ -133,7 +133,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("record.merger.impls")
       .stringType()
       .defaultValue(HoodieAvroRecordMerger.class.getName())
-      .withFallbackKeys(HoodieWriteConfig.RECORD_MERGE_IMPLS.key())
+      .withFallbackKeys(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key())
       .withDescription("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
           + "These merger impls will filter by record.merger.strategy. "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");

@@ -139,7 +139,7 @@ public class BootstrapExecutor implements Serializable {
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withRecordMergerImpls(cfg.recordMergeImplClasses)
+            .withRecordMergeImplClasses(cfg.recordMergeImplClasses)
             .withAutoCommit(true)
             .withProps(props);
 

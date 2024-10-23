@@ -19,23 +19,23 @@
 
 package org.apache.hudi.common.table.read
 
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.util
 import org.apache.hudi.common.testutils.HoodieTestTable
+import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.util.CloseableInternalRowIterator
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileFormatInternalRowReaderContext}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
-import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse}
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse}
 
 class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestHarness {
   private val PARQUET_FORMAT = "parquet"
@@ -58,7 +58,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "userid")
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(HoodieWriteConfig.TBL_NAME.key, "user_to_country")
-      .option(HoodieWriteConfig.RECORD_MERGE_IMPLS.key, SPARK_MERGER)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key, SPARK_MERGER)
       .option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key, "true")
       .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key, PARQUET_FORMAT)
       .option(

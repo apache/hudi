@@ -134,7 +134,7 @@ public class UtilHelpers {
 
   public static HoodieRecordMerger createRecordMerger(Properties props) {
     return HoodieRecordUtils.createRecordMerger(null, EngineType.SPARK,
-        StringUtils.split(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_IMPLS, null), ","),
+        StringUtils.split(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES, null), ","),
         ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID, null));
   }
 

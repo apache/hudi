@@ -1188,8 +1188,8 @@ public class StreamSync implements Serializable, Closeable {
                     .withPayloadOrderingField(cfg.sourceOrderingField)
                     .build())
             .withRecordMergeMode(cfg.recordMergeMode)
-            .withRecordMergerStrategy(cfg.recordMergeStrategyId)
-            .withRecordMergerImpls(cfg.recordMergeImplClasses)
+            .withRecordMergeStrategyId(cfg.recordMergeStrategyId)
+            .withRecordMergeImplClasses(cfg.recordMergeImplClasses)
             .forTable(cfg.targetTableName)
             .withAutoCommit(autoCommit)
             .withProps(props);

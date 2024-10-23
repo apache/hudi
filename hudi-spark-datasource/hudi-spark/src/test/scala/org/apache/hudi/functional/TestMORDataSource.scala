@@ -38,8 +38,6 @@ import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.QuickstartUtils.convertToStringList
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -68,7 +66,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
-    HoodieWriteConfig.RECORD_MERGE_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 
@@ -1047,7 +1045,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.datasource.write.row.writer.enable" -> "false"
     )
     if (recordType.equals(HoodieRecordType.SPARK)) {
-      writeOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
+      writeOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet") ++ writeOpts
     }
     val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).asScala.toSeq
@@ -1089,7 +1087,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.datasource.write.row.writer.enable" -> "false"
     )
     if (recordType.equals(HoodieRecordType.SPARK)) {
-      writeOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
+      writeOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet") ++ writeOpts
     }
     val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).asScala.toSeq

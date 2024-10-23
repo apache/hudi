@@ -162,10 +162,10 @@ public class HoodieMetadataWriteUtils {
         .withWriteStatusClass(FailOnFirstErrorWriteStatus.class)
         .withReleaseResourceEnabled(writeConfig.areReleaseResourceEnabled())
         .withRecordMergeMode(RecordMergeMode.CUSTOM)
-        .withRecordMergerStrategy(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)
+        .withRecordMergeStrategyId(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(HoodieMetadataPayload.class.getCanonicalName()).build())
-        .withRecordMergerImpls(HoodieAvroRecordMerger.class.getCanonicalName());
+        .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getCanonicalName());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();

@@ -404,8 +404,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
 
     assertTrue(metadataWriter.isPresent());
-    Triple<RecordMergeMode, String, String> inferredMergeConfs = 
-        HoodieTableConfig.inferCorrectMergingBehavior(writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(), writeConfig.getRecordMergerStrategy());
+    Triple<RecordMergeMode, String, String> inferredMergeConfs =
+        HoodieTableConfig.inferCorrectMergingBehavior(writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(),
+            writeConfig.getRecordMergeStrategyId());
     HoodieTableConfig hoodieTableConfig =
         new HoodieTableConfig(this.storage, metaClient.getMetaPath(), inferredMergeConfs.getLeft(), inferredMergeConfs.getMiddle(), inferredMergeConfs.getRight());
     assertFalse(hoodieTableConfig.getMetadataPartitions().isEmpty());
@@ -425,7 +426,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertFalse(metadataWriter2.isPresent());
 
     Triple<RecordMergeMode, String, String> inferredMergeConfs2 =
-        HoodieTableConfig.inferCorrectMergingBehavior(writeConfig2.getRecordMergeMode(), writeConfig2.getPayloadClass(), writeConfig2.getRecordMergerStrategy());
+        HoodieTableConfig.inferCorrectMergingBehavior(writeConfig2.getRecordMergeMode(), writeConfig2.getPayloadClass(),
+            writeConfig2.getRecordMergeStrategyId());
     HoodieTableConfig hoodieTableConfig2 =
         new HoodieTableConfig(this.storage, metaClient.getMetaPath(),
             inferredMergeConfs2.getLeft(),
@@ -3285,6 +3287,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteInsertAndUpsert(testTable, "0000001", "0000002", false);
   }
 
+  @Override
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     Properties properties = getDisabledRowWriterProperties();

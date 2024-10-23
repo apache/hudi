@@ -196,9 +196,9 @@ public class HoodieStreamer implements Serializable {
       // Explicitly set the table type
       hoodieConfig.setValue(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     }
-    if (!hoodieConfig.contains(HoodieWriteConfig.RECORD_MERGE_IMPLS)
+    if (!hoodieConfig.contains(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES)
         && !StringUtils.isNullOrEmpty(cfg.recordMergeImplClasses)) {
-      hoodieConfig.setValue(HoodieWriteConfig.RECORD_MERGE_IMPLS.key(), cfg.recordMergeImplClasses);
+      hoodieConfig.setValue(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), cfg.recordMergeImplClasses);
     }
 
     return hoodieConfig.getProps(true);
