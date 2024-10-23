@@ -334,19 +334,19 @@ public class StreamSync implements Serializable, Closeable {
    *
    * @throws IOException in case of any IOException
    */
-  public HoodieTableMetaClient refreshTimeline() throws IOException {
-    HoodieTableMetaClient metaClient = null;
+  public Option<HoodieTableMetaClient> refreshTimeline() throws IOException {
+    Option<HoodieTableMetaClient> metaClient = Option.empty();
     try {
-      metaClient = getMetaClient();
-      switch (metaClient.getTableType()) {
+      metaClient = Option.of(getMetaClient());
+      switch (metaClient.get().getTableType()) {
         case COPY_ON_WRITE:
         case MERGE_ON_READ:
           // we can use getCommitsTimeline for both COW and MOR here, because for COW there is no deltacommit
-          this.commitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-          this.allCommitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getAllCommitsTimeline());
+          this.commitsTimelineOpt = Option.of(metaClient.get().getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+          this.allCommitsTimelineOpt = Option.of(metaClient.get().getActiveTimeline().getAllCommitsTimeline());
           break;
         default:
-          throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
+          throw new HoodieException("Unsupported table type :" + metaClient.get().getTableType());
       }
     } catch (TableNotFoundException e) {
       initializeEmptyTable();
@@ -441,7 +441,7 @@ public class StreamSync implements Serializable, Closeable {
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
     // Refresh Timeline
-    HoodieTableMetaClient metaClient = Option.ofNullable(refreshTimeline()).orElseGet(this::getMetaClient);
+    HoodieTableMetaClient metaClient = refreshTimeline().orElseGet(this::getMetaClient);
     String instantTime = metaClient.createNewInstantTime();
 
     Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
