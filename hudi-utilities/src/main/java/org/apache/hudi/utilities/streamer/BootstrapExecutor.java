@@ -216,7 +216,7 @@ public class BootstrapExecutor implements Serializable {
             ARCHIVELOG_FOLDER.key(), ARCHIVELOG_FOLDER.defaultValue()))
         .setPayloadClassName(cfg.payloadClassName)
         .setRecordMergeMode(cfg.recordMergeMode)
-        .setRecordMergerStrategyId(cfg.recordMergeStrategyId)
+        .setRecordMergeStrategyId(cfg.recordMergeStrategyId)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)
         .setBootstrapBasePath(bootstrapBasePath)

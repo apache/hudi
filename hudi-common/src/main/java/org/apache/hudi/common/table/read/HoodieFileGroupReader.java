@@ -103,7 +103,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     readerContext.setRecordMerger(readerContext.getRecordMerger(
         tableConfig.getRecordMergeMode(),
-        tableConfig.getRecordMergerStrategy(),
+        tableConfig.getRecordMergeStrategyId(),
         props.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
             props.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, ""))));
     readerContext.setTablePath(tablePath);

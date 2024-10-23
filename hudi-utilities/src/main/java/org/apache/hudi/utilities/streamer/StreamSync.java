@@ -412,7 +412,7 @@ public class StreamSync implements Serializable, Closeable {
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName(cfg.payloadClassName)
-        .setRecordMergerStrategyId(cfg.recordMergeStrategyId)
+        .setRecordMergeStrategyId(cfg.recordMergeStrategyId)
         .setRecordMergeMode(cfg.recordMergeMode)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setPartitionFields(partitionColumns)

@@ -1012,8 +1012,8 @@ object DataSourceOptionsHelper {
     if (!params.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key()) && tableConfig.getRecordMergeMode != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_MODE.key() -> tableConfig.getRecordMergeMode.name())
     }
-    if (!params.contains(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key()) && tableConfig.getRecordMergerStrategy != null) {
-      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key() -> tableConfig.getRecordMergerStrategy)
+    if (!params.contains(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key()) && tableConfig.getRecordMergeStrategyId != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key() -> tableConfig.getRecordMergeStrategyId)
     }
     if (!params.contains(DataSourceWriteOptions.TABLE_TYPE.key())) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableConfig.getTableType.name())

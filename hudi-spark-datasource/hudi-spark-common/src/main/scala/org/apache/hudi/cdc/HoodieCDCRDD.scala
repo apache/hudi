@@ -152,8 +152,8 @@ class HoodieCDCRDD(
         metaClient.getTableConfig.getPayloadClass,
         metadataConfig,
         // TODO support CDC with spark record
-        recordMergerImpls = List(classOf[HoodieAvroRecordMerger].getName),
-        recordMergerStrategy = HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
+        recordMergeImplClasses = List(classOf[HoodieAvroRecordMerger].getName),
+        recordMergeStrategyId = HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
       )
     }
 

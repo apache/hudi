@@ -85,8 +85,8 @@ case class HoodieTableState(tablePath: String,
                             usesVirtualKeys: Boolean,
                             recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
-                            recordMergerImpls: List[String],
-                            recordMergerStrategy: String)
+                            recordMergeImplClasses: List[String],
+                            recordMergeStrategyId: String)
 
 
 /**
@@ -272,8 +272,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,
-      recordMergerImpls = recordMergerImpls,
-      recordMergerStrategy = tableConfig.getRecordMergerStrategy
+      recordMergeImplClasses = recordMergerImpls,
+      recordMergeStrategyId = tableConfig.getRecordMergeStrategyId
     )
   }
 

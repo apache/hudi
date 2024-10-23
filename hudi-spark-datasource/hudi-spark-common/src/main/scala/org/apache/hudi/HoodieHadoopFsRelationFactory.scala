@@ -252,8 +252,8 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = metadataConfig,
-      recordMergerImpls = recordMergerImpls,
-      recordMergerStrategy = tableConfig.getRecordMergerStrategy
+      recordMergeImplClasses = recordMergerImpls,
+      recordMergeStrategyId = tableConfig.getRecordMergeStrategyId
     )
   val mandatoryFields: Seq[String] = partitionColumnsToRead
 

@@ -42,7 +42,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
       "preCombineField" -> "timestamp",
       "type" -> "mor",
       "payloadClass" -> classOf[OverwriteWithLatestAvroPayload].getName,
-      "recordMergerStrategy" -> HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID,
+      "recordMergeStrategy" -> HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID,
       "mergeMode" -> HoodieWriteConfig.RECORD_MERGE_MODE.defaultValue
     )
     val with2 = HoodieOptionConfig.withDefaultSqlOptions(ops2)

@@ -296,7 +296,7 @@ class HoodieSparkSqlWriterInternal {
         val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
         val payloadClass = hoodieConfig.getString(DataSourceWriteOptions.PAYLOAD_CLASS_NAME)
-        val recordMergerStrategy = hoodieConfig.getString(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID)
+        val recordMergeStrategyId = hoodieConfig.getString(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID)
         val keyGenProp =
           if (StringUtils.nonEmpty(hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)))
             hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
@@ -324,7 +324,7 @@ class HoodieSparkSqlWriterInternal {
           .setShouldDropPartitionColumns(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.DROP_PARTITION_COLUMNS))
           .setCommitTimezone(timelineTimeZone)
           .setPayloadClassName(payloadClass)
-          .setRecordMergerStrategyId(recordMergerStrategy)
+          .setRecordMergeStrategyId(recordMergeStrategyId)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
@@ -753,7 +753,7 @@ class HoodieSparkSqlWriterInternal {
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(payloadClass)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
-          .setRecordMergerStrategyId(recordMergerStrategy)
+          .setRecordMergeStrategyId(recordMergerStrategy)
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBaseFileFormat(baseFileFormat)

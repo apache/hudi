@@ -685,7 +685,7 @@ public class HoodieTableConfig extends HoodieConfig {
     return HoodieRecordPayload.getPayloadClassName(this);
   }
 
-  public String getRecordMergerStrategy() {
+  public String getRecordMergeStrategyId() {
     return getString(RECORD_MERGE_STRATEGY_ID);
   }
 

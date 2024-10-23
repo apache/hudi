@@ -970,7 +970,7 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setRecordMergerStrategyId(String recordMergerStrategyId) {
+    public TableBuilder setRecordMergeStrategyId(String recordMergerStrategyId) {
       this.recordMergerStrategyId = recordMergerStrategyId;
       return this;
     }
@@ -1108,7 +1108,7 @@ public class HoodieTableMetaClient implements Serializable {
           .setArchiveLogFolder(metaClient.getTableConfig().getArchivelogFolder())
           .setRecordMergeMode(metaClient.getTableConfig().getRecordMergeMode())
           .setPayloadClassName(metaClient.getTableConfig().getPayloadClass())
-          .setRecordMergerStrategyId(metaClient.getTableConfig().getRecordMergerStrategy());
+          .setRecordMergeStrategyId(metaClient.getTableConfig().getRecordMergeStrategyId());
     }
 
     public TableBuilder fromProperties(Properties properties) {
@@ -1149,7 +1149,7 @@ public class HoodieTableMetaClient implements Serializable {
         setPayloadClassName(hoodieConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
       }
       if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID)) {
-        setRecordMergerStrategyId(
+        setRecordMergeStrategyId(
             hoodieConfig.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID));
       }
       if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_LAYOUT_VERSION)) {

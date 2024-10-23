@@ -1444,7 +1444,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)
-    assertEquals(metaClient.getTableConfig.getRecordMergerStrategy, mergerStrategyName)
+    assertEquals(metaClient.getTableConfig.getRecordMergeStrategyId, mergerStrategyName)
   }
 
   /**
