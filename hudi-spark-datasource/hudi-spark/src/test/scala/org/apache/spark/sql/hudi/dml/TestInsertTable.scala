@@ -373,7 +373,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           |  type = 'cow',
           |  primaryKey = 'id',
           |  preCombineField = 'ts',
-          |  recordMergeStrategy = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_STR}'
+          |  recordMergeStrategy = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
           | )
          """.stripMargin)
      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
@@ -415,7 +415,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           |  type = 'mor',
           |  primaryKey = 'id',
           |  preCombineField = 'ts',
-          |  recordMergeStrategy = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_STR}'
+          |  recordMergeStrategy = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
           | )
          """.stripMargin)
      spark.sql(s"insert into $tableName2 select 1, 'a1', 10, 1000")
