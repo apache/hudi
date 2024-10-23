@@ -20,20 +20,20 @@ package org.apache.hudi
 import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
-import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
 
-import org.apache.spark.sql.hudi.command.{MergeIntoKeyGenerator, SqlKeyGenerator}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
+import org.apache.spark.sql.hudi.command.{MergeIntoKeyGenerator, SqlKeyGenerator}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -152,8 +152,8 @@ object HoodieWriterUtils {
     }
   }
 
-  private val expressionPayloadClassName = "org.apache.spark.sql.hudi.command.payload.ExpressionPayload"
-  private val validateDuplicateKeyPayloadClassName = "org.apache.spark.sql.hudi.command.ValidateDuplicateKeyPayload"
+  private final val EXPRESSION_PAYLOAD_CLASS_NAME = "org.apache.spark.sql.hudi.command.payload.ExpressionPayload"
+  private final val VALIDATE_DUPLICATE_KEY_PAYLOAD_CLASS_NAME = "org.apache.spark.sql.hudi.command.ValidateDuplicateKeyPayload"
 
   /**
    * Logic to skip validation of configs vs table configs
@@ -166,13 +166,13 @@ object HoodieWriterUtils {
     ignoreConfig = ignoreConfig || HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)
 
     //expression payload will never be the table config so skip validation of merge configs
-    ignoreConfig = ignoreConfig || (params.getOrElse(PAYLOAD_CLASS_NAME.key(), "").equals(expressionPayloadClassName)
+    ignoreConfig = ignoreConfig || (params.getOrElse(PAYLOAD_CLASS_NAME.key(), "").equals(EXPRESSION_PAYLOAD_CLASS_NAME)
       && (key.equals(PAYLOAD_CLASS_NAME.key()) || key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key())
       || key.equals(RECORD_MERGE_MODE.key())
       || key.equals(RECORD_MERGE_STRATEGY_ID.key())))
 
     //don't validate the payload only in the case that insert into is using fallback to some legacy configs
-    ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) &&  value.equals(validateDuplicateKeyPayloadClassName))
+    ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) && value.equals(VALIDATE_DUPLICATE_KEY_PAYLOAD_CLASS_NAME))
 
     ignoreConfig
   }
