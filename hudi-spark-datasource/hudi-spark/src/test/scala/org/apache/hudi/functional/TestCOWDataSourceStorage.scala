@@ -399,8 +399,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   }
 
   def assertRecordCount(basePath: String, expectedRecordCount: Long): Unit = {
-    val snapshotDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*/*/*")
+    val snapshotDF = spark.read.format("org.apache.hudi").load(basePath)
     assertEquals(expectedRecordCount, snapshotDF.count())
   }
 }

@@ -222,10 +222,7 @@ public class HoodieJavaApp {
     /**
      * Read & do some queries
      */
-    Dataset<Row> snapshotQueryDF = spark.read().format("org.apache.hudi")
-        // pass any path glob, can include hoodie & non-hoodie
-        // datasets
-        .load(tablePath + (nonPartitionedTable ? "/*" : "/*/*/*/*"));
+    Dataset<Row> snapshotQueryDF = spark.read().format("org.apache.hudi").load(tablePath);
     snapshotQueryDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
     // all trips whose fare amount was greater than 2.
