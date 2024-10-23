@@ -262,7 +262,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     }
   }
 
-  @Disabled
+  @Disabled("HUDI-8203")
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testSimpleInsertUpdateAndDelete(boolean populateMetaFields) throws Exception {

@@ -109,6 +109,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   /**
    * @return Hoodie Table Type
    */
+  @Override
   public HoodieTableType getTableType() {
     return HoodieTableType.valueOf(table.getTableType());
   }
@@ -118,6 +119,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
    *
    * @return Active instants timeline
    */
+  @Override
   public synchronized HoodieActiveTimeline getActiveTimeline() {
     if (activeTimeline == null) {
       activeTimeline = new HoodieMetaserverBasedTimeline(this, metaserverConfig);
@@ -130,11 +132,13 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
    *
    * @return Active instants timeline
    */
+  @Override
   public synchronized HoodieActiveTimeline reloadActiveTimeline() {
     activeTimeline = new HoodieMetaserverBasedTimeline(this, metaserverConfig);
     return activeTimeline;
   }
 
+  @Override
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
                                                               boolean applyLayoutVersionFilters) {
     throw new HoodieException("Unsupport operation");
