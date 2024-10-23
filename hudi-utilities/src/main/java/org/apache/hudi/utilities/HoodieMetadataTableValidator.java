@@ -20,6 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceReadOptions;
+import org.apache.hudi.FunctionalIndexSupport;
 import org.apache.hudi.PartitionStatsIndexSupport;
 import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -43,6 +44,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -69,6 +71,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -94,7 +97,16 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.Optional;
+import org.apache.spark.api.java.function.FilterFunction;
+import org.apache.spark.api.java.function.MapFunction;
+import org.apache.spark.sql.Column;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
+import org.apache.spark.sql.HoodieUnsafeUtils;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.StructType;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -123,15 +135,18 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
 
+import static org.apache.hudi.client.utils.SparkMetadataWriterUtils.getFunctionalIndexRecords;
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLocationFromRecordIndexInfo;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnRangeMetadata;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForFunctionalIndex;
 
 /**
  * TODO: [HUDI-8294]
@@ -338,6 +353,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         required = false)
     public boolean validateSecondaryIndex = false;
 
+    @Parameter(names = {"--validate-functional-index"},
+        description = "Validate the entries in functional index",
+        required = false)
+    public boolean validateFunctionalIndex = false;
+
     @Parameter(names = {"--num-record-index-error-samples"},
         description = "Number of error samples to show for record index validation",
         required = false)
@@ -402,6 +422,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-partition-stats " + validatePartitionStats + ", \n"
           + "   --validate-bloom-filters " + validateBloomFilters + ", \n"
           + "   --validate-secondary-index " + validateSecondaryIndex + ", \n"
+          + "   --validate-functional-index " + validateFunctionalIndex + ", \n"
           + "   --validate-record-index-count " + validateRecordIndexCount + ", \n"
           + "   --validate-record-index-content " + validateRecordIndexContent + ", \n"
           + "   --num-record-index-error-samples " + numRecordIndexErrorSamples + ", \n"
@@ -440,6 +461,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           && Objects.equals(validatePartitionStats, config.validatePartitionStats)
           && Objects.equals(validateBloomFilters, config.validateBloomFilters)
           && Objects.equals(validateSecondaryIndex, config.validateSecondaryIndex)
+          && Objects.equals(validateFunctionalIndex, config.validateFunctionalIndex)
           && Objects.equals(validateRecordIndexCount, config.validateRecordIndexCount)
           && Objects.equals(validateRecordIndexContent, config.validateRecordIndexContent)
           && Objects.equals(viewStorageTypeForFSListing, config.viewStorageTypeForFSListing)
@@ -460,9 +482,8 @@ public class HoodieMetadataTableValidator implements Serializable {
     public int hashCode() {
       return Objects.hash(basePath, continuous, skipDataFilesForCleaning, validateLatestFileSlices,
           validateLatestBaseFiles, validateAllFileGroups, validateAllColumnStats, validatePartitionStats, validateBloomFilters,
-          validateSecondaryIndex, validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
-          viewStorageTypeForFSListing, viewStorageTypeForMetadata,
-          minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
+          validateSecondaryIndex, validateFunctionalIndex, validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
+          viewStorageTypeForFSListing, viewStorageTypeForMetadata, minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
           sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
     }
   }
@@ -619,6 +640,15 @@ public class HoodieMetadataTableValidator implements Serializable {
         }
       } catch (HoodieValidationException e) {
         handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in secondary index validation");
+      }
+
+      try {
+        if (cfg.validateFunctionalIndex) {
+          validateFunctionalIndex(engineContext, metadataTableBasedContext, metaClient);
+          result.add(Pair.of(true, null));
+        }
+      } catch (HoodieValidationException e) {
+        handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in functional index validation");
       }
 
       try {
@@ -1115,6 +1145,86 @@ public class HoodieMetadataTableValidator implements Serializable {
       }
     }
     secondaryKeys.unpersist();
+  }
+
+  private void validateFunctionalIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
+                                      HoodieTableMetaClient metaClient) throws Exception {
+    Option<Map<String, HoodieIndexDefinition>> indexDefinitions = metaClient.getIndexMetadata().map(HoodieIndexMetadata::getIndexDefinitions);
+    if (!indexDefinitions.isPresent()) {
+      return;
+    }
+    for (Map.Entry<String, HoodieIndexDefinition> indexDefinitionEntry : indexDefinitions.get().entrySet()) {
+      if (indexDefinitionEntry.getValue().isFunctionalIndex()) {
+        validateFunctionalIndex(engineContext, metadataContext, metaClient, indexDefinitionEntry.getKey(), indexDefinitionEntry.getValue());
+      }
+    }
+  }
+
+  private void validateFunctionalIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
+                                       HoodieTableMetaClient metaClient, String indexPartition, HoodieIndexDefinition indexDefinition) throws Exception {
+    // Fetch latest mdt functional index records using FunctionalIndexSupport API
+    // Generate functional index records using functional index initialization API and compare them
+    FunctionalIndexSupport functionalIndexSupport = new FunctionalIndexSupport(engineContext.getSqlContext().sparkSession(), metadataContext.getMetadataConfig(), metaClient);
+    Dataset<Row> mdtIndexDf = functionalIndexSupport.loadFunctionalIndexDataFrame(indexPartition, false).cache();
+    Dataset<Row> fsFunctionalIndexDf = getFSFunctionalIndexRecords(engineContext, metaClient.getBasePath(), indexDefinition, metadataContext)
+        .select(Arrays.stream(FunctionalIndexSupport.getTargetColumnStatsIndexColumns()).map(functions::col).toArray(Column[]::new))
+        .cache();
+    Dataset<Row> fsFunctionalIndexDiff = fsFunctionalIndexDf.exceptAll(mdtIndexDf);
+    List<String> diffRecordsFilenames = fsFunctionalIndexDiff.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+        .map((MapFunction<Row, String>) row -> row.getString(0), Encoders.STRING())
+        .collectAsList();
+    Dataset<Row> mdtFunctionalIndexDiffRecords = mdtIndexDf.filter((FilterFunction<Row>) row -> {
+      String fileName = row.getAs(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME);
+      return diffRecordsFilenames.contains(fileName);
+    });
+    if (diffRecordsFilenames.isEmpty()) {
+      throw new HoodieValidationException(String.format("Functional Index does not match : \nFS functional index diff records: %s \nCorresponding MDT functional index diff records: %s",
+          Arrays.toString(fsFunctionalIndexDf.collectAsList().toArray()), Arrays.toString(mdtFunctionalIndexDiffRecords.collectAsList().toArray())));
+    }
+    fsFunctionalIndexDf.unpersist();
+    mdtIndexDf.unpersist();
+  }
+
+  Dataset<Row> getFSFunctionalIndexRecords(HoodieSparkEngineContext sparkEngineContext, StoragePath basePath, HoodieIndexDefinition indexDefinition,
+                                           HoodieMetadataValidationContext metadataContext) throws Exception {
+    // Get latest partition file slices and generate functional index records using functional index initialization API
+    List<Pair<String, Pair<String, Long>>> partitionFilePathSizeTriplet = getPartitionFileSlicePairs(metaClient, metadataContext.tableMetadata, metadataContext.fileSystemView);
+    Schema readerSchema = getProjectedSchemaForFunctionalIndex(indexDefinition, metaClient);
+    StructType columnStatsRecordStructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataColumnStats.SCHEMA$);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieData<InternalRow> fsFunctionalIndexRecords = getFunctionalIndexRecords(partitionFilePathSizeTriplet, indexDefinition, metaClient, 10, readerSchema,
+        metadataContext.getMetaClient().getStorageConf(), "", sparkEngineContext, writeConfig, writeConfig)
+        .map(record -> {
+          HoodieMetadataPayload metadataPayload = (HoodieMetadataPayload) record.getData();
+          return AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType).apply(metadataPayload.getColumnStatMetadata().get()).orNull(null);
+        });
+    return HoodieUnsafeUtils.createDataFrameFromRDD(sparkEngineContext.getSqlContext().sparkSession(), HoodieJavaRDD.getJavaRDD(fsFunctionalIndexRecords).rdd(), columnStatsRecordStructType);
+  }
+
+  private List<Pair<String, Pair<String, Long>>> getPartitionFileSlicePairs(HoodieTableMetaClient dataMetaClient, HoodieTableMetadata tableMetadata,
+                                                                            HoodieTableFileSystemView fsView) throws IOException {
+    String latestInstant = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
+        .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
+      // Collect the list of latest file slices present in each partition
+      List<String> partitions = tableMetadata.getAllPartitionPaths();
+      fsView.loadAllPartitions();
+      List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+      partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
+          .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+    List<Pair<String, Pair<String, Long>>> partitionFilePathSizeTriplet = new ArrayList<>();
+    partitionFileSlicePairs.forEach(entry -> {
+      if (entry.getValue().getBaseFile().isPresent()) {
+        partitionFilePathSizeTriplet.add(Pair.of(entry.getKey(), Pair.of(entry.getValue().getBaseFile().get().getPath(), entry.getValue().getBaseFile().get().getFileLen())));
+      }
+      entry.getValue().getLogFiles().forEach(hoodieLogFile -> {
+        if (entry.getValue().getLogFiles().count() > 0) {
+          entry.getValue().getLogFiles().forEach(logfile -> {
+            partitionFilePathSizeTriplet.add(Pair.of(entry.getKey(), Pair.of(logfile.getPath().toString(), logfile.getFileSize())));
+          });
+        }
+      });
+    });
+    return partitionFilePathSizeTriplet;
   }
 
   /**

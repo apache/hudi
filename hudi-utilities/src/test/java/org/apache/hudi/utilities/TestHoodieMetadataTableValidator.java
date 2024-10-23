@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -308,6 +309,57 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   }
 
   @Test
+  public void testFunctionalIndexValidation() throws IOException {
+    // To overwrite the table properties created during test setup
+    storage.deleteDirectory(metaClient.getBasePath());
+
+    sparkSession.sql(
+        "create table tbl ("
+            + "ts bigint, "
+            + "record_key_col string, "
+            + "not_record_key_col string, "
+            + "partition_key_col string "
+            + ") using hudi "
+            + "options ("
+            + "primaryKey = 'record_key_col', "
+            + "type = 'mor', "
+            + "hoodie.metadata.enable = 'true', "
+            + "hoodie.metadata.record.index.enable = 'true', "
+            + "hoodie.datasource.write.recordkey.field = 'record_key_col', "
+            + "hoodie.enable.data.skipping = 'true', "
+            + "hoodie.datasource.write.precombine.field = 'ts'"
+            + ") "
+            + "partitioned by(partition_key_col) "
+            + "location '" + basePath + "'");
+
+    Dataset<Row> rows = getRowDataset(1000, "row1", "abc", "p1");
+    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+    rows = getRowDataset(1001, "row2", "cde", "p2");
+    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+    rows = getRowDataset(1002, "row3", "def", "p2");
+    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+
+    // create functional index
+    String createIndexSql = "create index idx_datestr on tbl using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')";
+    sparkSession.sql(createIndexSql);
+    HoodieTableMetaClient metaClient = createMetaClient(sparkSession, basePath);
+    HoodieIndexMetadata functionalIndexMetadata = metaClient.getIndexMetadata().get();
+    assertEquals(1, functionalIndexMetadata.getIndexDefinitions().size());
+    assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions().get("func_index_idx_datestr").getIndexName());
+    validateFunctionalIndex();
+
+    // test after insert
+    rows = getRowDataset(2000, "row4", "efg", "p1");
+    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+    validateFunctionalIndex();
+
+    // test after upsert
+    rows = getRowDataset(3000, "row1", "ghi", "p2");
+    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+    validateFunctionalIndex();
+  }
+
+  @Test
   public void testGetFSSecondaryKeyToRecordKeys() throws IOException {
     // To overwrite the table properties created during test setup
     storage.deleteDirectory(metaClient.getBasePath());
@@ -465,6 +517,18 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.validateLatestFileSlices = false;
     config.validateAllFileGroups = false;
     config.validateSecondaryIndex = true;
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    assertTrue(validator.run());
+    assertFalse(validator.hasValidationFailure());
+    assertTrue(validator.getThrowables().isEmpty());
+  }
+
+  private void validateFunctionalIndex() {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.validateLatestFileSlices = false;
+    config.validateAllFileGroups = false;
+    config.validateFunctionalIndex = true;
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     assertTrue(validator.run());
     assertFalse(validator.hasValidationFailure());

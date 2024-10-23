@@ -168,57 +168,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     writeClient.deletePartitions(partitionsToDrop, instantTime);
   }
 
-  @Override
   protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
-                                                               HoodieIndexDefinition indexDefinition,
-                                                               HoodieTableMetaClient metaClient, int parallelism,
-                                                               Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient,
+                                                               int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
                                                                String instantTime) {
-    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
-    if (indexDefinition.getSourceFields().isEmpty()) {
-      // In case there are no columns to index, bail
-      return sparkEngineContext.emptyHoodieData();
-    }
-
-    // NOTE: We are assuming that the index expression is operating on a single column
-    //       HUDI-6994 will address this.
-    String columnToIndex = indexDefinition.getSourceFields().get(0);
-    SQLContext sqlContext = sparkEngineContext.getSqlContext();
-
-    // Read records and append functional index metadata to every row
-    HoodieData<Row> rowData = sparkEngineContext.parallelize(partitionFilePathAndSizeTriplet, parallelism)
-        .flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<Row>>) entry -> {
-          String partition = entry.getKey();
-          Pair<String, Long> filePathSizePair = entry.getValue();
-          String filePath = filePathSizePair.getKey();
-          long fileSize = filePathSizePair.getValue();
-          List<Row> rowsForFilePath = readRecordsAsRows(new StoragePath[] {new StoragePath(filePath)}, sqlContext, metaClient, readerSchema, dataWriteConfig,
-              FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1))));
-          List<Row> rowsWithIndexMetadata = SparkMetadataWriterUtils.getRowsWithFunctionalIndexMetadata(rowsForFilePath, partition, filePath, fileSize);
-          return rowsWithIndexMetadata.iterator();
-        });
-
-    // Generate dataset with functional index metadata
-    StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema)
-        .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION, DataTypes.StringType, false, Metadata.empty()))
-        .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_PATH, DataTypes.StringType, false, Metadata.empty()))
-        .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE, DataTypes.LongType, false, Metadata.empty()));
-    Dataset<Row> rowDataset = sparkEngineContext.getSqlContext().createDataFrame(HoodieJavaRDD.getJavaRDD(rowData).rdd(), structType);
-
-    // Apply functional index and generate the column to index
-    HoodieFunctionalIndex<Column, Column> functionalIndex =
-        new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
-    Column indexedColumn = functionalIndex.apply(Collections.singletonList(rowDataset.col(columnToIndex)));
-    rowDataset = rowDataset.withColumn(columnToIndex, indexedColumn);
-
-    // Generate functional index records
-    if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-      return SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingColumnStats(rowDataset, functionalIndex, columnToIndex);
-    } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-      return SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime);
-    } else {
-      throw new UnsupportedOperationException(indexDefinition.getIndexType() + " is not yet supported");
-    }
+    return SparkMetadataWriterUtils.getFunctionalIndexRecords(partitionFilePathAndSizeTriplet, indexDefinition, metaClient, parallelism, readerSchema,
+        storageConf, instantTime, engineContext, dataWriteConfig, metadataWriteConfig);
   }
 
   @Override
