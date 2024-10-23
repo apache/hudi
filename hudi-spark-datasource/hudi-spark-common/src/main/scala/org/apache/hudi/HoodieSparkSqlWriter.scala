@@ -518,7 +518,7 @@ class HoodieSparkSqlWriterInternal {
             } catch {
               case e: HoodieException =>
                 // close the write client in all cases
-                handleWriteClientClosure(client, tableConfig, parameters, jsc.hadoopConfiguration())
+                handleWriteClientClosure(client, tableConfig, parameters, jsc.hadoopConfiguration(), Option.apply(e))
                 throw e
             }
         }
@@ -538,12 +538,16 @@ class HoodieSparkSqlWriterInternal {
     }
   }
 
-  private def handleWriteClientClosure(writeClient: SparkRDDWriteClient[_], tableConfig: HoodieTableConfig, parameters: Map[String, String], configuration: Configuration): Unit = {
+  private def handleWriteClientClosure(writeClient: SparkRDDWriteClient[_], tableConfig: HoodieTableConfig, parameters: Map[String, String], configuration: Configuration, e: Option[HoodieException] = None): Unit = {
     // close the write client in all cases
     val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, configuration)
     val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
     if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-      log.warn("Closing write client")
+      if (e.isDefined) {
+        log.warn("Closing write client for the exception: " + e.get.getMessage)
+      } else {
+        log.info("Closing write client")
+      }
       writeClient.close()
     }
   }
