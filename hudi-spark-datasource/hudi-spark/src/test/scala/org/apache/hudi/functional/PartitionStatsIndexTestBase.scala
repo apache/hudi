@@ -184,20 +184,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     } else {
       latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
     }
-    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
-    latestBatchDf.cache()
-    latestBatchDf.write.format("org.apache.hudi")
-      .options(hudiOpts)
-      .option(OPERATION.key, operation)
-      .mode(saveMode)
-      .save(basePath)
-    val deletedDf = calculateMergedDf(latestBatchDf, operation)
-    deletedDf.cache()
-    if (validate) {
-      validateDataAndPartitionStats(deletedDf)
-    }
-    deletedDf.unpersist()
-    latestBatchDf
+    doWriteAndValidateDataAndPartitionStats(latestBatch, hudiOpts, operation, saveMode, validate)
   }
 
   protected def doWriteAndValidateDataAndPartitionStats(records: mutable.Buffer[String],

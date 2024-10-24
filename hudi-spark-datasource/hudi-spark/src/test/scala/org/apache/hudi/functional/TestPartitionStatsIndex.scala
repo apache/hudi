@@ -25,11 +25,11 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model._
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.config._
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataFileSystemView, MetadataPartitionType}
@@ -160,32 +160,32 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   def testPartitionStatsWithMultiWriter(tableType: HoodieTableType, useUpsert: Boolean): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
-      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> HoodieFailedWritesCleaningPolicy.LAZY.name,
-      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,
-      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
+      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.LAZY.name,
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> classOf[InProcessLockProvider].getName,
+      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
     )
 
-    val firstBatch: mutable.Buffer[String] =
+    val insertRecords: mutable.Buffer[String] =
       recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
     doWriteAndValidateDataAndPartitionStats(
-      firstBatch,
+      insertRecords,
       hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
       validate = false)
 
-    val latestBatch1: mutable.Buffer[String] = firstBatch
-    val latestBatch2: mutable.Buffer[String] =
-      if (useUpsert) firstBatch else recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
+    val write1Records: mutable.Buffer[String] = insertRecords
+    val write2Records: mutable.Buffer[String] =
+      if (useUpsert) insertRecords else recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
 
     val executor = Executors.newFixedThreadPool(2)
     implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
     val function = new Function1[mutable.Buffer[String], Boolean] {
-      def apply(latestBatch: mutable.Buffer[String]): Boolean = {
+      def apply(records: mutable.Buffer[String]): Boolean = {
         try {
           doWriteAndValidateDataAndPartitionStats(
-            latestBatch,
+            records,
             hudiOpts,
             operation = if (useUpsert) UPSERT_OPERATION_OPT_VAL else BULK_INSERT_OPERATION_OPT_VAL,
             saveMode = SaveMode.Append,
@@ -198,10 +198,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       }
     }
     val f1 = Future[Boolean] {
-      function.apply(latestBatch1)
+      function.apply(write1Records)
     }
     val f2 = Future[Boolean] {
-      function.apply(latestBatch2)
+      function.apply(write2Records)
     }
 
     Await.result(f1, Duration("5 minutes"))
