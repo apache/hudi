@@ -306,7 +306,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
             return Option.empty();
           }
-          Comparable deleteOrderingVal = deleteRecord.getOrderingValue() == null ? orderingFieldDefault : deleteRecord.getOrderingValue();
+          Comparable deleteOrderingVal = deleteRecord.getOrderingVal(orderingFieldDefault);
           // Here existing record represents newer record with the same key, which can be a delete or non-delete record.
           // Therefore, we should use event time based merging if possible. So, the newer record is returned if
           // 1. the delete is processing time based, or
