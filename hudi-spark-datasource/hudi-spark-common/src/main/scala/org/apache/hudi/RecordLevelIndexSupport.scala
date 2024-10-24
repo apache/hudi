@@ -27,10 +27,11 @@ import org.apache.hudi.common.model.HoodieTableQueryType.SNAPSHOT
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.table.timeline.InstantComparison
+import org.apache.hudi.keygen.KeyGenUtils.DEFAULT_COMPOSITE_KEY_FILED_VALUE
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, In, Literal, Or}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 import scala.collection.JavaConverters._
@@ -123,27 +124,30 @@ object RecordLevelIndexSupport {
   val INDEX_NAME = "RECORD_LEVEL"
 
   /**
-   * If the input query is an EqualTo or IN query on simple record key columns, the function returns a tuple of
+   * If the input query is an EqualTo or IN query on record key columns, the function returns a tuple of
    * list of the query and list of record key literals present in the query otherwise returns an empty option.
    *
    * @param queryFilter The query that need to be filtered.
    * @return Tuple of filtered query and list of record key literals that need to be matched
    */
-
-  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String]): Option[(Expression, List[String])] = {
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Array[String]): Option[(Expression, List[String])] = {
     filterQueryWithRecordKey(queryFilter, recordKeyOpt, attributeFetcher = expr => expr)
   }
 
-  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], attributeFetcher: Function1[Expression, Expression]
+
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Array[String], attributeFetcher: Function1[Expression, Expression]
                               ): Option[(Expression, List[String])] = {
+    val isComplexRecordKey = recordKeyOpt.length > 1
     queryFilter match {
+      // Handle EqualTo expressions
       case equalToQuery: EqualTo =>
         val attributeLiteralTuple = getAttributeLiteralTuple(attributeFetcher.apply(equalToQuery.left), attributeFetcher.apply(equalToQuery.right)).orNull
         if (attributeLiteralTuple != null) {
           val attribute = attributeLiteralTuple._1
           val literal = attributeLiteralTuple._2
-          if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
-            Option.apply(equalToQuery, List.apply(literal.value.toString))
+          if (attribute != null && attribute.name != null && recordKeyOpt.contains(attribute.name)) {
+            val recordKeyLiteral = getRecordKeyLiteral(attribute, literal, isComplexRecordKey)
+            Option.apply(equalToQuery, List.apply(recordKeyLiteral))
           } else {
             Option.empty
           }
@@ -151,18 +155,19 @@ object RecordLevelIndexSupport {
           Option.empty
         }
 
+      // Handle In expressions
       case inQuery: In =>
         var validINQuery = true
         attributeFetcher.apply(inQuery.value) match {
           case attribute: AttributeReference =>
-            if (!attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
+            if (!recordKeyOpt.contains(attribute.name)) {
               validINQuery = false
             }
           case _ => validINQuery = false
         }
         var literals: List[String] = List.empty
         inQuery.list.foreach {
-          case literal: Literal => literals = literals :+ literal.value.toString
+          case literal: Literal => literals = literals :+ getRecordKeyLiteral(inQuery.value.asInstanceOf[AttributeReference], literal, isComplexRecordKey)
           case _ => validINQuery = false
         }
         if (validINQuery) {
@@ -170,6 +175,33 @@ object RecordLevelIndexSupport {
         } else {
           Option.empty
         }
+
+      // Handle And expression (composite filter)
+      case andQuery: And =>
+        val leftResult = filterQueryWithRecordKey(andQuery.left, recordKeyOpt)
+        val rightResult = filterQueryWithRecordKey(andQuery.right, recordKeyOpt)
+
+        // If both left and right filters are valid, concatenate their results
+        (leftResult, rightResult) match {
+          case (Some((leftExp, leftKeys)), Some((rightExp, rightKeys))) =>
+            // Return concatenated expressions and record keys
+            Option.apply(And(leftExp, rightExp), leftKeys ++ rightKeys)
+          case _ => Option.empty
+        }
+
+      // Handle Or expression (for completeness, though usually not used for record key filtering)
+      case orQuery: Or =>
+        val leftResult = filterQueryWithRecordKey(orQuery.left, recordKeyOpt)
+        val rightResult = filterQueryWithRecordKey(orQuery.right, recordKeyOpt)
+
+        (leftResult, rightResult) match {
+          case (Some((leftExp, leftKeys)), Some((rightExp, rightKeys))) =>
+            // In the case of OR, return a valid option if either side matches
+            Option.apply(Or(leftExp, rightExp), leftKeys ++ rightKeys)
+          case _ => Option.empty
+        }
+
+      // Default case: no match for record keys
       case _ => Option.empty
     }
   }
@@ -239,6 +271,15 @@ object RecordLevelIndexSupport {
       true
     } else {
       HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == attributeName
+    }
+  }
+
+  private def getRecordKeyLiteral(attribute: AttributeReference, literal: Literal, isComplexRecordKey: Boolean): String = {
+    if (isComplexRecordKey) {
+      // For complex record keys, the record key is of the form fieldName:fieldValue
+      attribute.name + DEFAULT_COMPOSITE_KEY_FILED_VALUE + literal.value.toString
+    } else {
+      literal.value.toString
     }
   }
 }

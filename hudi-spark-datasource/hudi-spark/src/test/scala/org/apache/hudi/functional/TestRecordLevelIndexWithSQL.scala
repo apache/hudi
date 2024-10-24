@@ -17,20 +17,25 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
+import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
 import org.apache.spark.sql.{DataFrame, SaveMode}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, Literal, Or}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.Properties
 import scala.util.Using
 
 @Tag("functional")
@@ -130,9 +135,13 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   }
 
   private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int): Unit = {
+    verifyPruningFileCount(opts, dataFilter, numFiles, HoodieTableMetaClient.reload(metaClient))
+  }
+
+  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int, metaClient: HoodieTableMetaClient): Unit = {
     // with data skipping
-    val commonOpts = opts + ("path" -> basePath)
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val commonOpts = opts + ("path" -> metaClient.getBasePath.toString)
+    this.metaClient = HoodieTableMetaClient.reload(metaClient)
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
@@ -151,7 +160,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    Using(getTableFileSystenView(opts)) { fsView =>
+    Using(getTableFileSystemView(opts)) { fsView =>
       fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().requestedTime)
         .values()
         .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
@@ -162,8 +171,10 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     }.get
   }
 
-  private def getTableFileSystenView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
-    new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+  private def getTableFileSystemView(opts: Map[String, String]): HoodieTableFileSystemView = {
+    val props = new Properties()
+    opts.foreach(kv => props.setProperty(kv._1, kv._2))
+    FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().fromProperties(props).build())
   }
 
   private def createTempTable(hudiOpts: Map[String, String]): Unit = {
@@ -239,5 +250,62 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val rliIndexSupport = new RecordLevelIndexSupport(spark, getConfig.getMetadataConfig, metaClient)
     val fileNames = rliIndexSupport.computeCandidateFileNames(fileIndex, Seq(dataFilter), null, prunedPaths, false)
     assertEquals(if (includeLogFiles) 2 else 1, fileNames.get.size)
+  }
+
+  @Test
+  def testRLIWithMultipleRecordKeyFields(): Unit = {
+    val tableName = "dummy_table_multi_pk"
+    val dummyTablePath = tempDir.resolve("dummy_table_multi_pk").toAbsolutePath.toString
+    val hudiOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> tableName,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "record_key_col,name",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_key_col",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+    ) ++ metadataOpts
+
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  record_key_col string,
+         |  name string,
+         |  not_record_key_col string,
+         |  partition_key_col string
+         |) using hudi
+         | options (
+         |  primaryKey ='record_key_col,name',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.datasource.write.recordkey.field = 'record_key_col,name',
+         |  hoodie.enable.data.skipping = 'true'
+         | )
+         | partitioned by(partition_key_col)
+         | location '$dummyTablePath'
+       """.stripMargin)
+    spark.sql(s"insert into $tableName values('row1', 'name1', 'a', 'p1')")
+    spark.sql(s"insert into $tableName values('row2', 'name2', 'b', 'p2')")
+    spark.sql(s"insert into $tableName values('row3', 'name3', 'c', 'p3')")
+
+    val latestSnapshotDf = spark.read.format("hudi").options(hudiOpts).load(dummyTablePath)
+    this.metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(dummyTablePath)
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .build()
+    verifyEqualToQuery(hudiOpts, Seq("record_key_col", "name"), tableName, latestSnapshotDf, HoodieTableMetaClient.reload(metaClient))
+  }
+
+  def verifyEqualToQuery(hudiOpts: Map[String, String], colNames: Seq[String], tableName: String, latestSnapshotDf: DataFrame, metaClient: HoodieTableMetaClient): Unit = {
+    val rowValues = latestSnapshotDf.limit(1).collect().map(row => {
+      colNames.map(colName => row.getAs(colName).toString)
+    }).head
+
+    // Build the data filter using EqualTo for each column and combine with And
+    val dataFilter = colNames.zip(rowValues).map {
+      case (colName, value) => EqualTo(attribute(colName), Literal(value))
+    }.reduceLeft(And)
+
+    assertEquals(1, spark.sql("select * from " + tableName + " where " + dataFilter.sql).count())
+    verifyPruningFileCount(hudiOpts, dataFilter, 1, metaClient)
   }
 }
