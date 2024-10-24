@@ -1378,7 +1378,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
     // rollback partially failed writes if any.
-    if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites()) {
+    if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites(metadataMetaClient)) {
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
     }
 
