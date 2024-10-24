@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.BaseTimelineV2;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -73,6 +74,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
@@ -102,6 +104,9 @@ public class TestCleanPlanner {
     when(sliceView.getPendingLogCompactionOperations()).thenReturn(Stream.empty());
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
+    TimelineLayout layout = mock(TimelineLayout.class);
+    when(metaClient.getTimelineLayout()).thenReturn(layout);
+    when(layout.getCommitMetadataSerDe()).thenReturn(COMMIT_METADATA_SER_DE);
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     HoodieTimeline mockCompletedCommitsTimeline = mock(HoodieTimeline.class);
@@ -664,13 +669,15 @@ public class TestCleanPlanner {
       });
       try {
         when(hoodieTable.getActiveTimeline().getInstantDetails(hoodieInstant)).thenReturn(
-            TimelineMetadataUtils.serializeCommitMetadata(hoodieTable.getMetaClient().getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+            TimelineMetadataUtils.serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata));
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);
       }
     });
     commitsTimeline.setInstants(instants);
     Collections.sort(instants);
+    mock(HoodieTableMetaClient.class);
+    when(hoodieTable.getMetaClient().getTimelineLayout().getCommitMetadataSerDe()).thenReturn(COMMIT_METADATA_SER_DE);
     when(hoodieTable.getActiveTimeline().getInstantsAsStream()).thenReturn(instants.stream());
     when(hoodieTable.getCompletedCommitsTimeline()).thenReturn(commitsTimeline);
 
