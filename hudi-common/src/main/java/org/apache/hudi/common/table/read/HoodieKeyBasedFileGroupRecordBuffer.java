@@ -40,6 +40,8 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE;
+
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
  * by calling the {@link #processDataBlock} and {@link #processDeleteBlock} methods into a record key based map.
@@ -86,6 +88,13 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordKey) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
+    // The order of merging within file group reader is from latest to the oldest.
+    // When a delete is found without ordering value, all older records can be skipped without merging.
+    // Therefore, when the flag is found, we can safely skip all rest records with the same key.
+    if (existingRecordMetadataPair != null && existingRecordMetadataPair.getRight().containsKey(DELETE_FOUND_WITHOUT_ORDERING_VALUE)) {
+      return;
+    }
+
     Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
         doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
     if (mergedRecordAndMetadata.isPresent()) {
@@ -108,10 +117,20 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
+    if (deleteRecord.getOrderingValue() == null && existingRecordMetadataPair != null) {
+      existingRecordMetadataPair.getRight().put(DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
+      return;
+    }
+
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
+      Comparable orderingVal = recordOpt.get().getOrderingVal(orderingFieldDefault);
       records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          (String) recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue(), orderingFieldTypeOpt)));
+          (String) recordKey, recordOpt.get().getPartitionPath(), orderingVal, orderingFieldTypeOpt)));
+
+      if (recordOpt.get().getOrderingValue() == null) {
+        records.get(recordKey).getRight().put(DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
+      }
     }
   }
 
