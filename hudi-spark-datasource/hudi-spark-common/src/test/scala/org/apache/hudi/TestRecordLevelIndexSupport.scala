@@ -39,27 +39,27 @@ class TestRecordLevelIndexSupport {
     val fmt = "yyyy-MM-dd HH:mm:ss"
     val fromUnixTime = FromUnixTime(Literal(0L), Literal(fmt), Some(TimeZone.getDefault.getID))
     var testFilter: Expression = EqualTo(fromUnixTime, Literal("2020-01-01 00:10:20"))
-    var result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.empty)
+    var result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array())
     assertTrue(result.isEmpty)
 
     // Case 2: EqualTo filters not on Literal and not on simple AttributeReference should return empty result
     testFilter = EqualTo(Literal("2020-01-01 00:10:20"), fromUnixTime)
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.empty)
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array())
     assertTrue(result.isEmpty)
 
     // Case 3: EqualTo filters on simple AttributeReference and non-Literal should return empty result
     testFilter = EqualTo(AttributeReference(filterColumnName, StringType, nullable = true)(), fromUnixTime)
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.empty)
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array())
     assertTrue(result.isEmpty)
 
     // Case 4: EqualTo filters on simple AttributeReference and Literal which should return non-empty result
     testFilter = EqualTo(AttributeReference(filterColumnName, StringType, nullable = true)(), Literal("row1"))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(recordKeyField))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array(recordKeyField))
     assertTrue(result.isDefined)
     assertEquals(result, Option.apply(testFilter, List.apply("row1")))
 
     // case 5: EqualTo on fields other than record key should return empty result unless it's _hoodie_record_key
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("blah"))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array("blah"))
     if (filterColumnName.equals(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName)) {
       assertTrue(result.isDefined)
       assertEquals(result, Option.apply(testFilter, List.apply("row1")))
@@ -69,7 +69,7 @@ class TestRecordLevelIndexSupport {
 
     // Case 6: In filter on fields other than record key should return empty result unless it's _hoodie_record_key
     testFilter = In(AttributeReference(filterColumnName, StringType, nullable = true)(), List.apply(Literal("xyz"), Literal("abc")))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("blah"))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array("blah"))
     if (filterColumnName.equals(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName)) {
       assertTrue(result.isDefined)
       assertEquals(result, Option.apply(testFilter, List.apply("xyz", "abc")))
@@ -79,26 +79,26 @@ class TestRecordLevelIndexSupport {
 
     // Case 7: In filter on record key should return non-empty result
     testFilter = In(AttributeReference(filterColumnName, StringType, nullable = true)(), List.apply(Literal("xyz"), Literal("abc")))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(recordKeyField))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array(recordKeyField))
     assertTrue(result.isDefined)
     assertEquals(result, Option.apply(testFilter, List.apply("xyz", "abc")))
 
     // Case 8: In filter on simple AttributeReference(on record-key) and non-Literal should return empty result
     testFilter = In(AttributeReference(filterColumnName, StringType, nullable = true)(), List.apply(fromUnixTime))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
     assertTrue(result.isEmpty)
 
     // Case 9: Anything other than EqualTo and In predicate is not supported. Hence it returns empty result
     testFilter = Not(In(AttributeReference(filterColumnName, StringType, nullable = true)(), List.apply(Literal("xyz"), Literal("abc"))))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
     assertTrue(result.isEmpty)
 
     testFilter = Not(In(AttributeReference(filterColumnName, StringType, nullable = true)(), List.apply(fromUnixTime)))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
     assertTrue(result.isEmpty)
 
     testFilter = GreaterThan(AttributeReference(filterColumnName, StringType, nullable = true)(), Literal("row1"))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Array(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
     assertTrue(result.isEmpty)
   }
 }
