@@ -137,8 +137,7 @@ class FunctionalIndexSupport(spark: SparkSession,
     }.toMap
   }
 
-  private def loadFunctionalIndexDataFrame(indexPartition: String,
-                                           shouldReadInMemory: Boolean): DataFrame = {
+  def loadFunctionalIndexDataFrame(indexPartition: String, shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
       val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
       val indexType = indexDefinition.getIndexType
@@ -165,7 +164,7 @@ class FunctionalIndexSupport(spark: SparkSession,
       }
     }
 
-    colStatsDF.select(targetColumnStatsIndexColumns.map(col): _*)
+    colStatsDF.select(getTargetColumnStatsIndexColumns.map(col): _*)
   }
 
   private def loadFunctionalIndexForColumnsInternal(targetColumns: Seq[String],
@@ -208,4 +207,14 @@ object FunctionalIndexSupport {
   )
 
   private val columnStatsRecordStructType: StructType = AvroConversionUtils.convertAvroSchemaToStructType(HoodieMetadataColumnStats.SCHEMA$)
+
+  def getTargetColumnStatsIndexColumns: Array[String] = {
+    Array.apply(
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT,
+      HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME)
+  }
 }

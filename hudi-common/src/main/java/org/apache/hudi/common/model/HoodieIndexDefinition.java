@@ -28,6 +28,7 @@ import java.util.StringJoiner;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX;
 
 /**
  * Class representing the metadata for a functional or secondary index in Hudi.
@@ -79,6 +80,10 @@ public class HoodieIndexDefinition implements Serializable {
 
   public String getIndexType() {
     return indexType;
+  }
+
+  public boolean isFunctionalIndex() {
+    return indexName.startsWith(PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX);
   }
 
   @Override
