@@ -118,7 +118,7 @@ object SecondaryIndexSupport {
     var secondaryKeyQueries: List[Expression] = List.empty
     var secondaryKeys: List[String] = List.empty
     for (query <- queryFilters) {
-      filterQueryWithRecordKey(query, secondaryKeyConfigOpt).foreach({
+      filterQueryWithRecordKey(query, Array(secondaryKeyConfigOpt.get)).foreach({
         case (exp: Expression, recKeys: List[String]) =>
           secondaryKeys = secondaryKeys ++ recKeys
           secondaryKeyQueries = secondaryKeyQueries :+ exp
