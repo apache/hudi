@@ -3,6 +3,7 @@ title: "Adding support for Virtual Keys in Hudi"
 excerpt: "Supporting Virtual keys in Hudi for reducing storage overhead"
 author: shivnarayan
 category: blog
+image: /assets/images/blog/user_stories2.png
 tags:
 - design
 - metadata

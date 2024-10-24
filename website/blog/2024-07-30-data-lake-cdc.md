@@ -3,7 +3,7 @@ title: "Understanding Data Lake Change Data Capture"
 excerpt: "Explains the concept of CDC in data lakes"
 author: Sagar Lakshmipathy
 category: blog
-image: /assets/images/blog/data-lake-cdc/hudi-cdc.jpg
+image: /assets/images/blog/user_stories2.png
 tags:
 - Data Lake
 - Apache Hudi

@@ -3,7 +3,7 @@ title: "Apache Hudi 2022 - A year in Review"
 excerpt: "2022 was the best year for Apache Hudi yet! Huge thank you to everyone who contributed!"
 author: Sivabalan Narayanan
 category: blog
-image: /assets/images/blog/Apache-Hudi-2022-Review.png
+image: /assets/images/blog/user_stories1.png
 tags:
 - apache hudi
 - community

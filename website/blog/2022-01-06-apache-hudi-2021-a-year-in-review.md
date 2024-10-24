@@ -3,7 +3,7 @@ title: "Apache Hudi - 2021 a Year in Review"
 excerpt: "A reflection on the growth and momentum of Apache Hudi in 2021"
 author: vinoth
 category: blog
-image: /assets/images/Hudi_community.png
+image: /assets/images/blog/user_stories1.png
 tags:
 - blog
 - community

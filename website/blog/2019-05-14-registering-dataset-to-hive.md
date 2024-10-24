@@ -3,6 +3,7 @@ title: "Registering sample dataset to Hive via beeline"
 excerpt: "How to manually register HUDI dataset into Hive using beeline"
 author: vinoth
 category: blog
+image: /assets/images/blog/user_stories5.png
 tags:
 - how-to
 - apache hudi
