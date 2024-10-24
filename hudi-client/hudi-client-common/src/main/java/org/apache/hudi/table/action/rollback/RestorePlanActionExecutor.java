@@ -22,7 +22,6 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -40,6 +39,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
 
 /**
  * Plans the restore action and add a restore.requested meta file to timeline.
@@ -65,27 +66,27 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
 
   @Override
   public Option<HoodieRestorePlan> execute() {
-    final HoodieInstant restoreInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
+    final HoodieInstant restoreInstant = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
     try {
       // Get all the commits on the timeline after the provided commit time
       // rollback pending clustering instants first before other instants (See HUDI-3362)
       List<HoodieInstant> pendingClusteringInstantsToRollback = table.getActiveTimeline().filterPendingReplaceOrClusteringTimeline()
               // filter only clustering related replacecommits (Not insert_overwrite related commits)
-              .filter(instant -> ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant))
+              .filter(instant -> ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantFactory))
               .getReverseOrderedInstants()
-              .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), savepointToRestoreTimestamp))
+              .filter(instant -> GREATER_THAN.test(instant.getRequestTime(), savepointToRestoreTimestamp))
               .collect(Collectors.toList());
 
       // Get all the commits on the timeline after the provided commit time
       List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
               .getReverseOrderedInstants()
-              .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), savepointToRestoreTimestamp))
+              .filter(instant -> GREATER_THAN.test(instant.getRequestTime(), savepointToRestoreTimestamp))
               .filter(instant -> !pendingClusteringInstantsToRollback.contains(instant))
               .collect(Collectors.toList());
 
       // Combine both lists - first rollback pending clustering and then rollback all other commits
       List<HoodieInstantInfo> instantsToRollback = Stream.concat(pendingClusteringInstantsToRollback.stream(), commitInstantsToRollback.stream())
-              .map(entry -> new HoodieInstantInfo(entry.getTimestamp(), entry.getAction()))
+              .map(entry -> new HoodieInstantInfo(entry.getRequestTime(), entry.getAction()))
               .collect(Collectors.toList());
 
       HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp);

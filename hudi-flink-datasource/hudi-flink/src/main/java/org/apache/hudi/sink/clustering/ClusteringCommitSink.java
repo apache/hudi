@@ -143,7 +143,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     HoodieClusteringPlan clusteringPlan = clusteringPlanCache.computeIfAbsent(instant, k -> {
       try {
         HoodieTableMetaClient metaClient = this.writeClient.getHoodieTable().getMetaClient();
-        return ClusteringUtils.getInflightClusteringInstant(instant, metaClient.getActiveTimeline())
+        return ClusteringUtils.getInflightClusteringInstant(instant, metaClient.getActiveTimeline(), table.getInstantFactory())
             .flatMap(pendingInstant -> ClusteringUtils.getClusteringPlan(
             metaClient, pendingInstant))
             .map(Pair::getRight)

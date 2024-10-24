@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFactory;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.spark.launcher.SparkLauncher;
@@ -51,7 +52,7 @@ public class SavepointsCommand {
     String[][] rows = new String[commits.size()][];
     for (int i = 0; i < commits.size(); i++) {
       HoodieInstant commit = commits.get(i);
-      rows[i] = new String[] {commit.getTimestamp()};
+      rows[i] = new String[] {commit.getRequestTime()};
     }
     return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_SAVEPOINT_TIME}, rows);
   }
@@ -107,7 +108,7 @@ public class SavepointsCommand {
     }
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(instant -> instant.getTimestamp().equals(instantTime)).collect(Collectors.toList());
+    List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(instant -> instant.getRequestTime().equals(instantTime)).collect(Collectors.toList());
 
     if (instants.isEmpty()) {
       return String.format("Commit %s not found in Commits %s", instantTime, timeline);
@@ -141,7 +142,8 @@ public class SavepointsCommand {
     if (completedInstants.empty()) {
       throw new HoodieException("There are no completed savepoint to run delete");
     }
-    HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantTime);
+    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+    HoodieInstant savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, instantTime);
 
     if (!completedInstants.containsInstant(savePoint)) {
       return String.format("Commit %s not found in Commits %s", instantTime, completedInstants);

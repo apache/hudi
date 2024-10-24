@@ -104,7 +104,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
       operation = UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
 
-    assertTrue(getLatestClusteringInstant().get().getTimestamp.compareTo(lastClusteringInstant.get().getTimestamp) > 0)
+    assertTrue(getLatestClusteringInstant().get().getRequestTime.compareTo(lastClusteringInstant.get().getRequestTime) > 0)
     validateDataAndRecordIndices(hudiOpts)
   }
 

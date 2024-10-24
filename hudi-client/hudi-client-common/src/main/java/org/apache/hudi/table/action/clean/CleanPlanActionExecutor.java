@@ -116,7 +116,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       }
       LOG.info(
           "Earliest commit to retain for clean : {}",
-          earliestInstant.isPresent() ? earliestInstant.get().getTimestamp() : "null");
+          earliestInstant.isPresent() ? earliestInstant.get().getRequestTime() : "null");
       LOG.info(
           "Total partitions to clean : {}, with policy {}",
           partitionsToClean.size(),
@@ -152,7 +152,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       }
 
       return new HoodieCleanerPlan(
-          earliestInstant.map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
+          earliestInstant.map(x -> new HoodieActionInstant(x.getRequestTime(), x.getAction(), x.getState().name())).orElse(null),
           planner.getLastCompletedCommitTimestamp(), // Note: This is the start time of the last completed ingestion before this clean.
           config.getCleanerPolicy().name(),
           Collections.emptyMap(),
@@ -188,7 +188,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     if (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())
         && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0) {
       // Only create cleaner plan which does some work
-      final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
+      final HoodieInstant cleanInstant = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
       try {
         table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));

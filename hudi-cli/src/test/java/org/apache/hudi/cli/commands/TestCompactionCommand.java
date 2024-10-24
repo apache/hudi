@@ -25,12 +25,12 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -61,6 +61,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -157,7 +158,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // Create six commits
     Arrays.asList("001", "003", "005", "007").forEach(timestamp -> {
       activeTimeline.transitionCompactionInflightToComplete(true,
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), Option.empty());
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), Option.empty());
     });
     // Simulate a compaction commit in metadata table timeline
     // so the archival in data table can happen
@@ -176,7 +177,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // archive
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    HoodieTimelineArchiver archiver = new TimelineArchiverV2(cfg, table);
     archiver.archiveIfRequired(context());
   }
 
@@ -219,7 +220,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // get compaction plan before compaction
     HoodieCompactionPlan plan = TimelineMetadataUtils.deserializeCompactionPlan(
         HoodieCLI.getTableMetaClient().reloadActiveTimeline().readCompactionPlanAsBytes(
-            HoodieTimeline.getCompactionRequestedInstant(instance)).get());
+            INSTANT_FACTORY.getCompactionRequestedInstant(instance)).get());
 
     generateArchive();
 

@@ -34,10 +34,12 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
   @EnumSource(classOf[HoodieTableType])
   def testPartitionFieldsWithUpgrade(tableType: HoodieTableType): Unit = {
     val partitionFields = "partition:simple"
+    // Downgrade handling for metadata not yet ready.
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> KeyGeneratorType.CUSTOM.getClassName,
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> partitionFields)
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> partitionFields,
+      "hoodie.metadata.enable" -> "false")
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
