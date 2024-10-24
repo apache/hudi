@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
@@ -29,6 +30,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -55,7 +57,7 @@ public abstract class HoodieReaderContext<T> {
   private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
-  private HoodieRecordMerger recordMerger = null;
+  private Option<HoodieRecordMerger> recordMerger = null;
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
@@ -89,11 +91,11 @@ public abstract class HoodieReaderContext<T> {
     this.latestCommitTime = latestCommitTime;
   }
 
-  public HoodieRecordMerger getRecordMerger() {
+  public Option<HoodieRecordMerger> getRecordMerger() {
     return recordMerger;
   }
 
-  public void setRecordMerger(HoodieRecordMerger recordMerger) {
+  public void setRecordMerger(Option<HoodieRecordMerger> recordMerger) {
     this.recordMerger = recordMerger;
   }
 
@@ -184,11 +186,16 @@ public abstract class HoodieReaderContext<T> {
    */
   public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
+  public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
+  
   /**
-   * @param mergerStrategy Merger strategy UUID.
+   * @param mergeMode        record merge mode
+   * @param mergeStrategyId  record merge strategy ID
+   * @param mergeImplClasses custom implementation classes for record merging
+   *
    * @return {@link HoodieRecordMerger} to use.
    */
-  public abstract HoodieRecordMerger getRecordMerger(String mergerStrategy);
+  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses);
 
   /**
    * Gets the field value.
@@ -219,7 +226,7 @@ public abstract class HoodieReaderContext<T> {
    * @param metadataMap  A map containing the record metadata.
    * @param schema       The Avro schema of the record.
    * @param orderingFieldName name of the ordering field
-   * @param orderingFieldType type of the ordering field
+   * @param orderingFieldTypeOpt type of the ordering field
    * @param orderingFieldDefault default value for ordering
    * @return The ordering value.
    */
@@ -227,18 +234,18 @@ public abstract class HoodieReaderContext<T> {
                                      Map<String, Object> metadataMap,
                                      Schema schema,
                                      String orderingFieldName,
-                                     Schema.Type orderingFieldType,
+                                     Option<Schema.Type> orderingFieldTypeOpt,
                                      Comparable orderingFieldDefault) {
     if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
       return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     }
 
-    if (!recordOption.isPresent() || orderingFieldName == null) {
+    if (!recordOption.isPresent() || !orderingFieldTypeOpt.isPresent()) {
       return orderingFieldDefault;
     }
 
     Object value = getValue(recordOption.get(), schema, orderingFieldName);
-    Comparable finalOrderingVal = value != null ? castValue((Comparable) value, orderingFieldType) : orderingFieldDefault;
+    Comparable finalOrderingVal = value != null ? castValue((Comparable) value, orderingFieldTypeOpt.get()) : orderingFieldDefault;
     metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;
   }
@@ -270,11 +277,11 @@ public abstract class HoodieReaderContext<T> {
    * @return A mapping containing the metadata.
    */
   public Map<String, Object> generateMetadataForRecord(
-      String recordKey, String partitionPath, Comparable orderingVal, Schema.Type orderingFieldType) {
+      String recordKey, String partitionPath, Comparable orderingVal, Option<Schema.Type> orderingFieldType) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, recordKey);
     meta.put(INTERNAL_META_PARTITION_PATH, partitionPath);
-    meta.put(INTERNAL_META_ORDERING_FIELD, castValue(orderingVal, orderingFieldType));
+    meta.put(INTERNAL_META_ORDERING_FIELD, orderingFieldType.map(type -> castValue(orderingVal, type)).orElse(orderingVal));
     return meta;
   }
 

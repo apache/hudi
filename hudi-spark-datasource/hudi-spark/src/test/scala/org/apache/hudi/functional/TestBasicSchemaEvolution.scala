@@ -19,6 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
+import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.util.Option
@@ -50,8 +51,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
     HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key() -> "true",
-    HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-    HoodieWriteConfig.WRITE_PAYLOAD_TYPE.key() -> "OVERWRITE_LATEST_AVRO",
+    HoodieWriteConfig.RECORD_MERGE_MODE.key() -> RecordMergeMode.OVERWRITE_WITH_LATEST.name(),
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",

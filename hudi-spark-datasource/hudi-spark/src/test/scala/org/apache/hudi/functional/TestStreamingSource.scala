@@ -60,7 +60,6 @@ class TestStreamingSource extends StreamTest {
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setPreCombineField("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
@@ -112,7 +111,6 @@ class TestStreamingSource extends StreamTest {
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setPreCombineField("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
@@ -158,7 +156,6 @@ class TestStreamingSource extends StreamTest {
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setPreCombineField("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
@@ -190,7 +187,6 @@ class TestStreamingSource extends StreamTest {
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setPreCombineField("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
@@ -222,7 +218,6 @@ class TestStreamingSource extends StreamTest {
       val metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
-        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setRecordKeyFields("id")
         .setPreCombineField("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)

@@ -1894,7 +1894,7 @@ public class HoodieTableMetadataUtil {
                 metaClient.getBasePath().toString(),
                 engineType,
                 Collections.emptyList(), // TODO: support different merger classes, which is currently only known to write config
-                metaClient.getTableConfig().getRecordMergerStrategy()))
+                metaClient.getTableConfig().getRecordMergeStrategyId()))
             .withTableMetaClient(metaClient)
             .build();
         ClosableIterator<String> recordKeyIterator = ClosableIterator.wrap(mergedLogRecordScanner.getRecords().keySet().iterator());
@@ -2013,7 +2013,7 @@ public class HoodieTableMetadataUtil {
         basePath,
         engineType,
         Collections.emptyList(),
-        metaClient.getTableConfig().getRecordMergerStrategy());
+        metaClient.getTableConfig().getRecordMergeStrategyId());
 
     HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(metaClient.getStorage())

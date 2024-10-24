@@ -21,6 +21,7 @@ package org.apache.hudi;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -221,8 +222,7 @@ public class TestDataSourceUtils {
     asyncClusteringKeyValues.stream().forEach(pair -> {
       HashMap<String, String> params = new HashMap<>(3);
       params.put(DataSourceWriteOptions.TABLE_TYPE().key(), DataSourceWriteOptions.TABLE_TYPE().defaultValue());
-      params.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
-              DataSourceWriteOptions.PAYLOAD_CLASS_NAME().defaultValue());
+      params.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), DefaultHoodieRecordPayload.class.getName());
       params.put(pair.left, pair.right.toString());
       HoodieWriteConfig hoodieConfig = DataSourceUtils
               .createHoodieConfig(avroSchemaString, config.getBasePath(), "test", params);

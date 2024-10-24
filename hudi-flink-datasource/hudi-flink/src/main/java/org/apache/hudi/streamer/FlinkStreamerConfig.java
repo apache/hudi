@@ -132,7 +132,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--record-merger-strategy"}, description = "Id of record merger strategy. Hudi will pick HoodieRecordMerger implementations in record-merger-impls "
       + "which has the same record merger strategy id")
-  public String recordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+  public String recordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
 
   @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
       + "is purely new data/inserts to gain speed).", converter = OperationConverter.class)
@@ -429,7 +429,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setInteger(FlinkOptions.WRITE_TABLE_VERSION, config.writeTableVersion);
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);
     conf.setString(FlinkOptions.RECORD_MERGER_IMPLS, config.recordMergerImpls);
-    conf.setString(FlinkOptions.RECORD_MERGER_STRATEGY, config.recordMergerStrategy);
+    conf.setString(FlinkOptions.RECORD_MERGER_STRATEGY_ID, config.recordMergerStrategy);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, config.preCombine);
     conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
     conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));

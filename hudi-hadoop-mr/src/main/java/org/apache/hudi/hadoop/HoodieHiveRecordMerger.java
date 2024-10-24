@@ -21,22 +21,10 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.exception.HoodieException;
 
 abstract class HoodieHiveRecordMerger implements HoodieRecordMerger {
   @Override
   public HoodieRecord.HoodieRecordType getRecordType() {
     return HoodieRecord.HoodieRecordType.HIVE;
-  }
-
-  static HoodieRecordMerger getRecordMerger(String mergerStrategy) {
-    switch (mergerStrategy) {
-      case DEFAULT_MERGER_STRATEGY_UUID:
-        return new DefaultHiveRecordMerger();
-      case OVERWRITE_MERGER_STRATEGY_UUID:
-        return new OverwriteWithLatestHiveRecordMerger();
-      default:
-        throw new HoodieException("This merger strategy UUID is not supported: " + mergerStrategy);
-    }
   }
 }

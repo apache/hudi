@@ -65,7 +65,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED;
 import static org.apache.hudi.common.config.HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT;
 import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY;
-import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGER_IMPLS;
+import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_RECORD_POSITIONS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -143,7 +143,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public List<HoodieRecord> generateEmptyRecords(List<HoodieKey> keys) {
     List<HoodieRecord> records = new ArrayList<>();
     for (HoodieKey key : keys) {
-      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, 1, HoodieRecord.HoodieRecordType.SPARK));
+      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, key.getRecordKey(), HoodieRecord.HoodieRecordType.SPARK));
     }
     return records;
   }
@@ -159,7 +159,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public HoodieWriteConfig getWriteConfig(Schema avroSchema) {
     Properties extraProperties = new Properties();
     extraProperties.setProperty(
-        RECORD_MERGER_IMPLS.key(),
+        RECORD_MERGE_IMPL_CLASSES.key(),
         "org.apache.hudi.DefaultSparkRecordMerger");
     extraProperties.setProperty(
         LOGFILE_DATA_BLOCK_FORMAT.key(),
@@ -228,7 +228,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public void checkDataEquality(int numRecords) {
     Map<String, String> properties = new HashMap<>();
     properties.put(
-        RECORD_MERGER_IMPLS.key(),
+        RECORD_MERGE_IMPL_CLASSES.key(),
         "org.apache.hudi.DefaultSparkRecordMerger");
     properties.put(
         LOGFILE_DATA_BLOCK_FORMAT.key(),
