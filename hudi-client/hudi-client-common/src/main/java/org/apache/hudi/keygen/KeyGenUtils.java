@@ -153,7 +153,7 @@ public class KeyGenUtils {
       keyValueSep1 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, processed);
       currentField = recordKey.substring(processed, keyValueSep1);
       keyValueSep2 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, keyValueSep1 + 1);
-      if (fields.isEmpty() || fields.contains(currentField)) {
+      if (fields.isEmpty() || (fields.size() == 1 && fields.get(0).isEmpty()) || fields.contains(currentField)) {
         if (keyValueSep2 < 0) {
           // there is no next key value pair
           currentValue = recordKey.substring(keyValueSep1 + 1);
