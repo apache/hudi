@@ -20,6 +20,7 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
@@ -550,5 +551,17 @@ public class StreamerUtil {
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
           FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
+  }
+
+  /**
+   * @return HoodieMetadataConfig constructed from flink configuration.
+   */
+  public static HoodieMetadataConfig metadataConfig(org.apache.flink.configuration.Configuration conf) {
+    Properties properties = new Properties();
+
+    // set up metadata.enabled=true in table DDL to enable metadata listing
+    properties.put(HoodieMetadataConfig.ENABLE.key(), conf.getBoolean(FlinkOptions.METADATA_ENABLED));
+
+    return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
   }
 }

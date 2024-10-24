@@ -44,7 +44,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
-import static org.apache.hudi.source.prune.DataPruner.convertColumnStats;
+import static org.apache.hudi.source.prune.ColumnStatsProbe.convertColumnStats;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
