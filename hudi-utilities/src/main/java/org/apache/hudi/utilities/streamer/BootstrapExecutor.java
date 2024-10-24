@@ -220,6 +220,7 @@ public class BootstrapExecutor implements Serializable {
             ARCHIVELOG_FOLDER.key(), ARCHIVELOG_FOLDER.defaultValue()))
         .setPayloadClassName(cfg.payloadClassName)
         .setBaseFileFormat(cfg.baseFileFormat)
+        .setBootstrapIndexEnable(true)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)
         .setBootstrapBasePath(bootstrapBasePath)
         .setHiveStylePartitioningEnable(props.getBoolean(
