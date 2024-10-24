@@ -1277,10 +1277,8 @@ public class HoodieTableMetadataUtil {
    * Read column range metadata from log file.
    */
   @VisibleForTesting
-  protected static List<HoodieColumnRangeMetadata<Comparable>> getLogFileColumnRangeMetadata(String filePath,
-                                                                                             HoodieTableMetaClient datasetMetaClient,
-                                                                                             List<String> columnsToIndex,
-                                                                                             Option<Schema> writerSchemaOpt) {
+  public static List<HoodieColumnRangeMetadata<Comparable>> getLogFileColumnRangeMetadata(String filePath, HoodieTableMetaClient datasetMetaClient,
+                                                                                          List<String> columnsToIndex, Option<Schema> writerSchemaOpt) {
     if (writerSchemaOpt.isPresent()) {
       List<Schema.Field> fieldsToIndex = writerSchemaOpt.get().getFields().stream()
           .filter(field -> columnsToIndex.contains(field.name()))
