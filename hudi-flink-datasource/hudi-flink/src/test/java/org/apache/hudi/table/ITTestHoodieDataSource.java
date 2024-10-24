@@ -509,21 +509,24 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("executionModeAndTableTypeParams")
-  void testReadWithPartitionStatsPrune(ExecMode execMode, HoodieTableType tableType) throws Exception {
-    TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testReadWithPartitionStatsPruning(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.METADATA_ENABLED, true)
-        .option(FlinkOptions.READ_AS_STREAMING, execMode == ExecMode.STREAM)
+        .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
         .end();
-    tableEnv.executeSql(hoodieTableDDL);
+    streamTableEnv.executeSql(hoodieTableDDL);
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+    conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
     // write one commit
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
@@ -551,14 +554,7 @@ public class ITTestHoodieDataSource {
             "[+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
                 + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]");
     for (int i = 0; i < sqls.size(); i++) {
-      List<Row> result;
-      final String sql = sqls.get(i);
-      if (execMode == ExecMode.BATCH) {
-        result = CollectionUtil.iterableToList(
-            () -> tableEnv.sqlQuery(sql).execute().collect());
-      } else {
-        result = execSelectSql(streamTableEnv, sql, 10);
-      }
+      List<Row> result = execSelectSql(streamTableEnv, sqls.get(i), 10);
       assertRowsEquals(result, expectResults.get(i));
     }
   }

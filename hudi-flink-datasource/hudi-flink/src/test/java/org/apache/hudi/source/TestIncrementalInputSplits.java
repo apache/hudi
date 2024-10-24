@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -40,8 +39,6 @@ import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
-import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -58,6 +55,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -358,12 +356,20 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     assertEquals(expectedPartitions, partitions);
   }
 
-  @Test
-  void testInputSplitsWithPartitionStatsPruner() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testInputSplitsWithPartitionStatsPruner(HoodieTableType tableType) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
     conf.set(FlinkOptions.READ_AS_STREAMING, true);
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      // enable CSI for MOR table to collect col stats for delta write stats,
+      // which will be used to construct partition stats then.
+      conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    }
+    metaClient = HoodieTestUtils.init(basePath, tableType);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
@@ -393,10 +399,6 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
         .path(new Path(basePath))
         .rowType(TestConfigurations.ROW_TYPE)
         .partitionPruner(partitionPruner)
-        .build();
-    metaClient = HoodieTableMetaClient.builder()
-        .setStorage(new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf()))
-        .setBasePath(basePath)
         .build();
     IncrementalInputSplits.Result result = iis.inputSplits(metaClient, null, false);
     List<String> partitions = getFilteredPartitions(result);
@@ -529,11 +531,22 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
   }
 
   private List<String> getFilteredPartitions(IncrementalInputSplits.Result result) {
-    return result.getInputSplits().stream().map(split -> {
-      Option<String> basePath = split.getBasePath();
-      String[] pathParts = basePath.get().split("/");
-      return pathParts[pathParts.length - 2];
-    }).collect(Collectors.toList());
+    List<String> partitions = new ArrayList<>();
+    result.getInputSplits().forEach(split -> {
+      split.getBasePath().map(path -> {
+        String[] pathParts = path.split("/");
+        partitions.add(pathParts[pathParts.length - 2]);
+        return null;
+      });
+      split.getLogPaths().map(paths -> {
+        paths.forEach(path -> {
+          String[] pathParts = path.split("/");
+          partitions.add(pathParts[pathParts.length - 2]);
+        });
+        return null;
+      });
+    });
+    return partitions;
   }
 
   private Integer intervalBetween2Instants(HoodieTimeline timeline, String instant1, String instant2) {

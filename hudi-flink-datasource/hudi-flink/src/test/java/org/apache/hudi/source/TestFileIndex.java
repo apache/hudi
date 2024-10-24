@@ -20,6 +20,7 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
@@ -42,6 +43,7 @@ import org.apache.flink.table.functions.FunctionIdentifier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -58,6 +60,7 @@ import static org.apache.hudi.configuration.FlinkOptions.METADATA_ENABLED;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_DEFAULT_NAME;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_PATH_FIELD;
 import static org.apache.hudi.configuration.FlinkOptions.READ_DATA_SKIPPING_ENABLED;
+import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE;
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -160,12 +163,19 @@ public class TestFileIndex {
     assertThat(files.size(), is(2));
   }
 
-  @Test
-  void testFileListingWithPartitionStatsPruning() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testFileListingWithPartitionStatsPruning(HoodieTableType tableType) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(READ_DATA_SKIPPING_ENABLED, true);
     conf.set(METADATA_ENABLED, true);
+    conf.set(TABLE_TYPE, tableType.name());
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      // enable CSI for MOR table to collect col stats for delta write stats,
+      // which will be used to construct partition stats then.
+      conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    }
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
