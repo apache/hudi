@@ -417,17 +417,6 @@ public class StreamSync implements Serializable, Closeable {
     }
   }
 
-  private HoodieTableMetaClient getMetaClient() {
-    return HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
-        .setBasePath(cfg.targetBasePath)
-        .setRecordMergeMode(cfg.recordMergeMode)
-        .setPayloadClassName(cfg.payloadClassName)
-        .setRecordMergerStrategy(cfg.recordMergeStrategyId)
-        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
-        .build();
-  }
-
   private HoodieTableMetaClient initializeEmptyTable() throws IOException {
     return initializeEmptyTable(HoodieTableMetaClient.newTableBuilder(),
         SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props),
