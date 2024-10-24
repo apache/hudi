@@ -176,7 +176,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     LinkedList<Option<byte[]>> commits = generateCommitMetadataList();
     when(commitTimeLine.getInstantDetails(any(HoodieInstant.class))).thenAnswer(invocationOnMock -> commits.pop());
     long expectAvgSize = (long) Math.ceil((1.0 * 7500) / 1500);
-    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config);
+    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config, COMMIT_METADATA_SER_DE);
     assertEquals(expectAvgSize, actualAvgSize);
   }
 
@@ -186,7 +186,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().build();
     when(commitTimeLine.empty()).thenReturn(true);
     long expectAvgSize = config.getCopyOnWriteRecordSizeEstimate();
-    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config);
+    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config, COMMIT_METADATA_SER_DE);
     assertEquals(expectAvgSize, actualAvgSize);
   }
 
