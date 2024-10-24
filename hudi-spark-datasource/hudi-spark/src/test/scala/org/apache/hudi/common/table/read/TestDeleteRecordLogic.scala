@@ -47,7 +47,7 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
   def testDeleteLogic(useFgReader: String, tableType: String, recordType: String, positionUsed: String): Unit = {
     val sparkOpts: Map[String, String] = Map(
       HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
-      HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName)
+      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName)
     val fgReaderOpts: Map[String, String] = Map(
       HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> useFgReader,
       HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> positionUsed)
