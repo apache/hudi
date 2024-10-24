@@ -3,6 +3,7 @@ title: "Apache Hudi Key Generators"
 excerpt: "Different key generators available with Apache Hudi"
 author: shivnarayan
 category: blog
+image: /assets/images/blog/user_stories2.png
 tags:
 - blog
 - key generators

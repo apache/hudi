@@ -3,6 +3,7 @@ title: "Ingesting Database changes via Sqoop/Hudi"
 excerpt: "Learn how to ingesting changes from a HUDI dataset using Sqoop/Hudi"
 author: vinoth
 category: blog
+image: /assets/images/blog/user_stories4.png
 tags:
 - how-to
 - apache hudi

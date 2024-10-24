@@ -3,7 +3,7 @@ title: "What is a Data Lakehouse & How does it Work?"
 excerpt: "Explains the concept of the lakehouse architecture"
 author: Dipankar Mazumdar
 category: blog
-image: /assets/images/blog/dlh_1200.png
+image: /assets/images/blog/user_stories3.png
 tags:
 - data lakehouse
 - Apache Hudi

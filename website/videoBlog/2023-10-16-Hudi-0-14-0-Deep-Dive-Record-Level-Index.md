@@ -5,7 +5,7 @@ authors:
 - name: prashant wason
 - name: nadine farah
 category: blog
-image: /assets/images/video_blogs/2023-10-16-Hudi-0-14-0-Deep-Dive-Record-Level-Index.png
+image: /assets/images/video_blogs/video_blog2.png
 navigate: "https://www.youtube.com/watch?v=9f8ZmUY7yyA"
 tags:
 - guide

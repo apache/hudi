@@ -6,20 +6,25 @@
  */
 
 .blogPostTitle {
-  font-size: 1rem;
-  color: #0db1f9;
+  font-size: 20px;
+  color: #1C1E21;
 }
 
-.blogPostTitle:hover, .videoImage {
+.blogPostTitle:hover,
+.videoImage {
   cursor: pointer;
+}
+
+.categoryLink {
+  font-size: 16px;
 }
 
 .blogPostPageTitle {
   margin-bottom: 0;
 }
 
-.blogPostPageTile{
-  font-size:3rem;
+.blogPostPageTile {
+  font-size: 3rem;
   display: inline-flex;
 }
 
@@ -49,52 +54,47 @@
 .authorsList {
   font-size: 0.875rem;
   white-space: nowrap;
-  text-align:justify;
+  text-align: justify;
   color: rgb(28, 30, 33);
   column-gap: 5px;
-  margin-top:-10px;
-  margin-right:3px;
-  display:inline-flex;
+  margin-top: -10px;
+  margin-right: 3px;
+  display: inline-flex;
   justify-content: space-around;
-  margin-left:5px;
+  margin-left: 5px;
 }
 
-
-
-
-@media(max-width:1820px){
-  .authorsListLong{
-    font-size:0.75rem;
+@media (max-width: 1820px) {
+  .authorsListLong {
+    font-size: 0.75rem;
   }
 }
-@media(max-width:1602px){
-  .authorsListLong{
-    font-size:0.6rem;
+@media (max-width: 1602px) {
+  .authorsListLong {
+    font-size: 0.6rem;
   }
 }
 
-
-
-@media(max-width:1391px){
-  .authorsListLong{
-    font-size:0.9rem;
+@media (max-width: 1391px) {
+  .authorsListLong {
+    font-size: 0.9rem;
   }
 }
 
 .authorTimeTags {
   font-size: 0.875rem;
   color: rgb(28, 30, 33);
-  display:flex;
+  display: flex;
   flex-direction: row;
-  vertical-align:text-top;
-  margin-left:2px;
+  vertical-align: text-top;
+  margin-left: 2px;
   flex-wrap: wrap;
 }
 
 .tag {
   margin: -5px 20px 10px -10px;
   display: inline-flex;
-  vertical-align:bottom;
+  vertical-align: bottom;
 }
 
 .tagPostPage {
@@ -105,10 +105,9 @@
   padding: 2px 5px;
 }
 
-h4{
-  margin-right:20px;
-  margin-left:-8px;
-
+h4 {
+  margin-right: 20px;
+  margin-left: -8px;
 }
 
 .postHeader {
@@ -116,19 +115,29 @@ h4{
   flex-direction: column;
   justify-content: space-between;
   width: 100%;
+  border: 1px solid #dfdfdf;
+  border-radius: 8px;
+  overflow: hidden;
+  height: 100%;
+  transition: box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.5, 1),
+    -webkit-box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.5, 1);
 }
+.postHeader:hover {
+  box-shadow: 0 2px 10px #d3d3d3;
+}
+
 
 .greyLink {
   color: rgb(28, 30, 33);
   text-decoration-color: rgb(28, 30, 33);
 }
 
-.blogPostText{
+.blogPostText {
   font-size: 1.1rem;
   color: rgb(28, 30, 33);
-  display:flex;
+  display: flex;
   flex-direction: row;
-  margin-left:2px;
+  margin-left: 2px;
 }
 
 .blogInfo {
@@ -137,15 +146,25 @@ h4{
   column-gap: 20px;
 }
 
-.blogPostAuthorsList{
-  font-size:1.1rem;
+.blogPostAuthorsList {
+  font-size: 1.1rem;
   white-space: nowrap;
-  text-align:justify;
+  text-align: justify;
   color: rgb(28, 30, 33);
   column-gap: 5px;
-  margin-top:-10px;
-  margin-right:3px;
-  display:inline-flex;
+  margin-top: -10px;
+  margin-right: 3px;
+  display: inline-flex;
   justify-content: space-around;
-  margin-left:5px
+  margin-left: 5px;
+}
+
+@media only screen and (max-width: 768px) {
+  .categoryLink {
+    font-size: 14px;
+  }
+
+  .blogPostTitle {
+    font-size: 18px;
+  }
 }

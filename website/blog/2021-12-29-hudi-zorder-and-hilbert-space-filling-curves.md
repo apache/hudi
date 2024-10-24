@@ -3,7 +3,7 @@ title: "Hudi Z-Order and Hilbert Space Filling Curves"
 excerpt: "Explore the benefits of new Apache Hudi Z-Order and Hilbert Curves"
 author: Alexey Kudinkin and Tao Meng
 category: blog
-image: /assets/images/zordercurve.png
+image: /assets/images/blog/user_stories3.png
 tags:
 - design
 - clustering

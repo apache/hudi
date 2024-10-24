@@ -1,0 +1,107 @@
+/*.pagination {*/
+/*  display: flex;*/
+/*  justify-content: center;*/
+/*  align-items: center;*/
+/*  padding: 10px;*/
+/*}*/
+
+/*.pagination a {*/
+/*  text-decoration: none;*/
+/*  color: #0DB1F9; !* Link color *!*/
+/*  padding: 10px 15px;*/
+/*  margin: 0 5px;*/
+/*  border: 1px solid #0DB1F9; !* Border color *!*/
+/*  border-radius: 8px;*/
+/*  transition: background-color 0.3s ease, color 0.3s ease;*/
+/*}*/
+
+/*.pagination a:hover {*/
+/*  background-color: #0DB1F9; !* Background color on hover *!*/
+/*  color: #FFF; !* Text color on hover *!*/
+/*}*/
+
+/*.pagination .current {*/
+/*  background-color: #0DB1F9; !* Highlight current page *!*/
+/*  color: #FFF; !* Text color for current page *!*/
+/*  pointer-events: none; !* Disable click on current page *!*/
+/*}*/
+
+/*.pagination .prev,*/
+/*.pagination .next {*/
+/*  font-weight: bold; !* Make prev and next bold *!*/
+/*}*/
+
+
+
+.table_filter_info{
+  padding : 15px;
+}
+.thead_primary tr th {
+  background-color: #0DB1F9;
+  border-color: #0DB1F9;
+  color: #fff;
+}
+.dt_pagination_ul {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0;
+  padding-left: 0;
+  padding-top : 15px;
+  user-select: none;
+}
+
+.dt_pagination .dt_item {
+  display: inline-block;
+}
+
+.dt_pagination .dt_item .dt_link {
+  padding: 6px 8px;
+  min-width: 38px;
+  min-height: 36px;
+  border-radius: 8px;
+  margin-left: 0;
+  margin-right: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #1C1E21;
+  display: inline-block;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid #EBEDF0;
+}
+
+.dt_pagination .dt_item .dt_link:hover {
+  background-color: #ebf2fd;
+  color: #0DB1F9;
+}
+
+.dt_pagination .dt_item.disabled .dt_link {
+  color: #D7DAE0;
+  cursor: not-allowed;
+}
+
+.dt_pagination .dt_item:first-child .dt_link, .dt_pagination .dt_item:last-child .dt_link {
+  border: none;
+}
+
+.dt_pagination .dt_item.active .dt_link {
+  background-color: #0DB1F9;
+  border-color: #0DB1F9;
+  color: #fff;
+}
+
+
+.dt_pagination .dt_item.dots .dt_link {
+  border: none;
+}
+
+@media only screen and (max-width: 600px) {
+  .dt_pagination .dt_item .dt_link {
+    padding: 5px 6px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    border-radius: 6px !important;
+    font-size: 14px !important;
+  }
+}

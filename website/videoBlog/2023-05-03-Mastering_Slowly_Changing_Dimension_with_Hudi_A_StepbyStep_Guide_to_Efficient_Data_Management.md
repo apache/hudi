@@ -4,7 +4,7 @@ last_modified_at: 2023-10-13T16:54:38.964863-07:00
 authors:
 - name: Soumil Shah
 category: blog
-image: /assets/images/video_blogs/2023-05-03-Mastering_Slowly_Changing_Dimension_with_Hudi_A_StepbyStep_Guide_to_Efficient_Data_Management.png
+image: /assets/images/video_blogs/video_blog2.png
 navigate: "https://www.youtube.com/watch?v=S93fOMhR-wg"
 tags:
 - guide

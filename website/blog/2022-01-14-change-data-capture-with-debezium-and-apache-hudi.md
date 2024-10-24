@@ -3,7 +3,7 @@ title: "Change Data Capture with Debezium and Apache Hudi"
 excerpt: "A review of new Debezium source connector for Apache Hudi"
 author: Rajesh Mahindra
 category: blog
-image: /assets/images/blog/debezium.png
+image: /assets/images/blog/user_stories6.png
 tags:
 - design
 - deltastreamer

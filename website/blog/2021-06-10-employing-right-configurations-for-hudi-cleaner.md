@@ -3,7 +3,7 @@ title: "Employing correct configurations for Hudi's cleaner table service"
 excerpt: "Ensuring isolation between Hudi writers and readers using `HoodieCleaner.java`"
 author: pratyakshsharma
 category: blog
-image: /assets/images/blog/hoodie-cleaner/Initial_timeline.png
+image: /assets/images/blog/user_stories5.png
 tags:
 - how-to
 - cleaner

@@ -3,7 +3,7 @@ title: "Incremental Processing on the Data Lake"
 excerpt: "How Apache Hudi provides ability for incremental data processing."
 author: vinoyang
 category: blog
-image: /assets/images/blog/incr-processing/image7.png
+image: /assets/images/blog/user_stories4.png
 tags:
 - blog
 - datalake

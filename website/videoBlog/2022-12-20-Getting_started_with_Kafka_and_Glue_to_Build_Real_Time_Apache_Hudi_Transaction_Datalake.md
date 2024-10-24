@@ -4,7 +4,7 @@ last_modified_at: 2023-10-13T16:54:38.964863-07:00
 authors:
 - name: Soumil Shah
 category: blog
-image: /assets/images/video_blogs/2022-12-20-Getting_started_with_Kafka_and_Glue_to_Build_Real_Time_Apache_Hudi_Transaction_Datalake.png
+image: /assets/images/video_blogs/video_blog4.png
 navigate: "https://youtu.be/pE23hadqX58"
 tags:
 - guide
