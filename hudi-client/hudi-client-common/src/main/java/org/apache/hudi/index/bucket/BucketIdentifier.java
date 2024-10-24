@@ -25,7 +25,6 @@ import org.apache.hudi.keygen.KeyGenUtils;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -61,13 +60,11 @@ public class BucketIdentifier implements Serializable {
   }
 
   protected static List<String> getHashKeys(String recordKey, String indexKeyFields) {
-    return !recordKey.contains(":") ? Collections.singletonList(recordKey) :
-        getHashKeysUsingIndexFields(recordKey, Arrays.asList(indexKeyFields.split(",")));
+    return getHashKeysUsingIndexFields(recordKey, Arrays.asList(indexKeyFields.split(",")));
   }
 
   protected static List<String> getHashKeys(String recordKey, List<String> indexKeyFields) {
-    return !recordKey.contains(":") ? Collections.singletonList(recordKey) :
-        getHashKeysUsingIndexFields(recordKey, indexKeyFields);
+    return getHashKeysUsingIndexFields(recordKey, indexKeyFields);
   }
 
   private static List<String> getHashKeysUsingIndexFields(String recordKey, List<String> indexKeyFields) {
