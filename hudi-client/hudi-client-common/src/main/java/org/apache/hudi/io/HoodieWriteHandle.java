@@ -175,6 +175,16 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   }
 
   /**
+   * ignore failed write based on 'getIgnoreWriteFailed' config
+   * @param throwable
+   */
+  protected void ignoreWriteFailed(Throwable throwable) {
+    if (config.getIgnoreWriteFailed()) {
+      throw new HoodieException(throwable.getMessage(), throwable);
+    }
+  }
+
+  /**
    * Perform the actual writing of the given record into the backing file.
    */
   public void write(HoodieRecord record, Schema schema, TypedProperties props) {
