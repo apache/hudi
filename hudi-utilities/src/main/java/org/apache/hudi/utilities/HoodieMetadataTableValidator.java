@@ -806,12 +806,12 @@ public class HoodieMetadataTableValidator implements Serializable {
    * @param metadataTableBasedContext Validation context containing information based on metadata table
    * @param fsBasedContext            Validation context containing information based on the file system
    * @param partitionPath             Partition path String
-   * @param baseDataFilesForCleaning    Base files for un-complete cleaner action
+   * @param baseDataFilesForCleaning  Base files for un-complete cleaner action
    */
   private void validateFilesInPartition(
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext, String partitionPath,
-      Set<String> baseDataFilesForCleaning) {
+      Set<String> baseDataFilesForCleaning) throws Exception {
     if (cfg.validateLatestFileSlices) {
       validateLatestFileSlices(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
     }
@@ -955,17 +955,14 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   @SuppressWarnings("rawtypes")
-  private void validateAllColumnStats(
-      HoodieMetadataValidationContext metadataTableBasedContext,
-      HoodieMetadataValidationContext fsBasedContext,
-      String partitionPath,
-      Set<String> baseDataFilesForCleaning) {
+  private void validateAllColumnStats(HoodieMetadataValidationContext metadataTableBasedContext, HoodieMetadataValidationContext fsBasedContext,
+                                      String partitionPath, Set<String> baseDataFilesForCleaning) throws Exception {
 
-    List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning);
+    List<String> latestFileNames = getLatestFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning);
     List<HoodieColumnRangeMetadata<Comparable>> metadataBasedColStats = metadataTableBasedContext
-        .getSortedColumnStatsList(partitionPath, latestBaseFilenameList);
+        .getSortedColumnStatsList(partitionPath, latestFileNames);
     List<HoodieColumnRangeMetadata<Comparable>> fsBasedColStats = fsBasedContext
-        .getSortedColumnStatsList(partitionPath, latestBaseFilenameList);
+        .getSortedColumnStatsList(partitionPath, latestFileNames);
 
     validate(metadataBasedColStats, fsBasedColStats, partitionPath, "column stats");
   }
@@ -1004,8 +1001,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           baseDataFilesForCleaning);
       List<String> latestFileNames = new ArrayList<>();
       latestFileSlicesFromMetadataTable.stream().filter(fs -> fs.getBaseFile().isPresent()).forEach(fs -> {
-        latestFileNames.add(fs.getBaseFile().get().getFileName());
-        latestFileNames.addAll(fs.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
+        getLatestFiles(fs, latestFileNames);
       });
       List<HoodieColumnRangeMetadata<Comparable>> colStats = metadataTableBasedContext
           .getSortedColumnStatsList(partitionPath, latestFileNames);
@@ -1028,6 +1024,11 @@ public class HoodieMetadataTableValidator implements Serializable {
           .collect(Collectors.toList())
           .iterator();
     });
+  }
+
+  private static void getLatestFiles(FileSlice fs, List<String> latestFileNames) {
+    latestFileNames.add(fs.getBaseFile().get().getFileName());
+    latestFileNames.addAll(fs.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
   }
 
   /**
@@ -1340,6 +1341,18 @@ public class HoodieMetadataTableValidator implements Serializable {
       sb.append("<empty>");
     }
     return sb.toString();
+  }
+
+  private List<String> getLatestFileNames(HoodieMetadataValidationContext fsBasedContext, String partitionPath, Set<String> baseDataFilesForCleaning) {
+    List<String> latestFileNames = new ArrayList<>();
+    List<FileSlice> latestFileSlices;
+    if (!baseDataFilesForCleaning.isEmpty()) {
+      latestFileSlices = filterFileSliceBasedOnInflightCleaning(fsBasedContext.getSortedLatestFileSliceList(partitionPath), baseDataFilesForCleaning);
+    } else {
+      latestFileSlices = fsBasedContext.getSortedLatestFileSliceList(partitionPath);
+    }
+    latestFileSlices.forEach(fileSlice -> getLatestFiles(fileSlice, latestFileNames));
+    return latestFileNames;
   }
 
   private List<String> getLatestBaseFileNames(HoodieMetadataValidationContext fsBasedContext, String partitionPath, Set<String> baseDataFilesForCleaning) {
@@ -1714,8 +1727,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    public List<HoodieColumnRangeMetadata<Comparable>> getSortedColumnStatsList(
-        String partitionPath, List<String> fileNames) {
+    public List<HoodieColumnRangeMetadata<Comparable>> getSortedColumnStatsList(String partitionPath, List<String> fileNames) throws Exception {
       LOG.info("All column names for getting column stats: {}", allColumnNameList);
       if (enableMetadataTable) {
         List<Pair<String, String>> partitionFileNameList = fileNames.stream()
@@ -1731,13 +1743,32 @@ public class HoodieMetadataTableValidator implements Serializable {
       } else {
         FileFormatUtils formatUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage())
             .getFileFormatUtils(HoodieFileFormat.PARQUET);
-        return fileNames.stream().flatMap(filename ->
-                formatUtils.readColumnStatsFromMetadata(
-                        metaClient.getStorage(),
-                        new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath), filename),
-                        allColumnNameList).stream())
-            .sorted(new HoodieColumnRangeMetadataComparator())
-            .collect(Collectors.toList());
+        Schema readerSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+        return fileNames.stream().flatMap(filename -> {
+          if (filename.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+            return formatUtils.readColumnStatsFromMetadata(
+                metaClient.getStorage(),
+                new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath), filename),
+                allColumnNameList
+            ).stream();
+          } else {
+            StoragePath storagePartitionPath = new StoragePath(metaClient.getBasePath(), partitionPath);
+            String filePath = new StoragePath(storagePartitionPath, filename).toString();
+            try {
+              return ((List<HoodieColumnRangeMetadata<Comparable>>) HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, metaClient, allColumnNameList, Option.of(readerSchema), metadataConfig.getMaxReaderBufferSize())
+                  .stream()
+                  // We need to convert file path and use only the file name instead of the complete file path
+                  .map(m -> (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.create(filename, m.getColumnName(), m.getMinValue(), m.getMaxValue(),
+                      m.getNullCount(), m.getValueCount(), m.getTotalSize(), m.getTotalUncompressedSize()))
+                  .collect(Collectors.toList()))
+                  .stream();
+            } catch (IOException e) {
+              throw new HoodieIOException(String.format("Failed to get column stats for file: %s", filePath), e);
+            }
+          }
+        })
+        .sorted(new HoodieColumnRangeMetadataComparator())
+        .collect(Collectors.toList());
       }
     }
 

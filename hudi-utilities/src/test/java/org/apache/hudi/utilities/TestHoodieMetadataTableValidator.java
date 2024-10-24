@@ -371,6 +371,36 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
   @ParameterizedTest
   @ValueSource(strings = {"MERGE_ON_READ", "COPY_ON_WRITE"})
+  public void testColumnStatsValidation(String tableType) {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+    writeOptions.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+
+    Dataset<Row> inserts = makeInsertDf("000", 5);
+    inserts.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+    // validate MDT column stats
+    validateColumnStats();
+
+    Dataset<Row> updates = makeUpdateDf("001", 5);
+    updates.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
+        .mode(SaveMode.Append)
+        .save(basePath);
+
+    // validate MDT column stats
+    validateColumnStats();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"MERGE_ON_READ", "COPY_ON_WRITE"})
   public void testPartitionStatsValidation(String tableType) {
     // TODO: Add validation for compaction and clustering cases
     Map<String, String> writeOptions = new HashMap<>();
@@ -403,6 +433,18 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
     // validate MDT partition stats
     validatePartitionStats();
+  }
+
+  private void validateColumnStats() {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.validateLatestFileSlices = false;
+    config.validateAllFileGroups = false;
+    config.validateAllColumnStats = true;
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    assertTrue(validator.run());
+    assertFalse(validator.hasValidationFailure());
+    assertTrue(validator.getThrowables().isEmpty());
   }
 
   private void validatePartitionStats() {
