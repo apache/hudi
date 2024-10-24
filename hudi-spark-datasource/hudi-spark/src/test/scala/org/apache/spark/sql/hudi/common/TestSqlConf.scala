@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.scalatest.BeforeAndAfter
 
 import java.io.File
@@ -65,11 +66,11 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, $partitionVal)")
 
       val metaClient = createMetaClient(spark, tablePath)
-      val firstCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
 
       // Then insert another new record
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, $partitionVal)")
 
+      val commitCompletionTime2 = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getCompletionTime
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
         Seq(1, "a1", 10.0, 1000, partitionVal),
         Seq(2, "a2", 10.0, 1000, partitionVal)
@@ -81,14 +82,12 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       assertResult(true)(Files.exists(Paths.get(s"$tablePath/$partitionVal")))
       assertResult(HoodieTableType.MERGE_ON_READ)(new HoodieTableConfig(
         HoodieStorageUtils.getStorage(tablePath, HoodieTestUtils.getDefaultStorageConf),
-        new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME),
-        HoodieTableConfig.PAYLOAD_CLASS_NAME.defaultValue,
-        HoodieTableConfig.RECORD_MERGER_STRATEGY.defaultValue).getTableType)
+        new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableConfig.RECORD_MERGE_MODE.defaultValue(), null, null).getTableType)
 
       // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
       // global configs
       DFSPropertiesConfiguration.addToGlobalProps(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      DFSPropertiesConfiguration.addToGlobalProps(BEGIN_INSTANTTIME.key, firstCommit)
+      DFSPropertiesConfiguration.addToGlobalProps(START_COMMIT.key, commitCompletionTime2)
       spark.catalog.refreshTable(tableName)
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
         Seq(2, "a2", 10.0, 1000, partitionVal)

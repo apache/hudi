@@ -980,7 +980,9 @@ public class HoodieMetadataTableValidator implements Serializable {
         AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()), metadataTableBasedContext.getMetadataConfig(),
         metaClient, false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
-        partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(metadataTableBasedContext.allColumnNameList).asScala().toSeq(), false);
+        partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
+            // set isTightBound to false since partition stats generated using column stats does not contain the field
+            .map(colStat -> HoodieMetadataColumnStats.newBuilder(colStat).setIsTightBound(false).build());
     JavaRDD<HoodieMetadataColumnStats> diffRDD = HoodieJavaRDD.getJavaRDD(partitionStats).subtract(HoodieJavaRDD.getJavaRDD(partitionStatsUsingColStats));
     if (!diffRDD.isEmpty()) {
       List<HoodieMetadataColumnStats> diff = diffRDD.collect();
@@ -1099,12 +1101,17 @@ public class HoodieMetadataTableValidator implements Serializable {
     secondaryKeys = secondaryKeys.sortBy(x -> x, true, numPartitions);
     for (int i = 0; i < numPartitions; i++) {
       List<String> secKeys = secondaryKeys.collectPartitions(new int[] {i})[0];
-      Map<String, List<String>> mdtSecondaryKeyToRecordKeys = ((HoodieBackedTableMetadata) metadataContext.tableMetadata)
+      Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = ((HoodieBackedTableMetadata) metadataContext.tableMetadata)
           .getSecondaryIndexRecords(secKeys, indexDefinition.getIndexName())
           .entrySet().stream()
-          .collect(Collectors.toMap(Map.Entry::getKey,
-              e -> e.getValue().stream().map(rec -> rec.getData().getRecordKeyFromSecondaryIndex()).collect(Collectors.toList())));
-      Map<String, List<String>> fsSecondaryKeyToRecordKeys = getFSSecondaryKeyToRecordKeys(engineContext, basePath, latestCompletedCommit, indexDefinition.getSourceFields().get(0), secKeys);
+          .collect(Collectors.toMap(
+              Map.Entry::getKey,
+              e -> e.getValue().stream()
+                  .map(rec -> rec.getData().isSecondaryIndexDeleted() ? null : rec.getData().getRecordKeyFromSecondaryIndex())
+                  .filter(Objects::nonNull)
+                  .collect(Collectors.toSet()))
+          );
+      Map<String, Set<String>> fsSecondaryKeyToRecordKeys = getFSSecondaryKeyToRecordKeys(engineContext, basePath, latestCompletedCommit, indexDefinition.getSourceFields().get(0), secKeys);
       if (!fsSecondaryKeyToRecordKeys.equals(mdtSecondaryKeyToRecordKeys)) {
         throw new HoodieValidationException(String.format("Secondary Index does not match : \nMDT secondary index: %s \nFS secondary index: %s",
             StringUtils.join(mdtSecondaryKeyToRecordKeys), StringUtils.join(fsSecondaryKeyToRecordKeys)));
@@ -1117,16 +1124,16 @@ public class HoodieMetadataTableValidator implements Serializable {
    * Queries data in the table and generates a mapping from secondary key to list of record keys with value
    * as secondary key. Here secondary key is the value of secondary key column or the secondaryField. Also the
    * function returns the secondary key mapping only for the input secondary keys.
-
-   * @param sparkEngineContext Spark Engine context
-   * @param basePath Table base path
+   *
+   * @param sparkEngineContext    Spark Engine context
+   * @param basePath              Table base path
    * @param latestCompletedCommit Latest completed commit in the table
-   * @param secondaryField The secondary key column used to determine the secondary keys
-   * @param secKeys Input secondary keys which will be filtered
+   * @param secondaryField        The secondary key column used to determine the secondary keys
+   * @param secKeys               Input secondary keys which will be filtered
    * @return Mapping of secondary keys to list of record keys with value as secondary key
    */
-  Map<String, List<String>> getFSSecondaryKeyToRecordKeys(HoodieSparkEngineContext sparkEngineContext, String basePath, String latestCompletedCommit,
-                                                          String secondaryField, List<String> secKeys) {
+  Map<String, Set<String>> getFSSecondaryKeyToRecordKeys(HoodieSparkEngineContext sparkEngineContext, String basePath, String latestCompletedCommit,
+                                                         String secondaryField, List<String> secKeys) {
     List<Tuple2<String, String>> recordAndSecondaryKeys = sparkEngineContext.getSqlContext().read().format("hudi")
         .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
         .load(basePath)
@@ -1135,10 +1142,10 @@ public class HoodieMetadataTableValidator implements Serializable {
         .javaRDD()
         .map(row -> new Tuple2<>(row.getAs(RECORD_KEY_METADATA_FIELD).toString(), row.getAs(secondaryField).toString()))
         .collect();
-    Map<String, List<String>> secondaryKeyToRecordKeys = new HashMap<>();
+    Map<String, Set<String>> secondaryKeyToRecordKeys = new HashMap<>();
     for (Tuple2<String, String> recordAndSecondaryKey : recordAndSecondaryKeys) {
       secondaryKeyToRecordKeys.compute(recordAndSecondaryKey._2, (k, v) -> {
-        List<String> recKeys = v != null ? v : new ArrayList<>();
+        Set<String> recKeys = v != null ? v : new HashSet<>();
         recKeys.add(recordAndSecondaryKey._1);
         return recKeys;
       });

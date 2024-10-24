@@ -166,10 +166,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   }
 
   private List<Row> readRecords() {
-    Dataset<Row> roViewDF = sparkSession
-        .read()
-        .format("hudi")
-        .load(basePath + "/*/*/*/*");
+    Dataset<Row> roViewDF = sparkSession.read().format("hudi").load(basePath);
     roViewDF.createOrReplaceTempView("clutering_table");
     return sparkSession.sqlContext().sql("select * from clutering_table").collectAsList();
   }

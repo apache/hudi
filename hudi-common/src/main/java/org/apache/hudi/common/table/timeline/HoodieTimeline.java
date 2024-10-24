@@ -401,6 +401,11 @@ public interface HoodieTimeline extends Serializable {
   Stream<HoodieInstant> getReverseOrderedInstants();
 
   /**
+   * @return the latest completion time of the instants
+   */
+  Option<String> getLatestCompletionTime();
+
+  /**
    * Get the stream of instants in order by state transition timestamp of actions.
    */
   Stream<HoodieInstant> getInstantsOrderedByCompletionTime();
@@ -409,6 +414,11 @@ public interface HoodieTimeline extends Serializable {
    * @return true if the passed in instant is before the first completed instant in the timeline
    */
   boolean isBeforeTimelineStarts(String ts);
+
+  /**
+   * @return true if the passed-in completion time is smaller than the minimum completion time in the timeline
+   */
+  boolean isBeforeTimelineStartsByCompletionTime(String completionTime);
 
   /**
    * First non-savepoint commit in the active data timeline. Examples:

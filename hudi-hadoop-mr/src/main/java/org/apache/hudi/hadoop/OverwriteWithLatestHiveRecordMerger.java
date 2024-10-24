@@ -34,7 +34,7 @@ import java.io.IOException;
 public class OverwriteWithLatestHiveRecordMerger extends HoodieHiveRecordMerger {
   @Override
   public String getMergingStrategy() {
-    return OVERWRITE_MERGER_STRATEGY_UUID;
+    return OVERWRITE_MERGE_STRATEGY_UUID;
   }
 
   @Override

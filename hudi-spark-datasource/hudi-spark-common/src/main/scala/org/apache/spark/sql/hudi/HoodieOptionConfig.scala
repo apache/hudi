@@ -19,10 +19,11 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
-import org.apache.hudi.common.model.{HoodieRecordMerger, HoodieTableType}
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils
-import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
 
@@ -67,21 +68,18 @@ object HoodieOptionConfig {
     .withSqlKey("payloadClass")
     .withHoodieKey(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key)
     .withTableConfigKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key)
-    .defaultValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue())
     .build()
 
-  val SQL_PAYLOAD_TYPE: HoodieSQLOption[String] = buildConf()
-    .withSqlKey("payloadType")
-    .withHoodieKey(DataSourceWriteOptions.PAYLOAD_TYPE.key)
-    .withTableConfigKey(HoodieTableConfig.PAYLOAD_TYPE.key)
-    .defaultValue(DataSourceWriteOptions.PAYLOAD_TYPE.defaultValue())
+  val SQL_RECORD_MERGE_MODE: HoodieSQLOption[String] = buildConf()
+    .withSqlKey("recordMergeMode")
+    .withHoodieKey(HoodieWriteConfig.RECORD_MERGE_MODE.key)
+    .withTableConfigKey(HoodieTableConfig.RECORD_MERGE_MODE.key)
     .build()
 
-  val SQL_RECORD_MERGER_STRATEGY: HoodieSQLOption[String] = buildConf()
-    .withSqlKey("recordMergerStrategy")
-    .withHoodieKey(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key)
-    .withTableConfigKey(HoodieTableConfig.RECORD_MERGER_STRATEGY.key)
-    .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+  val SQL_RECORD_MERGE_STRATEGY_ID: HoodieSQLOption[String] = buildConf()
+    .withSqlKey("recordMergeStrategyId")
+    .withHoodieKey(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key)
+    .withTableConfigKey(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key)
     .build()
 
   /**
@@ -203,7 +201,7 @@ object HoodieOptionConfig {
   // extract primaryKey, preCombineField, type options
   def extractSqlOptions(options: Map[String, String]): Map[String, String] = {
     val sqlOptions = mapHoodieConfigsToSqlOptions(options)
-    val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName) -- Set(SQL_RECORD_MERGER_STRATEGY.sqlKeyName) -- Set(SQL_PAYLOAD_TYPE.sqlKeyName)
+    val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName, SQL_RECORD_MERGE_STRATEGY_ID.sqlKeyName, SQL_RECORD_MERGE_MODE.sqlKeyName)
     sqlOptions.filterKeys(targetOptions.contains).toMap
   }
 
@@ -249,7 +247,7 @@ object HoodieOptionConfig {
   def makeOptionsCaseInsensitive(sqlOptions: Map[String, String]): Map[String, String] = {
     // Make Keys Case Insensitive
     val standardOptions = Seq(SQL_KEY_TABLE_PRIMARY_KEY, SQL_KEY_PRECOMBINE_FIELD,
-    SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGER_STRATEGY, SQL_PAYLOAD_TYPE).map(key => key.sqlKeyName)
+      SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGE_STRATEGY_ID, SQL_RECORD_MERGE_MODE).map(key => key.sqlKeyName)
 
     sqlOptions.map(option => {
       standardOptions.find(x => x.toLowerCase().contains(option._1.toLowerCase())) match {

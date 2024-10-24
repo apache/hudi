@@ -17,19 +17,19 @@
 
 package org.apache.spark.sql.hudi.dml
 
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
 
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
@@ -351,11 +351,12 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  // TODO(HUDI-8430): revisit the explicit config setting of recordMergeStrategyId
   test("Test Insert Into Non Partitioned Table") {
    withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK), Map(HoodieRecordType.SPARK ->
      // SparkMerger should use "HoodieSparkValidateDuplicateKeyRecordMerger"
      // with "hoodie.sql.insert.mode=strict"
-     Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key ->
+     Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key ->
        classOf[HoodieSparkValidateDuplicateKeyRecordMerger].getName)))(withTempDir { tmp =>
      val tableName = generateTableName
      spark.sql(s"set hoodie.sql.insert.mode=strict")
@@ -372,7 +373,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           | tblproperties (
           |  type = 'cow',
           |  primaryKey = 'id',
-          |  preCombineField = 'ts'
+          |  preCombineField = 'ts',
+          |  recordMergeStrategyId = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
           | )
          """.stripMargin)
      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
@@ -413,7 +415,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           | tblproperties (
           |  type = 'mor',
           |  primaryKey = 'id',
-          |  preCombineField = 'ts'
+          |  preCombineField = 'ts',
+          |  recordMergeStrategyId = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
           | )
          """.stripMargin)
      spark.sql(s"insert into $tableName2 select 1, 'a1', 10, 1000")

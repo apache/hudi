@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 
 import java.io.File;
 import java.io.FileReader;
@@ -50,7 +50,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(DefaultHoodieRecordPayload.class.getName())
+      .defaultValue(HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME)
       .markAdvanced()
       .withDocumentation("This needs to be same as class used during insert/upserts. Just like writing, compaction also uses "
         + "the record payload class to merge records in the log against each other, merge again with the base file and "
@@ -65,9 +65,6 @@ public class HoodiePayloadConfig extends HoodieConfig {
       .withDocumentation("Table column/field name to order records that have the same key, before "
           + "merging and writing to storage.");
 
-  /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
-  @Deprecated
-  public static final String DEFAULT_PAYLOAD_CLASS = PAYLOAD_CLASS_NAME.defaultValue();
   /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated
   public static final String PAYLOAD_CLASS_PROP = PAYLOAD_CLASS_NAME.key();

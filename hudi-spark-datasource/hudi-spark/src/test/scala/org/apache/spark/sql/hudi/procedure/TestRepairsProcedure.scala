@@ -135,10 +135,13 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       // overwrite hoodie props
       val expectedOutput ="""
           |[hoodie.archivelog.folder,archived,archive]
+          |[hoodie.compaction.payload.class,org.apache.hudi.common.model.DefaultHoodieRecordPayload,null]
           |[hoodie.database.name,default,null]
           |[hoodie.datasource.write.drop.partition.columns,false,false]
           |[hoodie.datasource.write.hive_style_partitioning,true,null]
           |[hoodie.datasource.write.partitionpath.urlencode,false,null]
+          |[hoodie.record.merge.mode,EVENT_TIME_ORDERING,null]
+          |[hoodie.record.merge.strategy.id,eeb8d96f-b1e4-49fd-bbf8-28ac514178e5,null]
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
           |[hoodie.table.initial.version,8,8]

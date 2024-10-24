@@ -80,6 +80,12 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    */
   private Functions.Function2<String, Integer, Integer> partitionIndexFunc;
 
+
+  /**
+   * To prevent strings compare for each record, define this only during open()
+   */
+  private boolean isInsertOverwrite;
+
   /**
    * Constructs a BucketStreamWriteFunction.
    *
@@ -100,6 +106,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
     this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(bucketNum, parallelism);
+    this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
   }
 
   @Override
@@ -120,7 +127,11 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     final String partition = hoodieKey.getPartitionPath();
     final HoodieRecordLocation location;
 
-    bootstrapIndexIfNeed(partition);
+    // for insert overwrite operation skip the index loading
+    if (!isInsertOverwrite) {
+      bootstrapIndexIfNeed(partition);
+    }
+
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
     final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, this.bucketNum);
     final String bucketId = partition + "/" + bucketNum;
@@ -154,10 +165,6 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * This is a required operation for each restart to avoid having duplicate file ids for one bucket.
    */
   private void bootstrapIndexIfNeed(String partition) {
-    if (OptionsResolver.isInsertOverwrite(config)) {
-      // skips the index loading for insert overwrite operation.
-      return;
-    }
     if (bucketIndex.containsKey(partition)) {
       return;
     }
