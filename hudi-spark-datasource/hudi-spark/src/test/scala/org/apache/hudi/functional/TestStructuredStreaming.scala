@@ -18,10 +18,10 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.hudi.DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER
+import org.apache.hudi.DataSourceWriteOptions.{STREAMING_CHECKPOINT_IDENTIFIER, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
-import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.config.{HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
-import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
@@ -473,7 +473,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .get.getTimestamp
   }
 
-  private def streamingWrite(schema: StructType, sourcePath: String, destPath: String, hudiOptions: Map[String, String], checkpoint: String): Unit = {
+  private def streamingWrite(schema: StructType, sourcePath: String, destPath: String, hudiOptions: Map[String, String]): Unit = {
     val query = spark.readStream
       .schema(schema)
       .json(sourcePath)
@@ -481,7 +481,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .format("org.apache.hudi")
       .options(hudiOptions)
       .trigger(Trigger.Once())
-      .option("checkpointLocation", basePath + "/checkpoint" + checkpoint)
+      .option("checkpointLocation", basePath + "/checkpoint")
       .outputMode(OutputMode.Append)
       .start(destPath)
     query.processAllAvailable()
@@ -496,15 +496,52 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
     val opts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name()) + (DataSourceWriteOptions.STREAMING_DISABLE_COMPACTION.key -> "true")
-    streamingWrite(inputDF1.schema, sourcePath, destPath, opts, "000")
+    streamingWrite(inputDF1.schema, sourcePath, destPath, opts)
     for (i <- 1 to 24) {
       val id = String.format("%03d", new Integer(i))
       val records = recordsToStrings(dataGen.generateUpdates(id, 10)).asScala.toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       inputDF.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
-      streamingWrite(inputDF.schema, sourcePath, destPath, opts, id)
+      streamingWrite(inputDF.schema, sourcePath, destPath, opts)
     }
-    val metaClient = HoodieTestUtils.createMetaClient(storage, destPath);
+    val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
     assertTrue(metaClient.getActiveTimeline.getCommitAndReplaceTimeline.empty())
+    assertEquals(25, metaClient.getActiveTimeline.countInstants())
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testStructuredStreamingWithMergeMode(isCow: Boolean): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    // First chunk of data
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    val tableType = if (isCow) {
+      "COPY_ON_WRITE"
+    } else {
+      "MERGE_ON_READ"
+    }
+    val opts = commonOpts ++ Map(DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key() -> tableType,
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
+      DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key() -> HoodieSparkDeleteRecordMerger.DELETE_MERGER_STRATEGY,
+      DataSourceWriteOptions.RECORD_MERGE_IMPL_CLASSES.key() -> classOf[HoodieSparkDeleteRecordMerger].getName,
+      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key() -> "parquet")
+    streamingWrite(inputDF1.schema, sourcePath, destPath, opts)
+
+
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("001", 5)).asScala.toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    streamingWrite(inputDF2.schema, sourcePath, destPath, opts)
+
+    //merger will delete any records in records2 so we remove those from the original batch using except
+    val expectedFinalRecords = inputDF1.select("_row_key", "partition_path").except(inputDF2.select("_row_key", "partition_path"))
+    val finalRecords = spark.read.format("hudi")
+      .option(DataSourceWriteOptions.RECORD_MERGE_IMPL_CLASSES.key(), classOf[HoodieSparkDeleteRecordMerger].getName)
+      .load(destPath).select("_row_key", "partition_path")
+    assertEquals(expectedFinalRecords.count(), finalRecords.count())
+    assertEquals(0, expectedFinalRecords.except(finalRecords).count())
   }
 }
