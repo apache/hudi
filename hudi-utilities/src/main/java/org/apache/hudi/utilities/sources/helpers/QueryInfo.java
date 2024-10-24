@@ -28,6 +28,7 @@ import java.util.List;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL;
 
+// TODO remove this class
 /**
  * This class is used to prepare query information for s3 and gcs incr source.
  * Some of the information in this class is used for batching based on sourceLimit.

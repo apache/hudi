@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -550,5 +551,55 @@ public class CloudObjectsSelectorCommon {
   public enum Type {
     S3,
     GCS
+  }
+
+  public enum CloudDataColumnInfo {
+    S3(
+        CloudObjectsSelectorCommon.S3_OBJECT_KEY,
+        CloudObjectsSelectorCommon.S3_OBJECT_SIZE
+    ),
+    GCS(
+        CloudObjectsSelectorCommon.GCS_OBJECT_KEY,
+        CloudObjectsSelectorCommon.GCS_OBJECT_SIZE
+    );
+
+    // both S3 and GCS use COMMIT_TIME_METADATA_FIELD as order column
+    private final String orderColumn = HoodieRecord.COMMIT_TIME_METADATA_FIELD;
+    private final String keyColumn;
+    private final String limitColumn;
+    private final List<String> orderByColumns;
+
+    CloudDataColumnInfo(String keyColumn, String limitColumn) {
+      this.keyColumn = keyColumn;
+      this.limitColumn = limitColumn;
+      orderByColumns = Arrays.asList(orderColumn, keyColumn);
+    }
+
+    public String getOrderColumn() {
+      return orderColumn;
+    }
+
+    public String getKeyColumn() {
+      return keyColumn;
+    }
+
+    public String getLimitColumn() {
+      return limitColumn;
+    }
+
+    public List<String> getOrderByColumns() {
+      return orderByColumns;
+    }
+
+    public static CloudDataColumnInfo getCloudDataColumnInfo(CloudObjectsSelectorCommon.Type type) {
+      switch (type) {
+        case S3:
+          return S3;
+        case GCS:
+          return GCS;
+        default:
+          throw new IllegalArgumentException("Unsupported cloud data column type: " + type);
+      }
+    }
   }
 }

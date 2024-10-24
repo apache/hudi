@@ -43,6 +43,7 @@ import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SOURCE_MAX_BYTES_PER_PARTITION;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.SOURCE_FILE_FORMAT;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.CloudDataColumnInfo.getCloudDataColumnInfo;
 
 /**
  * Connects to S3/GCS from Spark and downloads data from a given list of files.
@@ -87,7 +88,7 @@ public class CloudDataFetcher implements Serializable {
       CloudObjectsSelectorCommon.Type cloudType,
       CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint,
       Option<SourceProfileSupplier> sourceProfileSupplier,
-      Pair<QueryInfo, Dataset<Row>> queryInfoDatasetPair,
+      Pair<String, Dataset<Row>> chkptDatasetPair,
       Option<SchemaProvider> schemaProvider,
       long sourceLimit) {
     boolean isSourceProfileSupplierAvailable = sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null;
@@ -96,15 +97,16 @@ public class CloudDataFetcher implements Serializable {
       sourceLimit = sourceProfileSupplier.get().getSourceProfile().getMaxSourceBytes();
     }
 
-    QueryInfo queryInfo = queryInfoDatasetPair.getLeft();
+    String endCheckpoint = chkptDatasetPair.getLeft();
     String filter = CloudObjectsSelectorCommon.generateFilter(cloudType, props);
     LOG.info("Adding filter string to Dataset: " + filter);
-    Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(filter);
+    Dataset<Row> filteredSourceData = chkptDatasetPair.getRight().filter(filter);
 
-    LOG.info("Adjusting end checkpoint:" + queryInfo.getEndInstant() + " based on sourceLimit :" + sourceLimit);
+    LOG.info("Adjusting end checkpoint:" + endCheckpoint + " based on sourceLimit :" + sourceLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
         IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
-            filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
+            filteredSourceData, sourceLimit, endCheckpoint,
+            cloudObjectIncrCheckpoint, getCloudDataColumnInfo(cloudType));
     if (!checkPointAndDataset.getRight().isPresent()) {
       LOG.info("Empty source, returning endpoint:" + checkPointAndDataset.getLeft());
       return Pair.of(Option.empty(), checkPointAndDataset.getLeft().toString());
