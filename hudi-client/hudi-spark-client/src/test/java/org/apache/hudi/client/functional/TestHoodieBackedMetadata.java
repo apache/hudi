@@ -2607,7 +2607,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Perform a commit. This should bootstrap the metadata table with latest version.
     List<HoodieRecord> records;
     List<WriteStatus> writeStatuses;
-    HoodieWriteConfig writeConfig = getWriteConfig(true, true);
+    // Set Writer Version 6.
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    tableConfig.setTableVersion(HoodieTableVersion.SIX);
+    initMetaClient(COPY_ON_WRITE, tableConfig.getProps());
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).withWriteTableVersion(6).build();
     String commitTimestamp;
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       commitTimestamp = client.createNewInstantTime();
@@ -2677,6 +2681,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(false, true, false)
+        .withWriteTableVersion(6)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
@@ -2684,7 +2689,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withProperties(properties)
         .build();
     String commitTimestamp;
-
+    // Set Writer Version 6.
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    tableConfig.setTableVersion(HoodieTableVersion.SIX);
+    initMetaClient(COPY_ON_WRITE, tableConfig.getProps());
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       commitTimestamp = client.createNewInstantTime();
       records = dataGen.generateInserts(commitTimestamp, 5);

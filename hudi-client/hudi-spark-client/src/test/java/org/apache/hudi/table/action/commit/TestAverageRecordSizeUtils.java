@@ -91,7 +91,7 @@ public class TestAverageRecordSizeUtils {
     when(mockTimeline.getReverseOrderedInstants()).then(i -> reverseOrderInstants.stream());
     commitsTimeline.setInstants(instants);
 
-    assertEquals(expectedSize, AverageRecordSizeUtils.averageBytesPerRecord(mockTimeline, writeConfig));
+    assertEquals(expectedSize, AverageRecordSizeUtils.averageBytesPerRecord(mockTimeline, writeConfig, COMMIT_METADATA_SER_DE));
   }
 
   @Test
@@ -109,7 +109,7 @@ public class TestAverageRecordSizeUtils {
     // Simulate a case where the instant details are absent
     commitsTimeline.setInstants(new ArrayList<>());
 
-    assertEquals(recordSize, AverageRecordSizeUtils.averageBytesPerRecord(mockTimeline, writeConfig));
+    assertEquals(recordSize, AverageRecordSizeUtils.averageBytesPerRecord(mockTimeline, writeConfig, COMMIT_METADATA_SER_DE));
   }
 
   private static String getBaseFileName(String instantTime) {

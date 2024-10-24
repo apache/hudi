@@ -409,7 +409,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     initMetaClient(getTableType(), properties);
     // init config, table and client.
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(true).withRollbackUsingMarkers(false)
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(true).withRollbackUsingMarkers(false).withWriteTableVersion(6)
         .doSkipDefaultPartitionValidation(skipDefaultPartitionValidation).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     // Write inserts
@@ -457,6 +457,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     params.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
     params.put(HoodieTableConfig.NAME.key(), tableName);
     params.put(BASE_FILE_FORMAT.key(), BASE_FILE_FORMAT.defaultValue().name());
+    params.put("hoodie.table.version", "6");
   }
 
   private void doInsert(SparkRDDWriteClient client) {
@@ -600,13 +601,14 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     // init config, table and client.
     Map<String, String> params = new HashMap<>();
     if (fromVersion.versionCode() >= HoodieTableVersion.TWO.versionCode()) {
-      addNewTableParamsToProps(params);
+      addNewTableParamsToProps(params, metaClient.getTableConfig().getTableName());
     }
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       params.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
       metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
     }
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(true)
+        .withWriteTableVersion(6)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
         .withMarkersType(markerType.name()).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
@@ -619,6 +621,10 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, cfg.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
       tableConfig.setValue(BASE_FILE_FORMAT, cfg.getString(BASE_FILE_FORMAT));
     }
+
+    // Downgrade Script for table version 8 is still in progress.
+    assertTrue(HoodieTableVersion.SEVEN.greaterThan(fromVersion));
+    prepForDowngradeFromVersion(HoodieTableVersion.SIX);
 
     // prepare data. Make 2 commits, in which 2nd is not committed.
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
