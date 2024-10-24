@@ -45,6 +45,11 @@ public abstract class CompactionStrategy implements Serializable {
   public static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILES_SIZE";
   public static final String TOTAL_LOG_FILES = "TOTAL_LOG_FILES";
 
+  // >>>>>>>>> For Sort Merge Join Compaction >>>>>>>>> //
+  public static final String TOTAL_BASE_FILES = "TOTAL_BASE_FILES";
+  public static final String TOTAL_BASE_FILE_SIZE = "TOTAL_BASE_FILE_SIZE";
+  // <<<<<<<<< For Sort Merge Join Compaction <<<<<<<<< //
+
   /**
    * Callback hook when a HoodieCompactionOperation is created. Individual strategies can capture the metrics they need
    * to decide on the priority.

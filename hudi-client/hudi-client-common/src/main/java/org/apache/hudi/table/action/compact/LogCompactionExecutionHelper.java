@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.CompactionContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -71,7 +72,7 @@ public class LogCompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O
                                                                   CompactionOperation operation,
                                                                   String instantTime,
                                                                   HoodieMergedLogRecordScanner scanner,
-                                                                  Option<HoodieBaseFile> oldDataFileOpt) throws IOException {
+                                                                  Option<HoodieBaseFile> oldDataFileOpt, CompactionContext compactionContext) throws IOException {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES,
         StringUtils.join(scanner.getValidBlockInstants(), ","));
