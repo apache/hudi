@@ -125,8 +125,8 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
 
   /**
    * Processing time based delete is found when
-   * 1. The current record's metadata contains the flag: PROCESSING_TIME_BASED_DELETE_FOUND.
-   * 2. The current record is a delete whose orderingVal is default value, or
+   * 1. The current record's metadata contains the flag: PROCESSING_TIME_BASED_DELETE_FOUND, or
+   * 2. The current record is a delete whose orderingVal is default value.
    */
   private <T> boolean hasProcessingTimeBasedDelete(HoodieRecord<T> record) throws IOException {
     return (record.getMetadata().isPresent() && record.getMetaDataInfo(DELETE_FOUND_WITHOUT_ORDERING_VALUE).isPresent())
