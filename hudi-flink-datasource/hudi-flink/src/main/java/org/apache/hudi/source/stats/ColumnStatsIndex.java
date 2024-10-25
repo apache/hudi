@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source.stats;
 
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 
 import java.io.Serializable;
@@ -31,11 +30,28 @@ import java.util.Set;
  */
 public interface ColumnStatsIndex extends Serializable {
 
-  String getIndexName();
+  /**
+   * Returns the partition name of the index.
+   */
+  String getIndexPartitionName();
 
-  HoodieTableMetadata getMetadataTable();
-
+  /**
+   * Computes the filtered files with given candidates.
+   *
+   * @param columnStatsProbe The utility to filter the column stats metadata.
+   * @param allFile          The file name list of the candidate files.
+   *
+   * @return The set of filtered file names
+   */
   Set<String> computeCandidateFiles(ColumnStatsProbe columnStatsProbe, List<String> allFile);
 
+  /**
+   * Computes the filtered partition paths with given candidates.
+   *
+   * @param columnStatsProbe The utility to filter the column stats metadata.
+   * @param allPartitions    The <strong>relative</strong> partition path list of the candidate partitions.
+   *
+   * @return The set of filtered relative partition paths
+   */
   Set<String> computeCandidatePartitions(ColumnStatsProbe columnStatsProbe, List<String> allPartitions);
 }

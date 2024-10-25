@@ -95,11 +95,10 @@ public class FileStatsIndex implements ColumnStatsIndex {
   }
 
   @Override
-  public String getIndexName() {
+  public String getIndexPartitionName() {
     return HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
   }
 
-  @Override
   public HoodieTableMetadata getMetadataTable() {
     // initialize the metadata table lazily
     if (this.metadataTable == null) {
@@ -122,7 +121,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
       final List<RowData> statsRows = readColumnStatsIndexByColumns(targetColumns);
       return candidatesInMetadataTable(probe, statsRows, allFiles);
     } catch (Throwable t) {
-      LOG.warn("Read {} for data skipping error", getIndexName(), t);
+      LOG.warn("Read {} for data skipping error", getIndexPartitionName(), t);
       return null;
     }
   }
@@ -385,7 +384,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
         .map(colName -> new ColumnIndexID(colName).asBase64EncodedString()).collect(Collectors.toList());
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
-        getMetadataTable().getRecordsByKeyPrefixes(encodedTargetColumnNames, getIndexName(), false);
+        getMetadataTable().getRecordsByKeyPrefixes(encodedTargetColumnNames, getIndexPartitionName(), false);
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
         AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());

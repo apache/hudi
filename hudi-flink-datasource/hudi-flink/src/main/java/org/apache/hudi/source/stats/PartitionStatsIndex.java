@@ -42,7 +42,7 @@ public class PartitionStatsIndex extends FileStatsIndex {
   }
 
   @Override
-  public String getIndexName() {
+  public String getIndexPartitionName() {
     return HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS;
   }
 
