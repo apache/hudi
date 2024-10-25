@@ -72,6 +72,9 @@ Apache Hudi is integrated in the digital platform to meet the real-time update n
 ### Kyligence 
 [Kyligence](https://kyligence.io/zh/) is the leading Big Data analytics platform company. We’ve built end to end solutions for various Global Fortune 500 companies in US and China. We adopted Apache Hudi in our Cloud solution on AWS in 2019. With the help of Hudi, we are able to process upserts and deletes easily and we use incremental views to build efficient data pipelines in AWS. The Hudi datasets can also be integrated to Kyligence Cloud directly for high concurrent OLAP access.
 
+### Kuaishou
+[Kuaishou](https://www.kuaishou.com/en/) is a prominent Chinese giant in the content community and social platform. The company offers a diverse range of services, including live streaming, short videos, and e-commerce. At Kuaishou, both AI experts and BI technologists leverage Hudi to handle their online business cases. In AI scenarios, Hudi is used to build a unified batch-stream sample lake at the exabyte (EB) scale and end-to-end latency of 30 seconds. The sample lake supports both online and offline training. In BI scenarios, Hudi enhances the traditional HIVE data warehouse by enabling streaming ingestion into the lakehouse at the ODS layer. It efficiently processes append and upsert streams, while also supporting incremental updates across the DWD, DWS, and ADS layers. Currently, Hudi plays a key role in both BI and AI scenarios at Kuaishou.
+
 ### Lingyue-digital Corporation 
 [Lingyue-digital Corporation](https://www.lingyue-digital.com/) belongs to BMW Group. Apache Hudi is used to perform ingest MySQL and PostgreSQL change data capture. We build up upsert scenarios on Hadoop and spark.
 
