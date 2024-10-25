@@ -214,8 +214,9 @@ public class StreamReadMonitoringFunction
     }
     IncrementalInputSplits.Result result =
         incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled);
-    if (result.isEmpty()) {
+    if (result.equals(IncrementalInputSplits.Result.EMPTY)) {
       // no new instants, returns early
+      LOG.info("result is empty, do not update issuedInstant.");
       return;
     }
 
@@ -281,5 +282,9 @@ public class StreamReadMonitoringFunction
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
     readMetrics = new FlinkStreamReadMetrics(metrics);
     readMetrics.registerMetrics();
+  }
+
+  public String getIssuedInstant() {
+    return issuedInstant;
   }
 }

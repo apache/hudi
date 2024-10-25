@@ -19,9 +19,13 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
@@ -35,6 +39,7 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.util.AbstractStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.CollectingSourceContext;
 import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,15 +47,18 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -137,6 +145,51 @@ public class TestStreamReadMonitoringFunction {
           sourceContext.getPartitionPaths(), is("par1,par2,par3,par4"));
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All the instants should have range limit");
+
+      // Stop the stream task.
+      function.close();
+    }
+  }
+
+  @Test
+  public void testConsumeForSpeedLimitWhenEmptyCommitExists() throws Exception {
+    Configuration conf = new Configuration(this.conf);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    TestData.writeData(Collections.EMPTY_LIST, conf);
+    TestData.writeData(Collections.EMPTY_LIST, conf);
+    TestData.writeData(Collections.EMPTY_LIST, conf);
+    TestData.writeData(Collections.EMPTY_LIST, conf);
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(conf.get(FlinkOptions.PATH), HoodieTableType.COPY_ON_WRITE);
+    HoodieTimeline commitsTimeline = metaClient.reloadActiveTimeline()
+        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    HoodieInstant firstInstant = commitsTimeline.firstInstant().get();
+
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
+    conf.set(FlinkOptions.READ_COMMITS_LIMIT, 2);
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+    conf.set(FlinkOptions.READ_START_COMMIT, String.valueOf((Long.valueOf(firstInstant.getTimestamp()) - 100)));
+    StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
+    // issuedOffset is null
+    try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
+      harness.setup();
+      harness.open();
+
+      CountDownLatch latch = new CountDownLatch(0);
+      CollectingSourceContext sourceContext = new CollectingSourceContext(latch);
+
+      //issuedOffset is null , so it is InstantRange.RangeType.CLOSED_CLOSED
+      function.monitorDirAndForwardSplits(sourceContext);
+      assertTrue(sourceContext.splits.size() == 0, "There should be no inputSplits");
+      assertEquals(1, intervalBetween2Instants(commitsTimeline, firstInstant.getTimestamp(), function.getIssuedInstant()), "Should read 2 instant");
+
+      // issuedOffset is not null, so it is InstantRange.RangeType.OPEN_CLOSED
+      String preIussuedInstant = function.getIssuedInstant();
+      function.monitorDirAndForwardSplits(sourceContext);
+      assertTrue(sourceContext.splits.size() == 0, "There should be no inputSplits");
+      assertEquals(2, intervalBetween2Instants(commitsTimeline, preIussuedInstant, function.getIssuedInstant()), "Should read 2 instant");
 
       // Stop the stream task.
       function.close();
@@ -436,6 +489,20 @@ public class TestStreamReadMonitoringFunction {
       }
     });
     task.start();
+  }
+
+  private Integer intervalBetween2Instants(HoodieTimeline timeline, String instant1, String instant2) {
+    Integer idxInstant1 = getInstantIdxInTimeline(timeline, instant1);
+    Integer idxInstant2 = getInstantIdxInTimeline(timeline, instant2);
+    return (idxInstant1 != -1 && idxInstant2 != -1) ? Math.abs(idxInstant1 - idxInstant2) : -1;
+  }
+
+  private Integer getInstantIdxInTimeline(HoodieTimeline timeline, String instant) {
+    List<HoodieInstant> instants = timeline.getInstants();
+    return IntStream.range(0, instants.size())
+        .filter(i -> instants.get(i).getTimestamp().equals(instant))
+        .findFirst()
+        .orElse(-1);
   }
 
   /**
