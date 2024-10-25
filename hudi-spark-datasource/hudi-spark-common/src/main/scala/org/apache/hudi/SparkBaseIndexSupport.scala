@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, In}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
@@ -163,7 +163,15 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
           // Handle composite record keys
           RecordLevelIndexSupport.filterQueryWithRecordKey(query, recordKeysArray).foreach {
             case (exp: Expression, recKeys: List[String]) =>
-              recordKeys = recordKeys :+ recKeys.mkString(DEFAULT_RECORD_KEY_PARTS_SEPARATOR)
+              exp match {
+                // For IN, add each element individually to recordKeys
+                case _: In =>
+                  recordKeys = recordKeys ++ recKeys
+
+                // For other cases, basically EqualTo, concatenate recKeys with the default separator
+                case _ =>
+                  recordKeys = recordKeys :+ recKeys.mkString(DEFAULT_RECORD_KEY_PARTS_SEPARATOR)
+              }
               recordKeyQueries = recordKeyQueries :+ exp
           }
         }

@@ -130,14 +130,14 @@ object RecordLevelIndexSupport {
    * @param queryFilter The query that need to be filtered.
    * @return Tuple of filtered query and list of record key literals that need to be matched
    */
-  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Array[String]): Option[(Expression, List[String])] = {
-    filterQueryWithRecordKey(queryFilter, recordKeyOpt, attributeFetcher = expr => expr)
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyFields: Array[String]): Option[(Expression, List[String])] = {
+    filterQueryWithRecordKey(queryFilter, recordKeyFields, attributeFetcher = expr => expr)
   }
 
 
-  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Array[String], attributeFetcher: Function1[Expression, Expression]
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyFields: Array[String], attributeFetcher: Function1[Expression, Expression]
                               ): Option[(Expression, List[String])] = {
-    val isComplexRecordKey = recordKeyOpt.length > 1
+    val isComplexRecordKey = recordKeyFields.length > 1
     queryFilter match {
       // Handle EqualTo expressions
       case equalToQuery: EqualTo =>
@@ -145,7 +145,7 @@ object RecordLevelIndexSupport {
         if (attributeLiteralTuple != null) {
           val attribute = attributeLiteralTuple._1
           val literal = attributeLiteralTuple._2
-          if (attribute != null && attribute.name != null && recordKeyOpt.contains(attribute.name)) {
+          if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyFields)) {
             val recordKeyLiteral = getRecordKeyLiteral(attribute, literal, isComplexRecordKey)
             Option.apply(equalToQuery, List.apply(recordKeyLiteral))
           } else {
@@ -160,7 +160,7 @@ object RecordLevelIndexSupport {
         var validINQuery = true
         attributeFetcher.apply(inQuery.value) match {
           case attribute: AttributeReference =>
-            if (!recordKeyOpt.contains(attribute.name)) {
+            if (!attributeMatchesRecordKey(attribute.name, recordKeyFields)) {
               validINQuery = false
             }
           case _ => validINQuery = false
@@ -178,8 +178,8 @@ object RecordLevelIndexSupport {
 
       // Handle And expression (composite filter)
       case andQuery: And =>
-        val leftResult = filterQueryWithRecordKey(andQuery.left, recordKeyOpt)
-        val rightResult = filterQueryWithRecordKey(andQuery.right, recordKeyOpt)
+        val leftResult = filterQueryWithRecordKey(andQuery.left, recordKeyFields)
+        val rightResult = filterQueryWithRecordKey(andQuery.right, recordKeyFields)
 
         // If both left and right filters are valid, concatenate their results
         (leftResult, rightResult) match {
@@ -191,8 +191,8 @@ object RecordLevelIndexSupport {
 
       // Handle Or expression (for completeness, though usually not used for record key filtering)
       case orQuery: Or =>
-        val leftResult = filterQueryWithRecordKey(orQuery.left, recordKeyOpt)
-        val rightResult = filterQueryWithRecordKey(orQuery.right, recordKeyOpt)
+        val leftResult = filterQueryWithRecordKey(orQuery.left, recordKeyFields)
+        val rightResult = filterQueryWithRecordKey(orQuery.right, recordKeyFields)
 
         (leftResult, rightResult) match {
           case (Some((leftExp, leftKeys)), Some((rightExp, rightKeys))) =>
@@ -266,12 +266,8 @@ object RecordLevelIndexSupport {
    * @param attributeName The attribute name provided in the query
    * @return true if input attribute name matches the configured simple record key
    */
-  private def attributeMatchesRecordKey(attributeName: String, recordKeyOpt: Option[String]): Boolean = {
-    if (recordKeyOpt.isDefined && recordKeyOpt.get == attributeName) {
-      true
-    } else {
-      HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == attributeName
-    }
+  private def attributeMatchesRecordKey(attributeName: String, recordKeyFields: Array[String]): Boolean = {
+     HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == attributeName || recordKeyFields.contains(attributeName)
   }
 
   private def getRecordKeyLiteral(attribute: AttributeReference, literal: Literal, isComplexRecordKey: Boolean): String = {

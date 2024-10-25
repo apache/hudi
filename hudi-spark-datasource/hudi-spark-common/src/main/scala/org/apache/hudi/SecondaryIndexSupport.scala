@@ -117,12 +117,14 @@ object SecondaryIndexSupport {
                                     secondaryKeyConfigOpt: Option[String]): (List[Expression], List[String]) = {
     var secondaryKeyQueries: List[Expression] = List.empty
     var secondaryKeys: List[String] = List.empty
-    for (query <- queryFilters) {
-      filterQueryWithRecordKey(query, Array(secondaryKeyConfigOpt.get)).foreach({
-        case (exp: Expression, recKeys: List[String]) =>
-          secondaryKeys = secondaryKeys ++ recKeys
-          secondaryKeyQueries = secondaryKeyQueries :+ exp
-      })
+    if (secondaryKeyConfigOpt.isDefined) {
+      for (query <- queryFilters) {
+        filterQueryWithRecordKey(query, Array(secondaryKeyConfigOpt.get)).foreach({
+          case (exp: Expression, recKeys: List[String]) =>
+            secondaryKeys = secondaryKeys ++ recKeys
+            secondaryKeyQueries = secondaryKeyQueries :+ exp
+        })
+      }
     }
 
     Tuple2.apply(secondaryKeyQueries, secondaryKeys)
