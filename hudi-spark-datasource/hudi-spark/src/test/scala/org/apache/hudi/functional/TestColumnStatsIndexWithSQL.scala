@@ -28,7 +28,7 @@ import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, Writ
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, DoWriteAndValidateColumnStatsParams}
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
@@ -88,7 +88,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       HoodieIndexConfig.INDEX_TYPE.key() -> INMEMORY.name()
     ) ++ metadataOpts
 
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -133,7 +133,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     verifyFileIndexAndSQLQueries(commonOpts, isTableDataSameAsAfterSecondInstant = true)
 
     // Add the last df back and verify the queries
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
       expectedColStatsSourcePath = "",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -195,7 +195,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     writeClient.scheduleCompaction(org.apache.hudi.common.util.Option.empty())
     writeClient.close()
 
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
       expectedColStatsSourcePath = "",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -205,13 +205,13 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   }
 
   private def setupTable(testCase: ColumnStatsTestCase, metadataOpts: Map[String, String], commonOpts: Map[String, String], shouldValidate: Boolean): Unit = {
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite))
 
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
       expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -225,7 +225,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       "index/colstats/mor-updated2-column-stats-index-table.json"
     }
 
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,

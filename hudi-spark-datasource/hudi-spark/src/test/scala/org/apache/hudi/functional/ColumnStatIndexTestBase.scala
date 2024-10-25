@@ -34,12 +34,12 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
-import org.apache.hudi.functional.ColumnStatIndexTestBase.DoWriteAndValidateColumnStatsParams
+import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, _}
+import org.apache.spark.sql.DataFrame
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.provider.Arguments
@@ -87,7 +87,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     cleanupSparkContexts()
   }
 
-  protected def doWriteAndValidateColumnStats(params: DoWriteAndValidateColumnStatsParams): Unit = {
+  protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams): Unit = {
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource(params.dataSourcePath).toString
 
@@ -180,7 +180,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
         val colsToGenerateStats = indexedCols // check for included cols
         val writerSchemaOpt = LogFileColStatsTestUtil.getSchemaForTable(metaClient)
         val latestCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
-        baseFilesDf.union(getColStatsForLogFiles(allLogFiles, latestCompletedCommit,
+        baseFilesDf.union(getColStatsFromLogFiles(allLogFiles, latestCompletedCommit,
           scala.collection.JavaConverters.seqAsJavaList(colsToGenerateStats),
           metaClient,
           writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
@@ -190,11 +190,11 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     }
   }
 
-  protected def getColStatsForLogFiles(logFiles: List[HoodieLogFile], latestCommit: String, columnsToIndex: util.List[String],
-                                       datasetMetaClient: HoodieTableMetaClient,
-                                       writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
-                                       maxBufferSize: Integer,
-                                       indexSchema: StructType): DataFrame = {
+  protected def getColStatsFromLogFiles(logFiles: List[HoodieLogFile], latestCommit: String, columnsToIndex: util.List[String],
+                                        datasetMetaClient: HoodieTableMetaClient,
+                                        writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
+                                        maxBufferSize: Integer,
+                                        indexSchema: StructType): DataFrame = {
     val colStatsEntries = logFiles.stream().map[org.apache.hudi.common.util.Option[Row]](logFile => {
       try {
         getColStatsFromLogFile(logFile.getPath.toString, latestCommit, columnsToIndex, datasetMetaClient, writerSchemaOpt, maxBufferSize)
@@ -355,17 +355,16 @@ object ColumnStatIndexTestBase {
         : _*)
   }
 
-  case class DoWriteAndValidateColumnStatsParams(testCase: ColumnStatsTestCase,
-                                                 metadataOpts: Map[String, String],
-                                                 hudiOpts: Map[String, String],
-                                                 dataSourcePath: String,
-                                                 expectedColStatsSourcePath: String,
-                                                 operation: String,
-                                                 saveMode: SaveMode,
-                                                 shouldValidate: Boolean = true,
-                                                 latestCompletedCommit: String = null,
-                                                 numPartitions: Integer = 4,
-                                                 parquetMaxFileSize: Integer = 10 * 1024,
-                                                 smallFileLimit: Integer = 100 * 1024 * 1024)
+  case class ColumnStatsTestParams(testCase: ColumnStatsTestCase,
+                                   metadataOpts: Map[String, String],
+                                   hudiOpts: Map[String, String],
+                                   dataSourcePath: String,
+                                   expectedColStatsSourcePath: String,
+                                   operation: String,
+                                   saveMode: SaveMode,
+                                   shouldValidate: Boolean = true,
+                                   latestCompletedCommit: String = null,
+                                   numPartitions: Integer = 4,
+                                   parquetMaxFileSize: Integer = 10 * 1024,
+                                   smallFileLimit: Integer = 100 * 1024 * 1024)
 }
-

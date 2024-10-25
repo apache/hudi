@@ -257,9 +257,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(0, FSUtils.getStageIdFromLogPath(rlPath));
     assertEquals(1, FSUtils.getTaskAttemptIdFromLogPath(rlPath));
 
-    assertEquals(logFile, FSUtils.getFileNameFromFilePath("/tmp/path/" + logFile));
-    assertEquals(logFile, FSUtils.getFileNameFromFilePath("/tmp/abc/def/path/" + logFile));
-    assertEquals(logFile, FSUtils.getFileNameFromFilePath("/tmp/" + logFile));
+    assertEquals(logFile, FSUtils.getFileNameFromPath("/tmp/path/" + logFile));
+    assertEquals(logFile, FSUtils.getFileNameFromPath("/tmp/abc/def/path/" + logFile));
+    assertEquals(logFile, FSUtils.getFileNameFromPath("/tmp/" + logFile));
   }
 
   @Test

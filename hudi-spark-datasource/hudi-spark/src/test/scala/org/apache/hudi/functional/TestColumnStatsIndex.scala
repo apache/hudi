@@ -39,7 +39,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
-import org.apache.hudi.functional.ColumnStatIndexTestBase.DoWriteAndValidateColumnStatsParams
+import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions, config}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -77,13 +77,13 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite))
 
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
       expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -97,7 +97,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "index/colstats/mor-updated2-column-stats-index-table.json"
     }
 
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -125,7 +125,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
 
     // inserts
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -136,7 +136,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       smallFileLimit = 0))
 
     // updates
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update2-input-table-json/",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -147,7 +147,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       smallFileLimit = 0))
 
     // delete a subset of recs. this will add a delete log block for MOR table.
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/delete-input-table-json/",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
@@ -175,7 +175,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
 
     // updates a subset which are not deleted and enable col stats and validate bootstrap
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
       dataSourcePath = "index/colstats/update3-input-table-json",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -193,7 +193,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "index/colstats/mor-bootstrap2-column-stats-index-table.json"
     }
 
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
       dataSourcePath = "index/colstats/update4-input-table-json",
       expectedColStatsSourcePath = expectedColStatsSourcePath1,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -226,7 +226,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
 
     // inserts
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -237,7 +237,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       smallFileLimit = 0))
 
     // updates
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update2-input-table-json/",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -267,7 +267,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
 
     // updates a subset which are not deleted and enable col stats and validate bootstrap
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
       dataSourcePath = "index/colstats/update3-input-table-json",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -290,17 +290,17 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val lastCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/"))
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath, "/"))
       } else {
-        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/9/"))
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath, "9"))
       }
       val logFileFileStatus = dataFiles.stream().filter(fileStatus => fileStatus.getPath.getName.contains(".log")).findFirst().get()
       logFileName = logFileFileStatus.getPath.getName
     } else {
       val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/"))
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString))
       } else {
-        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/9/"))
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath,  "9"))
       }
       val baseFileFileStatus = dataFiles.stream().filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.getTimestamp)).findFirst().get()
       baseFileName = baseFileFileStatus.getPath.getName
@@ -323,7 +323,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/9/" + baseFileName + ".marker.MERGE"))
       }
     }
-
   }
 
   @Test
@@ -349,7 +348,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
 
     // inserts
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -360,7 +359,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       smallFileLimit = 0))
 
     // updates
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update2-input-table-json/",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -373,7 +372,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val expectedColStatsSourcePath = "index/colstats/mor-delete-block1-column-stats-index-table.json"
 
     // delete a subset of recs. this will add a delete log block for MOR table.
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/delete-input-table-json/",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
@@ -406,7 +405,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
 
     // inserts
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -422,7 +421,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     )
 
     // updates 1
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
       dataSourcePath = "index/colstats/update2-input-table-json/",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -439,7 +438,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     }
 
     // updates 2
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
       dataSourcePath = "index/colstats/update3-input-table-json/",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -473,7 +472,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
 
     // inserts
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -489,7 +488,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     )
 
     // updates 1
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
       dataSourcePath = "index/colstats/update2-input-table-json/",
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -506,7 +505,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     }
 
     // updates 2
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
       dataSourcePath = "index/colstats/update3-input-table-json/",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
