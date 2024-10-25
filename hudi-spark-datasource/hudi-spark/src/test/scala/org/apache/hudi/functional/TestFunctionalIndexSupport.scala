@@ -80,7 +80,7 @@ class TestFunctionalIndexSupport extends HoodieSparkClientTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_fi",
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      PARTITIONPATH_FIELD.key() -> "c8",
+      PARTITIONPATH_FIELD.key() -> "c8"
     )
     val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json-partition-pruning").toString
 
