@@ -398,7 +398,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
-        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
+        .partitionPruner(PartitionPruners.builder().candidatePartitions(Arrays.asList("par1", "par2", "par3", "par4")).build())
         .skipCompaction(false)
         .build();
 
@@ -437,7 +437,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
-        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
+        .partitionPruner(PartitionPruners.builder().candidatePartitions(Arrays.asList("par1", "par2", "par3", "par4")).build())
         .skipCompaction(true)
         .build();
 
@@ -502,7 +502,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
-        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
+        .partitionPruner(PartitionPruners.builder().candidatePartitions(Arrays.asList("par1", "par2", "par3", "par4")).build())
         .skipClustering(true)
         .build();
 
@@ -659,7 +659,7 @@ public class TestInputFormat {
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
         .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
-        .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
+        .partitionPruner(PartitionPruners.builder().candidatePartitions(Arrays.asList("par1", "par2", "par3", "par4")).build())
         .build();
 
     // default read the latest commit

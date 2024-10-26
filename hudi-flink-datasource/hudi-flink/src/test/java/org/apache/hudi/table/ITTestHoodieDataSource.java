@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -505,6 +506,57 @@ public class ITTestHoodieDataSource {
         "select name, sum(age) from t1 group by name", sinkDDL, 10);
     final String expected = "[+I(+I[Danny, 24]), +I(+I[Stephen, 34])]";
     assertRowsEquals(result, expected, true);
+  }
+
+  @ParameterizedTest
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testReadWithPartitionStatsPruning(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true)
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+    conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
+    // write one commit
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    List<String> sqls =
+        Arrays.asList(
+            // no filter
+            "select * from t1",
+            // filter by partition stats pruner only
+            "select * from t1 where uuid > 'id5' and age > 15",
+            // filter by partition stats pruner and dynamic partition pruner
+            "select * from t1 where uuid > 'id5' and age > 15 and `partition` > 'par3'");
+    List<String> expectResults =
+        Arrays.asList(
+            "[+I[id1, Danny, 23, 1970-01-01T00:00:00.001, par1], "
+                + "+I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1], "
+                + "+I[id3, Julian, 53, 1970-01-01T00:00:00.003, par2], "
+                + "+I[id4, Fabian, 31, 1970-01-01T00:00:00.004, par2], "
+                + "+I[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+                + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+                + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+                + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]",
+            "[+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+                + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+                + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]",
+            "[+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+                + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]");
+    for (int i = 0; i < sqls.size(); i++) {
+      List<Row> result = execSelectSql(streamTableEnv, sqls.get(i), 10);
+      assertRowsEquals(result, expectResults.get(i));
+    }
   }
 
   @ParameterizedTest
