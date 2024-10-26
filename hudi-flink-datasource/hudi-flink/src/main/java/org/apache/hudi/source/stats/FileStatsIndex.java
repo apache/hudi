@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
@@ -31,9 +32,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.util.RowDataProjection;
 
@@ -41,9 +43,12 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -55,44 +60,130 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_DATA_TYPE;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_TARGET_POS;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.METADATA_DATA_TYPE;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_COL_NAME;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_FILE_NAME;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_MAX_VAL;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_MIN_VAL;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_NULL_CNT;
+import static org.apache.hudi.source.stats.ColumnStatsSchemas.ORD_VAL_CNT;
 
 /**
- * Utilities for abstracting away heavy-lifting of interactions with Metadata Table's Column Stats Index,
+ * An index support implementation that leverages Column Stats Index to prune files,
+ * including utilities for abstracting away heavy-lifting of interactions with the index,
  * providing convenient interfaces to read it, transpose, etc.
  */
-public class ColumnStatsIndices {
-  private static final DataType METADATA_DATA_TYPE = getMetadataDataType();
-  private static final DataType COL_STATS_DATA_TYPE = getColStatsDataType();
-  private static final int[] COL_STATS_TARGET_POS = getColStatsTargetPos();
+public class FileStatsIndex implements ColumnStatsIndex {
+  private static final long serialVersionUID = 1L;
+  private static final Logger LOG = LoggerFactory.getLogger(FileStatsIndex.class);
+  private final RowType rowType;
+  private final String basePath;
+  private final HoodieMetadataConfig metadataConfig;
+  private HoodieTableMetadata metadataTable;
 
-  // the column schema:
-  // |- file_name: string
-  // |- min_val: row
-  // |- max_val: row
-  // |- null_cnt: long
-  // |- val_cnt: long
-  // |- column_name: string
-  private static final int ORD_FILE_NAME = 0;
-  private static final int ORD_MIN_VAL = 1;
-  private static final int ORD_MAX_VAL = 2;
-  private static final int ORD_NULL_CNT = 3;
-  private static final int ORD_VAL_CNT = 4;
-  private static final int ORD_COL_NAME = 5;
-
-  private ColumnStatsIndices() {
+  public FileStatsIndex(
+      String basePath,
+      RowType rowType,
+      HoodieMetadataConfig metadataConfig) {
+    this.basePath = basePath;
+    this.rowType = rowType;
+    this.metadataConfig = metadataConfig;
   }
 
-  public static List<RowData> readColumnStatsIndex(String basePath, HoodieMetadataConfig metadataConfig, String[] targetColumns) {
-    // NOTE: If specific columns have been provided, we can considerably trim down amount of data fetched
-    //       by only fetching Column Stats Index records pertaining to the requested columns.
-    //       Otherwise, we fall back to read whole Column Stats Index
-    ValidationUtils.checkArgument(targetColumns.length > 0,
-        "Column stats is only valid when push down filters have referenced columns");
-    final List<RowData> metadataRows = readColumnStatsIndexByColumns(basePath, targetColumns, metadataConfig);
-    return projectNestedColStatsColumns(metadataRows);
+  @Override
+  public String getIndexPartitionName() {
+    return HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+  }
+
+  public HoodieTableMetadata getMetadataTable() {
+    // initialize the metadata table lazily
+    if (this.metadataTable == null) {
+      this.metadataTable = HoodieTableMetadata.create(
+          HoodieFlinkEngineContext.DEFAULT,
+          new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf()),
+          metadataConfig,
+          basePath);
+    }
+    return this.metadataTable;
+  }
+
+  @Override
+  public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles) {
+    if (probe == null) {
+      return null;
+    }
+    try {
+      String[] targetColumns = probe.getReferencedCols();
+      final List<RowData> statsRows = readColumnStatsIndexByColumns(targetColumns);
+      return candidatesInMetadataTable(probe, statsRows, allFiles);
+    } catch (Throwable t) {
+      LOG.warn("Read {} for data skipping error", getIndexPartitionName(), t);
+      return null;
+    }
+  }
+
+  @Override
+  public Set<String> computeCandidatePartitions(ColumnStatsProbe probe, List<String> allPartitions) {
+    throw new UnsupportedOperationException("This method is not supported by " + this.getClass().getSimpleName());
+  }
+
+  /**
+   * Computes pruned list of candidates' names based on provided list of data filters.
+   * conditions, by leveraging Metadata Table's Column Statistics index (hereon referred as ColStats for brevity)
+   * bearing "min", "max", "num_nulls" statistics for all columns.
+   *
+   * <p>NOTE: This method has to return complete set of the candidates, since only provided candidates will
+   * ultimately be scanned as part of query execution. Hence, this method has to maintain the
+   * invariant of conservatively including every candidate's name, that is NOT referenced in its index.
+   *
+   * <p>The {@code filters} must all be simple.
+   *
+   * @param probe         The column stats probe built from push-down filters.
+   * @param indexRows     The raw column stats records.
+   * @param oriCandidates The original candidates to be pruned.
+   *
+   * @return set of pruned (data-skipped) candidate names
+   */
+  protected Set<String> candidatesInMetadataTable(
+      @Nullable ColumnStatsProbe probe,
+      List<RowData> indexRows,
+      List<String> oriCandidates) {
+    if (probe == null) {
+      return null;
+    }
+    String[] referencedCols = probe.getReferencedCols();
+    final Pair<List<RowData>, String[]> colStatsTable =
+        transposeColumnStatsIndex(indexRows, referencedCols);
+    List<RowData> transposedColStats = colStatsTable.getLeft();
+    String[] queryCols = colStatsTable.getRight();
+    if (queryCols.length == 0) {
+      // the indexed columns have no intersection with the referenced columns, returns early
+      return null;
+    }
+    RowType.RowField[] queryFields = DataTypeUtils.projectRowFields(rowType, queryCols);
+
+    Set<String> allIndexedFiles = transposedColStats.stream().parallel()
+        .map(row -> row.getString(0).toString())
+        .collect(Collectors.toSet());
+    Set<String> candidateFiles = transposedColStats.stream().parallel()
+        .filter(row -> probe.test(row, queryFields))
+        .map(row -> row.getString(0).toString())
+        .collect(Collectors.toSet());
+
+    // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
+    //       base-file: since it's bound to clustering, which could occur asynchronously
+    //       at arbitrary point in time, and is not likely to be touching all the base files.
+    //
+    //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
+    //       files and all outstanding base-files, and make sure that all base files not
+    //       represented w/in the index are included in the output of this method
+    oriCandidates.removeAll(allIndexedFiles);
+    candidateFiles.addAll(oriCandidates);
+    return candidateFiles;
   }
 
   private static List<RowData> projectNestedColStatsColumns(List<RowData> rows) {
@@ -140,12 +231,12 @@ public class ColumnStatsIndices {
    *
    * @param colStats     RowData list bearing raw Column Stats Index table
    * @param queryColumns target columns to be included into the final table
-   * @param tableSchema  schema of the source data table
    * @return reshaped table according to the format outlined above
    */
-  public static Pair<List<RowData>, String[]> transposeColumnStatsIndex(List<RowData> colStats, String[] queryColumns, RowType tableSchema) {
+  @VisibleForTesting
+  public Pair<List<RowData>, String[]> transposeColumnStatsIndex(List<RowData> colStats, String[] queryColumns) {
 
-    Map<String, LogicalType> tableFieldTypeMap = tableSchema.getFields().stream()
+    Map<String, LogicalType> tableFieldTypeMap = rowType.getFields().stream()
         .collect(Collectors.toMap(RowType.RowField::getName, RowType.RowField::getType));
 
     // NOTE: We have to collect list of indexed columns to make sure we properly align the rows
@@ -243,7 +334,6 @@ public class ColumnStatsIndices {
     // |- null_cnt: long
     // |- val_cnt: long
     // |- column_name: string
-
     GenericRowData unpackedRow = new GenericRowData(row.getArity());
     unpackedRow.setField(0, row.getString(0));
     unpackedRow.setField(1, minValue);
@@ -278,28 +368,27 @@ public class ColumnStatsIndices {
     return converter.convert(rawVal);
   }
 
-  private static List<RowData> readColumnStatsIndexByColumns(
-      String basePath,
-      String[] targetColumns,
-      HoodieMetadataConfig metadataConfig) {
+  @VisibleForTesting
+  public List<RowData> readColumnStatsIndexByColumns(String[] targetColumns) {
+    // NOTE: If specific columns have been provided, we can considerably trim down amount of data fetched
+    //       by only fetching Column Stats Index records pertaining to the requested columns.
+    //       Otherwise, we fall back to read whole Column Stats Index
+    ValidationUtils.checkArgument(targetColumns.length > 0,
+        "Column stats is only valid when push down filters have referenced columns");
 
-    // Read Metadata Table's Column Stats Index into Flink's RowData list by
-    //    - Fetching the records from CSI by key-prefixes (encoded column names)
+    // Read Metadata Table's column stats Flink's RowData list by
+    //    - Fetching the records by key-prefixes (encoded column names)
     //    - Deserializing fetched records into [[RowData]]s
-    HoodieTableMetadata metadataTable = HoodieTableMetadata.create(
-        HoodieFlinkEngineContext.DEFAULT, new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf()),
-        metadataConfig, basePath);
-
     // TODO encoding should be done internally w/in HoodieBackedTableMetadata
     List<String> encodedTargetColumnNames = Arrays.stream(targetColumns)
         .map(colName -> new ColumnIndexID(colName).asBase64EncodedString()).collect(Collectors.toList());
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
-        metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, false);
+        getMetadataTable().getRecordsByKeyPrefixes(encodedTargetColumnNames, getIndexPartitionName(), false);
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
         AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());
-    return records.collectAsList().stream().parallel().map(record -> {
+    List<RowData> rows = records.collectAsList().stream().parallel().map(record -> {
           // schema and props are ignored for generating metadata record from the payload
           // instead, the underlying file system, or bloom filter, or columns stats metadata (part of payload) are directly used
           GenericRecord genericRecord;
@@ -311,37 +400,6 @@ public class ColumnStatsIndices {
           return (RowData) converter.convert(genericRecord);
         }
     ).collect(Collectors.toList());
-  }
-
-  // -------------------------------------------------------------------------
-  //  Utilities
-  // -------------------------------------------------------------------------
-  private static DataType getMetadataDataType() {
-    return AvroSchemaConverter.convertToDataType(HoodieMetadataRecord.SCHEMA$);
-  }
-
-  private static DataType getColStatsDataType() {
-    int pos = HoodieMetadataRecord.SCHEMA$.getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).pos();
-    return METADATA_DATA_TYPE.getChildren().get(pos);
-  }
-
-  // the column schema:
-  // |- file_name: string
-  // |- min_val: row
-  // |- max_val: row
-  // |- null_cnt: long
-  // |- val_cnt: long
-  // |- column_name: string
-  private static int[] getColStatsTargetPos() {
-    RowType colStatsRowType = (RowType) COL_STATS_DATA_TYPE.getLogicalType();
-    return Stream.of(
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT,
-            HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME)
-        .mapToInt(colStatsRowType::getFieldIndex)
-        .toArray();
+    return projectNestedColStatsColumns(rows);
   }
 }
