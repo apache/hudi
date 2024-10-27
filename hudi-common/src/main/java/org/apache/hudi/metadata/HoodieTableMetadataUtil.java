@@ -2448,6 +2448,7 @@ public class HoodieTableMetadataUtil {
       filenameToSizeMap = new HashMap<>(pathInfos.size());
 
       // Presence of partition meta file implies this is a HUDI partition
+      // if input files are directly fetched from MDT, it may not contain the HoodiePartitionMetadata file. So, we can ignore the validation for isHoodiePartition.
       isHoodiePartition = !validateHoodiePartitions || pathInfos.stream().anyMatch(status -> status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
       for (StoragePathInfo pathInfo : pathInfos) {
         // Do not attempt to search for more subdirectories inside directories that are partitions

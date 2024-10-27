@@ -269,10 +269,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Otherwise, we use the timestamp of the latest completed action.
       String initializationTime = dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
       initializeFromFilesystem(initializationTime, metadataPartitionsToInit, inflightInstantTimestamp);
-      if (!this.dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FILES)) {
-        LOG.error("Failed to initialize MDT from filesystem");
-        return false;
-      }
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       return true;
     } catch (IOException e) {
@@ -342,7 +338,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param partitionsToInit         - List of MDT partitions to initialize
    * @param inflightInstantTimestamp - Current action instant responsible for this initialization
    */
-  private boolean initializeFromFilesystem(String initializationTime, List<MetadataPartitionType> partitionsToInit,
+  private void initializeFromFilesystem(String initializationTime, List<MetadataPartitionType> partitionsToInit,
                                            Option<String> inflightInstantTimestamp) throws IOException {
     Set<String> pendingDataInstants = getPendingDataInstants(dataMetaClient);
 
@@ -479,8 +475,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       long totalInitTime = partitionInitTimer.endTimer();
       LOG.info("Initializing {} index in metadata table took {} in ms", partitionTypeName, totalInitTime);
     }
-
-    return true;
   }
 
   /**

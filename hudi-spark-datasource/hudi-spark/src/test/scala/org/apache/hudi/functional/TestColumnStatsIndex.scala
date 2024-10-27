@@ -35,11 +35,13 @@ import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions, config}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -173,6 +175,20 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+
+    // lets validate that we have log files generated in case of MOR table
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      val metaClient = HoodieTableMetaClient.builder().setConf(new HadoopStorageConfiguration(jsc.hadoopConfiguration())).setBasePath(basePath).build()
+      val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().enable(false).build())
+      fsv.loadAllPartitions()
+      val baseStoragePath = new StoragePath(basePath)
+      val allPartitionPaths = fsv.getPartitionPaths
+      allPartitionPaths.forEach(partitionPath => {
+        val pPath = FSUtils.getRelativePartitionPath(baseStoragePath, partitionPath)
+        assertTrue (fsv.getLatestFileSlices(pPath).filter(fileSlice => fileSlice.hasLogFiles).count() > 0)
+      })
+      fsv.close()
+    }
 
     // updates a subset which are not deleted and enable col stats and validate bootstrap
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
