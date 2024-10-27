@@ -46,6 +46,6 @@ public class BatchedMarkerCreationRunnable implements Runnable {
       requestContext.getMarkerDirState().processMarkerCreationRequests(
           requestContext.getFutures(), requestContext.getFileIndex());
     }
-    LOG.debug("Finish batch processing of create marker requests in " + timer.endTimer() + " ms");
+    LOG.debug("Finish batch processing of create marker requests in {} ms", timer.endTimer());
   }
 }

@@ -40,7 +40,7 @@ public class WriteMarkersFactory {
    * @return  {@code WriteMarkers} instance based on the {@code MarkerType}
    */
   public static WriteMarkers get(MarkerType markerType, HoodieTable table, String instantTime) {
-    LOG.debug("Instantiated MarkerFiles with marker type: " + markerType.toString());
+    LOG.debug("Instantiated MarkerFiles with marker type: {}", markerType);
     switch (markerType) {
       case DIRECT:
         return new DirectWriteMarkers(table, instantTime);
@@ -54,7 +54,7 @@ public class WriteMarkersFactory {
         if (StorageSchemes.HDFS.getScheme().equals(
             HadoopFSUtils.getFs(basePath, table.getContext().getStorageConf(), true).getScheme())) {
           LOG.warn("Timeline-server-based markers are not supported for HDFS: "
-              + "base path " + basePath + ".  Falling back to direct markers.");
+              + "base path {}.  Falling back to direct markers.", basePath);
           return new DirectWriteMarkers(table, instantTime);
         }
         return new TimelineServerBasedWriteMarkers(table, instantTime);

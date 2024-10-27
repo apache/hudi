@@ -159,13 +159,13 @@ public class CloudObjectsSelector {
     // Get count for available messages
     Map<String, String> queueAttributesResult = getSqsQueueAttributes(sqsClient, queueUrl);
     long approxMessagesAvailable = Long.parseLong(queueAttributesResult.get(SQS_ATTR_APPROX_MESSAGES));
-    log.info("Approximately " + approxMessagesAvailable + " messages available in queue.");
+    log.info("Approximately {} messages available in queue.", approxMessagesAvailable);
     long numMessagesToProcess = Math.min(approxMessagesAvailable, maxMessagePerBatch);
     for (int i = 0;
          i < (int) Math.ceil((double) numMessagesToProcess / maxMessagesPerRequest);
          ++i) {
       List<Message> messages = sqsClient.receiveMessage(receiveMessageRequest).messages();
-      log.debug("Number of messages: " + messages.size());
+      log.debug("Number of messages: {}", messages.size());
       messagesToProcess.addAll(messages);
       if (messages.isEmpty()) {
         // ApproximateNumberOfMessages value is eventually consistent.
@@ -221,13 +221,9 @@ public class CloudObjectsSelector {
             .collect(Collectors.toList());
     if (!deleteFailures.isEmpty()) {
       log.warn(
-          "Failed to delete "
-              + deleteFailures.size()
-              + " messages out of "
-              + deleteEntries.size()
-              + " from queue.");
+          "Failed to delete {} messages out of {} from queue.", deleteFailures.size(), deleteEntries.size());
     } else {
-      log.info("Successfully deleted " + deleteEntries.size() + " messages from queue.");
+      log.info("Successfully deleted {} messages from queue.", deleteEntries.size());
     }
   }
 

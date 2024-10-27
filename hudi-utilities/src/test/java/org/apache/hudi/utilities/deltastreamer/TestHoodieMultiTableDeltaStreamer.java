@@ -158,7 +158,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
       HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, basePath + "/config", TestDataSource.class.getName(), true, true, null);
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Creation of execution object should fail without kafka topic");
-    LOG.debug("Creation of execution object failed with error: " + e.getMessage(), e);
+    LOG.debug("Creation of execution object failed with error: {}", e.getMessage(), e);
     assertTrue(e.getMessage().contains("Please provide valid table config arguments!"));
   }
 

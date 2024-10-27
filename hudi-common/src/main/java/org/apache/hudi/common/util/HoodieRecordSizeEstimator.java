@@ -46,7 +46,7 @@ public class HoodieRecordSizeEstimator<T> implements SizeEstimator<T> {
     // note the sizes and differences. A correct estimation in such cases is handled in
     /** {@link ExternalSpillableMap} **/
     long sizeOfRecord = ObjectSizeCalculator.getObjectSize(hoodieRecord);
-    LOG.debug("SizeOfRecord => " + sizeOfRecord + " SizeOfSchema => " + sizeOfSchema);
+    LOG.debug("SizeOfRecord => {} SizeOfSchema => {}", sizeOfRecord, sizeOfSchema);
     return sizeOfRecord;
   }
 }

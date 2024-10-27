@@ -969,7 +969,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         index = (index + 1) % numExistingKeys;
         kp = existingKeys.get(index);
       }
-      logger.debug("key getting updated: " + kp.key.getRecordKey());
+      logger.debug("key getting updated: {}", kp.key.getRecordKey());
       used.add(kp);
       try {
         return new HoodieAvroRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false));

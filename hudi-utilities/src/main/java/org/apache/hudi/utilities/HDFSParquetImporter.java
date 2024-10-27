@@ -114,7 +114,7 @@ public class HDFSParquetImporter implements Serializable {
     this.fs = HadoopFSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
         : UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
-    LOG.info("Starting data import with configs : " + props.toString());
+    LOG.info("Starting data import with configs : {}", props);
     int ret = -1;
     try {
       // Verify that targetPath is not present.
@@ -189,13 +189,13 @@ public class HDFSParquetImporter implements Serializable {
             throw new HoodieIOException("row field is missing. :" + cfg.rowKey);
           }
           String partitionPath = partitionField.toString();
-          LOG.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
+          LOG.debug("Row Key : {}, Partition Path is ({})", rowField, partitionPath);
           if (partitionField instanceof Number) {
             try {
               long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
               partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
             } catch (NumberFormatException nfe) {
-              LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
+              LOG.warn("Unable to parse date from partition field. Assuming partition as ({})", partitionField);
             }
           }
           return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),

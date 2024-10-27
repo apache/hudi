@@ -535,11 +535,11 @@ public class StreamSync implements Serializable, Closeable {
       resumeCheckpointStr = getCheckpointToResume(commitsTimelineOpt);
     }
 
-    LOG.debug("Checkpoint from config: " + cfg.checkpoint);
+    LOG.debug("Checkpoint from config: {}", cfg.checkpoint);
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
       resumeCheckpointStr = Option.of(cfg.checkpoint);
     }
-    LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
+    LOG.info("Checkpoint to resume from : {}", resumeCheckpointStr);
 
     int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;
     int curRetryCount = 0;
@@ -784,7 +784,7 @@ public class StreamSync implements Serializable, Closeable {
       Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitsTimelineOpt.get());
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
-        LOG.debug("Checkpoint reset from metadata: " + commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
+        LOG.debug("Checkpoint reset from metadata: {}", commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
         if (cfg.ignoreCheckpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY))
             || !cfg.ignoreCheckpoint.equals(commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY)))) {
           // we ignore any existing checkpoint and start ingesting afresh
@@ -1287,9 +1287,7 @@ public class StreamSync implements Serializable, Closeable {
       schemas.add(targetSchema);
     }
     if (!schemas.isEmpty()) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Registering Schema: " + schemas);
-      }
+      LOG.debug("Registering Schema: {}", schemas);
       // Use the underlying spark context in case the java context is changed during runtime
       hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaScalaConverters.convertJavaListToScalaList(schemas).toList());
     }

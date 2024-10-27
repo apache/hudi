@@ -244,9 +244,7 @@ public class StreamReadMonitoringFunction
       }
     }
 
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Closed File Monitoring Source for path: " + path + ".");
-    }
+    LOG.debug("Closed File Monitoring Source for path: {}.", path);
   }
 
   @Override

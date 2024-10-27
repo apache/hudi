@@ -157,7 +157,7 @@ public class HoodieMetadataMetrics implements Serializable {
   }
 
   protected void incrementMetric(String action, long value) {
-    LOG.debug(String.format("Updating metadata metrics (%s=%d) in %s", action, value, metricsRegistry));
+    LOG.debug("Updating metadata metrics ({}={}) in {}", action, value, metricsRegistry);
     Option<HoodieGauge<Long>> gaugeOpt = metrics.registerGauge(action);
     gaugeOpt.ifPresent(gauge -> gauge.setValue(gauge.getValue() + value));
   }
