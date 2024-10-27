@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
@@ -47,6 +48,7 @@ import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -72,11 +74,13 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -85,6 +89,9 @@ import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -719,6 +726,44 @@ public class HoodieTableMetaClient implements Serializable {
       default:
         throw new HoodieException("Unsupported table type :" + this.getTableType());
     }
+  }
+
+  /**
+   * WARNING: This method should be only used in org.apache.hudi.client.transaction.SimpleSchemaConflictResolutionStrategy.
+   * Please DO NOT USE IT ANYWHERE ELSE!!!
+   * TODO(HUDI-8438): remove this method after table service writes the latest table schema
+   *   in the commit metadata.
+   *
+   * Get timeline that only contains completed instants whose schema attribute in their commit metadata reflects the
+   * latest table schema at the time when they commit.
+   */
+  public HoodieTimeline getSchemaEvolutionTimeline() {
+    HoodieActiveTimeline timeline = getActiveTimeline();
+    Stream<HoodieInstant> timelineStream = timeline.getInstantsAsStream();
+    final Set<String> actions;
+    switch (this.getTableType()) {
+      case COPY_ON_WRITE: {
+        actions = new HashSet<>(Arrays.asList(COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+        break;
+      }
+      case MERGE_ON_READ: {
+        actions = new HashSet<>(Arrays.asList(DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+        break;
+      }
+      default:
+        throw new HoodieException("Unsupported table type :" + this.getTableType());
+    }
+
+    // We only care commited instant when it comes to table schema.
+    // For REPLACE_COMMIT_ACTION we need further differentiate ones come from table service clustering and those from
+    // insert overwrite operation.
+    return new HoodieDefaultTimeline(
+        timelineStream
+            .filter(s -> actions.contains(s.getAction()))
+            .filter(HoodieInstant::isCompleted)
+            .filter(instant -> !instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
+                || !ClusteringUtils.isClusteringInstant(timeline, instant)),
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) timeline::getInstantDetails);
   }
 
   /**
