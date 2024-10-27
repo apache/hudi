@@ -63,7 +63,7 @@ public abstract class HoodieLogBlock {
   // Header for each log block
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block
-  private final Map<HeaderMetadataType, String> logBlockFooter;
+  private final Map<FooterMetadataType, String> logBlockFooter;
   // Location of a log block on disk
   private final Option<HoodieLogBlockContentLocation> blockContentLocation;
   // data for a specific block
@@ -74,7 +74,7 @@ public abstract class HoodieLogBlock {
 
   public HoodieLogBlock(
       @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-      @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
+      @Nonnull Map<FooterMetadataType, String> logBlockFooter,
       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
       @Nonnull Option<byte[]> content,
       @Nullable Supplier<SeekableDataInputStream> inputStreamSupplier,
@@ -114,7 +114,7 @@ public abstract class HoodieLogBlock {
     return logBlockHeader;
   }
 
-  public Map<HeaderMetadataType, String> getLogBlockFooter() {
+  public Map<FooterMetadataType, String> getLogBlockFooter() {
     return logBlockFooter;
   }
 
@@ -255,9 +255,9 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Convert log metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual bytes
+   * Convert footer metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual bytes
    */
-  public static byte[] getLogMetadataBytes(Map<HeaderMetadataType, String> metadata) throws IOException {
+  public static byte[] getHeaderMetadataBytes(Map<HeaderMetadataType, String> metadata) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
     output.writeInt(metadata.size());
@@ -271,9 +271,25 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}.
+   * Convert footer metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual bytes
    */
-  public static Map<HeaderMetadataType, String> getLogMetadata(SeekableDataInputStream dis) throws IOException {
+  public static byte[] getFooterMetadataBytes(Map<FooterMetadataType, String> metadata) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream output = new DataOutputStream(baos);
+    output.writeInt(metadata.size());
+    for (Map.Entry<FooterMetadataType, String> entry : metadata.entrySet()) {
+      output.writeInt(entry.getKey().ordinal());
+      byte[] bytes = getUTF8Bytes(entry.getValue());
+      output.writeInt(bytes.length);
+      output.write(bytes);
+    }
+    return baos.toByteArray();
+  }
+
+  /**
+   * Convert bytes to Header Metadata, follow the same order as {@link HoodieLogBlock#getHeaderMetadataBytes}.
+   */
+  public static Map<HeaderMetadataType, String> getHeaderMetadata(SeekableDataInputStream dis) throws IOException {
 
     Map<HeaderMetadataType, String> metadata = new HashMap<>();
     // 1. Read the metadata written out
@@ -285,6 +301,29 @@ public abstract class HoodieLogBlock {
         byte[] metadataEntry = new byte[metadataEntrySize];
         dis.readFully(metadataEntry, 0, metadataEntrySize);
         metadata.put(HeaderMetadataType.values()[metadataEntryIndex], new String(metadataEntry));
+        metadataCount--;
+      }
+      return metadata;
+    } catch (EOFException eof) {
+      throw new IOException("Could not read metadata fields ", eof);
+    }
+  }
+
+  /**
+   * Convert bytes to Footer Metadata, follow the same order as {@link HoodieLogBlock#getFooterMetadataBytes}.
+   */
+  public static Map<FooterMetadataType, String> getFooterMetadata(SeekableDataInputStream dis) throws IOException {
+
+    Map<FooterMetadataType, String> metadata = new HashMap<>();
+    // 1. Read the metadata written out
+    int metadataCount = dis.readInt();
+    try {
+      while (metadataCount > 0) {
+        int metadataEntryIndex = dis.readInt();
+        int metadataEntrySize = dis.readInt();
+        byte[] metadataEntry = new byte[metadataEntrySize];
+        dis.readFully(metadataEntry, 0, metadataEntrySize);
+        metadata.put(FooterMetadataType.values()[metadataEntryIndex], new String(metadataEntry));
         metadataCount--;
       }
       return metadata;
