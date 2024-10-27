@@ -3,6 +3,9 @@
 target/
 metastore_db/
 .mvn/
+*.bloop/
+*.vscode/
+*.metals/
 
 # OS Files #
 .DS_Store
