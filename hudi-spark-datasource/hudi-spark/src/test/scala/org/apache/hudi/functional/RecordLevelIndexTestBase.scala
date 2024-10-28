@@ -108,7 +108,6 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
     val lastInsant = HoodieInstantTimeGenerator.getLastInstantTime
     if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInsant) < 0) {
-      println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
       metaClient
     }

@@ -450,7 +450,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
       this.metaClient.reloadActiveTimeline()
       val completeReplaceSize = this.metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.toArray.length
-      println("completeReplaceSize:" + completeReplaceSize)
+      log.info("completeReplaceSize:{}", completeReplaceSize)
       if (completeReplaceSize > 0) {
         success = true
       }

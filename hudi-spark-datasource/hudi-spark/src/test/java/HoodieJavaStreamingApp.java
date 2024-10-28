@@ -260,12 +260,12 @@ public class HoodieJavaStreamingApp {
     while ((currTime - beginTime) < timeoutMsecs) {
       try {
         HoodieTimeline timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, tablePath);
-        LOG.info("Timeline :" + timeline.getInstants());
+        LOG.info("Timeline :{}", timeline.getInstants());
         if (timeline.countInstants() >= numCommits) {
           return;
         }
         HoodieTableMetaClient metaClient = createMetaClient(new HadoopStorageConfiguration(fs.getConf()), tablePath);
-        System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants());
+        LOG.info("Instants :{}", metaClient.getActiveTimeline().getInstants());
       } catch (TableNotFoundException te) {
         LOG.info("Got table not found exception. Retrying");
       } finally {
@@ -328,7 +328,7 @@ public class HoodieJavaStreamingApp {
     spark.sql("select fare.amount, begin_lon, begin_lat, timestamp from hoodie_ro where fare.amount > 2.0").show();
 
     if (instantTimeValidation) {
-      System.out.println("Showing all records. Latest Instant Time =" + commitInstantTime2);
+      LOG.info("Showing all records. Latest Instant Time ={}", commitInstantTime2);
       spark.sql("select * from hoodie_ro").show(200, false);
       long numRecordsAtInstant2 =
           spark.sql("select * from hoodie_ro where _hoodie_commit_time = " + commitInstantTime2).count();

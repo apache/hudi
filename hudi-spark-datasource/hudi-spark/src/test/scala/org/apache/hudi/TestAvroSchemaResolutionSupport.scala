@@ -127,8 +127,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     def doTest(colInitType: String, start: Int, end: Int): Unit = {
       for (a <- Range(start, end)) {
         try {
-          Console.println(s"Performing test: $a with initialColType of: $colInitType")
-
           // convert int to string first before conversion to binary
           val initDF = prepDataFrame(df1, colInitType)
           initDF.printSchema()
