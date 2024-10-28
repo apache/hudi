@@ -2159,7 +2159,7 @@ public class HoodieTableMetadataUtil {
   }
 
   public static HoodieData<HoodieRecord> convertFilesToPartitionStatsRecords(HoodieEngineContext engineContext,
-                                                                             List<DirectoryInfo> partitionInfoList,
+                                                                             List<Pair<String, FileSlice>> partitionInfoList,
                                                                              HoodieMetadataConfig metadataConfig,
                                                                              HoodieTableMetaClient dataTableMetaClient,
                                                                              Option<Schema> writerSchemaOpt) {
@@ -2173,12 +2173,44 @@ public class HoodieTableMetadataUtil {
       return engineContext.emptyHoodieData();
     }
     LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndex);
+
+    // Group by partition path and collect file names (BaseFile and LogFiles)
+    Map<String, List<String>> partitionToFileNamesMap = partitionInfoList.stream()
+        .collect(Collectors.toMap(
+            Pair::getKey, // Group by partition path (key of the Pair)
+            pair -> {
+              // Get the FileSlice from the pair
+              FileSlice fileSlice = pair.getValue();
+
+              // Collect BaseFile name if present
+              List<String> fileNames = new ArrayList<>();
+              fileSlice.getBaseFile().ifPresent(baseFile -> fileNames.add(baseFile.getFileName()));
+
+              // Collect LogFile names if present
+              fileSlice.getLogFiles()
+                  .map(HoodieLogFile::getFileName)
+                  .forEach(fileNames::add);
+
+              return fileNames;
+            },
+            // In case of duplicate keys, merge lists of file names
+            (existingList, newList) -> {
+              existingList.addAll(newList);
+              return existingList;
+            }
+        ));
+
+    // Convert the Map<String, List<String>> to List<Pair<String, List<String>>>
+    List<Pair<String, List<String>>> partitionFileNamePairs = partitionToFileNamesMap.entrySet().stream()
+        .map(entry -> Pair.of(entry.getKey(), entry.getValue()))
+        .collect(Collectors.toList());
+
     // Create records for MDT
-    int parallelism = Math.max(Math.min(partitionInfoList.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-    return engineContext.parallelize(partitionInfoList, parallelism).flatMap(partitionInfo -> {
-      final String partitionPath = partitionInfo.getRelativePath();
+    int parallelism = Math.max(Math.min(partitionFileNamePairs.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
+    return engineContext.parallelize(partitionFileNamePairs, parallelism).flatMap(partitionInfo -> {
+      final String partitionPath = partitionInfo.getKey();
       // Step 1: Collect Column Metadata for Each File
-      List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getFileNameToSizeMap().keySet().stream()
+      List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getValue().stream()
           .map(fileName -> getFileStatsRangeMetadata(partitionPath, fileName, dataTableMetaClient, columnsToIndex, false,
               metadataConfig.getMaxReaderBufferSize()))
           .collect(Collectors.toList());
