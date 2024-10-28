@@ -42,9 +42,11 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final int columnStatsIndexParallelism;
   private final List<String> targetColumnsForColumnStatsIndex;
   private final List<String> targetColumnsForBloomFilterIndex;
+  private final int maxReaderBufferSize;
 
   MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
-                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
+                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex,
+                                  int maxReaderBufferSize) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
@@ -53,6 +55,7 @@ public class MetadataRecordsGenerationParams implements Serializable {
     this.columnStatsIndexParallelism = columnStatsIndexParallelism;
     this.targetColumnsForColumnStatsIndex = targetColumnsForColumnStatsIndex;
     this.targetColumnsForBloomFilterIndex = targetColumnsForBloomFilterIndex;
+    this.maxReaderBufferSize = maxReaderBufferSize;
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -85,5 +88,9 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public List<String> getSecondaryKeysForBloomFilterIndex() {
     return targetColumnsForBloomFilterIndex;
+  }
+
+  int getMaxReaderBufferSize() {
+    return maxReaderBufferSize;
   }
 }
