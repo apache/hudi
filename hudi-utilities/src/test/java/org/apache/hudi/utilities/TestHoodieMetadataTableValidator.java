@@ -217,7 +217,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
     Dataset<Row> rows = getRowDataset(1, "row1", "abc", "p1");
     rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
-    rows = getRowDataset(2, "row2", "abc", "p2");
+    rows = getRowDataset(2, "row2", "ghi", "p2");
     rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
     rows = getRowDataset(3, "row3", "def", "p2");
     rows.write().format("hudi").mode(SaveMode.Append).save(basePath);

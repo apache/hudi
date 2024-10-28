@@ -840,12 +840,17 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
 
       Set<String> keySet = new TreeSet<>(recordKeys);
+      Set<String> deletedRecordsFromLogs = new HashSet<>();
       Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
       logRecordScanner.getRecords().forEach(record -> {
         HoodieMetadataPayload payload = record.getData();
-        String recordKey = payload.getRecordKeyFromSecondaryIndex();
-        if (keySet.contains(recordKey)) {
-          logRecordsMap.put(recordKey, record);
+        if (!payload.isDeleted()) { // process only valid records.
+          String recordKey = payload.getRecordKeyFromSecondaryIndex();
+          if (keySet.contains(recordKey)) {
+            logRecordsMap.put(recordKey, record);
+          }
+        } else {
+          deletedRecordsFromLogs.add(record.getRecordKey());
         }
       });
 
@@ -856,7 +861,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         Option<HoodieRecord<HoodieMetadataPayload>> mergedRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldRecord, newRecord);
         return mergedRecord.orElseGet(null);
       }));
-      baseFileRecords.forEach((key, value) -> recordKeyMap.put(key, value.getRecordKey()));
+      baseFileRecords.forEach((key, value) -> {
+        if (!deletedRecordsFromLogs.contains(key)) {
+          recordKeyMap.put(key, value.getRecordKey());
+        }
+      });
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for  " + recordKeys.size() + " key : ", ioe);
     } finally {
@@ -931,17 +940,22 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       List<String> sortedSecondaryKeys = new ArrayList<>(secondaryKeys);
       secondaryKeySet.addAll(sortedSecondaryKeys);
       Collections.sort(sortedSecondaryKeys);
+      Set<String> deletedRecordKeysFromLogs = new HashSet<>();
 
       logRecordScanner.getRecords().forEach(record -> {
         HoodieMetadataPayload payload = record.getData();
-        String secondaryKey = payload.key;
-        if (secondaryKeySet.contains(secondaryKey)) {
-          String recordKey = payload.getRecordKeyFromSecondaryIndex();
-          logRecordsMap.computeIfAbsent(secondaryKey, k -> new HashMap<>()).put(recordKey, record);
+        if (!payload.isDeleted()) {
+          String secondaryKey = payload.key;
+          if (secondaryKeySet.contains(secondaryKey)) {
+            String recordKey = payload.getRecordKeyFromSecondaryIndex();
+            logRecordsMap.computeIfAbsent(secondaryKey, k -> new HashMap<>()).put(recordKey, record);
+          }
+        } else {
+          deletedRecordKeysFromLogs.add(record.getRecordKey());
         }
       });
 
-      return readNonUniqueRecordsAndMergeWithLogRecords(baseFileReader, sortedSecondaryKeys, logRecordsMap, timings, partitionName);
+      return readNonUniqueRecordsAndMergeWithLogRecords(baseFileReader, sortedSecondaryKeys, logRecordsMap, timings, partitionName, deletedRecordKeysFromLogs);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for  " + secondaryKeys.size() + " key : ", ioe);
     } finally {
@@ -955,7 +969,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                                             List<String> sortedKeys,
                                                                                                             Map<String, HashMap<String, HoodieRecord>> logRecordsMap,
                                                                                                             List<Long> timings,
-                                                                                                            String partitionName) throws IOException {
+                                                                                                            String partitionName,
+                                                                                                            Set<String> deleteRecordKeysFromLogs) throws IOException {
     HoodieTimer timer = HoodieTimer.start();
 
     Map<String, List<HoodieRecord<HoodieMetadataPayload>>> resultMap = new HashMap<>();
@@ -978,9 +993,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (logRecordsMap.isEmpty() && !baseFileRecordsMap.isEmpty()) {
       // file slice has only base file
       timings.add(timer.endTimer());
+      if (!deleteRecordKeysFromLogs.isEmpty()) { // remove deleted records from log from base file record list
+        deleteRecordKeysFromLogs.forEach(key -> baseFileRecordsMap.remove(key));
+      }
       return baseFileRecordsMap;
     }
 
+    // check why we are not considering records missing from logs, but only from base file.
     logRecordsMap.forEach((secondaryKey, logRecords) -> {
       if (!baseFileRecordsMap.containsKey(secondaryKey)) {
         List<HoodieRecord<HoodieMetadataPayload>> recordList = logRecords
