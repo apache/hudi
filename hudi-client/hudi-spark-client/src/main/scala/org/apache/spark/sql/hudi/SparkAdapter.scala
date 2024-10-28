@@ -19,6 +19,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 
@@ -191,6 +192,15 @@ trait SparkAdapter extends Serializable {
                      metaClient: HoodieTableMetaClient,
                      schema: Schema,
                      globPaths: Array[StoragePath],
+                     parameters: java.util.Map[String, String]): BaseRelation
+
+  /**
+   * Create Hoodie relation based on globPaths, otherwise use tablePath if it's empty
+   */
+  def createRelation(sqlContext: SQLContext,
+                     metaClient: HoodieTableMetaClient,
+                     schema: Schema,
+                     fileSlices: java.util.Map[String, java.util.List[FileSlice]],
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**

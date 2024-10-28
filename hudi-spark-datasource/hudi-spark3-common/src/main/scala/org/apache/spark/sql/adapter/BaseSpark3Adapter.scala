@@ -18,14 +18,16 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieHadoopFsRelationFactory, HoodieSparkUtils, Spark3RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SparkSession, SQLContext}
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
@@ -34,7 +36,7 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 
 import java.time.ZoneId
@@ -86,6 +88,16 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
+  }
+
+  override def createRelation(sqlContext: SQLContext,
+                              metaClient: HoodieTableMetaClient,
+                              schema: Schema,
+                              fileSlices: java.util.Map[String, java.util.List[FileSlice]],
+                              parameters: java.util.Map[String, String]): BaseRelation = {
+    val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType)
+    HoodieHadoopFsRelationFactory.createRelation(sqlContext, metaClient, dataSchema,
+      fileSlices.asScala.map(u => (u._1, u._2.asScala)).toMap, parameters.asScala.toMap)
   }
 
   override def convertStorageLevelToString(level: StorageLevel): String

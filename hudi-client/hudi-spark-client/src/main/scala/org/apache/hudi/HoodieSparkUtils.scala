@@ -22,6 +22,10 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.keygen.{CustomAvroKeyGenerator, KeyGenUtils}
+import org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
 
@@ -323,6 +327,64 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         partitionVals(index) += StoragePath.SEPARATOR + fragment
       }
     }
-    return partitionVals
+    partitionVals
+  }
+
+  def parsePartitionColumnValuesToInternalRow(partitionColumns: Array[String],
+                                              partitionPath: String,
+                                              basePath: StoragePath,
+                                              schema: StructType,
+                                              timeZoneId: String,
+                                              sparkParsePartitionUtil: SparkParsePartitionUtil,
+                                              shouldValidatePartitionCols: Boolean,
+                                              timestampPartitionIndexes: Set[Int],
+                                              shouldUseStringTypeForTimestampPartitionKeyType: Boolean): InternalRow = {
+
+    convertTimestampPartitionValues(parsePartitionColumnValues(partitionColumns, partitionPath, basePath,
+      schema, timeZoneId, sparkParsePartitionUtil, shouldValidatePartitionCols), timestampPartitionIndexes, shouldUseStringTypeForTimestampPartitionKeyType)
+  }
+
+  private def convertTimestampPartitionType(timestampPartitionIndexes: Set[Int], index: Int, elem: Any) = {
+    if (timestampPartitionIndexes.contains(index)) {
+      org.apache.spark.unsafe.types.UTF8String.fromString(String.valueOf(elem))
+    } else {
+      elem
+    }
+  }
+
+  def convertTimestampPartitionValues(values: Array[Object], timestampPartitionIndexes: Set[Int], shouldUseStringTypeForTimestampPartitionKeyType: Boolean): InternalRow = {
+    InternalRow.fromSeq(
+    if (!shouldUseStringTypeForTimestampPartitionKeyType || timestampPartitionIndexes.isEmpty) {
+      values
+    } else {
+      values.zipWithIndex.map { case (elem, index) => convertTimestampPartitionType(timestampPartitionIndexes, index, elem) }
+    })
+  }
+
+  /**
+   * Returns set of indices with timestamp partition type. For Timestamp based keygen, there is only one
+   * partition so index is 0. For custom keygen, it is the partition indices for which partition type is
+   * timestamp.
+   */
+  def getTimestampPartitionIndex(tableConfig: HoodieTableConfig): Set[Int] = {
+    val keyGeneratorClassNameOpt = Option.apply(tableConfig.getKeyGeneratorClassName)
+    val recordKeyFieldOpt = common.util.Option.ofNullable(tableConfig.getRawRecordKeyFieldProp)
+    val keyGeneratorClassName = keyGeneratorClassNameOpt.getOrElse(KeyGenUtils.inferKeyGeneratorType(recordKeyFieldOpt, tableConfig.getPartitionFieldProp).getClassName)
+    if (keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
+      || keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP_AVRO.getClassName)) {
+      Set(0)
+    } else if (keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM.getClassName)
+      || keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName)) {
+      val partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(tableConfig)
+      var partitionIndexes: Set[Int] = Set.empty
+      for (i <- 0 until partitionTypes.size()) {
+        if (partitionTypes.get(i).equals(PartitionKeyType.TIMESTAMP)) {
+          partitionIndexes = partitionIndexes + i
+        }
+      }
+      partitionIndexes
+    } else {
+      Set.empty
+    }
   }
 }

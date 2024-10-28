@@ -19,28 +19,11 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.model.FileSlice
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.datasources.FileIndex
+import org.apache.spark.sql.types.StructType
 
-class HoodiePartitionFileSliceMapping(values: InternalRow,
-                                      slices: Map[String, FileSlice])
-  extends HoodiePartitionValues(values) {
+trait HoodieSparkFileIndex extends FileIndex with SparkAdapterSupport {
 
-  def getSlice(fileId: String): Option[FileSlice] = {
-    slices.get(fileId)
-  }
+  def dataSchema: StructType
 
-  def getPartitionValues: InternalRow = values
-}
-
-object HoodiePartitionFileSliceMapping {
-
-  def tryWrap(values: InternalRow,
-              slices: Map[String, FileSlice]): InternalRow = {
-    if (slices.nonEmpty) {
-      new HoodiePartitionFileSliceMapping(values, slices)
-    } else {
-      values
-    }
-  }
 }

@@ -867,19 +867,19 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "f3, f4")
     tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.CUSTOM.name())
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1:SIMPLE,f2:TIMESTAMP")
-    assertEquals(Set(1), HoodieFileIndex.getTimestampPartitionIndex(tableConfig))
+    assertEquals(Set(1), HoodieSparkUtils.getTimestampPartitionIndex(tableConfig))
 
     // Custom key generator with both field partition types as timestamp would return both the indices
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1:TIMESTAMP,f2:TIMESTAMP")
-    assertEquals(Set(0, 1), HoodieFileIndex.getTimestampPartitionIndex(tableConfig))
+    assertEquals(Set(0, 1), HoodieSparkUtils.getTimestampPartitionIndex(tableConfig))
 
     // Custom key generator with both field partition types as simple would return empty set
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1:SIMPLE,f2:SIMPLE")
-    assertEquals(Set(), HoodieFileIndex.getTimestampPartitionIndex(tableConfig))
+    assertEquals(Set(), HoodieSparkUtils.getTimestampPartitionIndex(tableConfig))
 
     // Timestamp based key generators have only a single partition field
     tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.TIMESTAMP.name())
-    assertEquals(Set(0), HoodieFileIndex.getTimestampPartitionIndex(tableConfig))
+    assertEquals(Set(0), HoodieSparkUtils.getTimestampPartitionIndex(tableConfig))
   }
 }
 
