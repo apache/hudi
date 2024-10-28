@@ -1388,10 +1388,6 @@ public class HoodieMetadataTableValidator implements Serializable {
           break;
         }
         // test for log files equality
-        if (!fileSlice1.getLogFiles().collect(Collectors.toList()).equals(fileSlice2.getLogFiles().collect(Collectors.toList()))) {
-          mismatch = true;
-          break;
-        }
         if (!areFileSliceCommittedLogFilesMatching(
             fileSlice1, fileSlice2, metaClient, committedFilesMap)) {
           mismatch = true;
