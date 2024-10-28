@@ -19,15 +19,10 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -75,11 +70,9 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
                                       Option<String> partitionName,
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
-                                      HoodieRecordMerger recordMerger,
-                                      RecordMergeMode recordMergeMode,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
     super(readerContext, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
-        forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger, recordMergeMode, recordBuffer);
+        forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer);
     this.scannedPrefixes = new HashSet<>();
 
     if (forceFullScan) {
@@ -185,10 +178,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     return recordBuffer.getLogRecords();
   }
 
-  public HoodieRecord.HoodieRecordType getRecordType() {
-    return recordMerger.getRecordType();
-  }
-
   public long getNumMergedRecordsInLog() {
     return numMergedRecordsInLog;
   }
@@ -229,8 +218,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     // By default, we're doing a full-scan
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
-    private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
-    private RecordMergeMode recordMergeMode;
 
     private HoodieFileGroupRecordBuffer<T> recordBuffer;
 
@@ -290,18 +277,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
-    @Override
-    public Builder<T> withRecordMerger(HoodieRecordMerger recordMerger) {
-      this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger);
-      return this;
-    }
-
-    @Override
-    public Builder<T> withRecordMergeMode(RecordMergeMode recordMergeMode) {
-      this.recordMergeMode = recordMergeMode;
-      return this;
-    }
-
     public Builder<T> withKeyFiledOverride(String keyFieldOverride) {
       this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
       return this;
@@ -319,7 +294,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
     @Override
     public HoodieMergedLogRecordReader<T> build() {
-      ValidationUtils.checkArgument(recordMerger != null, "Record Merger is null in Merged Log Record Reader");
       ValidationUtils.checkArgument(recordBuffer != null, "Record Buffer is null in Merged Log Record Reader");
       ValidationUtils.checkArgument(readerContext != null, "Reader Context is null in Merged Log Record Reader");
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
@@ -333,8 +307,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName),
           Option.ofNullable(keyFieldOverride),
-          enableOptimizedLogBlocksScan, recordMerger, recordMergeMode,
-          recordBuffer);
+          enableOptimizedLogBlocksScan, recordBuffer);
     }
   }
 }

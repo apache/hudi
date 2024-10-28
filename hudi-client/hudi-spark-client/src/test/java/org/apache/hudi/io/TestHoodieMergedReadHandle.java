@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -227,6 +228,7 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
         .withSchema(SCHEMA_STR)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .fromProperties(getPayloadProps(payloadClass)).build())
+        .withRecordMergeMode(RecordMergeMode.CUSTOM)
         .build();
   }
 }

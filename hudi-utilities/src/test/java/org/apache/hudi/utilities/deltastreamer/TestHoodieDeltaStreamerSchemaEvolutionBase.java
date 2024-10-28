@@ -110,6 +110,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     defaultSchemaProviderClassName = TestSchemaProvider.class.getName();
   }
 
+  @Override
   @BeforeEach
   public void setupTest() {
     super.setupTest();

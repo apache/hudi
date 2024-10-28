@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -44,8 +45,9 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
                                           Schema dataSchema,
                                           Schema requestedSchema,
                                           Option<InternalSchema> internalSchemaOpt,
-                                          HoodieTableConfig hoodieTableConfig) {
-    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig);
+                                          HoodieTableConfig hoodieTableConfig,
+                                          TypedProperties properties) {
+    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig, properties);
   }
 
   @Override

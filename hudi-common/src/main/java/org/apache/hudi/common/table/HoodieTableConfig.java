@@ -30,10 +30,10 @@ import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.model.RecordPayloadType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -43,6 +43,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -74,6 +75,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.OVERWRITE_WITH_LATEST;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
@@ -83,9 +88,14 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 @Immutable
 @ConfigClassProperty(name = "Hudi Table Basic Configs",
@@ -185,43 +195,30 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
-
-  //TODO: why is this the default? not OVERWRITE_WITH_LATEST?
-  public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
+  
+  public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
-      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
+      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING)
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(DefaultHoodieRecordPayload.class.getName())
+      .noDefaultValue()
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
-  public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
-      .key("hoodie.compaction.payload.type")
-      .defaultValue(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())
-      .sinceVersion("1.0.0")
-      .withDocumentation(RecordPayloadType.class);
+  // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
+  public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
 
-  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
-      .key("hoodie.compaction.record.merger.strategy")
-      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
-      .withInferFunction(cfg -> {
-        switch (RecordMergeMode.valueOf(cfg.getStringOrDefault(RECORD_MERGE_MODE))) {
-          case EVENT_TIME_ORDERING:
-            return Option.of(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
-          case OVERWRITE_WITH_LATEST:
-            return Option.of(HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID);
-          case CUSTOM:
-          default:
-            return Option.empty();
-        }
-      })
+  public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
+      .key("hoodie.record.merge.strategy.id")
+      .noDefaultValue()
+      .withAlternatives("hoodie.compaction.record.merger.strategy")
       .sinceVersion("0.13.0")
-      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in `"
+          + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "` which has the same merger strategy id");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
@@ -359,7 +356,8 @@ public class HoodieTableConfig extends HoodieConfig {
         .collect(Collectors.toList());
   }
 
-  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, String payloadClassName, String recordMergerStrategyId) {
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
+                           String recordMergeStrategyId) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
@@ -371,14 +369,14 @@ public class HoodieTableConfig extends HoodieConfig {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         needStore = true;
       }
-      if (contains(PAYLOAD_TYPE) && payloadClassName != null
-          && !payloadClassName.equals(RecordPayloadType.valueOf(getString(PAYLOAD_TYPE)).getClassName())) {
-        setValue(PAYLOAD_TYPE, RecordPayloadType.fromClassName(payloadClassName).name());
+      if (contains(RECORD_MERGE_MODE) && recordMergeMode != null
+          && !recordMergeMode.equals(RecordMergeMode.getValue(getString(RECORD_MERGE_MODE)))) {
+        setValue(RECORD_MERGE_MODE, recordMergeMode.name());
         needStore = true;
       }
-      if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
-          && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
-        setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
+      if (contains(RECORD_MERGE_STRATEGY_ID) && recordMergeStrategyId != null
+          && !getString(RECORD_MERGE_STRATEGY_ID).equals(recordMergeStrategyId)) {
+        setValue(RECORD_MERGE_STRATEGY_ID, recordMergeStrategyId);
         needStore = true;
       }
       if (needStore) {
@@ -513,12 +511,6 @@ public class HoodieTableConfig extends HoodieConfig {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
       }
       hoodieConfig.setDefaultValue(TYPE);
-      if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
-        if (tableVersion.greaterThan(HoodieTableVersion.SEVEN)) {
-          hoodieConfig.setDefaultValue(PAYLOAD_TYPE);
-        }
-        hoodieConfig.setDefaultValue(RECORD_MERGER_STRATEGY);
-      }
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
         // Use latest Version as default unless forced by client
@@ -684,21 +676,110 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public RecordMergeMode getRecordMergeMode() {
-    return RecordMergeMode.valueOf(getStringOrDefault(RECORD_MERGE_MODE).toUpperCase());
+    return RecordMergeMode.getValue(getStringOrDefault(RECORD_MERGE_MODE));
   }
 
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getPayloadClass() {
-    return RecordPayloadType.getPayloadClassName(this);
+    return HoodieRecordPayload.getPayloadClassName(this);
+  }
+
+  public String getRecordMergeStrategyId() {
+    return getString(RECORD_MERGE_STRATEGY_ID);
   }
 
   /**
-   * Read the payload class for HoodieRecords from the table properties.
+   * Infers the merging behavior based on what the user sets (or doesn't set).
+   * Validates that the user has not set an illegal combination of configs
    */
-  public String getRecordMergerStrategy() {
-    return getStringOrDefault(RECORD_MERGER_STRATEGY);
+  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode, String payloadClassName,
+                                                                                    String recordMergeStrategyId) {
+    RecordMergeMode inferredRecordMergeMode;
+    String inferredPayloadClassName;
+    String inferredRecordMergeStrategyId;
+
+    if (isNullOrEmpty(payloadClassName)) {
+      if (isNullOrEmpty(recordMergeStrategyId)) {
+        // no payload class name or merge strategy ID. If nothing is set then we default. User cannot set custom because no payload or strategy is set
+        checkArgument(recordMergeMode != RecordMergeMode.CUSTOM,
+            "Custom merge mode should only be used if you set a payload class or merge strategy ID");
+        if (recordMergeMode == null) {
+          inferredRecordMergeMode = RECORD_MERGE_MODE.defaultValue();
+        } else {
+          inferredRecordMergeMode = recordMergeMode;
+        }
+
+        // set merger strategy based on merge mode
+        if (inferredRecordMergeMode == OVERWRITE_WITH_LATEST) {
+          inferredRecordMergeStrategyId = OVERWRITE_MERGE_STRATEGY_UUID;
+        } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
+          inferredRecordMergeStrategyId = DEFAULT_MERGE_STRATEGY_UUID;
+        } else {
+          throw new IllegalStateException("Merge Mode: '" + inferredRecordMergeMode + "' has not been fully implemented.");
+        }
+      } else {
+        // no payload class but merge strategy ID is set. Need to validate that strategy and merge mode align if both are set
+        inferredRecordMergeStrategyId = recordMergeStrategyId;
+        if (recordMergeStrategyId.equals(DEFAULT_MERGE_STRATEGY_UUID)) {
+          checkArgument(recordMergeMode == null || recordMergeMode == EVENT_TIME_ORDERING,
+              "Default merge strategy ID can only be used with the merge mode of EVENT_TIME_ORDERING");
+          inferredRecordMergeMode = EVENT_TIME_ORDERING;
+        } else if (recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID)) {
+          checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST,
+              "Overwrite with latest merger strategy ID can only be used with the merge mode of OVERWRITE_WITH_LATEST");
+          inferredRecordMergeMode = OVERWRITE_WITH_LATEST;
+        } else {
+          checkArgument(!recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+              "Payload based strategy should only be used if you have a custom payload class set");
+          checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM,
+              "Record merge mode must be set to custom when using a custom merge strategy ID");
+          inferredRecordMergeMode = CUSTOM;
+        }
+      }
+      inferredPayloadClassName = HoodieRecordPayload.getAvroPayloadForMergeMode(inferredRecordMergeMode);
+    } else {
+      // payload class name is set
+      inferredPayloadClassName = payloadClassName;
+      if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
+        // Default payload matches with EVENT_TIME_ORDERING. However, Custom merge modes still have some gaps (tracked by [HUDI-8317]) so
+        // we will use default merger for now on the write path if the user has a custom merger. After all gaps have been closed, we will set
+        // a dummy payload by default for custom merge mode. Then we can get rid of this if else, and add the validation:
+        // checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(DEFAULT_MERGER_STRATEGY_UUID),
+        //   "Record merge strategy cannot be set if a merge payload is used");
+        if (isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(DEFAULT_MERGE_STRATEGY_UUID)) {
+          // Default case, everything should be null or event time ordering / default strategy
+          checkArgument(recordMergeMode == null || recordMergeMode == EVENT_TIME_ORDERING,
+              "Only the record merge mode of EVENT_TIME_ORDERING can be used with default payload");
+          inferredRecordMergeMode = EVENT_TIME_ORDERING;
+          inferredRecordMergeStrategyId = DEFAULT_MERGE_STRATEGY_UUID;
+        } else {
+          // currently for the custom case. This block will be moved below and check if the payload class name is dummy
+          checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM, "Record merge mode, payload class, and merge strategy are in an illegal configuration");
+          checkArgument(
+              !recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID) && !recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+              "Record merger strategy is incompatible with payload class");
+          inferredRecordMergeMode = CUSTOM;
+          inferredRecordMergeStrategyId = recordMergeStrategyId;
+        }
+      } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+        // strategy and merge mode must be unset or align with overwrite
+        checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID),
+            "Record merge strategy cannot be set if a merge payload is used");
+        checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST, "Only overwrite with latest record merge mode can be used with overwrite payload");
+        inferredRecordMergeMode = OVERWRITE_WITH_LATEST;
+        inferredRecordMergeStrategyId = OVERWRITE_MERGE_STRATEGY_UUID;
+      } else {
+        // using custom avro payload
+        checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+            "Record merge strategy cannot be set if a merge payload is used");
+        checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM, "Record merge mode must be custom if payload is defined");
+        inferredRecordMergeMode = CUSTOM;
+        inferredRecordMergeStrategyId = PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+      }
+    }
+    return Triple.of(inferredRecordMergeMode, inferredPayloadClassName, inferredRecordMergeStrategyId);
   }
 
   public String getPreCombineField() {
@@ -1041,11 +1122,6 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   @Deprecated
   public static final HoodieFileFormat DEFAULT_LOG_FILE_FORMAT = LOG_FILE_FORMAT.defaultValue();
-  /**
-   * @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods.
-   */
-  @Deprecated
-  public static final String DEFAULT_PAYLOAD_CLASS = PAYLOAD_CLASS_NAME.defaultValue();
   /**
    * @deprecated Use {@link #BOOTSTRAP_INDEX_CLASS_NAME} and its methods.
    */

@@ -19,12 +19,13 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
@@ -48,6 +49,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.AVRO;
@@ -59,6 +61,16 @@ import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.R
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
+
+  @Override
+  protected Properties getMetaProps() {
+    Properties metaProps =  super.getMetaProps();
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), CustomAvroMerger.KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY);
+    metaProps.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
+    return metaProps;
+  }
+
   @BeforeAll
   public static void setUp() throws IOException {
     // Enable our custom merger.
@@ -66,7 +78,7 @@ public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
         Option.of(new CustomAvroMerger()),
         Option.of(HoodieRecordTestPayload.class.getName()));
     properties.setProperty(
-        HoodieCommonConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
+        "hoodie.write.record.merge.mode", RecordMergeMode.CUSTOM.name());
 
     // -------------------------------------------------------------
     // The test logic is as follows:

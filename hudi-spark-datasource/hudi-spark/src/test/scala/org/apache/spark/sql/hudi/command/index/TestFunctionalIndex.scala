@@ -31,7 +31,6 @@ import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
@@ -635,8 +634,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
             // verify there are new updates to functional index with isDeleted true for cleaned file
             checkAnswer(s"select ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value, ColumnStatsMetadata.isDeleted from hudi_metadata('$tableName') where type=3 and ColumnStatsMetadata.fileName='$fileName'")(
-              Seq("2022-09-26", "2022-09-26", false),
-              Seq(null, null, true) // for the cleaned file
+              Seq("2022-09-26", "2022-09-26", false) // for cleaned file, there won't be any stats produced.
             )
           }
         }

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.examples.spark
 
-import org.apache.hudi.DataSourceReadOptions.{BEGIN_INSTANTTIME, END_INSTANTTIME, QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{END_COMMIT, QUERY_TYPE, QUERY_TYPE_INCREMENTAL_OPT_VAL, START_COMMIT}
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, DELETE_PARTITION_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PARTITIONS_TO_DELETE, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.model.HoodieAvroPayload
@@ -90,10 +90,7 @@ object HoodieDataSourceExample {
     * Load the data files into a DataFrame.
     */
   def queryData(spark: SparkSession, tablePath: String, tableName: String, dataGen: HoodieExampleDataGenerator[HoodieAvroPayload]): Unit = {
-    val roViewDF = spark.
-      read.
-      format("hudi").
-      load(tablePath + "/*/*/*/*")
+    val roViewDF = spark.read.format("hudi").load(tablePath)
 
     roViewDF.createOrReplaceTempView("hudi_ro_table")
 
@@ -136,7 +133,7 @@ object HoodieDataSourceExample {
    */
   def delete(spark: SparkSession, tablePath: String, tableName: String): Unit = {
 
-    val roViewDF = spark.read.format("hudi").load(tablePath + "/*/*/*/*")
+    val roViewDF = spark.read.format("hudi").load(tablePath)
     roViewDF.createOrReplaceTempView("hudi_ro_table")
     val df = spark.sql("select uuid, partitionpath, ts from  hudi_ro_table limit 2")
 
@@ -170,20 +167,20 @@ object HoodieDataSourceExample {
 
   /**
     * Hudi also provides capability to obtain a stream of records that changed since given commit timestamp.
-    * This can be achieved using Hudi’s incremental view and providing a begin time from which changes need to be streamed.
+   * This can be achieved using Hudi’s incremental view and providing a start time from which changes need to be streamed.
     * We do not need to specify endTime, if we want all changes after the given commit (as is the common case).
     */
   def incrementalQuery(spark: SparkSession, tablePath: String, tableName: String): Unit = {
     import spark.implicits._
     val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from hudi_ro_table order by commitTime").map(k => k.getString(0)).take(50)
-    val beginTime = commits(commits.length - 2) // commit time we are interested in
+    val startTime = commits(commits.length - 1) // commit time we are interested in
 
     // incrementally query data
     val incViewDF = spark.
       read.
       format("hudi").
       option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-      option(BEGIN_INSTANTTIME.key, beginTime).
+      option(START_COMMIT.key, startTime).
         load(tablePath)
     incViewDF.createOrReplaceTempView("hudi_incr_table")
     spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_incr_table where fare > 20.0").show()
@@ -197,14 +194,14 @@ object HoodieDataSourceExample {
   def pointInTimeQuery(spark: SparkSession, tablePath: String, tableName: String): Unit = {
     import spark.implicits._
     val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k => k.getString(0)).take(50)
-    val beginTime = "000" // Represents all commits > this time.
+    val startTime = "000" // Represents all commits > this time.
     val endTime = commits(commits.length - 2) // commit time we are interested in
 
     //incrementally query data
     val incViewDF = spark.read.format("hudi").
       option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-      option(BEGIN_INSTANTTIME.key, beginTime).
-      option(END_INSTANTTIME.key, endTime).
+      option(START_COMMIT.key, startTime).
+      option(END_COMMIT.key, endTime).
       load(tablePath)
     incViewDF.createOrReplaceTempView("hudi_incr_table")
     spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare > 20.0").show()

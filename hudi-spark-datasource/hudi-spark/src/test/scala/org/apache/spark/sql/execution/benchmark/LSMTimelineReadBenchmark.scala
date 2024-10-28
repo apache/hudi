@@ -22,8 +22,8 @@ import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.client.timeline.LSMTimelineWriter
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.table.timeline.{ActiveAction, CompletionTimeQueryView, HoodieArchivedTimeline, HoodieInstant, LSMTimeline}
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
@@ -95,7 +95,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         }
       }
       benchmark.addCase("read start time") { _ =>
-        new CompletionTimeQueryView(metaClient).getStartTimes(startTs + 1 + 1000 + "", startTs + commitsNum + 1000 + "", earliestStartTimeFunc)
+        new CompletionTimeQueryView(metaClient).getInstantTimes(startTs + 1 + 1000 + "", startTs + commitsNum + 1000 + "", earliestStartTimeFunc)
       }
       benchmark.run()
       val totalSize = LSMTimeline.latestSnapshotManifest(metaClient).getFiles.asScala
