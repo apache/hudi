@@ -319,7 +319,8 @@ public class IncrSourceHelper {
     }
     LOG.info("Processed batch size: " + row.get(row.fieldIndex(CUMULATIVE_COLUMN_NAME)) + " bytes");
     sourceData.unpersist();
-    // TODO: row.getString(0) is the commit time, not the completion time
+    // TODO: row.getString(0) is the commit time, not the completion time, need queryContext (filtered by snapshotLoadSplitter)
+    //  here to map commit time to completion time again
     return Pair.of(new CloudObjectIncrCheckpoint(row.getString(0), row.getString(1)), Option.of(collectedRows));
   }
 

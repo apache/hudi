@@ -282,6 +282,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list
+    // Triple(filePath, fileSize, commitTime)
     filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 50L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 50L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip1.json", 50L, "2"));
@@ -345,7 +346,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     when(queryRunner.run(any(QueryContext.class), any(), any(Boolean.class))).thenAnswer(invocation -> {
       QueryContext queryContext = invocation.getArgument(0);
       boolean shouldFullScan = invocation.getArgument(2);
-      if (queryContext.getInstantRange().isEmpty() || shouldFullScan) {
+      if (shouldFullScan) {
         return Pair.of(queryContext.getMaxCompletionTime(),
             inputDs.filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
                 String.join("','", queryContext.getInstantTimeList()))));

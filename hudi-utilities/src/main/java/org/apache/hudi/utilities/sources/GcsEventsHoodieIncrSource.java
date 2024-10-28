@@ -178,8 +178,9 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
       return Pair.of(Option.empty(), lastCheckpoint.orElse(null));
     }
     boolean shouldFullScan =
-        missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT
-            && queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(analyzer.getStartCompletionTime().get());
+        queryContext.getInstantRange().isEmpty()
+            || (missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT
+            && queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(analyzer.getStartCompletionTime().get()));
     return cloudDataFetcher.fetchPartitionedSource(
         GCS, cloudObjectIncrCheckpoint, this.sourceProfileSupplier,
         queryRunner.run(queryContext, snapshotLoadQuerySplitter, shouldFullScan), this.schemaProvider, sourceLimit);

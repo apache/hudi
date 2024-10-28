@@ -560,7 +560,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     when(mockQueryRunner.run(Mockito.any(QueryContext.class), Mockito.any(), Mockito.any(Boolean.class))).thenAnswer(invocation -> {
       QueryContext queryContext = invocation.getArgument(0);
       boolean shouldFullScan = invocation.getArgument(2);
-      if (queryContext.getInstantRange().isEmpty() || shouldFullScan) {
+      if (shouldFullScan) {
         return Pair.of(queryContext.getMaxCompletionTime(),
             inputDs.filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
                 String.join("','", queryContext.getInstantTimeList()))));

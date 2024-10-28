@@ -72,7 +72,7 @@ public class QueryRunner {
       QueryContext queryContext,
       Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption,
       boolean shouldFullScan) {
-    if (queryContext.getInstantRange().isEmpty() || shouldFullScan) {
+    if (shouldFullScan) {
       return runSnapshotQuery(queryContext, snapshotLoadQuerySplitterOption);
     } else {
       return runIncrementalQuery(queryContext);
