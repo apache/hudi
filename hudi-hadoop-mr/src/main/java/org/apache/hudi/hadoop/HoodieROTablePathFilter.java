@@ -215,7 +215,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
           return hoodiePathCache.get(folder.toString()).contains(path);
         } catch (TableNotFoundException e) {
           // Non-hoodie path, accept it.
-          LOG.debug("(1) Caching non-hoodie path under {} with basePath {}", folder, baseDir));
+          LOG.debug("(1) Caching non-hoodie path under {} with basePath {}", folder, baseDir);
           nonHoodiePathCache.add(folder.toString());
           nonHoodiePathCache.add(baseDir.toString());
           return true;
