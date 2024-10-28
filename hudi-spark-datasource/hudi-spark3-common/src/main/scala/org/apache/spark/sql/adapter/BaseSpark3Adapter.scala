@@ -97,7 +97,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType)
     HoodieHadoopFsRelationFactory.createRelation(sqlContext, metaClient, dataSchema,
-      fileSlices.asScala.map(u => (u._1, u._2.asScala)).toMap, parameters.asScala.toMap)
+      fileSlices.asScala.map(u => (u._1, u._2.asScala.toSeq)).toMap, parameters.asScala.toMap)
   }
 
   override def convertStorageLevelToString(level: StorageLevel): String
