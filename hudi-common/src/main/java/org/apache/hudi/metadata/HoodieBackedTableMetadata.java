@@ -1033,7 +1033,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private Map<String, HoodieRecord<HoodieMetadataPayload>> fetchBaseFileAllRecordsByPayload(HoodieSeekingFileReader reader, Set<String> keySet, String partitionName) throws IOException {
     if (reader == null) {
       // No base file at all
-      return Collections.emptyMap();
+      return new HashMap<>();
     }
 
     ClosableIterator<HoodieRecord<?>> records = reader.getRecordIterator();
