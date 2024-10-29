@@ -21,6 +21,9 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -30,6 +33,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 
 /**
  * Every Hoodie table has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which depend on record specific logic.
@@ -139,5 +144,30 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   default Comparable<?> getOrderingValue() {
     // default natural order
     return 0;
+  }
+
+  static String getAvroPayloadForMergeMode(RecordMergeMode mergeMode) {
+    switch (mergeMode) {
+      //TODO: After we have merge mode working for writing, we should have a dummy payload that will throw exception when used
+      default:
+      case EVENT_TIME_ORDERING:
+        return DefaultHoodieRecordPayload.class.getName();
+      case OVERWRITE_WITH_LATEST:
+        return OverwriteWithLatestAvroPayload.class.getName();
+    }
+  }
+
+  static String getPayloadClassName(HoodieConfig config) {
+    String payloadClassName;
+    if (config.contains(PAYLOAD_CLASS_NAME)) {
+      payloadClassName = config.getString(PAYLOAD_CLASS_NAME);
+    } else if (config.contains("hoodie.datasource.write.payload.class")) {
+      payloadClassName = config.getString("hoodie.datasource.write.payload.class");
+    } else {
+      return HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
+    }
+    // There could be tables written with payload class from com.uber.hoodie.
+    // Need to transparently change to org.apache.hudi.
+    return payloadClassName.replace("com.uber.hoodie", "org.apache.hudi");
   }
 }

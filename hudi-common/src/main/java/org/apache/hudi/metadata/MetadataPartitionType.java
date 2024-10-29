@@ -56,6 +56,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.BLOOM_FILTER_FIELD_
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_DELETED;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_TIGHT_BOUND;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT;
@@ -297,8 +298,8 @@ public enum MetadataPartitionType {
           String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
     } else {
       payload.columnStatMetadata = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())
-          .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME))
-          .setColumnName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME))
+          .setFileName(columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME).toString())
+          .setColumnName(columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME).toString())
           // AVRO-2377 1.9.2 Modified the type of org.apache.avro.Schema#FIELD_RESERVED to Collections.unmodifiableSet.
           // This causes Kryo to fail when deserializing a GenericRecord, See HUDI-5484.
           // We should avoid using GenericRecord and convert GenericRecord into a serializable type.
@@ -309,6 +310,7 @@ public enum MetadataPartitionType {
           .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
           .setTotalUncompressedSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE))
           .setIsDeleted((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_DELETED))
+          .setIsTightBound((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_TIGHT_BOUND))
           .build();
     }
   }
@@ -372,6 +374,13 @@ public enum MetadataPartitionType {
    */
   public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
     return newer;
+  }
+
+  /**
+   * Check if the partition path should be deleted on restore.
+   */
+  public static boolean shouldDeletePartitionOnRestore(String partitionPath) {
+    return fromPartitionPath(partitionPath) != FILES && fromPartitionPath(partitionPath) != RECORD_INDEX;
   }
 
   /**

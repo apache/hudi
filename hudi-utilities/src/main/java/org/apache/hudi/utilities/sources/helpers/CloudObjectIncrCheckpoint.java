@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.util.Option;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.DEFAULT_BEGIN_TIMESTAMP;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.DEFAULT_START_TIMESTAMP;
 
 /**
  * This POJO is used to craft checkpoints that supports size based batching
@@ -55,13 +55,13 @@ public class CloudObjectIncrCheckpoint {
         return new CloudObjectIncrCheckpoint(lastCheckpoint.get(), null);
       }
     }
-    return new CloudObjectIncrCheckpoint(DEFAULT_BEGIN_TIMESTAMP, null);
+    return new CloudObjectIncrCheckpoint(DEFAULT_START_TIMESTAMP, null);
   }
 
   @Override
   public String toString() {
     if (isNullOrEmpty(commit) && isNullOrEmpty(key)) {
-      return DEFAULT_BEGIN_TIMESTAMP;
+      return DEFAULT_START_TIMESTAMP;
     } else if (isNullOrEmpty(key)) {
       return commit;
     }

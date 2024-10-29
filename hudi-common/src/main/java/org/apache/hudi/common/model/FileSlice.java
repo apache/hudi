@@ -55,11 +55,17 @@ public class FileSlice implements Serializable {
   private final TreeSet<HoodieLogFile> logFiles;
 
   public FileSlice(FileSlice fileSlice) {
+    this(fileSlice, true);
+  }
+
+  private FileSlice(FileSlice fileSlice, boolean includeLogFiles) {
     this.baseInstantTime = fileSlice.baseInstantTime;
     this.baseFile = fileSlice.baseFile != null ? new HoodieBaseFile(fileSlice.baseFile) : null;
     this.fileGroupId = fileSlice.fileGroupId;
     this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
-    fileSlice.logFiles.forEach(lf -> this.logFiles.add(new HoodieLogFile(lf)));
+    if (includeLogFiles) {
+      fileSlice.logFiles.forEach(lf -> this.logFiles.add(new HoodieLogFile(lf)));
+    }
   }
 
   public FileSlice(String partitionPath, String baseInstantTime, String fileId) {
@@ -88,6 +94,22 @@ public class FileSlice implements Serializable {
 
   public void addLogFile(HoodieLogFile logFile) {
     this.logFiles.add(logFile);
+  }
+
+  public FileSlice withLogFiles(boolean includeLogFiles) {
+    if (includeLogFiles || !hasLogFiles()) {
+      return this;
+    } else {
+      return new FileSlice(this, false);
+    }
+  }
+
+  public boolean hasBootstrapBase() {
+    return getBaseFile().isPresent() && getBaseFile().get().getBootstrapBaseFile().isPresent();
+  }
+
+  public boolean hasLogFiles() {
+    return !logFiles.isEmpty();
   }
 
   public Stream<HoodieLogFile> getLogFiles() {

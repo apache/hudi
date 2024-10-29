@@ -115,7 +115,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
                                                                    final Reporter reporter) throws IOException {
     HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
-    if (shouldUseFilegroupReader(job)) {
+    if (shouldUseFilegroupReader(job, split)) {
       try {
         if (!(split instanceof FileSplit) || !checkIfHudiTable(split, job)) {
           return super.getRecordReader(split, job, reporter);

@@ -61,33 +61,35 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     boolean fullTest = false;
     Stream.Builder<Arguments> b = Stream.builder();
     if (fullTest) {
-      //only testing row-writer enabled for now
       for (Boolean rowWriterEnable : new Boolean[] {false, true}) {
         for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
           for (Boolean useKafkaSource : new Boolean[] {false, true}) {
             for (Boolean addFilegroups : new Boolean[] {false, true}) {
               for (Boolean multiLogFiles : new Boolean[] {false, true}) {
-                for (Boolean shouldCluster : new Boolean[] {false, true}) {
-                  for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
-                    if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
-                      b.add(Arguments.of(tableType, shouldCluster, false, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
+                for (Boolean useParquetLogFile : new Boolean[] {false, true}) {
+                  for (Boolean shouldCluster : new Boolean[] {false, true}) {
+                    for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
+                      if ((!multiLogFiles && !useParquetLogFile) || tableType.equals("MERGE_ON_READ")) {
+                        b.add(Arguments.of(tableType, shouldCluster, false, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols, useParquetLogFile));
+                      }
                     }
                   }
+                  b.add(Arguments.of("MERGE_ON_READ", false, true, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols, useParquetLogFile));
                 }
-                b.add(Arguments.of("MERGE_ON_READ", false, true, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
               }
             }
           }
         }
       }
     } else {
-      b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, false));
-      b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, true));
-      b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, false, true, true));
-      b.add(Arguments.of("MERGE_ON_READ", true, false, false, true, true, true, true));
-      b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true));
-      b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true));
-      b.add(Arguments.of("MERGE_ON_READ", false, false, true, true, true, false, true));
+      b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, false, false));
+      b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, true, false));
+      b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, false, true, true, false));
+      b.add(Arguments.of("MERGE_ON_READ", true, false, false, true, true, true, true, false));
+      b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true, false));
+      b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true, false));
+      b.add(Arguments.of("MERGE_ON_READ", false, false, true, true, true, false, true, false));
+      b.add(Arguments.of("MERGE_ON_READ", false, false, false, true, true, false, true, true));
     }
     return b.build();
   }
@@ -147,13 +149,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
                           Boolean addFilegroups,
                           Boolean multiLogFiles,
                           Boolean useKafkaSource,
-                          Boolean allowNullForDeletedCols) throws Exception {
+                          Boolean allowNullForDeletedCols,
+                          Boolean useParquetLogBlock) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.useParquetLogBlock = useParquetLogBlock;
     this.useKafkaSource = useKafkaSource;
     if (useKafkaSource) {
       this.useSchemaProvider = true;

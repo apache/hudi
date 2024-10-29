@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -49,7 +48,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_1;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.EXTRA_TYPE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.FARE_NESTED_SCHEMA;
@@ -168,7 +166,6 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(metaClient)
         .setTableType(HoodieTableType.MERGE_ON_READ)
-        .setRecordMergeMode(RecordMergeMode.valueOf(RECORD_MERGE_MODE.defaultValue()))
         .setTimelineLayoutVersion(VERSION_1)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 

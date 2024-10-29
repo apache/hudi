@@ -100,14 +100,14 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
 
   public HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-                           Map<HeaderMetadataType, String> footer) {
+                           Map<FooterMetadataType, String> footer) {
     // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
     this(content, inputStreamSupplier, readBlockLazily, blockContentLocation, header, footer, false);
   }
 
   HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                     Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-                    Map<HeaderMetadataType, String> footer, boolean shouldWriteRecordPositions) {
+                    Map<FooterMetadataType, String> footer, boolean shouldWriteRecordPositions) {
     super(header, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
     this.shouldWriteRecordPositions = shouldWriteRecordPositions;
   }

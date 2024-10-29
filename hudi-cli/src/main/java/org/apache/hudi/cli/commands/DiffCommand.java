@@ -110,7 +110,7 @@ public class DiffCommand {
                                        BiFunction<HoodieWriteStat, String, Boolean> diffEntityChecker) throws IOException {
     List<Comparable[]> rows = new ArrayList<>();
     List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
+        .getInstantsAsStream().sorted(HoodieInstant.INSTANT_TIME_COMPARATOR.reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
       Option<byte[]> instantDetails = timeline.getInstantDetails(commit);

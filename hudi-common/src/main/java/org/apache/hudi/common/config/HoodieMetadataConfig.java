@@ -358,6 +358,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating partition stats index.");
 
+  public static final ConfigProperty<Boolean> PARTITION_STATS_INDEX_CONSOLIDATE_ON_EVERY_WRITE = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.consolidate.on.every.write")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("When enabled, partition stats is consolidated is computed on every commit for the min/max value of every column "
+          + "at the storage partition level. Typically, the min/max range for each column can become wider (i.e. the minValue is <= all valid values "
+          + "in the file, and the maxValue >= all valid values in the file) with updates and deletes. If this config is enabled, "
+          + "the min/max range will be updated to the tight bound of the valid values after every commit for the partitions touched.");
+
   public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.enable")
       .defaultValue(false)
@@ -523,6 +532,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getPartitionStatsIndexParallelism() {
     return getInt(PARTITION_STATS_INDEX_PARALLELISM);
+  }
+
+  public boolean isPartitionStatsIndexConsolidationEnabledOnEveryWrite() {
+    return getBooleanOrDefault(PARTITION_STATS_INDEX_CONSOLIDATE_ON_EVERY_WRITE);
   }
 
   public boolean isSecondaryIndexEnabled() {
@@ -733,6 +746,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withPartitionStatsIndexParallelism(int parallelism) {
       metadataConfig.setValue(PARTITION_STATS_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withPartitionStatsIndexConsolidationEnabledOnEveryWrite(boolean enable) {
+      metadataConfig.setValue(PARTITION_STATS_INDEX_CONSOLIDATE_ON_EVERY_WRITE, String.valueOf(enable));
       return this;
     }
 

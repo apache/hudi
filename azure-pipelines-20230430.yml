@@ -42,6 +42,8 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.16.x'
       - 'hudi-flink-datasource/hudi-flink1.17.x'
       - 'hudi-flink-datasource/hudi-flink1.18.x'
+      - 'hudi-flink-datasource/hudi-flink1.19.x'
+      - 'hudi-flink-datasource/hudi-flink1.20.x'
   - name: job2FTModules
     type: object
     default:
@@ -54,6 +56,8 @@ parameters:
       - 'hudi-flink-datasource/hudi-flink1.16.x'
       - 'hudi-flink-datasource/hudi-flink1.17.x'
       - 'hudi-flink-datasource/hudi-flink1.18.x'
+      - 'hudi-flink-datasource/hudi-flink1.19.x'
+      - 'hudi-flink-datasource/hudi-flink1.20.x'
       - 'hudi-client/hudi-spark-client'
       - 'hudi-spark-datasource/hudi-spark'
   - name: job34UTModules
@@ -85,6 +89,8 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-flink-datasource/hudi-flink1.17.x'
       - '!hudi-flink-datasource/hudi-flink1.18.x'
+      - '!hudi-flink-datasource/hudi-flink1.19.x'
+      - '!hudi-flink-datasource/hudi-flink1.20.x'
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark3.5.x'
@@ -109,6 +115,8 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-flink-datasource/hudi-flink1.17.x'
       - '!hudi-flink-datasource/hudi-flink1.18.x'
+      - '!hudi-flink-datasource/hudi-flink1.19.x'
+      - '!hudi-flink-datasource/hudi-flink1.20.x'
       - '!hudi-spark-datasource/hudi-spark'
   - name: job4HudiSparkDmlOthersWildcardSuites
     type: object

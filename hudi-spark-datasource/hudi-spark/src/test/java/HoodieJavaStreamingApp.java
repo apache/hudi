@@ -321,10 +321,7 @@ public class HoodieJavaStreamingApp {
     /**
      * Read & do some queries
      */
-    Dataset<Row> hoodieROViewDF = spark.read().format("hudi")
-        // pass any path glob, can include hoodie & non-hoodie
-        // datasets
-        .load(tablePath + "/*/*/*/*");
+    Dataset<Row> hoodieROViewDF = spark.read().format("hudi").load(tablePath);
     hoodieROViewDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
     // all trips whose fare amount was greater than 2.
@@ -350,7 +347,7 @@ public class HoodieJavaStreamingApp {
       Dataset<Row> hoodieIncViewDF = spark.read().format("hudi")
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
           // Only changes in write 2 above
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), commitInstantTime1)
+          .option(DataSourceReadOptions.START_COMMIT().key(), commitInstantTime1)
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 

@@ -18,9 +18,12 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.metadata.MetadataPartitionType
+import org.apache.hudi.testutils.DataSourceTestUtils
+
 import org.apache.spark.sql.functions.{col, from_json}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -127,7 +130,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | """.stripMargin
           )
 
-          val firstInstant = spark.sql(s"select min(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
+          val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
 
           checkAnswer(
             s"""select id,
@@ -148,6 +151,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | values (1, 'a1_1', 10, 1100), (2, 'a2_2', 20, 1100), (3, 'a3_3', 30, 1100)
                | """.stripMargin
           )
+          val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
           val secondInstant = spark.sql(s"select max(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
 
           checkAnswer(
@@ -158,7 +162,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |from hudi_table_changes(
                |'$identifier',
                |'latest_state',
-               |'$firstInstant')
+               |'$secondCompletionTime')
                |""".stripMargin
           )(
             Seq(1, "a1_1", 10.0, 1100),
@@ -182,8 +186,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | from hudi_table_changes(
                | '$identifier',
                | 'latest_state',
-               | '$firstInstant',
-               | '$secondInstant')
+               | '$secondCompletionTime',
+               | '$secondCompletionTime')
                | """.stripMargin
           )(
             Seq(1, "a1_1", 10.0, 1100),

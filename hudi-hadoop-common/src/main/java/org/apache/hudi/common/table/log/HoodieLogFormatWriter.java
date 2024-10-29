@@ -146,11 +146,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       outputStream.write(HoodieLogFormat.MAGIC);
 
       // bytes for header
-      byte[] headerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockHeader());
+      byte[] headerBytes = HoodieLogBlock.getHeaderMetadataBytes(block.getLogBlockHeader());
       // content bytes
       byte[] content = block.getContentBytes(storage);
       // bytes for footer
-      byte[] footerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockFooter());
+      byte[] footerBytes = HoodieLogBlock.getFooterMetadataBytes(block.getLogBlockFooter());
 
       // 2. Write the total size of the block (excluding Magic)
       outputStream.writeLong(getLogBlockLength(content.length, headerBytes.length, footerBytes.length));

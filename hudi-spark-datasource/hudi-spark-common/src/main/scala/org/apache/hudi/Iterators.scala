@@ -25,16 +25,16 @@ import org.apache.hudi.LogFileIterator.{getPartitionPath, scanLog}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieOperation, HoodieRecord, HoodieSparkRecord}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.common.util.{FileIOUtils, HoodieRecordUtils}
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
+import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.CachingIterator
 
@@ -265,7 +265,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
   private val requiredSchemaAvroProjection = AvroProjection.create(avroSchema)
 
   private val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK,
-    tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy)
+    tableState.recordMergeImplClasses.asJava, tableState.recordMergeStrategyId)
 
   override def doHasNext: Boolean = hasNextInternal
 
@@ -406,7 +406,7 @@ object LogFileIterator extends SparkAdapterSupport {
       }
 
       logRecordScannerBuilder.withRecordMerger(
-        HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy))
+        HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.recordMergeImplClasses.asJava, tableState.recordMergeStrategyId))
 
       val scanner = logRecordScannerBuilder.build()
 

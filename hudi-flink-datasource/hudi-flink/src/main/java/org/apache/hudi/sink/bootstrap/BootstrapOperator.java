@@ -71,8 +71,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.source.FileIndex.metadataConfig;
 import static org.apache.hudi.util.StreamerUtil.isValidFile;
+import static org.apache.hudi.util.StreamerUtil.metadataConfig;
 
 /**
  * The operator to load index from existing hoodieTable.

@@ -25,6 +25,7 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -96,6 +97,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   protected Boolean multiLogFiles;
   protected Boolean useSchemaProvider;
   protected Boolean hasTransformer;
+  protected Boolean useParquetLogBlock;
   protected String sourceSchemaFile;
   protected String targetSchemaFile;
   protected boolean useKafkaSource;
@@ -108,6 +110,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     defaultSchemaProviderClassName = TestSchemaProvider.class.getName();
   }
 
+  @Override
   @BeforeEach
   public void setupTest() {
     super.setupTest();
@@ -116,6 +119,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     useSchemaProvider = false;
     hasTransformer = false;
     withErrorTable = false;
+    useParquetLogBlock = false;
     sourceSchemaFile = "";
     targetSchemaFile = "";
     topicName = "topic" + testNum;
@@ -156,6 +160,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
     extraProps.setProperty(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS().key(), Boolean.toString(nullForDeletedCols));
+    extraProps.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), useParquetLogBlock ? "parquet" : "avro");
 
     //we set to 0 so that we create new base files on insert instead of adding inserts to existing filegroups via small file handling
     extraProps.setProperty("hoodie.parquet.small.file.limit", "0");

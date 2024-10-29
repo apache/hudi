@@ -31,7 +31,6 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -59,13 +58,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
+import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFromFileSlice;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -78,15 +77,13 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @TempDir
   protected java.nio.file.Path tempDir;
 
-  protected String customRecordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
-
   public abstract StorageConfiguration<?> getStorageConf();
 
   public abstract String getBasePath();
 
   public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf);
 
-  public abstract String getRecordPayloadForMergeMode(RecordMergeMode mergeMode);
+  public abstract String getCustomPayload();
 
   public abstract void commitToTable(List<HoodieRecord> recordList, String operation,
                                      Map<String, String> writeConfigs);
@@ -173,20 +170,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     configMapping.put("hoodie.delete.shuffle.parallelism", "1");
     configMapping.put("hoodie.merge.small.file.group.candidates.limit", "0");
     configMapping.put("hoodie.compact.inline", "false");
-    configMapping.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
-    configMapping.put("hoodie.datasource.write.payload.class", getRecordPayloadForMergeMode(recordMergeMode));
-    switch (recordMergeMode) {
-      case OVERWRITE_WITH_LATEST:
-        configMapping.put("hoodie.datasource.write.record.merger.strategy", OVERWRITE_MERGER_STRATEGY_UUID);
-        configMapping.put("hoodie.datasource.write.precombine.field", "");
-        break;
-      case CUSTOM:
-        configMapping.put("hoodie.datasource.write.record.merger.strategy", customRecordMergerStrategy);
-        break;
-      case EVENT_TIME_ORDERING:
-      default:
-        configMapping.put("hoodie.datasource.write.record.merger.strategy", DEFAULT_MERGER_STRATEGY_UUID);
-        break;
+    configMapping.put("hoodie.write.record.merge.mode", recordMergeMode.name());
+    if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
+      configMapping.put("hoodie.datasource.write.payload.class", getCustomPayload());
     }
     return configMapping;
   }
@@ -215,8 +201,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
     props.setProperty("hoodie.payload.ordering.field", "timestamp");
-    props.setProperty(RECORD_MERGER_STRATEGY.key(), RECORD_MERGER_STRATEGY.defaultValue());
     props.setProperty(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+    if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
+      props.setProperty(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+      props.setProperty(PAYLOAD_CLASS_NAME.key(), getCustomPayload());
+    }
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
     props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), metaClient.getTempFolderPath());
     props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());

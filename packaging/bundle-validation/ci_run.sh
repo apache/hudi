@@ -70,22 +70,22 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.19.0
+  FLINK_VERSION=1.20.0
   SPARK_VERSION=3.5.0
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1180hive313spark350
+  IMAGE_TAG=flink1200hive313spark350
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.19.0
+  FLINK_VERSION=1.20.0
   SPARK_VERSION=3.5.0
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1180hive313spark350scala213
+  IMAGE_TAG=flink1200hive313spark350scala213
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
@@ -100,12 +100,12 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.13' ]];
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.19.0
+  FLINK_VERSION=1.20.0
   SPARK_VERSION=3.5.1
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1180hive313spark351scala213
+  IMAGE_TAG=flink1200hive313spark351scala213
 fi
 
 # Copy bundle jars to temp dir for mounting
@@ -166,6 +166,8 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.18-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.19' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.19-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink1.20' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.20-bundle    
   fi
 
   echo "Downloading bundle jars from staging repo orgapachehudi-$STAGING_REPO_NUM ..."

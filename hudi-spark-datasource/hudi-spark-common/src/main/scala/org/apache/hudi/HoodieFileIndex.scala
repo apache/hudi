@@ -19,20 +19,21 @@ package org.apache.hudi
 
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
-import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, convertFilterForTimestampKeyGenerator, convertTimestampPartitionValues, getConfigProperties}
+import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, convertTimestampPartitionValues, getConfigProperties, DataSkippingFailureMode}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, KeyGenUtils, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
-import org.apache.hudi.util.JFunction
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType
 import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -43,12 +44,14 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
+import javax.annotation.concurrent.NotThreadSafe
+
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
-import javax.annotation.concurrent.NotThreadSafe
+
 import scala.collection.JavaConverters._
-import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -98,8 +101,8 @@ case class HoodieFileIndex(spark: SparkSession,
     queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache,
-    beginInstantTime = options.get(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-    endInstantTime = options.get(DataSourceReadOptions.END_INSTANTTIME.key),
+    startCompletionTime = options.get(DataSourceReadOptions.START_COMMIT.key),
+    endCompletionTime = options.get(DataSourceReadOptions.END_COMMIT.key),
     shouldUseStringTypeForTimestampPartitionKeyType = shouldUseStringTypeForTimestampPartitionKeyType
   )
     with FileIndex {
@@ -175,7 +178,7 @@ case class HoodieFileIndex(spark: SparkSession,
           val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
             if (slice.getBaseFile.isPresent) {
               slice.getBaseFile.get().getPathInfo
-            } else if (includeLogFiles && slice.getLogFiles.findAny().isPresent) {
+            } else if (slice.hasLogFiles) {
               slice.getLogFiles.findAny().get().getPathInfo
             } else {
               null
@@ -183,9 +186,7 @@ case class HoodieFileIndex(spark: SparkSession,
           }).filter(slice => slice != null)
             .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
               fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
-          val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
-            || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
-            foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
+          val c = fileSlices.filter(f => f.hasLogFiles || f.hasBootstrapBase).foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, shouldUseStringTypeForTimestampPartitionKeyType)
           if (c.nonEmpty) {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
@@ -198,11 +199,7 @@ case class HoodieFileIndex(spark: SparkSession,
         } else {
           val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
             val baseFileStatusOpt = getBaseFileInfo(Option.apply(fs.getBaseFile.orElse(null)))
-            val logPathInfoStream = if (includeLogFiles) {
-              fs.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))
-            } else {
-              java.util.stream.Stream.empty()
-            }
+            val logPathInfoStream = fs.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))
             val files = logPathInfoStream.collect(Collectors.toList[StoragePathInfo]).asScala
             baseFileStatusOpt.foreach(f => files.append(f))
             files
@@ -280,8 +277,13 @@ case class HoodieFileIndex(spark: SparkSession,
                 .collect(Collectors.toSet[String])
               val baseFileStatusOpt = getBaseFileInfo(Option.apply(fs.getBaseFile.orElse(null)))
               baseFileStatusOpt.exists(f => fileSliceFiles.add(f.getPath.getName))
-              // NOTE: This predicate is true when {@code Option} is empty
-              candidateFilesNamesOpt.forall(files => files.exists(elem => fileSliceFiles.contains(elem)))
+              if (candidateFilesNamesOpt.isDefined) {
+                // if any file in the file slice is part of candidate file names, we need to inclue the file slice.
+                // in other words, if all files in the file slice is not present in candidate file names, we can filter out the file slice.
+                fileSliceFiles.stream().filter(fileSliceFile => candidateFilesNamesOpt.get.contains(fileSliceFile)).findAny().isPresent
+              } else {
+                true
+              }
             })
           }
 
@@ -350,7 +352,8 @@ case class HoodieFileIndex(spark: SparkSession,
       }
 
     (prunedPartitionsTuple._1, getInputFileSlices(prunedPartitionsTuple._2: _*).asScala.map(
-      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala.toSeq) }).toSeq)
+      { case (partition, fileSlices) =>
+        (Option.apply(partition), fileSlices.asScala.map(f => f.withLogFiles(includeLogFiles)).toSeq) }).toSeq)
   }
 
   /**
