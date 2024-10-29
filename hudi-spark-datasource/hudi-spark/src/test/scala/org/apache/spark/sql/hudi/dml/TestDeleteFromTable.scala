@@ -42,6 +42,12 @@ class TestDeleteFromTable extends HoodieSparkSqlTestBase {
              | LOCATION '${tmp.getCanonicalPath}/$tableName'
          """.stripMargin)
 
+        // Delete single row
+        spark.sql(s"DELETE FROM $tableName WHERE id = 1")
+
+        // Delete again
+        spark.sql(s"DELETE FROM $tableName WHERE id = 1")
+
         // NOTE: Do not write the field alias, the partition field must be placed last.
         spark.sql(
           s"""
