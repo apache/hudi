@@ -204,6 +204,7 @@ public class HoodieTestUtils {
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
       builder.setPartitionFields("some_nonexistent_field");
+      builder.setShouldDropPartitionColumns(true);
     }
 
     return builder.fromProperties(properties)

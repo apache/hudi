@@ -243,8 +243,12 @@ object HoodieDatasetBulkInsertHelper
 
   private def getPartitionPathFields(config: HoodieWriteConfig): mutable.Seq[String] = {
     val keyGeneratorClassName = config.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME)
-    val keyGenerator = ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
-    keyGenerator.getPartitionPathFields.asScala
+    if (keyGeneratorClassName != null) {
+      val keyGenerator = ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
+      keyGenerator.getPartitionPathFields.asScala
+    } else {
+      mutable.Seq.empty
+    }
   }
 
   def getPartitionPathCols(config: HoodieWriteConfig): Seq[String] = {
