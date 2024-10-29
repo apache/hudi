@@ -287,7 +287,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     String commitTime = "100";
     final int numRecords = 1000;
     // Create 3 parquet files with 1000 records each
-    File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
+    File partitionDir = InputFormatTestUtil.prepareParquetTableWithFakePartitionColumn(tempDir, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
     FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));
@@ -366,11 +366,11 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.initWithFakePartitionColumn(conf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
     // Create 3 parquet files with 1000 records each
-    File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
+    File partitionDir = InputFormatTestUtil.prepareParquetTableWithFakePartitionColumn(tempDir, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
     FileCreateUtils.createCommit(tempDir.toString(), commitTime, Option.of(commitMetadata));

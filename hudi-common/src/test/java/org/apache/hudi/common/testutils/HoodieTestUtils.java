@@ -145,7 +145,17 @@ public class HoodieTestUtils {
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType)
       throws IOException {
-    return init(storageConf, basePath, tableType, new Properties());
+    return initInternal(storageConf, basePath, tableType, false);
+  }
+
+  public static HoodieTableMetaClient initWithFakePartitionColumn(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType)
+      throws IOException {
+    return initInternal(storageConf, basePath, tableType, true);
+  }
+
+  protected static HoodieTableMetaClient initInternal(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType, boolean addFakePartitionCol)
+      throws IOException {
+    return initInternal(storageConf, basePath, tableType, new Properties(), addFakePartitionCol);
   }
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
@@ -157,20 +167,40 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
-                                           HoodieFileFormat baseFileFormat, String databaseName)
+                                           HoodieFileFormat baseFileFormat, String databaseName) throws IOException {
+    return initInternal(storageConf, basePath, tableType, baseFileFormat, databaseName, false);
+  }
+
+  public static HoodieTableMetaClient initWithFakePartitionColumn(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
+                                           HoodieFileFormat baseFileFormat, String databaseName) throws IOException {
+    return initInternal(storageConf, basePath, tableType, baseFileFormat, databaseName, true);
+  }
+
+  protected static HoodieTableMetaClient initInternal(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
+                                                      HoodieFileFormat baseFileFormat, String databaseName, boolean addFakePartitionCol)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
-    return init(storageConf, basePath, tableType, properties, databaseName);
+    return initInternal(storageConf, basePath, tableType, properties, databaseName, addFakePartitionCol);
   }
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            HoodieFileFormat baseFileFormat) throws IOException {
-    return init(storageConf, basePath, tableType, baseFileFormat, false, null, true);
+    return initInternal(storageConf, basePath, tableType, baseFileFormat, false);
   }
 
-  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
-                                           HoodieFileFormat baseFileFormat, boolean setKeyGen, String keyGenerator, boolean populateMetaFields)
+  public static HoodieTableMetaClient initWithFakePartitionColumn(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
+                                           HoodieFileFormat baseFileFormat) throws IOException {
+    return initInternal(storageConf, basePath, tableType, baseFileFormat, true);
+  }
+
+  protected static HoodieTableMetaClient initInternal(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
+                                                      HoodieFileFormat baseFileFormat, boolean addFakePartitionCol) throws IOException {
+    return initInternal(storageConf, basePath, tableType, baseFileFormat, false, null, true, addFakePartitionCol);
+  }
+
+  protected static HoodieTableMetaClient initInternal(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
+                                                      HoodieFileFormat baseFileFormat, boolean setKeyGen, String keyGenerator, boolean populateMetaFields, boolean addFakePartitionCol)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
@@ -178,16 +208,21 @@ public class HoodieTestUtils {
       properties.setProperty("hoodie.datasource.write.keygenerator.class", keyGenerator);
     }
     properties.setProperty("hoodie.populate.meta.fields", Boolean.toString(populateMetaFields));
-    return init(storageConf, basePath, tableType, properties);
+    return initInternal(storageConf, basePath, tableType, properties, addFakePartitionCol);
   }
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            Properties properties) throws IOException {
-    return init(storageConf, basePath, tableType, properties, null);
+    return initInternal(storageConf, basePath, tableType, properties, false);
   }
 
-  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
-                                           Properties properties, String databaseName)
+  protected static HoodieTableMetaClient initInternal(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
+                                                      Properties properties, boolean addFakePartitionCol) throws IOException {
+    return initInternal(storageConf, basePath, tableType, properties, null, addFakePartitionCol);
+  }
+
+  protected static HoodieTableMetaClient initInternal(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
+                                                      Properties properties, String databaseName, boolean addFakePartitionCol)
       throws IOException {
     HoodieTableMetaClient.TableBuilder builder =
         HoodieTableMetaClient.newTableBuilder()
@@ -197,6 +232,10 @@ public class HoodieTestUtils {
 
     if (properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()) != null) {
       builder.setKeyGeneratorType(properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()));
+    }
+
+    if (addFakePartitionCol) {
+      builder.setPartitionFields("some_nonexistent_field");
     }
 
     return builder.fromProperties(properties)
