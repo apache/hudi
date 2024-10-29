@@ -377,6 +377,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val tableConfig = metaClient.getTableConfig
     if (null != tableConfig.getKeyGeneratorClassName
       && tableConfig.getKeyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
+      && null != tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
       && tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
       .matches("SCALAR|UNIX_TIMESTAMP|EPOCHMILLISECONDS|EPOCHMICROSECONDS")) {
       // For TIMESTAMP key generator when TYPE is SCALAR, UNIX_TIMESTAMP,
