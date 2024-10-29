@@ -112,7 +112,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // the same with the table schema.
     try {
       if (StringUtils.isNullOrEmpty(config.getInternalSchema())) {
-        Schema readerSchema = schemaResolver.getTableAvroSchema(false);
+        Schema readerSchema = schemaResolver.getTableAvroSchemaWithoutAddedColumns();
         config.setSchema(readerSchema.toString());
       }
     } catch (Exception e) {

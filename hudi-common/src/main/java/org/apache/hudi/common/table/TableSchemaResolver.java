@@ -170,6 +170,11 @@ public class TableSchemaResolver {
         .orElseThrow(schemaNotFoundError());
   }
 
+  public Schema getTableAvroSchemaWithoutAddedColumns() throws Exception {
+    return getTableAvroSchemaInternal(false, Option.empty(), false)
+        .orElseThrow(schemaNotFoundError());
+  }
+
   /**
    * Fetches tables schema in Avro format as of the given instant
    *
