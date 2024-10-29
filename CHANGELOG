@@ -372,3 +372,10 @@ b2543229a2f [AUDIT-993] Change log for release-v1.38.0 (#969)
 
 ---[2024-10-20 10:21:48] [release-v1.40.0] ---
 a3a099bba34 [AUDIT-1011]: Changelog for release-v1.39.0 (#973)
+
+---[2024-10-28 16:35:09] [release-v1.41.0] ---
+d478b280ab [ENG-15502][HUDI-8371] Fixing column stats index with MDT for few scenarios (#980)
+cef0183d62 [ENG-14385][HUDI-8219] add concurrent schema evolution conflict detection (#929)
+ac9d0a8074 [ENG-15012][INTERNAL] Making bootstrap index default to false (#978)
+fef00d28a3 [ENG-16026][MINOR] Allow check for uncommitted log files in Metadata Validation (#976)
+ccd30871c9 [AUDIT-1011] Changelog for release-v1.40.0 (#975)
