@@ -199,6 +199,11 @@ public class HoodieTestUtils {
     return initInternal(storageConf, basePath, tableType, baseFileFormat, false, null, true, addFakePartitionCol);
   }
 
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
+                                                      HoodieFileFormat baseFileFormat, boolean setKeyGen, String keyGenerator, boolean populateMetaFields) throws IOException {
+    return initInternal(storageConf, basePath, tableType, baseFileFormat, setKeyGen, keyGenerator, populateMetaFields, false);
+  }
+
   protected static HoodieTableMetaClient initInternal(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                                       HoodieFileFormat baseFileFormat, boolean setKeyGen, String keyGenerator, boolean populateMetaFields, boolean addFakePartitionCol)
       throws IOException {
