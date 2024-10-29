@@ -30,6 +30,7 @@ import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
 import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
@@ -242,13 +243,8 @@ object HoodieDatasetBulkInsertHelper
   }
 
   private def getPartitionPathFields(config: HoodieWriteConfig): mutable.Seq[String] = {
-    val keyGeneratorClassName = config.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME)
-    if (keyGeneratorClassName != null) {
-      val keyGenerator = ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
-      keyGenerator.getPartitionPathFields.asScala
-    } else {
-      mutable.Seq.empty
-    }
+    val keyGenerator = HoodieSparkKeyGeneratorFactory.getKeyGenerator(config.getProps).get()
+    keyGenerator.getPartitionPathFields.asScala
   }
 
   def getPartitionPathCols(config: HoodieWriteConfig): Seq[String] = {

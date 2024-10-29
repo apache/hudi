@@ -57,6 +57,7 @@ import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -120,6 +121,17 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           && HoodieDataTypeUtils.canUseRowWriter(schema, engineContext.hadoopConfiguration());
       if (canUseRowWriter) {
         HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty(writeConfig.getProps(), schema);
+        HoodieTableConfig tableConfig = getHoodieTable().getMetaClient().getTableConfig();
+        if (!writeConfig.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME)
+            && tableConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
+          writeConfig.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME,
+              tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
+        }
+        if (!writeConfig.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)
+            && tableConfig.contains(HoodieTableConfig.PARTITION_FIELDS)) {
+          writeConfig.setValue(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME,
+              tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS));
+        }
       }
       // execute clustering for each group async and collect WriteStatus
       Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
