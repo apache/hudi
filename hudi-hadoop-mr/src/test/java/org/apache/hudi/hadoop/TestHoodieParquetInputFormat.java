@@ -178,7 +178,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testInputFormatLoad() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTableWithFakePartitionColumn(basePath, baseFileFormat, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -229,7 +229,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testInputFormatUpdates() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTableWithFakePartitionColumn(basePath, baseFileFormat, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -271,7 +271,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testPointInTimeQueryWithUpdates() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTableWithFakePartitionColumn(basePath, baseFileFormat, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -305,7 +305,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testInputFormatWithCompaction() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTableWithFakePartitionColumn(basePath, baseFileFormat, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -338,7 +338,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testIncrementalSimple() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTableWithFakePartitionColumn(basePath, baseFileFormat, 10, "100");
     createCommitFile(basePath, "100", "2016/05/01");
 
     // Add the paths
@@ -346,7 +346,7 @@ public class TestHoodieParquetInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+    HoodieTableMetaClient metaClient = HoodieTestUtils.initWithFakePartitionColumn(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
         HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
@@ -361,7 +361,7 @@ public class TestHoodieParquetInputFormat {
     assertEquals(0, files.length,
         "We should exclude commit 100 when returning incremental pull with start commit time as 100");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+    metaClient = HoodieTestUtils.initWithFakePartitionColumn(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
         baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
         String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
@@ -375,7 +375,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testIncrementalWithDatabaseName() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTableWithFakePartitionColumn(basePath, baseFileFormat, 10, "100");
     createCommitFile(basePath, "100", "2016/05/01");
 
     // Add the paths
@@ -383,7 +383,7 @@ public class TestHoodieParquetInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.HOODIE_DATABASE, true);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+    HoodieTableMetaClient metaClient = HoodieTestUtils.initWithFakePartitionColumn(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
         HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
@@ -392,7 +392,7 @@ public class TestHoodieParquetInputFormat {
     assertEquals(10, files.length,
         "When hoodie.database.name is null, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+    metaClient = HoodieTestUtils.initWithFakePartitionColumn(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
         baseFileFormat, "");
     assertEquals("", metaClient.getTableConfig().getDatabaseName(),
         "The hoodie.database.name should be empty");
@@ -401,7 +401,7 @@ public class TestHoodieParquetInputFormat {
     assertEquals(10, files.length,
         "When hoodie.database.name is empty, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+    metaClient = HoodieTestUtils.initWithFakePartitionColumn(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
         baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
         String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
@@ -659,7 +659,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testSnapshotPreCommitValidate() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTableWithFakePartitionColumn(basePath, baseFileFormat, 10, "100");
     createCommitFile(basePath, "100", "2016/05/01");
 
     // Add the paths
@@ -705,7 +705,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testSnapshotPreCommitValidateWithInflights() throws IOException {
     // Create commit and data files with commit 000
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 5, "000");
+    File partitionDir = InputFormatTestUtil.prepareTableWithFakePartitionColumn(basePath, baseFileFormat, 5, "000");
     createCommitFile(basePath, "000", "2016/05/01");
 
     // create inflight commit add more files with same file_id.

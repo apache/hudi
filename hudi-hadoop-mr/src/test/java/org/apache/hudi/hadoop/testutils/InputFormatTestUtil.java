@@ -72,24 +72,41 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 
-public class InputFormatTestUtil {
+public class InputFormatTestUtil extends HoodieTestUtils {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
   public static File prepareTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
                                   String commitNumber) throws IOException {
-    return prepareCustomizedTable(basePath, baseFileFormat, numberOfFiles, commitNumber, false, true, false, null);
+    return prepareTableInternal(basePath, baseFileFormat, numberOfFiles, commitNumber, false);
+  }
+
+  public static File prepareTableWithFakePartitionColumn(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
+                                                         String commitNumber) throws IOException {
+    return prepareTableInternal(basePath, baseFileFormat, numberOfFiles, commitNumber, true);
+  }
+
+  protected static File prepareTableInternal(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
+                                  String commitNumber, boolean addFakePartitionCol) throws IOException {
+    return prepareCustomizedTable(basePath, baseFileFormat, numberOfFiles, commitNumber, false, true, false, null, addFakePartitionCol);
   }
 
   public static File prepareCustomizedTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
-                                            String commitNumber, boolean useNonPartitionedKeyGen, boolean populateMetaFields, boolean injectData, Schema schema)
+                                               String commitNumber, boolean useNonPartitionedKeyGen, boolean populateMetaFields,
+                                               boolean injectData, Schema schema) throws IOException {
+    return prepareCustomizedTable(basePath, baseFileFormat, numberOfFiles, commitNumber, useNonPartitionedKeyGen, populateMetaFields, injectData, schema, false);
+  }
+
+  protected static File prepareCustomizedTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
+                                            String commitNumber, boolean useNonPartitionedKeyGen, boolean populateMetaFields,
+                                            boolean injectData, Schema schema, boolean addFakePartitionCol)
       throws IOException {
     if (useNonPartitionedKeyGen) {
-      HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-          baseFileFormat, true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", populateMetaFields);
+      HoodieTestUtils.initInternal(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+          baseFileFormat, true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", populateMetaFields, addFakePartitionCol);
     } else {
-      HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-          baseFileFormat);
+      HoodieTestUtils.initInternal(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+          baseFileFormat, addFakePartitionCol);
     }
 
     java.nio.file.Path partitionPath = useNonPartitionedKeyGen
@@ -230,12 +247,27 @@ public class InputFormatTestUtil {
 
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
                                          int numberOfRecords, String commitNumber) throws IOException {
-    return prepareParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
+    return prepareParquetTableInternal(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, false);
+  }
+
+  public static File prepareParquetTableWithFakePartitionColumn(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                                                int numberOfRecords, String commitNumber) throws IOException {
+    return prepareParquetTableInternal(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, true);
+  }
+
+  protected static File prepareParquetTableInternal(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                                    int numberOfRecords, String commitNumber, boolean addFakePartitionCol) throws IOException {
+    return prepareParquetTableInternal(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE, addFakePartitionCol);
   }
 
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
                                          int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
+    return prepareParquetTableInternal(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, tableType, false);
+  }
+
+  protected static File prepareParquetTableInternal(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                                    int numberOfRecords, String commitNumber, HoodieTableType tableType, boolean addFakePartitionCol) throws IOException {
+    HoodieTestUtils.initInternal(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET, addFakePartitionCol);
 
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     setupPartition(basePath, partitionPath);
@@ -282,7 +314,7 @@ public class InputFormatTestUtil {
   public static List<File> prepareMultiPartitionedParquetTable(java.nio.file.Path basePath, Schema schema,
                                                                int numberPartitions, int numberOfRecordsPerPartition, String commitNumber, HoodieTableType tableType) throws IOException {
     List<File> result = new ArrayList<>();
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
+    HoodieTestUtils.initWithFakePartitionColumn(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
     for (int i = 0; i < numberPartitions; i++) {
       java.nio.file.Path partitionPath = basePath.resolve(Paths.get(2016 + i + "", "05", "01"));
       setupPartition(basePath, partitionPath);
