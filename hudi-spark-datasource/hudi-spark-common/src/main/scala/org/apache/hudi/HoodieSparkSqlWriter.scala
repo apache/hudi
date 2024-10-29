@@ -1121,6 +1121,10 @@ class HoodieSparkSqlWriterInternal {
       && mergedParams.getOrElse(DataSourceWriteOptions.TABLE_TYPE.key, COPY_ON_WRITE.name) == MERGE_ON_READ.name) {
       mergedParams.put(HoodieTableConfig.DROP_PARTITION_COLUMNS.key, "false")
     }
+    // use meta sync database to fill hoodie.database.name if it not sets
+    if (!mergedParams.contains(HoodieTableConfig.DATABASE_NAME.key()) && mergedParams.contains(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key())) {
+      mergedParams.put(HoodieTableConfig.DATABASE_NAME.key(),mergedParams(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key()))
+    }
 
     if (!mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_MODE.key())
       || !mergedParams.contains(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key())
