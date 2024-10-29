@@ -199,6 +199,7 @@ public class TableSchemaResolver {
   private Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
     return getTableAvroSchemaInternal(includeMetadataFields, instantOpt, metaClient.getTableConfig().shouldDropPartitionColumns());
   }
+
   private Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt, boolean tryAddPartitionCols) {
     Option<Schema> schema =
         (instantOpt.isPresent()
