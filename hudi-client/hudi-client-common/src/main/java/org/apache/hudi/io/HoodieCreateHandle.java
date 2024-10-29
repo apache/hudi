@@ -60,7 +60,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected long insertRecordsWritten = 0;
   protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
-  private boolean useWriterSchema = false;
+  private boolean populateMetaFields = false;
   private final boolean preserveMetadata;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -119,7 +119,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true);
     this.recordMap = recordMap;
-    this.useWriterSchema = true;
+    this.populateMetaFields = config.populateMetaFields();
   }
 
   @Override
@@ -187,7 +187,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     while (keyIterator.hasNext()) {
       final String key = keyIterator.next();
       HoodieRecord<T> record = recordMap.get(key);
-      write(record, useWriterSchema ? writeSchemaWithMetaFields : writeSchema, config.getProps());
+      write(record, populateMetaFields ? writeSchemaWithMetaFields : writeSchema, config.getProps());
     }
   }
 

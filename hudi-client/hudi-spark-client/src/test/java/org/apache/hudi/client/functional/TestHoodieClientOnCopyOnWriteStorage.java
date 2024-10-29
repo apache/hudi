@@ -408,7 +408,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testDeduplicationKeepOperationFieldOnInsert(boolean populateMetaFields) throws Exception {
-    testDeduplication((client, records, commitTime) -> (List<WriteStatus>) rdd2List.apply((JavaRDD<WriteStatus>)client.insert(list2Rdd.apply(records), commitTime)), populateMetaFields, true);
+    testDeduplication(
+        (client, records, commitTime) -> (List<WriteStatus>) rdd2List.apply(
+            (JavaRDD<WriteStatus>)client.insert(list2Rdd.apply(records), commitTime)
+        ),
+        populateMetaFields,
+        populateMetaFields);
   }
 
   /**
