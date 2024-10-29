@@ -165,6 +165,11 @@ public class TableSchemaResolver {
         .orElseThrow(schemaNotFoundError());
   }
 
+  public Schema getTableAvroSchemaWithoutPartitionCols() throws Exception {
+    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), Option.empty(), false)
+        .orElseThrow(schemaNotFoundError());
+  }
+
   /**
    * Fetches tables schema in Avro format as of the given instant
    *
