@@ -223,7 +223,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   private static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf, String latestCommitTime) {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
-      Schema schema = tableSchemaResolver.getTableAvroSchema(latestCommitTime);
+      Schema schema = tableSchemaResolver.getTableAvroSchemaWithoutPartitionCols(latestCommitTime);
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields
       return HoodieRealtimeRecordReaderUtils.addPartitionFields(schema, getPartitionFieldNames(jobConf));
     } catch (Exception e) {
