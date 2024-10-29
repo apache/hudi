@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -68,8 +69,8 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
 
-  protected final String orderingFieldName;
-  protected final Schema.Type orderingFieldType;
+  protected final Option<String> orderingFieldNameOpt;
+  protected final Option<Schema.Type> orderingFieldTypeOpt;
   protected final Comparable orderingFieldDefault;
 
   @SuppressWarnings("unchecked")
@@ -95,10 +96,13 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
       this.scannedPrefixes = new HashSet<>();
 
-      // TODO: use reader context for both non fg reader.
-      this.orderingFieldName = Option.ofNullable(ConfigUtils.getOrderingField(payloadProps)).orElseGet(() -> hoodieTableMetaClient.getTableConfig().getPreCombineField());
-      this.orderingFieldType = AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName).orElse(Schema.Type.INT);
-      this.orderingFieldDefault = TypeCaster.castValue(0, orderingFieldType);
+      // TODO: use reader context for both fg reader and non-fg reader.
+      TypedProperties props = hoodieTableMetaClient.getTableConfig().getProps();
+      this.orderingFieldNameOpt = Option.ofNullable(Option.ofNullable(
+          ConfigUtils.getOrderingField(props)).orElseGet(() -> hoodieTableMetaClient.getTableConfig().getPreCombineField()));
+      this.orderingFieldTypeOpt =
+          this.orderingFieldNameOpt.isPresent() ? AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldNameOpt.get()) : Option.empty();
+      this.orderingFieldDefault = TypeCaster.castValue(0, Schema.Type.INT);
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }

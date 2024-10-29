@@ -106,7 +106,7 @@ public abstract class AbstractHoodieLogRecordReader {
   protected final String preCombineField;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
-  protected final TypedProperties payloadProps;
+  private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
   // Reverse reader - Not implemented yet (NA -> Why do we need ?)
@@ -167,7 +167,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
     // Log scanner merge log with precombine
-    TypedProperties props = hoodieTableMetaClient.getTableConfig().getProps();
+    TypedProperties props = new TypedProperties();
     if (this.preCombineField != null) {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
     }

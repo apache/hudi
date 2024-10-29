@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class TypeCaster {
-  private static final Logger LOG = LoggerFactory.getLogger(TypeCaster.class);
   private TypeCaster() {
   }
 
@@ -44,8 +43,8 @@ public class TypeCaster {
         case STRING:
           return v.toString();
         default:
-          LOG.warn("Cannot cast integer to {}", newType);
-          return null;
+          throw new UnsupportedOperationException(
+              String.format("Cannot cast integer value (%d) to %s", v, newType));
       }
     } else if (value instanceof Long) {
       Long v = (Long) value;
@@ -59,8 +58,8 @@ public class TypeCaster {
         case STRING:
           return v.toString();
         default:
-          LOG.warn("Cannot cast integer to {}", newType);
-          return null;
+          throw new UnsupportedOperationException(
+              String.format("Cannot cast long value (%d) to %s", v, newType));
       }
     } else if (value instanceof Float) {
       Float v = (Float) value;
@@ -72,8 +71,8 @@ public class TypeCaster {
         case STRING:
           return v.toString();
         default:
-          LOG.warn("Cannot cast integer to {}", newType);
-          return null;
+          throw new UnsupportedOperationException(
+              String.format("Cannot cast float value (%f) to %s", v, newType));
       }
     } else if (value instanceof Double) {
       Double v = (Double) value;
@@ -83,21 +82,19 @@ public class TypeCaster {
         case STRING:
           return v.toString();
         default:
-          LOG.warn("Cannot cast integer to {}", newType);
-          return null;
+          throw new UnsupportedOperationException(
+              String.format("Cannot cast double value (%f) to %s", v, newType));
       }
     } else if (value instanceof String) {
-      String v = (String) value;
       if (newType == Type.STRING) {
-        return v;
+        return value;
       } else {
-        LOG.warn("Cannot cast integer to {}", newType);
-        return null;
+        throw new UnsupportedOperationException(
+            String.format("Cannot cast string value (%s) to %s", value, newType));
       }
     } else {
       throw new UnsupportedOperationException(
-          String.format("Unsupported value type: %s", value.getClass())
-      );
+          String.format("Unsupported value type: %s", value.getClass()));
     }
   }
 }
