@@ -57,6 +57,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{SQLContext, SparkSession}
 
 import scala.collection.JavaConverters._
+import scala.reflect.internal.util.Collections
 import scala.util.{Failure, Success, Try}
 
 trait HoodieHadoopFsRelationFactory {
@@ -492,7 +493,7 @@ object HoodieHadoopFsRelationFactory extends SparkAdapterSupport{
     val shouldValidate: Boolean = sqlContext.sparkSession.sessionState.conf.getConfString("spark.sql.sources.validatePartitionColumns", "true").toBoolean
     val timestampPartitionIndexes = HoodieSparkUtils.getTimestampPartitionIndex(metaClient.getTableConfig)
     new HoodieFixedFileIndex(metaClient,
-      fileSlices.map(u => (HoodieSparkUtils.parsePartitionColumnValuesToInternalRow(metaClient.getTableConfig.getPartitionFields.get(),
+      fileSlices.map(u => (HoodieSparkUtils.parsePartitionColumnValuesToInternalRow(metaClient.getTableConfig.getPartitionFields.orElse(Array.empty),
         u._1, metaClient.getBasePath, schema, tzp, sparkAdapter.getSparkParsePartitionUtil, shouldValidate, timestampPartitionIndexes, true), u._2)),
       schema, dataSchema, partitionSchema)
   }

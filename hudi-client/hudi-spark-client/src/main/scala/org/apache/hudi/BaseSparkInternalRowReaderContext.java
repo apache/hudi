@@ -82,11 +82,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public String getRecordKey(InternalRow row, Schema schema) {
-    return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
-  }
-
-  @Override
   public HoodieRecord<InternalRow> constructHoodieRecord(Option<InternalRow> rowOption,
                                                          Map<String, Object> metadataMap) {
     if (!rowOption.isPresent()) {
