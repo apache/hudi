@@ -200,12 +200,6 @@ public class HoodieTestUtils {
       builder.setKeyGeneratorType(properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()));
     }
 
-    String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
-    if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-        && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
-      builder.setPartitionFields("some_nonexistent_field");
-    }
-
     return builder.fromProperties(properties)
         .initTable(storageConf.newInstance(), basePath);
   }
