@@ -43,6 +43,8 @@ public abstract class BulkInsertInternalPartitionerFactory {
         return new RDDConsistentBucketBulkInsertPartitioner(table);
       } else if (config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.SIMPLE)) {
         return new RDDSimpleBucketBulkInsertPartitioner(table);
+      } else if (config.getBucketIndexEngineType().equals(HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET)) {
+        return new RDDExtensibleBucketBulkInsertPartitioner(table);
       }
     }
     return get(config, table.isPartitioned(), enforceNumOutputPartitions);

@@ -256,6 +256,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         return taggedInstant;
       }
     }
+    // TODO: consider extensible bucket index
     return instantTime;
   }
 

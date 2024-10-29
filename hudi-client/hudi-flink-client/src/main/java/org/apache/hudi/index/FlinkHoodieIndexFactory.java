@@ -62,6 +62,9 @@ public final class FlinkHoodieIndexFactory {
             return new HoodieSimpleBucketIndex(config);
           case CONSISTENT_HASHING:
             return new HoodieConsistentBucketIndex(config);
+          case EXTENSIBLE_BUCKET:
+            // TODO: support extensible bucket index in Flink
+            throw new HoodieIndexException("Unsupported bucket index engine type: " + config.getBucketIndexEngineType());
           default:
             throw new HoodieIndexException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
         }

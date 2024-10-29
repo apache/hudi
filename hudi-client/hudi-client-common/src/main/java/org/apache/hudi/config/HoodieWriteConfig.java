@@ -1353,6 +1353,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         && HoodieIndex.BucketIndexEngineType.SIMPLE.equals(getBucketIndexEngineType());
   }
 
+  public boolean isExtensibleBucketEnable() {
+    return HoodieIndex.IndexType.BUCKET.equals(getIndexType()) && HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET.equals(getBucketIndexEngineType());
+  }
+
   /**
    * Returns whether the table writer would generate pure log files at the very first place.
    */

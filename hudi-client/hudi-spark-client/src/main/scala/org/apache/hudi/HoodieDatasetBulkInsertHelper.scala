@@ -171,6 +171,19 @@ object HoodieDatasetBulkInsertHelper
               writeConfig.populateMetaFields,
               arePartitionRecordsSorted,
               shouldPreserveHoodieMetadata)
+          case HoodieIndex.IndexType.BUCKET if writeConfig.getBucketIndexEngineType
+            == BucketIndexEngineType.EXTENSIBLE_BUCKET =>
+            new ConsistentBucketBulkInsertDataInternalWriterHelper(
+              table,
+              writeConfig,
+              instantTime,
+              taskPartitionId,
+              taskId,
+              taskEpochId,
+              schema,
+              writeConfig.populateMetaFields,
+              arePartitionRecordsSorted,
+              shouldPreserveHoodieMetadata)
           case _ =>
             new BulkInsertDataInternalWriterHelper(
               table,

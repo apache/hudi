@@ -214,6 +214,10 @@ public abstract class HoodieIndex<I, O> implements Serializable {
     @EnumFieldDescription("Supports dynamic number of buckets with bucket resizing to properly "
         + "size each bucket. This solves potential data skew problem where one bucket can be "
         + "significantly larger than others in SIMPLE engine type. This only works with MOR tables.")
-    CONSISTENT_HASHING
+    CONSISTENT_HASHING,
+
+    @EnumFieldDescription("Supports heterogeneous bucketing with dynamic number of buckets. The number of buckets can be expanded and contracted in powers of 2"
+        + "This works for both COW and MOR tables.")
+    EXTENSIBLE_BUCKET
   }
 }
