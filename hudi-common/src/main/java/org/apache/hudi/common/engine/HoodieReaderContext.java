@@ -223,18 +223,7 @@ public abstract class HoodieReaderContext<T> {
    * @return The record key in String.
    */
   public final String getRecordKey(T record, Schema schema) {
-    return getRecordKey(record, schema, null);
-  }
-
-  public final String getRecordKey(T record, Schema schema, Map<String, Object> recordMetadata) {
-    if (recordMetadata != null && recordMetadata.containsKey(INTERNAL_META_RECORD_KEY)) {
-      return (String) recordMetadata.get(INTERNAL_META_RECORD_KEY);
-    }
-    String recordKey = getValue(record, schema, recordKeyFieldName).toString();
-    if (recordMetadata != null) {
-      recordMetadata.put(INTERNAL_META_RECORD_KEY, recordKey);
-    }
-    return recordKey;
+    return getValue(record, schema, recordKeyFieldName).toString();
   }
 
   /**
