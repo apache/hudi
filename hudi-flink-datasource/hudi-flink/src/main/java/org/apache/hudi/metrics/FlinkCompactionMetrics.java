@@ -94,7 +94,7 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
       if (!firstPendingCompactionInstant.isPresent()) {
         this.compactionDelay = 0L;
       } else {
-        Instant start = HoodieInstantTimeGenerator.parseDateFromInstantTime(firstPendingCompactionInstant.get().getTimestamp()).toInstant();
+        Instant start = HoodieInstantTimeGenerator.parseDateFromInstantTime(firstPendingCompactionInstant.get().getRequestTime()).toInstant();
         this.compactionDelay = Duration.between(start, Instant.now()).getSeconds();
       }
     } catch (ParseException e) {

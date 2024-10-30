@@ -55,7 +55,7 @@ class RepairAddpartitionmetaProcedure extends BaseProcedure with ProcedureBuilde
 
     val metaClient = createMetaClient(jsc, tablePath)
 
-    val latestCommit: String = metaClient.getActiveTimeline.getCommitAndReplaceTimeline.lastInstant.get.getTimestamp
+    val latestCommit: String = metaClient.getActiveTimeline.getCommitAndReplaceTimeline.lastInstant.get.getRequestTime
     val partitionPaths: util.List[String] = FSUtils.getAllPartitionFoldersThreeLevelsDown(metaClient.getStorage, tablePath);
     val basePath: StoragePath = new StoragePath(tablePath)
 

@@ -91,9 +91,9 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
       }
       // if instant completed, ensure that there was metadata commit, else update metadata for this completed instant
       if (COMPLETED.equals(instant.getState())) {
-        String instantTime = instant.getTimestamp();
+        String instantTime = instant.getRequestTime();
         Option<HoodieInstant> metadataInstant = metadataMetaClient.reloadActiveTimeline()
-            .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
+            .filterCompletedInstants().filter(i -> i.getRequestTime().equals(instantTime)).firstInstant();
         if (metadataInstant.isPresent()) {
           currentCaughtupInstant = instantTime;
           continue;
@@ -110,17 +110,17 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
               break;
             case CLEAN_ACTION:
               HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, instant);
-              metadataWriter.update(cleanMetadata, instant.getTimestamp());
+              metadataWriter.update(cleanMetadata, instant.getRequestTime());
               break;
             case RESTORE_ACTION:
               HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
                   metaClient.getActiveTimeline().getInstantDetails(instant).get());
-              metadataWriter.update(restoreMetadata, instant.getTimestamp());
+              metadataWriter.update(restoreMetadata, instant.getRequestTime());
               break;
             case ROLLBACK_ACTION:
               HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
                   metaClient.getActiveTimeline().getInstantDetails(instant).get());
-              metadataWriter.update(rollbackMetadata, instant.getTimestamp());
+              metadataWriter.update(rollbackMetadata, instant.getRequestTime());
               break;
             default:
               throw new IllegalStateException("Unexpected value: " + instant.getAction());
@@ -150,8 +150,8 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
    * @return null if instant is already caught up, else the instant after it is completed.
    */
   HoodieInstant awaitInstantCaughtUp(HoodieInstant instant) {
-    if (!metadataCompletedInstants.isEmpty() && metadataCompletedInstants.contains(instant.getTimestamp())) {
-      currentCaughtupInstant = instant.getTimestamp();
+    if (!metadataCompletedInstants.isEmpty() && metadataCompletedInstants.contains(instant.getRequestTime())) {
+      currentCaughtupInstant = instant.getRequestTime();
       return null;
     }
     if (!instant.isCompleted()) {
@@ -166,12 +166,12 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
   }
 
   private void reloadTimelineWithWait(HoodieInstant instant) throws InterruptedException {
-    String instantTime = instant.getTimestamp();
+    String instantTime = instant.getRequestTime();
     Option<HoodieInstant> currentInstant;
 
     do {
       currentInstant = metaClient.reloadActiveTimeline()
-          .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
+          .filterCompletedInstants().filter(i -> i.getRequestTime().equals(instantTime)).firstInstant();
       if (!currentInstant.isPresent() || !currentInstant.get().isCompleted()) {
         Thread.sleep(TIMELINE_RELOAD_INTERVAL_MILLIS);
       }

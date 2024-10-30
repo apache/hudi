@@ -210,7 +210,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   protected void removeReplacedFileIdsAtInstants(Set<String> instants) {
     //TODO should we make this more efficient by having reverse mapping of instant to file group id?
     Stream<HoodieFileGroupId> fileIdsToRemove = fgIdToReplaceInstants.entrySet().stream().map(entry -> {
-      if (instants.contains(entry.getValue().getTimestamp())) {
+      if (instants.contains(entry.getValue().getRequestTime())) {
         return Option.of(entry.getKey());
       } else {
         return Option.ofNullable((HoodieFileGroupId) null);

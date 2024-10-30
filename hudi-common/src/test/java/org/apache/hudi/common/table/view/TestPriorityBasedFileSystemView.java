@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -697,7 +698,7 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testGetLastInstant() {
     Option<HoodieInstant> actual;
-    Option<HoodieInstant> expected = Option.of(new HoodieInstant(true, "", ""));
+    Option<HoodieInstant> expected = Option.of(HoodieTestUtils.INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, "", ""));
 
     when(primary.getLastInstant()).thenReturn(expected);
     actual = fsView.getLastInstant();

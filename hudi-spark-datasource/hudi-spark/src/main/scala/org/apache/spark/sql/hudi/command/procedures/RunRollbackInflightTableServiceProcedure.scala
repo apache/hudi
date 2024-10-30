@@ -28,7 +28,6 @@ import org.apache.hudi.table.HoodieSparkTable
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
-import org.apache.spark.sql.hudi.command.procedures
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
@@ -73,12 +72,13 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder
       .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration)).setBasePath(basePath).build
-
+    val instantFactory = metaClient.getTimelineLayout.getInstantFactory
     // determine whether the current instant exists and whether it is clustering or compaction
     var isClustering: Boolean = true
     var instant: HoodieInstant = null
-    val pendingCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, pendingInstant)
-    val pendingClusteringInstant = ClusteringUtils.getInflightClusteringInstant(pendingInstant, metaClient.getActiveTimeline)
+    val pendingCompactionInstant = instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, pendingInstant)
+    val pendingClusteringInstant = ClusteringUtils.getInflightClusteringInstant(pendingInstant,
+      metaClient.getActiveTimeline, metaClient.getTimelineLayout.getInstantFactory)
     val timeline = metaClient.getActiveTimeline.getWriteTimeline
     if (!timeline.containsInstant(pendingCompactionInstant) && !pendingClusteringInstant.isPresent) {
       throw new RuntimeException(s"there is no pending instant : [$pendingClusteringInstant | $pendingCompactionInstant]")
@@ -100,14 +100,14 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
       val startTs = System.currentTimeMillis()
       doRollbackOnInflightInstant(client, instant, isClustering)
       if (deleteRequestInstantFile) {
-        val requestInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, instant.getAction, instant.getTimestamp)
+        val requestInstant = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction, instant.getRequestTime)
         metaClient.getActiveTimeline.deleteInstantFileIfExists(requestInstant)
       }
       val timeCost = System.currentTimeMillis() - startTs
       logInfo(s"Finish rollback pending instant: $pendingInstant," +
         s" time cost: $timeCost ms.")
 
-      Seq(Row(instant.getTimestamp, timeCost.toString))
+      Seq(Row(instant.getRequestTime, timeCost.toString))
     } finally {
       if (client != null) {
         client.close()

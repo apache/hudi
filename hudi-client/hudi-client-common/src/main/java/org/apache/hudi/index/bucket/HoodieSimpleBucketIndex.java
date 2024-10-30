@@ -69,7 +69,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     // bucketId -> fileIds
     Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = new HashMap<>();
     HoodieActiveTimeline hoodieActiveTimeline = hoodieTable.getMetaClient().reloadActiveTimeline();
-    Set<String> pendingInstants = hoodieActiveTimeline.filterInflights().getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    Set<String> pendingInstants = hoodieActiveTimeline.filterInflights().getInstantsAsStream().map(HoodieInstant::getRequestTime).collect(Collectors.toSet());
 
     HoodieIndexUtils
         .getLatestFileSlicesForPartition(partition, hoodieTable)

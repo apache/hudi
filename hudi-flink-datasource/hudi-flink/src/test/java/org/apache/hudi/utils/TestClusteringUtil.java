@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -110,7 +111,7 @@ public class TestClusteringUtil {
         .stream().allMatch(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     assertTrue(allRolledBack, "all the instants should be rolled back");
     List<String> actualInstants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient())
-        .stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .stream().map(HoodieInstant::getRequestTime).collect(Collectors.toList());
     assertThat(actualInstants, is(oriInstants));
   }
   
@@ -135,7 +136,7 @@ public class TestClusteringUtil {
         plan, Collections.emptyMap(), 1);
     String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant clusteringInstant =
-        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
     try {
       metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant,
           TimelineMetadataUtils.serializeRequestedReplaceMetadata(metadata));

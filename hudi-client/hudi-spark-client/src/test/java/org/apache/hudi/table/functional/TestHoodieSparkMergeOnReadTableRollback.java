@@ -77,7 +77,11 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -115,7 +119,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       metaClient = HoodieTableMetaClient.reload(metaClient);
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertTrue(commit.isPresent());
-      assertEquals("001", commit.get().getTimestamp(), "commit should be 001");
+      assertEquals("001", commit.get().getRequestTime(), "commit should be 001");
 
       /*
        * Write 2 (updates)
@@ -187,7 +191,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
-      assertEquals("000000001", deltaCommit.get().getTimestamp(), "Delta commit should be 000000001");
+      assertEquals("000000001", deltaCommit.get().getRequestTime(), "Delta commit should be 000000001");
 
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
@@ -317,10 +321,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
 
-        final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().getTimestamp();
+        final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().getRequestTime();
         assertTrue(listAllBaseFilesInPath(hoodieTable).stream()
             .anyMatch(file -> compactedCommitTime.equals(new HoodieBaseFile(file).getCommitTime())));
-        hoodieTable.rollbackInflightCompaction(new HoodieInstant(
+        hoodieTable.rollbackInflightCompaction(INSTANT_FACTORY.createNewInstant(
             HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime));
         allFiles = listAllBaseFilesInPath(hoodieTable);
         metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -372,7 +376,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       HoodieInstant commitInstant = instantCommitMetadataPairOpt.get().getKey();
 
-      assertEquals("001", commitInstant.getTimestamp());
+      assertEquals("001", commitInstant.getRequestTime());
       assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, commitInstant.getAction());
       assertEquals(200, getTotalRecordsWritten(instantCommitMetadataPairOpt.get().getValue()));
 
@@ -479,7 +483,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline(), allFiles);
 
       final String compactedCommitTime =
-          metaClient.getActiveTimeline().reload().getCommitsTimeline().lastInstant().get().getTimestamp();
+          metaClient.getActiveTimeline().reload().getCommitsTimeline().lastInstant().get().getRequestTime();
 
       assertTrue(tableView.getLatestBaseFiles().anyMatch(file -> compactedCommitTime.equals(file.getCommitTime())));
 
@@ -594,7 +598,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
           metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
       assertFalse(dataFilesToRead.anyMatch(
-          file -> HoodieTimeline.compareTimestamps("002", HoodieTimeline.GREATER_THAN,
+          file -> compareTimestamps("002", GREATER_THAN,
               file.getCommitTime())));
 
       client.deleteSavepoint("002");
@@ -788,11 +792,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       java.nio.file.Path tempFolder = Files.createTempDirectory(this.getClass().getCanonicalName());
       Map<String, String> fileNameMap = new HashMap<>();
       for (HoodieInstant.State state : Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT)) {
-        HoodieInstant toCopy = new HoodieInstant(state, HoodieTimeline.DELTA_COMMIT_ACTION, lastCommitTime);
+        HoodieInstant toCopy = INSTANT_FACTORY.createNewInstant(state, HoodieTimeline.DELTA_COMMIT_ACTION, lastCommitTime);
         File file = Files.createTempFile(tempFolder, null, null).toFile();
-        fs().copyToLocalFile(new Path(metaClient.getMetaPath().toString(), toCopy.getFileName()),
+        fs().copyToLocalFile(new Path(metaClient.getMetaPath().toString(), INSTANT_FILE_NAME_FACTORY.getFileName(toCopy)),
             new Path(file.getAbsolutePath()));
-        fileNameMap.put(file.getAbsolutePath(), toCopy.getFileName());
+        fileNameMap.put(file.getAbsolutePath(), INSTANT_FILE_NAME_FACTORY.getFileName(toCopy));
       }
       Path markerDir = new Path(Files.createTempDirectory(tempFolder, null).toAbsolutePath().toString());
       if (rollbackUsingMarkers) {
@@ -877,7 +881,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       //writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
       // Trigger a rollback of compaction
       table.getActiveTimeline().reload();
-      table.rollbackInflightCompaction(new HoodieInstant(
+      table.rollbackInflightCompaction(INSTANT_FACTORY.createNewInstant(
           HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime));
 
       metaClient = HoodieTableMetaClient.reload(metaClient);

@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -38,24 +39,24 @@ public class TestTimelineLayout  {
   @Test
   public void testTimelineLayoutFilter() {
     List<HoodieInstant> rawInstants = Arrays.asList(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "001"),
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "001"),
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "001"),
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "003"),
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "003"),
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003"),
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "004"),
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "004"),
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "005"),
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "005"),
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "005"),
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "006"),
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "006"),
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "007"),
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "007"));
+        INSTANT_FACTORY.createNewInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "001"),
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "001"),
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "001"),
+        INSTANT_FACTORY.createNewInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
+        INSTANT_FACTORY.createNewInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "003"),
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "003"),
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003"),
+        INSTANT_FACTORY.createNewInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "004"),
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "004"),
+        INSTANT_FACTORY.createNewInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "005"),
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "005"),
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "005"),
+        INSTANT_FACTORY.createNewInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "006"),
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "006"),
+        INSTANT_FACTORY.createNewInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "007"),
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "007"));
 
     List<HoodieInstant> layout0Instants = TimelineLayout.getLayout(new TimelineLayoutVersion(0))
         .filterHoodieInstants(rawInstants.stream()).collect(Collectors.toList());
@@ -64,18 +65,18 @@ public class TestTimelineLayout  {
         .filterHoodieInstants(rawInstants.stream()).collect(Collectors.toList());
     assertEquals(7, layout1Instants.size());
     assertTrue(layout1Instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "007")));
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "007")));
     assertTrue(layout1Instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "006")));
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "006")));
     assertTrue(layout1Instants.contains(
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "005")));
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "005")));
     assertTrue(layout1Instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "004")));
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "004")));
     assertTrue(layout1Instants.contains(
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003")));
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003")));
     assertTrue(layout1Instants.contains(
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002")));
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002")));
     assertTrue(layout1Instants.contains(
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "001")));
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "001")));
   }
 }

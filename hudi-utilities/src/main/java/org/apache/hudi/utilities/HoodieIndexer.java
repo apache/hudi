@@ -282,7 +282,7 @@ public class HoodieIndexer {
             .filterPendingIndexTimeline()
             .firstInstant();
         if (earliestPendingIndexInstant.isPresent()) {
-          cfg.indexInstantTime = earliestPendingIndexInstant.get().getTimestamp();
+          cfg.indexInstantTime = earliestPendingIndexInstant.get().getRequestTime();
           LOG.info("Found the earliest scheduled indexing instant which will be executed: "
               + cfg.indexInstantTime);
         } else {

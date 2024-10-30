@@ -262,7 +262,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
     // Set the last commit time from the TBLProperties
-    String lastCommitSynced = getActiveTimeline().lastInstant().get().getTimestamp();
+    String lastCommitSynced = getActiveTimeline().lastInstant().get().getRequestTime();
     try {
       String sql = constructUpdateTblPropertiesSql(tableName, lastCommitSynced);
       executeAdbSql(sql);

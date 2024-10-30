@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.ActiveAction;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -57,6 +56,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -93,7 +94,7 @@ public class TestLegacyArchivedMetaEntryReader {
       HoodieCommitMetadata metadata = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
       testTable.addCommit(instantTime, Option.of(metadata));
     }
-    List<HoodieInstant> instants = new HoodieActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());
+    List<HoodieInstant> instants = TIMELINE_FACTORY.createActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());
     // archive 2 times to have 2 log files.
     archive(metaClient, instants.subList(0, instants.size() / 2));
     archive(metaClient, instants.subList(instants.size() / 2, instants.size()));
@@ -119,7 +120,7 @@ public class TestLegacyArchivedMetaEntryReader {
         try {
           records.add(convertToAvroRecord(hoodieInstant, metaClient));
         } catch (Exception e) {
-          LOG.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
+          LOG.error("Failed to archive commits, .commit file: " + INSTANT_FILE_NAME_FACTORY.getFileName(hoodieInstant), e);
           throw e;
         }
       }

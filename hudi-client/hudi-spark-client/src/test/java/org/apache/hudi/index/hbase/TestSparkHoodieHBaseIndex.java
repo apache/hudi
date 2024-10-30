@@ -560,7 +560,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       // make first commit with 20 records
       JavaRDD<HoodieRecord> writeRecords1 = generateAndCommitRecords(writeClient, 20);
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      String commit1 = metaClient.getActiveTimeline().firstInstant().get().getTimestamp();
+      String commit1 = metaClient.getActiveTimeline().firstInstant().get().getRequestTime();
 
       // Make 6 additional commits, so that first commit is archived
       for (int nCommit = 0; nCommit < 6; nCommit++) {

@@ -81,7 +81,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     // TODO : check if maxMemory is not greater than JVM or executor memory
     // TODO - rollback any compactions in flight
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    CompletionTimeQueryView completionTimeQueryView = new CompletionTimeQueryView(metaClient);
+    CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(
         engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
 
@@ -119,7 +119,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     String lastCompletedInstantTime = hoodieTable.getMetaClient()
         .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+        .filterCompletedInstants().lastInstant().get().getRequestTime();
     LOG.info("Last completed instant time " + lastCompletedInstantTime);
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 

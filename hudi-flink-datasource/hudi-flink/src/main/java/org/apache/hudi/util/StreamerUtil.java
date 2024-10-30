@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -84,6 +84,9 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 
 /**
  * Utilities for Flink stream read and write.
@@ -267,7 +270,6 @@ public class StreamerUtil {
           .setUrlEncodePartitioning(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING))
           .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
-          .setTimelineLayoutVersion(1)
           .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {
@@ -386,16 +388,16 @@ public class StreamerUtil {
    * Returns the median instant time between the given two instant time.
    */
   public static Option<String> medianInstantTime(String highVal, String lowVal) {
-    long high = HoodieActiveTimeline.parseDateFromInstantTimeSafely(highVal)
+    long high = ActiveTimelineUtils.parseDateFromInstantTimeSafely(highVal)
             .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + highVal + "] error")).getTime();
-    long low = HoodieActiveTimeline.parseDateFromInstantTimeSafely(lowVal)
+    long low = ActiveTimelineUtils.parseDateFromInstantTimeSafely(lowVal)
             .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + lowVal + "] error")).getTime();
     ValidationUtils.checkArgument(high > low,
             "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
     long median = low + (high - low) / 2;
-    final String instantTime = HoodieActiveTimeline.formatDate(new Date(median));
-    if (HoodieTimeline.compareTimestamps(lowVal, HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime)
-            || HoodieTimeline.compareTimestamps(highVal, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime)) {
+    final String instantTime = ActiveTimelineUtils.formatDate(new Date(median));
+    if (compareTimestamps(lowVal, GREATER_THAN_OR_EQUALS, instantTime)
+            || compareTimestamps(highVal, LESSER_THAN_OR_EQUALS, instantTime)) {
       return Option.empty();
     }
     return Option.of(instantTime);
@@ -405,9 +407,9 @@ public class StreamerUtil {
    * Returns the time interval in seconds between the given instant time.
    */
   public static long instantTimeDiffSeconds(String newInstantTime, String oldInstantTime) {
-    long newTimestamp = HoodieActiveTimeline.parseDateFromInstantTimeSafely(newInstantTime)
+    long newTimestamp = ActiveTimelineUtils.parseDateFromInstantTimeSafely(newInstantTime)
             .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error")).getTime();
-    long oldTimestamp = HoodieActiveTimeline.parseDateFromInstantTimeSafely(oldInstantTime)
+    long oldTimestamp = ActiveTimelineUtils.parseDateFromInstantTimeSafely(oldInstantTime)
             .orElseThrow(() -> new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error")).getTime();
     return (newTimestamp - oldTimestamp) / 1000;
   }
@@ -455,14 +457,14 @@ public class StreamerUtil {
     }
     return metaClient.getCommitsTimeline().filterPendingExcludingCompaction()
         .lastInstant()
-        .map(HoodieInstant::getTimestamp)
+        .map(HoodieInstant::getRequestTime)
         .orElse(null);
   }
 
   public static String getLastCompletedInstant(HoodieTableMetaClient metaClient) {
     return metaClient.getCommitsTimeline().filterCompletedInstants()
         .lastInstant()
-        .map(HoodieInstant::getTimestamp)
+        .map(HoodieInstant::getRequestTime)
         .orElse(null);
   }
 

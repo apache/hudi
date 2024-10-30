@@ -92,7 +92,7 @@ public class HoodieIndexUtils {
         .filterCompletedInstants().lastInstant();
     if (latestCommitTime.isPresent()) {
       return hoodieTable.getBaseFileOnlyView()
-          .getLatestBaseFilesBeforeOrOn(partition, latestCommitTime.get().getTimestamp())
+          .getLatestBaseFilesBeforeOrOn(partition, latestCommitTime.get().getRequestTime())
           .collect(toList());
     }
     return Collections.emptyList();
@@ -112,7 +112,7 @@ public class HoodieIndexUtils {
         .filterCompletedInstants().lastInstant();
     if (latestCommitTime.isPresent()) {
       return hoodieTable.getHoodieView()
-          .getLatestFileSlicesBeforeOrOn(partition, latestCommitTime.get().getTimestamp(), true)
+          .getLatestFileSlicesBeforeOrOn(partition, latestCommitTime.get().getRequestTime(), true)
           .collect(toList());
     }
     return Collections.emptyList();
@@ -244,7 +244,7 @@ public class HoodieIndexUtils {
         .getActiveTimeline() // we need to include all actions and completed
         .filterCompletedInstants()
         .lastInstant()
-        .map(HoodieInstant::getTimestamp);
+        .map(HoodieInstant::getRequestTime);
     return partitionLocations.flatMap(p
         -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getKey(), p.getValue()))
         .getMergedRecords().iterator());

@@ -125,7 +125,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       return;
     }
 
-    String compactionInstantTime = firstRequested.get().getTimestamp();
+    String compactionInstantTime = firstRequested.get().getRequestTime();
 
     // generate compaction plan
     // should support configurable commit metadata
@@ -137,7 +137,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       // do nothing.
       LOG.info("Empty compaction plan for instant " + compactionInstantTime);
     } else {
-      HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+      HoodieInstant instant = table.getInstantFactory().getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
       table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
       table.getMetaClient().reloadActiveTimeline();

@@ -30,7 +30,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -55,7 +56,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 
 /**
  * Client to perform admin operations related to compaction.
@@ -107,21 +109,22 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionPlan(String compactionInstant, boolean skipValidation,
       int parallelism, boolean dryRun) throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-
+    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+    InstantFileNameFactory instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameFactory();
     // Only if all operations are successfully executed
     if (!dryRun) {
       // Overwrite compaction request with empty compaction operations
-      HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
-      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), inflight.getFileName());
+      HoodieInstant inflight = instantFactory.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
+      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), metaClient.getTimelineLayout().getInstantFileNameFactory().getFileName(inflight));
       if (metaClient.getStorage().exists(inflightPath)) {
         // We need to rollback data-files because of this inflight compaction before unscheduling
         throw new IllegalStateException("Please rollback the inflight compaction before unscheduling");
       }
       // Leave the trace in aux folder but delete from metapath.
       // TODO: Add a rollback instant but for compaction
-      HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
+      HoodieInstant instant = instantFactory.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
       boolean deleted = metaClient.getStorage().deleteFile(
-          new StoragePath(metaClient.getMetaPath(), instant.getFileName()));
+          new StoragePath(metaClient.getMetaPath(), instantFileNameFactory.getFileName(instant)));
       ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
     }
     return new ArrayList<>();
@@ -140,6 +143,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionFileId(HoodieFileGroupId fgId, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
+    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+    InstantFileNameFactory instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameFactory();
 
     if (!dryRun) {
       // Ready to remove this file-Id from compaction request
@@ -156,15 +161,15 @@ public class CompactionAdminClient extends BaseHoodieClient {
       HoodieCompactionPlan newPlan =
           HoodieCompactionPlan.newBuilder().setOperations(newOps).setExtraMetadata(plan.getExtraMetadata()).build();
       HoodieInstant inflight =
-          new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
-      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), inflight.getFileName());
+          instantFactory.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
+      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), instantFileNameFactory.getFileName(inflight));
       if (metaClient.getStorage().exists(inflightPath)) {
         // revert if in inflight state
         metaClient.getActiveTimeline().revertInstantFromInflightToRequested(inflight);
       }
       // Overwrite compaction plan with updated info
       metaClient.getActiveTimeline().saveToCompactionRequested(
-          new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
+          instantFactory.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
           TimelineMetadataUtils.serializeCompactionPlan(newPlan), true);
     }
     return new ArrayList<>();
@@ -194,7 +199,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       throws IOException {
     return TimelineMetadataUtils.deserializeCompactionPlan(
             metaClient.getActiveTimeline().readCompactionPlanAsBytes(
-                    HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
+                    metaClient.getTimelineLayout().getInstantFactory().getCompactionRequestedInstant(compactionInstant)).get());
   }
 
   /**
@@ -270,7 +275,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
                   + logFilesInCompactionOp + ", Got :" + logFilesInFileSlice);
           Set<HoodieLogFile> diff = logFilesInFileSlice.stream().filter(lf -> !logFilesInCompactionOp.contains(lf))
               .collect(Collectors.toSet());
-          ValidationUtils.checkArgument(diff.stream().allMatch(lf -> HoodieTimeline.compareTimestamps(lf.getDeltaCommitTime(), GREATER_THAN_OR_EQUALS, compactionInstant)),
+          ValidationUtils.checkArgument(diff.stream().allMatch(lf -> compareTimestamps(lf.getDeltaCommitTime(), GREATER_THAN_OR_EQUALS, compactionInstant)),
               "There are some log-files which are neither specified in compaction plan "
                   + "nor present after compaction request instant. Some of these :" + diff);
         } else {

@@ -265,7 +265,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     String maxInstantTime = metaClient
         .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+        .filterCompletedInstants().lastInstant().get().getRequestTime();
     return maxInstantTime;
   }
 

@@ -33,6 +33,9 @@ import java.time.temporal.TemporalAccessor;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+
 /**
  * Utility class to generate and parse timestamps used in Instants.
  */
@@ -80,7 +83,7 @@ public class HoodieInstantTimeGenerator {
         } else {
           newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
         }
-      } while (HoodieTimeline.compareTimestamps(newCommitTime, HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldVal));
+      } while (compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
       return newCommitTime;
     });
   }

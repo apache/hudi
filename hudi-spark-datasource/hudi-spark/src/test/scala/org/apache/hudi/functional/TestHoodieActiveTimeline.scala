@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieIOException
@@ -34,7 +35,7 @@ import java.io.FileNotFoundException
 import scala.collection.JavaConverters._
 
 /**
- * Tests on HoodieActionTimeLine using the real hudi table.
+ * Tests on HoodieTimeline using the real hudi table.
  */
 class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
@@ -93,7 +94,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val ret1 = activeTimeline.getLastCommitMetadataWithValidData()
     assert(ret1.isPresent)
     val (instant1, commitMetadata1) = (ret1.get().getLeft, ret1.get().getRight)
-    assertEquals(instant1.getTimestamp, commit1Time)
+    assertEquals(instant1.getRequestTime, commit1Time)
     val relativePath1 = commitMetadata1.getFileIdAndRelativePaths.values().stream().findAny().get()
     assert(relativePath1.contains(commit1Time))
     assert(relativePath1.contains(HoodieFileFormat.PARQUET.getFileExtension))
@@ -116,7 +117,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val ret2 = activeTimeline.getLastCommitMetadataWithValidData()
     assert(ret2.isPresent)
     val (instant2, commitMetadata2) = (ret2.get().getLeft, ret2.get().getRight)
-    assertEquals(instant2.getTimestamp, commit1Time)
+    assertEquals(instant2.getRequestTime, commit1Time)
     val relativePath2 = commitMetadata2.getFileIdAndRelativePaths.values().stream().findAny().get()
     assert(relativePath2.contains(commit1Time))
     assert(relativePath2.contains(HoodieFileFormat.PARQUET.getFileExtension))
@@ -136,7 +137,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val ret3 = activeTimeline.getLastCommitMetadataWithValidData()
     assert(ret3.isPresent)
     val (instant3, commitMetadata3) = (ret3.get().getLeft, ret3.get().getRight)
-    assertEquals(instant3.getTimestamp, commit3Time)
+    assertEquals(instant3.getRequestTime, commit3Time)
     val relativePath3 = commitMetadata3.getFileIdAndRelativePaths.values().stream().findAny().get()
     assert(relativePath3.contains(commit3Time))
     assert(relativePath3.contains(HoodieFileFormat.PARQUET.getFileExtension))
@@ -163,7 +164,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val ret1 = activeTimeline.getLastCommitMetadataWithValidData()
     assert(ret1.isPresent)
     val (instant1, commitMetadata1) = (ret1.get().getLeft, ret1.get().getRight)
-    assertEquals(instant1.getTimestamp, commit1Time)
+    assertEquals(instant1.getRequestTime, commit1Time)
     val relativePath1 = commitMetadata1.getFileIdAndRelativePaths.values().stream().findAny().get()
     assert(relativePath1.contains(commit1Time))
     assert(relativePath1.contains(HoodieFileFormat.PARQUET.getFileExtension))
@@ -183,7 +184,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val ret2 = activeTimeline.getLastCommitMetadataWithValidData()
     assert(ret2.isPresent)
     val (instant2, commitMetadata2) = (ret2.get().getLeft, ret2.get().getRight)
-    assertEquals(instant2.getTimestamp, commit2Time)
+    assertEquals(instant2.getRequestTime, commit2Time)
     val relativePath2 = commitMetadata2.getFileIdAndRelativePaths.values().stream().findAny().get()
     // deltacommit: .log file should contain the timestamp of it's instant time.
     assert(relativePath2.contains(commit2Time))
@@ -205,7 +206,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val ret3 = activeTimeline.getLastCommitMetadataWithValidData()
     assert(ret3.isPresent)
     val (instant3, commitMetadata3) = (ret3.get().getLeft, ret3.get().getRight)
-    assertEquals(instant3.getTimestamp, commit3Time)
+    assertEquals(instant3.getRequestTime, commit3Time)
     val relativePath3 = commitMetadata3.getFileIdAndRelativePaths.values().stream().findAny().get()
     assert(relativePath3.contains(commit3Time))
     assert(relativePath3.contains(HoodieFileFormat.PARQUET.getFileExtension))
@@ -224,7 +225,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val ret4 = activeTimeline.getLastCommitMetadataWithValidData()
     assert(ret4.isPresent)
     val (instant4, commitMetadata4) = (ret4.get().getLeft, ret4.get().getRight)
-    assertEquals(instant4.getTimestamp, commit4Time)
+    assertEquals(instant4.getRequestTime, commit4Time)
     val relativePath4 = commitMetadata4.getFileIdAndRelativePaths.values().stream().findAny().get()
     // deltacommit: .log file should contain the timestamp of it's instant time.
     assert(relativePath4.contains(commit4Time))
@@ -247,7 +248,8 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val activeTimeline = metaClient.getActiveTimeline
     assertNotNull(activeTimeline.getInstantDetails(activeTimeline.lastInstant().get()))
     try {
-      activeTimeline.getInstantDetails(new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, metaClient.createNewInstantTime()))
+      activeTimeline.getInstantDetails(HoodieTestUtils.INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT,
+        HoodieTimeline.CLUSTERING_ACTION, metaClient.createNewInstantTime()))
     } catch {
       // org.apache.hudi.common.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour
       // where FileNotFoundException is the cause of exception thrown by the API getInstantDetails

@@ -467,7 +467,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     val metaClient = createMetaClient(spark, basePath)
     val schema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get()
     val lastInstant = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get()
-    assert(schema.schemaId() == lastInstant.getTimestamp.toLong)
+    assert(schema.schemaId() == lastInstant.getRequestTime.toLong)
     if (isDropColumn) {
       assert(schema.getMaxColumnId == currentMaxColumnId)
     } else {

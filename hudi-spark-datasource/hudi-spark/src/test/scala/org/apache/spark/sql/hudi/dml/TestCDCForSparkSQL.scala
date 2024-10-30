@@ -77,7 +77,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $tableName values (1, 11, 1000, 'a1'), (2, 12, 1000, 'a2')")
         assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 2)
         val fgForID1 = spark.sql(s"select _hoodie_file_name from $tableName where id=1").head().get(0)
-        val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+        val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
         val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
         cdcDataOnly1.show(false)
         assertCDCOpCnt(cdcDataOnly1, 2, 0, 0)
@@ -132,13 +132,13 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
           val metaClient = createMetaClient(spark, basePath)
 
           spark.sql(s"insert into $tableName values (1, 'a1', 11, 1000), (2, 'a2', 12, 1000), (3, 'a3', 13, 1000)")
-          val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+          val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
           val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
           cdcDataOnly1.show(false)
           assertCDCOpCnt(cdcDataOnly1, 3, 0, 0)
 
           spark.sql(s"insert into $tableName values (1, 'a1_v2', 11, 1100)")
-          val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+          val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
           // here we use `commitTime1` to query the change data in commit 2.
           // because `commitTime2` is maybe the ts of the compaction operation, not the write operation.
           val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1.toLong)
@@ -162,13 +162,13 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
           checkAnswer(change2)(Seq("u", 1, "a1", 11, "a1_v2", 11))
 
           spark.sql(s"update $tableName set name = 'a2_v2', ts = 1200 where id = 2")
-          val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+          val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
           val cdcDataOnly3 = cdcDataFrame(basePath, commitTime2.toLong)
           cdcDataOnly3.show(false)
           assertCDCOpCnt(cdcDataOnly3, 0, 1, 0)
 
           spark.sql(s"delete from $tableName where id = 3")
-          val commitTime4 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+          val commitTime4 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
           val cdcDataOnly4 = cdcDataFrame(basePath, commitTime3.toLong)
           cdcDataOnly4.show(false)
           assertCDCOpCnt(cdcDataOnly4, 0, 0, 1)
@@ -187,7 +187,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | when matched then update set id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
                | when not matched then insert *
         """.stripMargin)
-          val commitTime5 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+          val commitTime5 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
           val cdcDataOnly5 = cdcDataFrame(basePath, commitTime4.toLong)
           cdcDataOnly5.show(false)
           assertCDCOpCnt(cdcDataOnly5, 1, 1, 0)
@@ -260,19 +260,19 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | (2, 'a2', 12, 1000, '2022'),
                | (3, 'a3', 13, 1000, '2022')
         """.stripMargin)
-          val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+          val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
           val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
           cdcDataOnly1.show(false)
           assertCDCOpCnt(cdcDataOnly1, 3, 0, 0)
 
           spark.sql(s"insert overwrite table $tableName partition (pt = '2021') values (1, 'a1_v2', 11, 1100)")
-          val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+          val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
           val cdcDataOnly2 = cdcDataFrame(basePath, commitTime2.toLong - 1)
           cdcDataOnly2.show(false)
           assertCDCOpCnt(cdcDataOnly2, 1, 0, 1)
 
           spark.sql(s"update $tableName set name = 'a2_v2', ts = 1200 where id = 2")
-          val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+          val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
           val cdcDataOnly3 = cdcDataFrame(basePath, commitTime3.toLong - 1)
           cdcDataOnly3.show(false)
           assertCDCOpCnt(cdcDataOnly3, 0, 1, 0)
@@ -291,7 +291,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | when matched then update set id = s0.id, name = s0.name, price = s0.price, ts = s0.ts, pt = s0.pt
                | when not matched then insert *
         """.stripMargin)
-          val commitTime4 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+          val commitTime4 = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
           val cdcDataOnly4 = cdcDataFrame(basePath, commitTime4.toLong - 1)
           cdcDataOnly4.show(false)
           assertCDCOpCnt(cdcDataOnly4, 1, 1, 0)

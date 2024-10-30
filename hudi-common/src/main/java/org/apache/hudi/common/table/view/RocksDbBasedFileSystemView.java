@@ -48,6 +48,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+
 /**
  * A file-system view implementation on top of embedded Rocks DB store. For each table : 3 column Family is added for
  * storing (1) File-Slices and Data Files for View lookups (2) Pending compaction operations (3) Partitions tracked
@@ -466,7 +470,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         .map(Pair::getValue).reduce(null,
             (x, y) -> ((x == null) ? y
                 : (y == null) ? null
-                    : HoodieTimeline.compareTimestamps(x.getBaseInstantTime(), HoodieTimeline.GREATER_THAN, y.getBaseInstantTime()
+                    : compareTimestamps(x.getBaseInstantTime(), GREATER_THAN, y.getBaseInstantTime()
             ) ? x : y)));
   }
 
@@ -480,10 +484,10 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         .<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(),
             schemaHelper.getPrefixForSliceViewByPartitionFile(partitionPath, fileId))
         .map(Pair::getValue)
-        .filter(fileSlice -> fileSlice != null && HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, completionTime.get()))
+        .filter(fileSlice -> fileSlice != null && compareTimestamps(fileSlice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, completionTime.get()))
         .reduce(null,
             (x, y) -> x == null ? y
-                : HoodieTimeline.compareTimestamps(x.getBaseInstantTime(), HoodieTimeline.GREATER_THAN, y.getBaseInstantTime()
+                : compareTimestamps(x.getBaseInstantTime(), GREATER_THAN, y.getBaseInstantTime()
             ) ? x : y));
   }
 
@@ -497,7 +501,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
             .map(Pair::getValue).reduce(null,
                 (x, y) -> ((x == null) ? y
                     : (y == null) ? null
-                        : HoodieTimeline.compareTimestamps(x.getCommitTime(), HoodieTimeline.GREATER_THAN, y.getCommitTime())
+                        : compareTimestamps(x.getCommitTime(), GREATER_THAN, y.getCommitTime())
                             ? x
                             : y)));
   }
@@ -545,7 +549,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   protected void removeReplacedFileIdsAtInstants(Set<String> instants) {
     //TODO can we make this more efficient by storing reverse mapping (Instant -> FileGroupId) as well?
     Stream<String> keysToDelete = rocksDB.<HoodieInstant>prefixSearch(schemaHelper.getColFamilyForReplacedFileGroups(), "")
-        .filter(entry -> instants.contains(entry.getValue().getTimestamp()))
+        .filter(entry -> instants.contains(entry.getValue().getRequestTime()))
         .map(Pair::getKey);
 
     rocksDB.writeBatch(batch ->

@@ -162,7 +162,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
     // check the change data about user_to_country_tbl for batch1
     val detailOutput1 = spark.read.format("hudi").load(userToCountryTblPath)
     assert(detailOutput1.where("country = 'US'").count() == 5)
-    val ucTs1 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.getTimestamp
+    val ucTs1 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.getRequestTime
     val ucDdcData1 = cdcDataFrame(userToCountryTblPath, (ucTs1.toLong - 1).toString, null)
     ucDdcData1.show(false)
     assertCDCOpCnt(ucDdcData1, 1, 2, 0)
@@ -185,7 +185,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
     stream2.processAllAvailable()
 
     // check the change data about user_to_country_tbl for batch2
-    val ts2 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.getTimestamp
+    val ts2 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.getRequestTime
     val cdcData2 = cdcDataFrame(userToCountryTblPath, (ts2.toLong - 1).toString, null)
     cdcData2.show(false)
     assertCDCOpCnt(cdcData2, 2, 1, 0)

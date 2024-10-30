@@ -261,7 +261,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val timelineT0 = metaClient.getActiveTimeline
     assertEquals(3, timelineT0.countInstants())
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT0.lastInstant().get().getAction)
-    val t0 = timelineT0.lastInstant().get().getTimestamp
+    val t0 = timelineT0.lastInstant().get().getRequestTime
 
     val filesT0 = getFiles(basePath)
     assertEquals(3, filesT0.size)
@@ -287,7 +287,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val timelineT1 = metaClient.reloadActiveTimeline()
     assertEquals(4, timelineT1.countInstants())
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT1.lastInstant().get().getAction)
-    val t1 =  timelineT1.lastInstant().get().getTimestamp
+    val t1 =  timelineT1.lastInstant().get().getRequestTime
 
     val filesT1 = getFiles(basePath)
     assertEquals(6, filesT1.size)
@@ -314,7 +314,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val timelineT2 = metaClient.reloadActiveTimeline()
     assertEquals(5, timelineT2.countInstants())
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT2.lastInstant().get().getAction)
-    val t2 =  timelineT2.lastInstant().get().getTimestamp
+    val t2 =  timelineT2.lastInstant().get().getRequestTime
 
     val filesT2 = getFiles(basePath)
     assertEquals(9, filesT2.size)

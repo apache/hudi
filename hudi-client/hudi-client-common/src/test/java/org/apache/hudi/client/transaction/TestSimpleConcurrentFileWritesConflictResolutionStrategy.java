@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCluster;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
@@ -70,7 +71,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
     Option<HoodieInstant> lastSuccessfulInstant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant();
     newInstantTime = HoodieTestTable.makeNewCommitTime();
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
 
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant);
@@ -88,7 +89,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createInflightCommit(HoodieTestTable.makeNewCommitTime(), metaClient);
     Option<HoodieInstant> lastSuccessfulInstant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant();
     newInstantTime = HoodieTestTable.makeNewCommitTime();
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant);
     Assertions.assertTrue(candidateInstants.count() == 0);
@@ -107,7 +108,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String newInstantTime = metaClient.createNewInstantTime();
     createCommit(newInstantTime, metaClient);
 
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
@@ -135,7 +136,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     // writer 1 starts
     String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
 
     // writer 2 starts and finishes
     String newInstantTime = metaClient.createNewInstantTime();
@@ -174,7 +175,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String newInstantTime = metaClient.createNewInstantTime();
     createCompactionRequested(newInstantTime, metaClient);
 
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
@@ -206,7 +207,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String newInstantTime = metaClient.createNewInstantTime();
     createCompaction(newInstantTime, metaClient);
 
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
@@ -241,7 +242,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
 
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
@@ -264,7 +265,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String newInstantTime = metaClient.createNewInstantTime();
     createClusterRequested(newInstantTime, metaClient);
 
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
@@ -296,7 +297,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String newInstantTime = metaClient.createNewInstantTime();
     createCluster(newInstantTime, WriteOperationType.CLUSTER, metaClient);
 
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
@@ -328,7 +329,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String newInstantTime = metaClient.createNewInstantTime();
     createReplace(newInstantTime, WriteOperationType.INSERT_OVERWRITE, metaClient);
 
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
@@ -362,7 +363,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String newInstantTime = metaClient.createNewInstantTime();
     createPendingInsertOverwrite(newInstantTime, WriteOperationType.INSERT_OVERWRITE, metaClient);
 
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
@@ -406,7 +407,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createCompleteCommit(commitC4, metaClient);
 
     // step6: do check
-    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     // make sure c3 has conflict with C1,C11,C12,C4;
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, "file-2");

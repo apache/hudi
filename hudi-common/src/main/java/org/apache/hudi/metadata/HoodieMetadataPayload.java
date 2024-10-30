@@ -32,7 +32,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
@@ -563,7 +563,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
     long instantTimeMillis = -1;
     try {
-      instantTimeMillis = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
+      instantTimeMillis = ActiveTimelineUtils.parseDateFromInstantTime(instantTime).getTime();
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to create metadata payload for record index. Instant time parsing for " + instantTime + " failed ", e);
     }

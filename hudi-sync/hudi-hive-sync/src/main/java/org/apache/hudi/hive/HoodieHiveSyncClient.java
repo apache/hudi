@@ -356,7 +356,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    if (getActiveTimeline().getInstantsAsStream().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
+    if (getActiveTimeline().getInstantsAsStream().noneMatch(i -> i.getRequestTime().equals(timeStamp))) {
       throw new HoodieHiveSyncException(
           "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
     }
@@ -403,7 +403,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   public void updateLastCommitTimeSynced(String tableName) {
     // Set the last commit time and commit completion from the TBLproperties
     HoodieTimeline activeTimeline = getActiveTimeline();
-    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
+    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getRequestTime);
     Option<String> lastCommitCompletionSynced = activeTimeline
         .getInstantsOrderedByCompletionTime()
         .skip(activeTimeline.countInstants() - 1)

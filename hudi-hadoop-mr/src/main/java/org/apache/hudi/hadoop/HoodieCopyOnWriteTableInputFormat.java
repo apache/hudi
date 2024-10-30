@@ -276,7 +276,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
         String basePath = tableMetaClient.getBasePath().toString();
         Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
         HoodieTimeline timeline = getActiveTimeline(tableMetaClient, shouldIncludePendingCommits);
-        Option<String> queryInstant = queryCommitInstant.or(() -> timeline.lastInstant().map(HoodieInstant::getTimestamp));
+        Option<String> queryInstant = queryCommitInstant.or(() -> timeline.lastInstant().map(HoodieInstant::getRequestTime));
         validateInstant(timeline, queryInstant);
 
         try {

@@ -87,7 +87,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
 
     val pendingCompactionInstants = metaClient.getActiveTimeline.getWriteTimeline.getInstants.iterator().asScala
       .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
-      .map(_.getTimestamp)
+      .map(_.getRequestTime)
       .toSeq.sortBy(f => f)
 
     var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
@@ -125,15 +125,15 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       }
 
       val compactionInstants = metaClient.reloadActiveTimeline().getInstantsAsStream.iterator().asScala
-        .filter(instant => filteredPendingCompactionInstants.contains(instant.getTimestamp))
+        .filter(instant => filteredPendingCompactionInstants.contains(instant.getRequestTime))
         .toSeq
-        .sortBy(p => p.getTimestamp)
+        .sortBy(p => p.getRequestTime)
         .reverse
 
       compactionInstants.map(instant =>
-        (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp))
+        (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getRequestTime))
       ).map { case (instant, plan) =>
-        Row(instant.getTimestamp, plan.getOperations.size(), instant.getState.name())
+        Row(instant.getRequestTime, plan.getOperations.size(), instant.getState.name())
       }
     } finally {
       if (client != null) {

@@ -694,7 +694,7 @@ public class RequestHandler {
       // When performing async clean, we may have one more .clean.completed after lastInstantTs.
       // In this case, we do not need to throw an exception.
       return !lastInstant.isPresent() || !lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
-          || !localTimeline.findInstantsBefore(lastInstant.get().getTimestamp()).getTimelineHash().equals(timelineHashFromClient);
+          || !localTimeline.findInstantsBefore(lastInstant.get().getRequestTime()).getTimelineHash().equals(timelineHashFromClient);
     }
 
     private boolean isRefreshCheckDisabledInQuery(Context ctx) {

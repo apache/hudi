@@ -39,7 +39,7 @@ public class ClusteringCommitTestSink extends ClusteringCommitSink {
   public void invoke(ClusteringCommitEvent event, Context context) throws Exception {
     super.invoke(event, context);
     List<HoodieInstant> instants = writeClient.getHoodieTable().getMetaClient().getActiveTimeline().getInstants();
-    boolean committed = instants.stream().anyMatch(i -> i.getTimestamp().equals(event.getInstant()) && i.isCompleted());
+    boolean committed = instants.stream().anyMatch(i -> i.getRequestTime().equals(event.getInstant()) && i.isCompleted());
     if (committed && getRuntimeContext().getAttemptNumber() == 0) {
       throw new HoodieException("Fail first attempt to simulate failover in test.");
     }

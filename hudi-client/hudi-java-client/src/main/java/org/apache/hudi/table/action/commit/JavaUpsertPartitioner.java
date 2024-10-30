@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -249,7 +250,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
       List<HoodieBaseFile> allFiles = table.getBaseFileOnlyView()
-          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
+          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getRequestTime()).collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {
@@ -320,8 +321,9 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
         Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
         while (instants.hasNext()) {
           HoodieInstant instant = instants.next();
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+          TimelineLayout layout = TimelineLayout.getLayout(commitTimeline.getTimelineLayoutVersion());
+          HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
+              .deserialize(instant, commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
           long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
           long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
           if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {

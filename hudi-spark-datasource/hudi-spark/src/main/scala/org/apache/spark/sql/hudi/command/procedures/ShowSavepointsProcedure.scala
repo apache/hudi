@@ -54,7 +54,7 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
     val commits: util.List[HoodieInstant] = timeline.getReverseOrderedInstants.collect(Collectors.toList[HoodieInstant])
 
     if (commits.isEmpty) Seq.empty[Row] else {
-      commits.toArray.map(instant => instant.asInstanceOf[HoodieInstant].getTimestamp).map(p => Row(p)).toSeq
+      commits.toArray.map(instant => instant.asInstanceOf[HoodieInstant].getRequestTime).map(p => Row(p)).toSeq
     }
   }
 

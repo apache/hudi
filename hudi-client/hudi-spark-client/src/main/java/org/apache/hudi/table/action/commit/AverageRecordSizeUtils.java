@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 
@@ -55,8 +56,9 @@ public class AverageRecordSizeUtils {
       while (instants.hasNext()) {
         HoodieInstant instant = instants.next();
         try {
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+          TimelineLayout layout = TimelineLayout.getLayout(commitTimeline.getTimelineLayoutVersion());
+          HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
+              .deserialize(instant, commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
           if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(REPLACE_COMMIT_ACTION)) {
             long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
             long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();

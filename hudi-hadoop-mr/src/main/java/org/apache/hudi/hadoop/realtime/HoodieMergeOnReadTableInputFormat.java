@@ -223,7 +223,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     }
 
     Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt = getHoodieVirtualKeyInfo(tableMetaClient);
-    String maxCommitTime = fsView.getLastInstant().get().getTimestamp();
+    String maxCommitTime = fsView.getLastInstant().get().getRequestTime();
     // step6
     result.addAll(collectAllIncrementalFiles(fileGroups, maxCommitTime, basePath.toString(), candidateFileStatus, virtualKeyInfoOpt));
     return result;
@@ -372,7 +372,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
         HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
         checkState(latestCompletedInstant.isCompleted());
 
-        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
+        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getRequestTime());
       }
 
       if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
@@ -403,7 +403,7 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
         HoodieInstant latestCompletedInstant = latestCompletedInstantOpt.get();
         checkState(latestCompletedInstant.isCompleted());
 
-        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getTimestamp());
+        rtFileStatus.setMaxCommitTime(latestCompletedInstant.getRequestTime());
       }
 
       return rtFileStatus;

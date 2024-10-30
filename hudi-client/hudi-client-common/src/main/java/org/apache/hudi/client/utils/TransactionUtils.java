@@ -142,7 +142,7 @@ public class TransactionUtils {
         .getTimelineOfActions(timelineActions)
         .filterInflightsAndRequested()
         .getInstantsAsStream()
-        .map(HoodieInstant::getTimestamp)
+        .map(HoodieInstant::getRequestTime)
         .collect(Collectors.toSet());
   }
 
@@ -155,6 +155,6 @@ public class TransactionUtils {
         .getCommitsTimeline()
         .filterCompletedInstants()
         .getInstantsAsStream()
-        .filter(f -> pendingInstants.contains(f.getTimestamp()));
+        .filter(f -> pendingInstants.contains(f.getRequestTime()));
   }
 }

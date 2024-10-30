@@ -38,6 +38,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -205,7 +206,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       String initCommitTime = "000";
       int numRecords = 200;
       JavaRDD<WriteStatus> result = insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime,
-          numRecords, insertFn, isPrepped, true, numRecords);
+          numRecords, insertFn, isPrepped, true, numRecords, INSTANT_FACTORY);
       // Construct HoodieRecord from the WriteStatus but set HoodieKey, Data and HoodieRecordLocation accordingly
       // since they have been modified in the DAG
       JavaRDD<HoodieRecord> recordRDD =
@@ -223,7 +224,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       String commitTimeBetweenPrevAndNew = "002";
       result = updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
           Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, updateFn, isPrepped, true,
-          numRecords, 200, 2);
+          numRecords, 200, 2, INSTANT_FACTORY);
       recordRDD =
           jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecordDelegates).flatMap(Collection::stream)
               .map(recordDelegate -> new HoodieAvroRecord(recordDelegate.getHoodieKey(), null)).collect(Collectors.toList()), PARALLELISM);

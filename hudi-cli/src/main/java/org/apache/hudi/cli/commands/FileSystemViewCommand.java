@@ -26,9 +26,9 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
@@ -50,6 +50,9 @@ import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
 
 /**
  * CLI command to display file system options.
@@ -150,7 +153,7 @@ public class FileSystemViewCommand {
     } else {
       if (maxInstant.isEmpty()) {
         maxInstant = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
-            .get().getTimestamp();
+            .get().getRequestTime();
       }
       fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, maxInstant);
     }
@@ -263,14 +266,14 @@ public class FileSystemViewCommand {
     if (!maxInstant.isEmpty()) {
       final BiPredicate<String, String> predicate;
       if (includeMaxInstant) {
-        predicate = HoodieTimeline.GREATER_THAN_OR_EQUALS;
+        predicate = GREATER_THAN_OR_EQUALS;
       } else {
-        predicate = HoodieTimeline.GREATER_THAN;
+        predicate = GREATER_THAN;
       }
-      instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.getTimestamp()));
+      instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.getRequestTime()));
     }
-
-    HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream,
+    TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
+    HoodieTimeline filteredTimeline = timelineFactory.createDefaultTimeline(instantsStream,
         (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
     return new HoodieTableFileSystemView(metaClient, filteredTimeline, pathInfoList);
   }

@@ -323,7 +323,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELTA_FILES_UNSCHEDULED);
 
     // Test show with partition path '2016/03/15'
-    new TableCommand().connect(partitionedTablePath, null, false, 0, 0, 0,
+    new TableCommand().connect(partitionedTablePath, false, 0, 0, 0,
         "WAIT_TO_ADJUST_SKEW", 200L, false);
     Object partitionedTable = shell.evaluate(() -> "show fsview latest --partitionPath " + partitionPath);
     assertTrue(ShellEvaluationResultUtil.isSuccess(partitionedTable));
@@ -337,7 +337,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     assertEquals(partitionedExpected, partitionedResults);
 
     // Test show for non-partitioned table
-    new TableCommand().connect(nonpartitionedTablePath, null, false, 0, 0, 0,
+    new TableCommand().connect(nonpartitionedTablePath, false, 0, 0, 0,
         "WAIT_TO_ADJUST_SKEW", 200L, false);
     Object nonpartitionedTable = shell.evaluate(() -> "show fsview latest");
     assertTrue(ShellEvaluationResultUtil.isSuccess(nonpartitionedTable));

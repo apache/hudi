@@ -28,6 +28,9 @@ import java.io.IOException;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -37,31 +40,31 @@ public class TestHoodieInstant extends HoodieCommonTestHarness {
   @Test
   public void testExtractTimestamp() {
     String fileName = "20230104152218702.inflight";
-    assertEquals("20230104152218702", HoodieInstant.extractTimestamp(fileName));
+    assertEquals("20230104152218702", INSTANT_FILE_NAME_PARSER.extractTimestamp(fileName));
 
     fileName = "20230104152218702.commit.request";
-    assertEquals("20230104152218702", HoodieInstant.extractTimestamp(fileName));
+    assertEquals("20230104152218702", INSTANT_FILE_NAME_PARSER.extractTimestamp(fileName));
 
     fileName = "20230104152218702_20230104152219346.commit";
-    assertEquals("20230104152218702", HoodieInstant.extractTimestamp(fileName));
+    assertEquals("20230104152218702", INSTANT_FILE_NAME_PARSER.extractTimestamp(fileName));
 
     String illegalFileName = "hoodie.properties";
-    assertThrows(IllegalArgumentException.class, () -> HoodieInstant.extractTimestamp(illegalFileName));
+    assertThrows(IllegalArgumentException.class, () -> INSTANT_FILE_NAME_PARSER.extractTimestamp(illegalFileName));
   }
 
   @Test
   public void testGetTimelineFileExtension() {
     String fileName = "20230104152218702.inflight";
-    assertEquals(".inflight", HoodieInstant.getTimelineFileExtension(fileName));
+    assertEquals(".inflight", INSTANT_FILE_NAME_PARSER.getTimelineFileExtension(fileName));
 
     fileName = "20230104152218702.commit.request";
-    assertEquals(".commit.request", HoodieInstant.getTimelineFileExtension(fileName));
+    assertEquals(".commit.request", INSTANT_FILE_NAME_PARSER.getTimelineFileExtension(fileName));
 
     fileName = "20230104152218702_20230104152219346.commit";
-    assertEquals(".commit", HoodieInstant.getTimelineFileExtension(fileName));
+    assertEquals(".commit", INSTANT_FILE_NAME_PARSER.getTimelineFileExtension(fileName));
 
     fileName = "hoodie.properties";
-    assertEquals("", HoodieInstant.getTimelineFileExtension(fileName));
+    assertEquals("", INSTANT_FILE_NAME_PARSER.getTimelineFileExtension(fileName));
   }
 
   @Test
@@ -69,14 +72,14 @@ public class TestHoodieInstant extends HoodieCommonTestHarness {
     try {
       initMetaClient();
       HoodieInstant instantRequested =
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "001");
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "001");
       HoodieInstant instantCommitted =
-          new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001");
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001");
       HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
       timeline.createNewInstant(instantRequested);
       timeline.transitionRequestedToInflight(instantRequested, Option.empty());
       timeline.saveAsComplete(
-          new HoodieInstant(true, instantRequested.getAction(), instantRequested.getTimestamp()),
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, instantRequested.getAction(), instantRequested.getRequestTime()),
           Option.empty());
       metaClient.reloadActiveTimeline();
       timeline = metaClient.getActiveTimeline();

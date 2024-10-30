@@ -86,7 +86,7 @@ public class FlinkClusteringMetrics extends FlinkWriteMetrics {
       if (!firstPendingClusteringInstant.isPresent()) {
         this.clusteringDelay = 0L;
       } else {
-        Instant start = HoodieInstantTimeGenerator.parseDateFromInstantTime((firstPendingClusteringInstant.get()).getTimestamp()).toInstant();
+        Instant start = HoodieInstantTimeGenerator.parseDateFromInstantTime((firstPendingClusteringInstant.get()).getRequestTime()).toInstant();
         this.clusteringDelay = Duration.between(start, Instant.now()).getSeconds();
       }
     } catch (ParseException e) {

@@ -20,6 +20,8 @@ package org.apache.hudi.table.marker;
 
 import org.apache.hudi.client.transaction.DirectMarkerTransactionManager;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -48,9 +50,10 @@ public class SimpleTransactionDirectMarkerBasedDetectionStrategy
   public void detectAndResolveConflictIfNecessary() throws HoodieEarlyConflictDetectionException {
     DirectMarkerTransactionManager txnManager =
         new DirectMarkerTransactionManager((HoodieWriteConfig) config, storage, partitionPath, fileId);
+    InstantFactory instantFactory = TimelineLayout.getLayout(activeTimeline.getTimelineLayoutVersion()).getInstantFactory();
     try {
       // Need to do transaction before create marker file when using early conflict detection
-      txnManager.beginTransaction(instantTime);
+      txnManager.beginTransaction(instantTime, instantFactory);
       super.detectAndResolveConflictIfNecessary();
 
     } catch (Exception e) {
@@ -58,7 +61,7 @@ public class SimpleTransactionDirectMarkerBasedDetectionStrategy
       throw e;
     } finally {
       // End transaction after created marker file.
-      txnManager.endTransaction(instantTime);
+      txnManager.endTransaction(instantTime, instantFactory);
       txnManager.close();
     }
   }

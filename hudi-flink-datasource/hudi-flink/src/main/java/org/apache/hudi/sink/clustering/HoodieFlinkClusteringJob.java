@@ -270,7 +270,7 @@ public class HoodieFlinkClusteringJob {
       final HoodieInstant clusteringInstant;
       if (cfg.clusteringInstantTime != null) {
         clusteringInstant = instants.stream()
-            .filter(i -> i.getTimestamp().equals(cfg.clusteringInstantTime))
+            .filter(i -> i.getRequestTime().equals(cfg.clusteringInstantTime))
             .findFirst()
             .orElseThrow(() -> new HoodieException("Clustering instant [" + cfg.clusteringInstantTime + "] not found"));
       } else {
@@ -279,7 +279,8 @@ public class HoodieFlinkClusteringJob {
             CompactionUtil.isLIFO(cfg.clusteringSeq) ? instants.get(instants.size() - 1) : instants.get(0);
       }
 
-      Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(clusteringInstant.getTimestamp(), table.getActiveTimeline());
+      Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(clusteringInstant.getRequestTime(),
+          table.getActiveTimeline(), table.getInstantFactory());
       if (inflightInstantOpt.isPresent()) {
         LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
         table.rollbackInflightClustering(inflightInstantOpt.get(),
@@ -303,11 +304,12 @@ public class HoodieFlinkClusteringJob {
       if (clusteringPlan == null || (clusteringPlan.getInputGroups() == null)
           || (clusteringPlan.getInputGroups().isEmpty())) {
         // no clustering plan, do nothing and return.
-        LOG.info("No clustering plan for instant " + clusteringInstant.getTimestamp());
+        LOG.info("No clustering plan for instant " + clusteringInstant.getRequestTime());
         return;
       }
 
-      HoodieInstant instant = ClusteringUtils.getRequestedClusteringInstant(clusteringInstant.getTimestamp(), table.getActiveTimeline()).get();
+      HoodieInstant instant = ClusteringUtils.getRequestedClusteringInstant(clusteringInstant.getRequestTime(),
+          table.getActiveTimeline(), table.getInstantFactory()).get();
 
       int inputGroupSize = clusteringPlan.getInputGroups().size();
 
@@ -329,7 +331,7 @@ public class HoodieFlinkClusteringJob {
       long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
-      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstant.getTimestamp(), clusteringPlan, conf))
+      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstant.getRequestTime(), clusteringPlan, conf))
           .name("clustering_source")
           .uid("uid_clustering_source")
           .rebalance()
@@ -351,7 +353,7 @@ public class HoodieFlinkClusteringJob {
           .getTransformation()
           .setMaxParallelism(1);
 
-      env.execute("flink_hudi_clustering_" + clusteringInstant.getTimestamp());
+      env.execute("flink_hudi_clustering_" + clusteringInstant.getRequestTime());
     }
 
     /**

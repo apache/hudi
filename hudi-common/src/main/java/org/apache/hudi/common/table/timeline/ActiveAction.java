@@ -99,7 +99,7 @@ public class ActiveAction implements Serializable, Comparable<ActiveAction> {
   }
 
   public String getInstantTime() {
-    return getCompleted().getTimestamp();
+    return getCompleted().getRequestTime();
   }
 
   public String getCompletionTime() {
@@ -174,7 +174,7 @@ public class ActiveAction implements Serializable, Comparable<ActiveAction> {
 
   @Override
   public int compareTo(ActiveAction other) {
-    return this.getCompleted().getTimestamp().compareTo(other.getCompleted().getTimestamp());
+    return this.getCompleted().getRequestTime().compareTo(other.getCompleted().getRequestTime());
   }
 
   @Override

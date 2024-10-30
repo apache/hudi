@@ -84,6 +84,7 @@ class TimelineRelation(val sqlContext: SQLContext,
         var totalRecordsWritten: Long = -1
         var totalUpdatedRecordsWritten: Long = -1
         var totalWriteErrors: Long = -1
+        val instantFileNameFactory = metaClient.getTimelineLayout.getInstantFileNameFactory;
 
         val commitMetadataOpt = CommitUtils.buildMetadataFromInstant(timeline, instant)
         if (commitMetadataOpt.isPresent) {
@@ -96,11 +97,11 @@ class TimelineRelation(val sqlContext: SQLContext,
           totalWriteErrors = commitMetadata.fetchTotalWriteErrors
         }
 
-        val r = Row(instant.getTimestamp,
+        val r = Row(instant.getRequestTime,
           instant.getAction,
           instant.getState.toString,
           instant.getCompletionTime,
-          instant.getFileName,
+          instantFileNameFactory.getFileName(instant),
           totalBytesWritten,
           totalFilesUpdated,
           totalPartitionsWritten,

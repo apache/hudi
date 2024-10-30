@@ -50,7 +50,7 @@ public class HoodieSparkClusteringClient<T> extends
   public void cluster(HoodieInstant instant) throws IOException {
     LOG.info("Executing clustering instance " + instant);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) clusteringClient;
-    Option<HoodieCommitMetadata> commitMetadata = writeClient.cluster(instant.getTimestamp()).getCommitMetadata();
+    Option<HoodieCommitMetadata> commitMetadata = writeClient.cluster(instant.getRequestTime()).getCommitMetadata();
     Stream<HoodieWriteStat> hoodieWriteStatStream = commitMetadata.get().getPartitionToWriteStats().entrySet().stream().flatMap(e ->
             e.getValue().stream());
     long errorsCount = hoodieWriteStatStream.mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();

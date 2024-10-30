@@ -55,8 +55,8 @@ public class CompactNode extends DagNode<JavaRDD<WriteStatus>> {
         .getWriteTimeline().filterPendingCompactionTimeline().lastInstant();
     if (lastInstant.isPresent()) {
       log.info("Compacting instant {}", lastInstant.get());
-      this.result = executionContext.getHoodieTestSuiteWriter().compact(Option.of(lastInstant.get().getTimestamp()));
-      executionContext.getHoodieTestSuiteWriter().commitCompaction(result, executionContext.getJsc().emptyRDD(), Option.of(lastInstant.get().getTimestamp()));
+      this.result = executionContext.getHoodieTestSuiteWriter().compact(Option.of(lastInstant.get().getRequestTime()));
+      executionContext.getHoodieTestSuiteWriter().commitCompaction(result, executionContext.getJsc().emptyRDD(), Option.of(lastInstant.get().getRequestTime()));
     }
   }
 }

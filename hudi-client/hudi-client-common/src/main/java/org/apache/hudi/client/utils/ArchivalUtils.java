@@ -36,8 +36,8 @@ import org.slf4j.LoggerFactory;
 import java.text.ParseException;
 import java.time.Instant;
 
-import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.NOT_PARSABLE_TIMESTAMPS;
-import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime;
+import static org.apache.hudi.common.table.timeline.ActiveTimelineUtils.NOT_PARSABLE_TIMESTAMPS;
+import static org.apache.hudi.common.table.timeline.ActiveTimelineUtils.parseDateFromInstantTime;
 import static org.apache.hudi.config.HoodieArchivalConfig.MAX_COMMITS_TO_KEEP;
 import static org.apache.hudi.config.HoodieArchivalConfig.MIN_COMMITS_TO_KEEP;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_COMMITS_RETAINED;
@@ -73,7 +73,7 @@ public class ArchivalUtils {
     int configuredMaxInstantsToKeep = config.getMaxCommitsToKeep();
     if (earliestCommitToRetain.isPresent()) {
       int minInstantsToKeepBasedOnCleaning =
-          completedCommitsTimeline.findInstantsAfter(earliestCommitToRetain.get().getTimestamp())
+          completedCommitsTimeline.findInstantsAfter(earliestCommitToRetain.get().getRequestTime())
               .countInstants() + 2;
       if (configuredMinInstantsToKeep < minInstantsToKeepBasedOnCleaning) {
         maxInstantsToKeep = minInstantsToKeepBasedOnCleaning
@@ -124,13 +124,13 @@ public class ArchivalUtils {
           cleanerPolicy,
           cleanerCommitsRetained,
           latestCommit.isPresent()
-              ? parseDateFromInstantTime(latestCommit.get().getTimestamp()).toInstant()
+              ? parseDateFromInstantTime(latestCommit.get().getRequestTime()).toInstant()
               : Instant.now(),
           cleanerHoursRetained,
           metaClient.getTableConfig().getTimelineTimezone());
     } catch (ParseException e) {
-      if (NOT_PARSABLE_TIMESTAMPS.stream().noneMatch(ts -> latestCommit.get().getTimestamp().startsWith(ts))) {
-        LOG.warn("Error parsing instant time: " + latestCommit.get().getTimestamp());
+      if (NOT_PARSABLE_TIMESTAMPS.stream().noneMatch(ts -> latestCommit.get().getRequestTime().startsWith(ts))) {
+        LOG.warn("Error parsing instant time: " + latestCommit.get().getRequestTime());
       }
     }
     return earliestCommitToRetain;

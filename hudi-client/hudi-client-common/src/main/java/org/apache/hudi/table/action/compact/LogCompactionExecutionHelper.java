@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -53,7 +52,7 @@ public class LogCompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O
   @Override
   protected void transitionRequestedToInflight(HoodieTable table, String logCompactionInstantTime) {
     HoodieActiveTimeline timeline = table.getActiveTimeline();
-    HoodieInstant instant = HoodieTimeline.getLogCompactionRequestedInstant(logCompactionInstantTime);
+    HoodieInstant instant = table.getMetaClient().getTimelineLayout().getInstantFactory().getLogCompactionRequestedInstant(logCompactionInstantTime);
     // Mark instant as compaction inflight
     timeline.transitionLogCompactionRequestedToInflight(instant);
   }

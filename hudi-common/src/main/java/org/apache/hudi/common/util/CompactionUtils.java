@@ -129,7 +129,7 @@ public class CompactionUtils {
     Function<HoodieTableMetaClient, HoodieTimeline> getFilteredTimelineByActionType =
         (hoodieTableMetaClient) -> hoodieTableMetaClient.getActiveTimeline().filterPendingCompactionTimeline();
     // Hoodie requested instant supplier
-    Function<String, HoodieInstant> requestedInstantSupplier = HoodieTimeline::getCompactionRequestedInstant;
+    Function<String, HoodieInstant> requestedInstantSupplier = metaClient.getTimelineLayout().getInstantFactory()::getCompactionRequestedInstant;
     return getCompactionPlansByTimeline(metaClient, getFilteredTimelineByActionType, requestedInstantSupplier);
   }
 
@@ -143,7 +143,7 @@ public class CompactionUtils {
     Function<HoodieTableMetaClient, HoodieTimeline> filteredTimelineSupplier =
         (hoodieTableMetaClient) -> hoodieTableMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline();
     // Hoodie requested instant supplier
-    Function<String, HoodieInstant> requestedInstantSupplier = HoodieTimeline::getLogCompactionRequestedInstant;
+    Function<String, HoodieInstant> requestedInstantSupplier = metaClient.getTimelineLayout().getInstantFactory()::getLogCompactionRequestedInstant;
     return getCompactionPlansByTimeline(metaClient, filteredTimelineSupplier, requestedInstantSupplier);
   }
 
@@ -160,7 +160,7 @@ public class CompactionUtils {
       Function<String, HoodieInstant> requestedInstantWrapper) {
     List<HoodieInstant> filteredInstants = filteredTimelineSupplier.apply(metaClient).getInstants();
     return filteredInstants.stream()
-        .map(instant -> Pair.of(instant, getCompactionPlan(metaClient, requestedInstantWrapper.apply(instant.getTimestamp()))))
+        .map(instant -> Pair.of(instant, getCompactionPlan(metaClient, requestedInstantWrapper.apply(instant.getRequestTime()))))
         .collect(Collectors.toList());
   }
 
@@ -169,7 +169,7 @@ public class CompactionUtils {
    * because we use same HoodieCompactionPlan for both the operations.
    */
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant) {
-    HoodieInstant compactionRequestedInstant = HoodieTimeline.getCompactionRequestedInstant(compactionInstant);
+    HoodieInstant compactionRequestedInstant = metaClient.getTimelineLayout().getInstantFactory().getCompactionRequestedInstant(compactionInstant);
     return getCompactionPlan(metaClient, compactionRequestedInstant);
   }
 
@@ -178,7 +178,7 @@ public class CompactionUtils {
    * because we use same HoodieCompactionPlan for both the operations.
    */
   public static HoodieCompactionPlan getLogCompactionPlan(HoodieTableMetaClient metaClient, String logCompactionInstant) {
-    HoodieInstant logCompactionRequestedInstant = HoodieTimeline.getLogCompactionRequestedInstant(logCompactionInstant);
+    HoodieInstant logCompactionRequestedInstant = metaClient.getTimelineLayout().getInstantFactory().getLogCompactionRequestedInstant(logCompactionInstant);
     return getCompactionPlan(metaClient, logCompactionRequestedInstant);
   }
 
@@ -259,7 +259,7 @@ public class CompactionUtils {
     List<HoodieCompactionOperation> ops = compactionPlan.getOperations();
     if (null != ops) {
       return ops.stream().map(op -> Pair.of(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()),
-          Pair.of(instant.getTimestamp(), op)));
+          Pair.of(instant.getRequestTime(), op)));
     } else {
       return Stream.empty();
     }
@@ -308,7 +308,7 @@ public class CompactionUtils {
       latestInstant = lastCompaction.get();
       // timeline containing the delta commits after the latest completed compaction commit,
       // and the completed compaction commit instant
-      return Option.of(Pair.of(deltaCommits.findInstantsModifiedAfterByCompletionTime(latestInstant.getTimestamp()), latestInstant));
+      return Option.of(Pair.of(deltaCommits.findInstantsModifiedAfterByCompletionTime(latestInstant.getRequestTime()), latestInstant));
     } else {
       if (deltaCommits.countInstants() > 0) {
         latestInstant = deltaCommits.firstInstant().get();
@@ -337,13 +337,13 @@ public class CompactionUtils {
       // timeline containing the delta commits after the latest completed compaction commit,
       // and the completed compaction commit instant
       return Option.of(Pair.of(deltaCommits.findInstantsAfter(
-            latestInstant.getTimestamp(), Integer.MAX_VALUE), lastCompaction.get()));
+            latestInstant.getRequestTime(), Integer.MAX_VALUE), lastCompaction.get()));
     } else {
       if (deltaCommits.countInstants() > 0) {
         latestInstant = deltaCommits.firstInstant().get();
         // timeline containing all the delta commits, and the first delta commit instant
         return Option.of(Pair.of(deltaCommits.findInstantsAfterOrEquals(
-              latestInstant.getTimestamp(), Integer.MAX_VALUE), latestInstant));
+              latestInstant.getRequestTime(), Integer.MAX_VALUE), latestInstant));
       } else {
         return Option.empty();
       }

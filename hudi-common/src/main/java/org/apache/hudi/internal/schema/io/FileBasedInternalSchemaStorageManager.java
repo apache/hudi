@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantFactory;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -87,11 +88,12 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public void persistHistorySchemaStr(String instantTime, String historySchemaStr) {
     cleanResidualFiles();
     HoodieActiveTimeline timeline = getMetaClient().getActiveTimeline();
-    HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, SCHEMA_COMMIT_ACTION, instantTime);
+    InstantFactory factory = metaClient.getTimelineLayout().getInstantFactory();
+    HoodieInstant hoodieInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, SCHEMA_COMMIT_ACTION, instantTime);
     timeline.createNewInstant(hoodieInstant);
     byte[] writeContent = getUTF8Bytes(historySchemaStr);
     timeline.transitionRequestedToInflight(hoodieInstant, Option.empty());
-    timeline.saveAsComplete(false, new HoodieInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.getTimestamp()), Option.of(writeContent));
+    timeline.saveAsComplete(false, factory.createNewInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.getRequestTime()), Option.of(writeContent));
     LOG.info(String.format("persist history schema success on commit time: %s", instantTime));
   }
 
@@ -139,7 +141,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   private List<String> getValidInstants() {
     return getMetaClient().getCommitsTimeline()
-        .filterCompletedInstants().getInstantsAsStream().map(f -> f.getTimestamp()).collect(Collectors.toList());
+        .filterCompletedInstants().getInstantsAsStream().map(f -> f.getRequestTime()).collect(Collectors.toList());
   }
 
   @Override
@@ -156,7 +158,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
             .map(file -> file.getPath().getName())
             .filter(Objects::nonNull)
-            .filter(f -> commitList.contains(HoodieInstant.extractTimestamp(f))).sorted().collect(Collectors.toList());
+            .filter(f -> commitList.contains(getMetaClient().getTimelineLayout().getInstantFileNameParser().extractTimestamp(f))).sorted().collect(Collectors.toList());
         if (!validaSchemaFiles.isEmpty()) {
           StoragePath latestFilePath =
               new StoragePath(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));

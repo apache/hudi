@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -29,6 +28,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 
 /**
  * An instant range used for incremental reader filtering.
@@ -96,10 +100,10 @@ public abstract class InstantRange implements Serializable {
 
     @Override
     public boolean isInRange(String instant) {
-      boolean validAgainstStart = HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN, startInstant.get());
+      boolean validAgainstStart = compareTimestamps(instant, GREATER_THAN, startInstant.get());
       // if there is an end instant, check against it, otherwise assume +INF and its always valid.
       boolean validAgainstEnd = endInstant
-              .map(e -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, e))
+              .map(e -> compareTimestamps(instant, LESSER_THAN_OR_EQUALS, e))
               .orElse(true);
       return validAgainstStart && validAgainstEnd;
     }
@@ -116,10 +120,10 @@ public abstract class InstantRange implements Serializable {
     @Override
     public boolean isInRange(String instant) {
       boolean validAgainstStart = startInstant
-              .map(s -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN, s))
+              .map(s -> compareTimestamps(instant, GREATER_THAN, s))
               .orElse(true);
       boolean validAgainstEnd = endInstant
-              .map(e -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, e))
+              .map(e -> compareTimestamps(instant, LESSER_THAN_OR_EQUALS, e))
               .orElse(true);
 
       return validAgainstStart && validAgainstEnd;
@@ -134,9 +138,9 @@ public abstract class InstantRange implements Serializable {
 
     @Override
     public boolean isInRange(String instant) {
-      boolean validAgainstStart = HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, startInstant.get());
+      boolean validAgainstStart = compareTimestamps(instant, GREATER_THAN_OR_EQUALS, startInstant.get());
       boolean validAgainstEnd = endInstant
-              .map(e -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, e))
+              .map(e -> compareTimestamps(instant, LESSER_THAN_OR_EQUALS, e))
               .orElse(true);
       return validAgainstStart && validAgainstEnd;
     }
@@ -153,10 +157,10 @@ public abstract class InstantRange implements Serializable {
     @Override
     public boolean isInRange(String instant) {
       boolean validAgainstStart = startInstant
-              .map(s -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, s))
+              .map(s -> compareTimestamps(instant, GREATER_THAN_OR_EQUALS, s))
               .orElse(true);
       boolean validAgainstEnd = endInstant
-              .map(e -> HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS, e))
+              .map(e -> compareTimestamps(instant, LESSER_THAN_OR_EQUALS, e))
               .orElse(true);
       return validAgainstStart && validAgainstEnd;
     }

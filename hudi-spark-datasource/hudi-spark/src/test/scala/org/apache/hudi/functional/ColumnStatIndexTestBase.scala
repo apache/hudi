@@ -179,7 +179,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       } else {
         val colsToGenerateStats = indexedCols // check for included cols
         val writerSchemaOpt = LogFileColStatsTestUtil.getSchemaForTable(metaClient)
-        val latestCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+        val latestCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().getRequestTime
         baseFilesDf.union(getColStatsFromLogFiles(allLogFiles, latestCompletedCommit,
           scala.collection.JavaConverters.seqAsJavaList(colsToGenerateStats),
           metaClient,

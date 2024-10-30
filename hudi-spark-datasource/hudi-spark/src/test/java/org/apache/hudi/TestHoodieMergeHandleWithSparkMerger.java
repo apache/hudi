@@ -270,7 +270,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
       // Check metadata files.
       Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
       assertTrue(deltaCommit.isPresent());
-      assertEquals(instantTime, deltaCommit.get().getTimestamp(), "Delta commit should be specified value");
+      assertEquals(instantTime, deltaCommit.get().getRequestTime(), "Delta commit should be specified value");
 
       // Check data files.
       List<String> fileIds = getFileIds(getPartitionPath());

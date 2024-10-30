@@ -26,9 +26,9 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFactory;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -98,8 +98,9 @@ public class RollbacksCommand {
       throws IOException {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
+    InstantFactory instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantFactory();
     HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
-        activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
+        activeTimeline.getInstantDetails(instantFactory.createNewInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
         HoodieRollbackMetadata.class);
     metadata.getPartitionMetadata().forEach((key, value) -> Stream
         .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
@@ -134,7 +135,7 @@ public class RollbacksCommand {
           help = "Enabling marker based rollback") final String rollbackUsingMarkers)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline filteredTimeline = activeTimeline.filter(instant -> instant.getTimestamp().equals(instantTime));
+    HoodieTimeline filteredTimeline = activeTimeline.filter(instant -> instant.getRequestTime().equals(instantTime));
     if (filteredTimeline.empty()) {
       return "Commit " + instantTime + " not found in Commits " + activeTimeline;
     }

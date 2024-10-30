@@ -46,7 +46,7 @@ public class JavaExecuteClusteringCommitActionExecutor<T>
                                                    String instantTime) {
     super(context, config, table, instantTime, WriteOperationType.CLUSTER);
     this.clusteringPlan = ClusteringUtils.getClusteringPlan(
-        table.getMetaClient(), ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline()).get())
+        table.getMetaClient(), ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline(), table.getInstantFactory()).get())
         .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
             "Unable to read clustering plan for instant: " + instantTime));
   }

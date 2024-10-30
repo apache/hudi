@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -48,7 +49,9 @@ public class HoodieStreamerDatasetBulkInsertCommitActionExecutor extends BaseDat
 
   @Override
   protected Option<HoodieData<WriteStatus>> doExecute(Dataset<Row> records, boolean arePartitionRecordsSorted) {
-    table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, getCommitActionType(), instantTime), Option.empty());
+    InstantFactory instantFactory = table.getInstantFactory();
+    table.getActiveTimeline().transitionRequestedToInflight(instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, getCommitActionType(), instantTime),
+        Option.empty());
     return Option.of(HoodieDatasetBulkInsertHelper
         .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false));
   }

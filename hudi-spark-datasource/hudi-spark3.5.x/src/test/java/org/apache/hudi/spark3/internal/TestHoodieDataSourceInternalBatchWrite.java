@@ -21,6 +21,7 @@ package org.apache.hudi.spark3.internal;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.HoodieBulkInsertInternalWriterTestBase;
@@ -193,7 +194,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
       dataSourceInternalBatchWrite.commit(commitMessages.toArray(new HoodieWriterCommitMessage[0]));
       metaClient.reloadActiveTimeline();
 
-      Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime, populateMetaFields);
+      Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime, populateMetaFields, HoodieTestUtils.INSTANT_FACTORY);
 
       // verify output
       assertOutput(totalInputRows, result, instantTime, Option.empty(), populateMetaFields);
@@ -241,7 +242,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
       metaClient.reloadActiveTimeline();
 
       Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime,
-          populateMetaFields);
+          populateMetaFields, HoodieTestUtils.INSTANT_FACTORY);
 
       // verify output
       assertOutput(totalInputRows, result, instantTime, Option.empty(), populateMetaFields);

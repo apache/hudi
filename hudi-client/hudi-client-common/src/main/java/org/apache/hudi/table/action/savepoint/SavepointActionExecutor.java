@@ -45,6 +45,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCleanerPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeHoodieCleanMetadata;
 
@@ -84,16 +86,16 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           } else {
             // clean is pending or inflight
             return deserializeCleanerPlan(
-                table.getActiveTimeline().getInstantDetails(new HoodieInstant(REQUESTED, instant.getAction(), instant.getTimestamp())).get())
+                table.getActiveTimeline().getInstantDetails(instantFactory.createNewInstant(REQUESTED, instant.getAction(), instant.getRequestTime())).get())
                 .getEarliestInstantToRetain().getTimestamp();
           }
         } catch (IOException e) {
           throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
         }
-      }).orElseGet(() -> table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp());
+      }).orElseGet(() -> table.getCompletedCommitsTimeline().firstInstant().get().getRequestTime());
 
       // Cannot allow savepoint time on a commit that could have been cleaned
-      ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCommitRetained),
+      ValidationUtils.checkArgument(compareTimestamps(instantTime, GREATER_THAN_OR_EQUALS, lastCommitRetained),
           "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime + " " + table.getConfig().getTableName());
@@ -142,9 +144,9 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint
       table.getActiveTimeline().createNewInstant(
-          new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
+          instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
       table.getActiveTimeline()
-          .saveAsComplete(new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
+          .saveAsComplete(instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
               TimelineMetadataUtils.serializeSavepointMetadata(metadata));
       LOG.info("Savepoint " + instantTime + " created");
       return metadata;

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -30,6 +31,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+
 /**
  * A helper class used to diff timeline.
  */
@@ -40,7 +44,8 @@ public class TimelineDiffHelper {
   private TimelineDiffHelper() {
   }
 
-  public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTimeline oldTimeline,
+  public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTableMetaClient metaClient,
+                                                                    HoodieTimeline oldTimeline,
                                                                     HoodieTimeline newTimeline) {
 
     HoodieTimeline oldT = oldTimeline.filterCompletedAndCompactionInstants();
@@ -50,8 +55,8 @@ public class TimelineDiffHelper {
     Option<HoodieInstant> firstInstantInNewTimeline = newT.firstInstant();
 
     if (lastSeenInstant.isPresent() && firstInstantInNewTimeline.isPresent()) {
-      if (HoodieTimeline.compareTimestamps(lastSeenInstant.get().getTimestamp(),
-          HoodieTimeline.LESSER_THAN, firstInstantInNewTimeline.get().getTimestamp())) {
+      if (compareTimestamps(lastSeenInstant.get().getRequestTime(),
+          LESSER_THAN, firstInstantInNewTimeline.get().getRequestTime())) {
         // The last seen instant is no longer in the timeline. Do not incrementally Sync.
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
@@ -60,7 +65,7 @@ public class TimelineDiffHelper {
       List<HoodieInstant> newInstants = new ArrayList<>();
 
       // Check If any pending compaction is lost. If so, do not allow incremental timeline sync
-      List<Pair<HoodieInstant, HoodieInstant>> compactionInstants = getPendingActionTransitions(oldT.filterPendingCompactionTimeline(),
+      List<Pair<HoodieInstant, HoodieInstant>> compactionInstants = getPendingActionTransitions(metaClient, oldT.filterPendingCompactionTimeline(),
           newT, HoodieTimeline.COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION);
       List<HoodieInstant> lostPendingCompactions = compactionInstants.stream()
           .filter(instantPair -> instantPair.getValue() == null).map(Pair::getKey).collect(Collectors.toList());
@@ -77,7 +82,7 @@ public class TimelineDiffHelper {
 
       newTimeline.getInstantsAsStream().filter(instant -> !oldTimelineInstants.contains(instant)).forEach(newInstants::add);
 
-      List<Pair<HoodieInstant, HoodieInstant>> logCompactionInstants = getPendingActionTransitions(oldTimeline.filterPendingLogCompactionTimeline(),
+      List<Pair<HoodieInstant, HoodieInstant>> logCompactionInstants = getPendingActionTransitions(metaClient, oldTimeline.filterPendingLogCompactionTimeline(),
           newTimeline, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION);
       List<HoodieInstant> finishedOrRemovedLogCompactionInstants = logCompactionInstants.stream()
           .filter(instantPair -> !instantPair.getKey().isCompleted()
@@ -91,22 +96,24 @@ public class TimelineDiffHelper {
     }
   }
 
-  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingActionTransitions(HoodieTimeline pendingActionTimelineFromOld,
-                                                                                             HoodieTimeline newTimeline,
-                                                                                             String completedAction, String pendingAction) {
+  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingActionTransitions(HoodieTableMetaClient metaClient,
+                                                                                      HoodieTimeline pendingActionTimelineFromOld,
+                                                                                      HoodieTimeline newTimeline,
+                                                                                      String completedAction, String pendingAction) {
     Set<HoodieInstant> newTimelineInstants = newTimeline.getInstantsAsStream().collect(Collectors.toSet());
+    InstantFactory factory = metaClient.getTimelineLayout().getInstantFactory();
 
     return pendingActionTimelineFromOld.getInstantsAsStream().map(instant -> {
       if (newTimelineInstants.contains(instant)) {
         return Pair.of(instant, instant);
       } else {
         HoodieInstant completedInstant =
-            new HoodieInstant(State.COMPLETED, completedAction, instant.getTimestamp());
+            factory.createNewInstant(State.COMPLETED, completedAction, instant.getRequestTime());
         if (newTimelineInstants.contains(completedInstant)) {
           return Pair.of(instant, completedInstant);
         }
         HoodieInstant inflightInstant =
-            new HoodieInstant(State.INFLIGHT, pendingAction, instant.getTimestamp());
+            factory.createNewInstant(State.INFLIGHT, pendingAction, instant.getRequestTime());
         if (newTimelineInstants.contains(inflightInstant)) {
           return Pair.of(instant, inflightInstant);
         }

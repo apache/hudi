@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparatorUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -372,7 +373,7 @@ public class IncrementalInputSplits implements Serializable {
               String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
               // the latest commit is used as the limit of the log reader instant upper threshold,
               // it must be at least the latest instant time of the file slice to avoid data loss.
-              String latestCommit = HoodieTimeline.minInstant(fileSlice.getLatestInstantTime(), endInstant);
+              String latestCommit = InstantComparatorUtils.minInstant(fileSlice.getLatestInstantTime(), endInstant);
               return new MergeOnReadInputSplit(cnt.getAndAdd(1),
                   basePath, logPaths, latestCommit,
                   metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());

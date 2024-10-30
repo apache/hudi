@@ -83,7 +83,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
 
         checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '$firstCleanedDataFile')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.CLEAN_ACTION, metaClient.reloadActiveTimeline().getCleanerTimeline.lastInstant().get.getTimestamp, TimelineType.ACTIVE.toString, DEFAULT_VALUE)
+          Seq(FileStatus.DELETED.toString, HoodieTimeline.CLEAN_ACTION, metaClient.reloadActiveTimeline().getCleanerTimeline.lastInstant().get.getRequestTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE)
         )
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1001)")
@@ -113,7 +113,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
         cleanedDataFile = getAnyOneDataFile(before, after)
 
         checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '${cleanedDataFile.get}')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.RESTORE_ACTION, metaClient.reloadActiveTimeline().getRestoreTimeline.lastInstant().get.getTimestamp, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
+          Seq(FileStatus.DELETED.toString, HoodieTimeline.RESTORE_ACTION, metaClient.reloadActiveTimeline().getRestoreTimeline.lastInstant().get.getRequestTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
 
         val latestTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
         spark.sql(s"insert into $tableName values(7, 'a7', 15, 1000, 1000)")
@@ -127,7 +127,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
         after = getAllDataFile(fs, basePath, Option.apply(partition))
         cleanedDataFile = getAnyOneDataFile(before, after)
         checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '${cleanedDataFile.get}')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.ROLLBACK_ACTION, metaClient.reloadActiveTimeline().getRollbackTimeline.lastInstant().get.getTimestamp, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
+          Seq(FileStatus.DELETED.toString, HoodieTimeline.ROLLBACK_ACTION, metaClient.reloadActiveTimeline().getRollbackTimeline.lastInstant().get.getRequestTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
 
         // unknown
         checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => 'unknown')")(
@@ -187,7 +187,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
 
         checkAnswer(s"call show_file_status(table => '$tableName', file => '$firstCleanedDataFile')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.CLEAN_ACTION, metaClient.reloadActiveTimeline().getCleanerTimeline.lastInstant().get.getTimestamp, TimelineType.ACTIVE.toString, DEFAULT_VALUE)
+          Seq(FileStatus.DELETED.toString, HoodieTimeline.CLEAN_ACTION, metaClient.reloadActiveTimeline().getCleanerTimeline.lastInstant().get.getRequestTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE)
         )
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
@@ -217,7 +217,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
         cleanedDataFile = getAnyOneDataFile(before, after)
         checkAnswer(s"call show_file_status(table => '$tableName', file => '${cleanedDataFile.get}')")(
           Seq(FileStatus.DELETED.toString, HoodieTimeline.RESTORE_ACTION,
-            metaClient.reloadActiveTimeline().getRestoreTimeline.lastInstant().get.getTimestamp, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
+            metaClient.reloadActiveTimeline().getRestoreTimeline.lastInstant().get.getRequestTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
 
         val latestTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
         spark.sql(s"insert into $tableName values(7, 'a7', 15, 1000, 1000)")
@@ -231,7 +231,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
         after = getAllDataFile(fs, basePath, partition)
         cleanedDataFile = getAnyOneDataFile(before, after)
         checkAnswer(s"call show_file_status(table => '$tableName', file => '${cleanedDataFile.get}')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.ROLLBACK_ACTION, metaClient.reloadActiveTimeline().getRollbackTimeline.lastInstant().get.getTimestamp, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
+          Seq(FileStatus.DELETED.toString, HoodieTimeline.ROLLBACK_ACTION, metaClient.reloadActiveTimeline().getRollbackTimeline.lastInstant().get.getRequestTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
 
         // unknown
         checkAnswer(s"call show_file_status(table => '$tableName', file => 'unknown')")(

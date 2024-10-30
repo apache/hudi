@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieArchivedTimeline, HoodieDefaultTimeline, HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
+import org.apache.hudi.common.table.timeline.{HoodieTimeline, HoodieActiveTimeline, HoodieArchivedTimeline, HoodieInstant, TimelineMetadataUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.spark.internal.Logging
@@ -140,7 +140,7 @@ class ShowFileStatusProcedure extends BaseProcedure
       FileStatusInfo(
         FileStatus.DELETED.toString,
         HoodieTimeline.RESTORE_ACTION,
-        restoreInstant.getTimestamp,
+        restoreInstant.getRequestTime,
         TimelineType.ACTIVE.toString,
         DEFAULT_VALUE
       )
@@ -154,7 +154,7 @@ class ShowFileStatusProcedure extends BaseProcedure
       )
   }
 
-  private def checkRollbackMetadataInternal(timeline: HoodieDefaultTimeline,
+  private def checkRollbackMetadataInternal(timeline: HoodieTimeline,
                                             partition: Option[String], fileName: String): Option[FileStatusInfo] = {
     val rollbackInstant = timeline.getRollbackTimeline
       .filterCompletedInstants()
@@ -172,7 +172,7 @@ class ShowFileStatusProcedure extends BaseProcedure
         p => Option.apply(partitionRollbackMetadata.get(p)).flatMap(
           _.getSuccessDeleteFiles.asScala.find(_.contains(fileName)))).isDefined ||
         partitionRollbackMetadata.values.iterator.asScala.exists(_.getSuccessDeleteFiles.asScala.exists(_.contains(fileName)))
-    }.map(instant => getResult(timeline, HoodieTimeline.ROLLBACK_ACTION, instant.getTimestamp).get)
+    }.map(instant => getResult(timeline, HoodieTimeline.ROLLBACK_ACTION, instant.getRequestTime).get)
   }
 
 
@@ -181,7 +181,7 @@ class ShowFileStatusProcedure extends BaseProcedure
       .orElse(checkCleanMetadataInternal(metaClient.getArchivedTimeline, partition, fileName))
   }
 
-  private def checkCleanMetadataInternal(timeline: HoodieDefaultTimeline, partition: Option[String], fileName: String): Option[FileStatusInfo] = {
+  private def checkCleanMetadataInternal(timeline: HoodieTimeline, partition: Option[String], fileName: String): Option[FileStatusInfo] = {
     val cleanedInstant = timeline.getCleanerTimeline
       .filterCompletedInstants()
       .getReverseOrderedInstants
@@ -194,10 +194,10 @@ class ShowFileStatusProcedure extends BaseProcedure
       val partitionCleanMetadata = cleanMetadata.getPartitionMetadata
       partition.flatMap(p => Option.apply(partitionCleanMetadata.get(p)).flatMap(_.getSuccessDeleteFiles.asScala.find(_.contains(fileName)))).isDefined ||
         partitionCleanMetadata.values.iterator.asScala.exists(_.getSuccessDeleteFiles.asScala.exists(_.contains(fileName)))
-    }.map(instant => getResult(timeline, HoodieTimeline.CLEAN_ACTION, instant.getTimestamp).get)
+    }.map(instant => getResult(timeline, HoodieTimeline.CLEAN_ACTION, instant.getRequestTime).get)
   }
 
-  private def getResult(timeline: HoodieDefaultTimeline, action: String, timestamp: String): Option[FileStatusInfo] = {
+  private def getResult(timeline: HoodieTimeline, action: String, timestamp: String): Option[FileStatusInfo] = {
     timeline match {
       case _: HoodieActiveTimeline =>
         Option.apply(FileStatusInfo(FileStatus.DELETED.toString, action, timestamp, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
@@ -207,7 +207,7 @@ class ShowFileStatusProcedure extends BaseProcedure
     }
   }
 
-  private def reloadTimelineIfNecessary(timeline: HoodieDefaultTimeline): Unit = {
+  private def reloadTimelineIfNecessary(timeline: HoodieTimeline): Unit = {
     timeline match {
       case _: HoodieArchivedTimeline =>
         val archivalTimeline: HoodieArchivedTimeline = timeline.asInstanceOf[HoodieArchivedTimeline]

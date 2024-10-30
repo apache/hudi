@@ -30,10 +30,10 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 
 /**
  * A set of data/base files + set of log files, that make up a unit for all operations.
@@ -125,7 +125,7 @@ public class HoodieFileGroup implements Serializable {
     if (completionTimeOpt.isPresent()) {
       for (String commitTime : fileSlices.keySet()) {
         // find the largest commit time that is smaller than the log delta commit completion time
-        if (HoodieTimeline.compareTimestamps(completionTimeOpt.get(), GREATER_THAN_OR_EQUALS, commitTime)) {
+        if (compareTimestamps(completionTimeOpt.get(), GREATER_THAN_OR_EQUALS, commitTime)) {
           return commitTime;
         }
       }
@@ -150,7 +150,7 @@ public class HoodieFileGroup implements Serializable {
    * some log files, that are based off a commit or delta commit.
    */
   private boolean isFileSliceCommitted(FileSlice slice) {
-    if (!compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, lastInstant.get().getTimestamp())) {
+    if (!compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, lastInstant.get().getRequestTime())) {
       return false;
     }
 

@@ -290,7 +290,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
         val metaClient = createMetaClient(tmp.getCanonicalPath)
         val instants = metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants
         assertResult(1)(instants.size())
-        val ts = instants.get(0).getTimestamp
+        val ts = instants.get(0).getRequestTime
         assertResult(1)(spark.sql(s"call run_compaction(table => '$tableName', op => 'execute', instants => '$ts')").collect().length)
 
         checkExceptionContain(

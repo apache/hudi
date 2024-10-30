@@ -65,7 +65,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
   public List<HoodieRollbackRequest> getRollbackRequests(HoodieInstant instantToRollback) {
     try {
       List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
-          table, context, instantToRollback.getTimestamp(), config.getRollbackParallelism());
+          table, context, instantToRollback.getRequestTime(), config.getRollbackParallelism());
       int parallelism = Math.max(Math.min(markerPaths.size(), config.getRollbackParallelism()), 1);
       return context.map(markerPaths, markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
@@ -77,11 +77,11 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
         switch (type) {
           case MERGE:
           case CREATE:
-            return new HoodieRollbackRequest(partitionPath, fileId, instantToRollback.getTimestamp(),
+            return new HoodieRollbackRequest(partitionPath, fileId, instantToRollback.getRequestTime(),
                 Collections.singletonList(filePath.toString()),
                 Collections.emptyMap());
           case APPEND:
-            return new HoodieRollbackRequest(partitionPath, fileId, instantToRollback.getTimestamp(), Collections.emptyList(),
+            return new HoodieRollbackRequest(partitionPath, fileId, instantToRollback.getRequestTime(), Collections.emptyList(),
               Collections.singletonMap(filePath.toString(), 1L));
           default:
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);

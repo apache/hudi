@@ -25,10 +25,11 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -76,10 +77,12 @@ public class UpgradeDowngradeUtils {
    */
   public static void syncCompactionRequestedFileToAuxiliaryFolder(HoodieTable table) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    HoodieTimeline compactionTimeline = new HoodieActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
+    TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
+    InstantFileNameFactory instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameFactory();
+    HoodieTimeline compactionTimeline = timelineFactory.createActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     compactionTimeline.getInstantsAsStream().forEach(instant -> {
-      String fileName = instant.getFileName();
+      String fileName = instantFileNameFactory.getFileName(instant);
       try {
         if (!metaClient.getStorage().exists(new StoragePath(metaClient.getMetaAuxiliaryPath(), fileName))) {
           FileIOUtils.copy(metaClient.getStorage(),

@@ -62,6 +62,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -153,10 +154,10 @@ public class CompactionTestBase extends HoodieClientTestBase {
 
   protected void moveCompactionFromRequestedToInflight(String compactionInstantTime, HoodieWriteConfig cfg) {
     HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
-    HoodieInstant compactionInstant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+    HoodieInstant compactionInstant = INSTANT_FACTORY.getCompactionRequestedInstant(compactionInstantTime);
     metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
     HoodieInstant instant = metaClient.getActiveTimeline().reload().filterPendingCompactionTimeline().getInstantsAsStream()
-        .filter(in -> in.getTimestamp().equals(compactionInstantTime)).findAny().get();
+        .filter(in -> in.getRequestTime().equals(compactionInstantTime)).findAny().get();
     assertTrue(instant.isInflight(), "Instant must be marked inflight");
   }
 
@@ -164,7 +165,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
     HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
     HoodieInstant instant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().get();
-    assertEquals(compactionInstantTime, instant.getTimestamp(), "Last compaction instant must be the one set");
+    assertEquals(compactionInstantTime, instant.getRequestTime(), "Last compaction instant must be the one set");
   }
 
   /**
@@ -179,7 +180,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
   protected String tryScheduleCompaction(String compactionInstantTime, SparkRDDWriteClient client, HoodieWriteConfig cfg) {
     client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
     HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
-    return metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().map(HoodieInstant::getTimestamp).orElse(null);
+    return metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().map(HoodieInstant::getRequestTime).orElse(null);
   }
 
   protected void scheduleAndExecuteCompaction(String compactionInstantTime, SparkRDDWriteClient client, HoodieTable table,
@@ -217,7 +218,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     // verify that there is a commit
     table = getHoodieTable(createMetaClient(cfg.getBasePath()), cfg);
     HoodieTimeline timeline = table.getMetaClient().getCommitTimeline().filterCompletedInstants();
-    String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
+    String latestCompactionCommitTime = timeline.lastInstant().get().getRequestTime();
     assertEquals(latestCompactionCommitTime, compactionInstantTime,
         "Expect compaction instant time to be the latest commit time");
     assertEquals(expectedNumRecs,
@@ -241,7 +242,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     HoodieTimeline timeline = table.getMetaClient().getCommitTimeline().filterCompletedInstants();
     // verify compaction commit is visible in timeline
     assertTrue(timeline.filterCompletedInstants().getInstantsAsStream()
-        .filter(instant -> compactionInstantTime.equals(instant.getTimestamp())).findFirst().isPresent());
+        .filter(instant -> compactionInstantTime.equals(instant.getRequestTime())).findFirst().isPresent());
     for (String partition: partitions) {
       table.getSliceView().getLatestFileSlicesBeforeOrOn(partition, compactionInstantTime, true).forEach(fs -> {
         // verify that all log files are merged
@@ -267,11 +268,11 @@ public class CompactionTestBase extends HoodieClientTestBase {
     Option<HoodieInstant> deltaCommit =
         metaClient.getActiveTimeline().reload().getDeltaCommitTimeline().filterCompletedInstants().lastInstant();
     if (skipCommit && !cfg.shouldAutoCommit()) {
-      assertTrue(deltaCommit.get().getTimestamp().compareTo(instantTime) < 0,
+      assertTrue(deltaCommit.get().getRequestTime().compareTo(instantTime) < 0,
           "Delta commit should not be latest instant");
     } else {
       assertTrue(deltaCommit.isPresent());
-      assertEquals(instantTime, deltaCommit.get().getTimestamp(), "Delta commit should be latest instant");
+      assertEquals(instantTime, deltaCommit.get().getRequestTime(), "Delta commit should be latest instant");
     }
     return statusList;
   }

@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -102,10 +103,10 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
       String timestamp = String.valueOf(i);
       // Requested Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
       // Inflight Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
 
       Map<String, String> extraCommitMetadata =
           Collections.singletonMap(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
@@ -146,7 +147,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     // EarliestCommandRetained should be 102, since hoodie.clean.commits.retained=2
     // Total Time Taken need read from metadata
-    rows.add(new Comparable[] {clean.getTimestamp(), "102", "2", getLatestCleanTimeTakenInMillis().toString()});
+    rows.add(new Comparable[] {clean.getRequestTime(), "102", "2", getLatestCleanTimeTakenInMillis().toString()});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
@@ -169,7 +170,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstantsAsStream().findFirst().get();
 
-    Object result = shell.evaluate(() -> "clean showpartitions --clean " + clean.getTimestamp());
+    Object result = shell.evaluate(() -> "clean showpartitions --clean " + clean.getRequestTime());
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)

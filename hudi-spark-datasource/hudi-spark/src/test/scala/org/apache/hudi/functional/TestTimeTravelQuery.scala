@@ -21,14 +21,13 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieTableType}
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.timeline.{ActiveTimelineUtils, HoodieActiveTimeline}
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.HoodieTimeTravelException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, ScalaAssertionSupport}
-
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
@@ -230,17 +229,17 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
   private def writeBatch(df: DataFrame, options: Map[String, String], mode: SaveMode = Append): String = {
     df.write.format("hudi").options(options).mode(mode).save(basePath)
     metaClient.reloadActiveTimeline()
-    metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+    metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getRequestTime
   }
 
   private def defaultDateTimeFormat(queryInstant: String): String = {
-    val date = HoodieActiveTimeline.parseDateFromInstantTime(queryInstant)
+    val date = ActiveTimelineUtils.parseDateFromInstantTime(queryInstant)
     val format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
     format.format(date)
   }
 
   private def defaultDateFormat(queryInstant: String): String = {
-    val date = HoodieActiveTimeline.parseDateFromInstantTime(queryInstant)
+    val date = ActiveTimelineUtils.parseDateFromInstantTime(queryInstant)
     val format = new SimpleDateFormat("yyyy-MM-dd")
     format.format(date)
   }

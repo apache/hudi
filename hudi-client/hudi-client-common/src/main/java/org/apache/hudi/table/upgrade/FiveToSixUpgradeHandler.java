@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.storage.StoragePath;
@@ -61,10 +62,12 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTimeline compactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
+    InstantFileNameFactory factory = table.getMetaClient().getTimelineLayout().getInstantFileNameFactory();
+
     compactionTimeline.getInstantsAsStream().forEach(
         deleteInstant -> {
           LOG.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());
-          StoragePath metaFile = new StoragePath(metaClient.getMetaAuxiliaryPath(), deleteInstant.getFileName());
+          StoragePath metaFile = new StoragePath(metaClient.getMetaAuxiliaryPath(), factory.getFileName(deleteInstant));
           try {
             if (metaClient.getStorage().exists(metaFile)) {
               metaClient.getStorage().deleteFile(metaFile);

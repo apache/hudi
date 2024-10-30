@@ -114,7 +114,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
       return;
     }
 
-    String clusteringInstantTime = firstRequested.get().getTimestamp();
+    String clusteringInstantTime = firstRequested.get().getRequestTime();
 
     // generate clustering plan
     // should support configurable commit metadata

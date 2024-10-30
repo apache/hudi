@@ -61,7 +61,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     val clusteringInstants = metaClient.getActiveTimeline.getInstants.iterator().asScala
       .filter(p => ClusteringUtils.isClusteringOrReplaceCommitAction(p.getAction))
       .toSeq
-      .sortBy(f => f.getTimestamp)
+      .sortBy(f => f.getRequestTime)
       .reverse
       .take(limit)
 
@@ -71,12 +71,12 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
 
     if (showInvolvedPartitions) {
       clusteringPlans.map { p =>
-        Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
+        Row(p.get().getLeft.getRequestTime, p.get().getRight.getInputGroups.size(),
           p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala.toSeq))
       }
     } else {
       clusteringPlans.map { p =>
-        Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
+        Row(p.get().getLeft.getRequestTime, p.get().getRight.getInputGroups.size(),
           p.get().getLeft.getState.name(), "*")
       }
     }

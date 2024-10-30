@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameFactoryV2;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
@@ -112,7 +112,7 @@ public class GlueTestUtil {
 
     String instantTime = "101";
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(false);
-    createMetaFile(basePath, HoodieTimeline.makeCommitFileName(instantTime), commitMetadata);
+    createMetaFile(basePath, new InstantFileNameFactoryV2().makeCommitFileName(instantTime), commitMetadata);
   }
 
   public static MessageType getSimpleSchema() {

@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -55,7 +54,7 @@ public class RollbackUtils {
   public static HoodieRollbackPlan getRollbackPlan(HoodieTableMetaClient metaClient, HoodieInstant rollbackInstant)
       throws IOException {
     // TODO: add upgrade step if required.
-    final HoodieInstant requested = HoodieTimeline.getRollbackRequestedInstant(rollbackInstant);
+    final HoodieInstant requested = metaClient.getTimelineLayout().getInstantFactory().getRollbackRequestedInstant(rollbackInstant);
     return TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
   }

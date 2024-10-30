@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -38,7 +38,7 @@ import java.io.IOException;
 @UseFileSplitsFromInputFormat
 public class HoodieHFileInputFormat extends HoodieCopyOnWriteTableInputFormat {
 
-  protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
+  protected HoodieTimeline filterInstantsTimeline(HoodieTimeline timeline) {
     return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
   }
 
