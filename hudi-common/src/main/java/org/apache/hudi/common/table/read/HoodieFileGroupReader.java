@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
@@ -103,7 +102,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.start = start;
     this.length = length;
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    readerContext.setRecordKeyFieldName(getRecordKeyFieldName(tableConfig));
     readerContext.setRecordMerger(readerContext.getRecordMerger(
         tableConfig.getRecordMergeMode(),
         tableConfig.getRecordMergeStrategyId(),
@@ -121,6 +119,15 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
+
+    // only needed when doing mor merging
+    if (readerContext.getHasLogFiles()) {
+      // TODO: [HUDI-8460] add handling for multiple recordkey fields
+      String[] recordKeyFields = readerContext.getSchemaHandler().getRecordKeyFields();
+      ValidationUtils.checkArgument(recordKeyFields.length == 1, "Number of record key fields set in tableconfig is not 1, but populateMetaFields is disabled");
+      readerContext.setRecordKeyFieldName(recordKeyFields[0]);
+    }
+    
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient, tableConfig.getRecordMergeMode(), props, this.logFiles.isEmpty(), isSkipMerge, shouldUseRecordPosition);
   }
@@ -272,17 +279,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
     if (recordBuffer != null) {
       recordBuffer.close();
-    }
-  }
-
-  private static String getRecordKeyFieldName(HoodieTableConfig tableConfig) {
-    if (tableConfig.populateMetaFields()) {
-      return HoodieRecord.RECORD_KEY_METADATA_FIELD;
-    } else {
-      Option<String[]> recordKeyFieldsOpt = tableConfig.getRecordKeyFields();
-      ValidationUtils.checkArgument(recordKeyFieldsOpt.isPresent(), "No record key field set in table config, but populateMetaFields is disabled");
-      ValidationUtils.checkArgument(recordKeyFieldsOpt.get().length == 1, "More than 1 record key set in table config, but populateMetaFields is disabled");
-      return recordKeyFieldsOpt.get()[0];
     }
   }
 

@@ -35,7 +35,6 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +59,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
 
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
   protected final Schema requiredSchema;
+
+  protected final String[] recordKeyFields;
 
   protected final InternalSchema internalSchema;
 
@@ -92,6 +93,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     this.dataSchema = dataSchema;
     this.requestedSchema = requestedSchema;
     this.hoodieTableConfig = hoodieTableConfig;
+    this.recordKeyFields = getRecordKeyFields(hoodieTableConfig);
     this.requiredSchema = prepareRequiredSchema();
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
@@ -108,6 +110,10 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
 
   public Schema getRequiredSchema() {
     return this.requiredSchema;
+  }
+
+  public String[] getRecordKeyFields() {
+    return this.recordKeyFields;
   }
 
   public InternalSchema getInternalSchema() {
@@ -158,7 +164,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     }
 
     List<Schema.Field> addedFields = new ArrayList<>();
-    for (String field : getMandatoryFieldsForMerging(hoodieTableConfig, properties, dataSchema, recordMerger)) {
+    for (String field : getMandatoryFieldsForMerging(hoodieTableConfig, properties, dataSchema, recordMerger, recordKeyFields)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
         Option<Schema.Field> foundFieldOpt  = findNestedField(dataSchema, field);
         if (!foundFieldOpt.isPresent()) {
@@ -177,21 +183,15 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
   }
 
   private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, TypedProperties props,
-                                                       Schema dataSchema, Option<HoodieRecordMerger> recordMerger) {
+                                                       Schema dataSchema, Option<HoodieRecordMerger> recordMerger, String[] recordKeyFields) {
     if (cfg.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
       return recordMerger.get().getMandatoryFieldsForMerging(dataSchema, cfg, props);
     }
 
     ArrayList<String> requiredFields = new ArrayList<>();
 
-    if (cfg.populateMetaFields()) {
-      requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    } else {
-      Option<String[]> fields = cfg.getRecordKeyFields();
-      if (fields.isPresent()) {
-        requiredFields.addAll(Arrays.asList(fields.get()));
-      }
-    }
+    //add recordkey fields
+    Collections.addAll(requiredFields, recordKeyFields);
 
     if (cfg.getRecordMergeMode() == RecordMergeMode.EVENT_TIME_ORDERING) {
       String preCombine = cfg.getPreCombineField();
@@ -200,6 +200,14 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       }
     }
     return requiredFields.toArray(new String[0]);
+  }
+
+  private static String[] getRecordKeyFields(HoodieTableConfig tableConfig) {
+    if (tableConfig.populateMetaFields()) {
+      return new String[] {HoodieRecord.RECORD_KEY_METADATA_FIELD};
+    } else {
+      return tableConfig.getRecordKeyFields().orElse(new String[0]);
+    }
   }
 
   protected Schema prepareRequiredSchema() {
