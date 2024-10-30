@@ -203,6 +203,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
   }
 
   private static String[] getRecordKeyFields(HoodieTableConfig tableConfig) {
+    // TODO: [HUDI-8461] optimize for bootstrap here
     if (tableConfig.populateMetaFields()) {
       return new String[] {HoodieRecord.RECORD_KEY_METADATA_FIELD};
     } else {
