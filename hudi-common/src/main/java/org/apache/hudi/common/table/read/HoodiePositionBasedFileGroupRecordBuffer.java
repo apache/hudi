@@ -242,7 +242,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       if (logRecordInfo != null) {
         //we have a delete that was not able to be converted. Since it is the newest version, the record is deleted
         //remove a key based record if it exists
-        records.remove(readerContext.getRecordKey(baseRecord, readerSchema));
+        records.remove(readerContext
+            .getRecordKey(baseRecord, readerSchema, logRecordInfo.getRight()));
         return false;
       }
     }

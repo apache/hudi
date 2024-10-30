@@ -28,11 +28,13 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
@@ -101,6 +103,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.start = start;
     this.length = length;
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
+    readerContext.setRecordKeyFieldName(getRecordKeyFieldName(tableConfig));
     readerContext.setRecordMerger(readerContext.getRecordMerger(
         tableConfig.getRecordMergeMode(),
         tableConfig.getRecordMergeStrategyId(),
@@ -269,6 +272,17 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
     if (recordBuffer != null) {
       recordBuffer.close();
+    }
+  }
+
+  private static String getRecordKeyFieldName(HoodieTableConfig tableConfig) {
+    if (tableConfig.populateMetaFields()) {
+      return HoodieRecord.RECORD_KEY_METADATA_FIELD;
+    } else {
+      Option<String[]> recordKeyFieldsOpt = tableConfig.getRecordKeyFields();
+      ValidationUtils.checkArgument(recordKeyFieldsOpt.isPresent(), "No record key field set in table config, but populateMetaFields is disabled");
+      ValidationUtils.checkArgument(recordKeyFieldsOpt.get().length == 1, "More than 1 record key set in table config, but populateMetaFields is disabled");
+      return recordKeyFieldsOpt.get()[0];
     }
   }
 

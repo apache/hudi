@@ -80,7 +80,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hadoop.hive.ql.exec.Utilities.HAS_MAP_WORK;
 import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
-import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getRecordKeyField;
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getStoredPartitionFieldNames;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -140,9 +139,11 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(tablePath).build();
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     setupJobconf(jobConf);
-    return new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
+    HoodieReaderContext<ArrayWritable> ctx = new HiveHoodieReaderContext(readerCreator,
         getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema),
         new ObjectInspectorCache(avroSchema, jobConf));
+    ctx.setRecordKeyFieldName(metaClient.getTableConfig().getRecordKeyFieldProp());
+    return ctx;
   }
 
   @Override

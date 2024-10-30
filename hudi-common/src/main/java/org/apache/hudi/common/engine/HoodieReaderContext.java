@@ -39,8 +39,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
-
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
  * engine-specific implementation on reading data files, getting field values from a record,
@@ -62,6 +60,7 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
   private Boolean shouldMergeUseRecordPosition = null;
+  private String recordKeyFieldName = null;
 
   // Getter and Setter for schemaHandler
   public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
@@ -133,6 +132,15 @@ public abstract class HoodieReaderContext<T> {
 
   public void setShouldMergeUseRecordPosition(boolean shouldMergeUseRecordPosition) {
     this.shouldMergeUseRecordPosition = shouldMergeUseRecordPosition;
+  }
+
+  // Getter and Setter for recordKeyFieldName
+  public String getRecordKeyFieldName() {
+    return recordKeyFieldName;
+  }
+
+  public void setRecordKeyFieldName(String recordKeyFieldName) {
+    this.recordKeyFieldName = recordKeyFieldName;
   }
 
   // These internal key names are only used in memory for record metadata and merging,
@@ -214,9 +222,19 @@ public abstract class HoodieReaderContext<T> {
    * @param schema The Avro schema of the record.
    * @return The record key in String.
    */
-  public String getRecordKey(T record, Schema schema) {
-    Object val = getValue(record, schema, RECORD_KEY_METADATA_FIELD);
-    return val.toString();
+  public final String getRecordKey(T record, Schema schema) {
+    return getRecordKey(record, schema, null);
+  }
+
+  public final String getRecordKey(T record, Schema schema, Map<String, Object> recordMetadata) {
+    if (recordMetadata != null && recordMetadata.containsKey(INTERNAL_META_RECORD_KEY)) {
+      return (String) recordMetadata.get(INTERNAL_META_RECORD_KEY);
+    }
+    String recordKey = getValue(record, schema, recordKeyFieldName).toString();
+    if (recordMetadata != null) {
+      recordMetadata.put(INTERNAL_META_RECORD_KEY, recordKey);
+    }
+    return recordKey;
   }
 
   /**
