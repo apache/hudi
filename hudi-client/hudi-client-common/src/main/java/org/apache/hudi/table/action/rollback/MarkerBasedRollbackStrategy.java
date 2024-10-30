@@ -77,7 +77,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
   public List<HoodieRollbackRequest> getRollbackRequests(HoodieInstant instantToRollback) {
     try {
       List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
-          table, context, instantToRollback.getTimestamp(), config.getRollbackParallelism());
+          table, context, instantToRollback.requestedTime(), config.getRollbackParallelism());
       int parallelism = Math.max(Math.min(markerPaths.size(), config.getRollbackParallelism()), 1);
       return context.map(markerPaths, markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
@@ -107,7 +107,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
                                                                          StoragePath filePath,
                                                                          HoodieInstant instantToRollback) {
     if (table.version().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      return new HoodieRollbackRequest(partitionPath, fileId, instantToRollback.getTimestamp(),
+      return new HoodieRollbackRequest(partitionPath, fileId, instantToRollback.requestedTime(),
           Collections.singletonList(filePath.toString()), Collections.emptyMap());
     } else {
       String baseInstantTime = null;
@@ -132,7 +132,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
                                                                  HoodieInstant instantToRollback,
                                                                  String filePathToRollback) {
     if (table.version().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      return new HoodieRollbackRequest(relativePartitionPath, fileId, instantToRollback.getTimestamp(), Collections.emptyList(),
+      return new HoodieRollbackRequest(relativePartitionPath, fileId, instantToRollback.requestedTime(), Collections.emptyList(),
           Collections.singletonMap(filePath.toString(), 1L));
     } else {
       StoragePath fullFilePath = new StoragePath(basePath, filePathToRollback);
@@ -150,7 +150,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
         try {
           latestLogFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getStorage(), partitionPath, fileId,
               HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime);
-          if (latestLogFileOption.isPresent() && baseCommitTime.equals(instantToRollback.getTimestamp())) {
+          if (latestLogFileOption.isPresent() && baseCommitTime.equals(instantToRollback.requestedTime())) {
             // Log file can be deleted if the commit to rollback is also the commit that created the fileGroup
             StoragePath fullDeletePath = new StoragePath(partitionPath, latestLogFileOption.get().getFileName());
             return new HoodieRollbackRequest(relativePartitionPath, EMPTY_STRING, EMPTY_STRING,

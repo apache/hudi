@@ -136,7 +136,7 @@ public class BaseRollbackHelper implements Serializable {
               .withFileId(fileId)
               .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
               .withInstantTime(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
-                      ? instantToRollback.getTimestamp() : rollbackRequest.getLatestBaseInstant()
+                      ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
                   )
               .withStorage(metaClient.getStorage())
               .withTableVersion(tableVersion)
@@ -144,7 +144,7 @@ public class BaseRollbackHelper implements Serializable {
 
           // generate metadata
           if (doDelete) {
-            Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
+            Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.requestedTime());
             // if update belongs to an existing log file
             // use the log file path from AppendResult in case the file handle may roll over
             filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
@@ -220,7 +220,7 @@ public class BaseRollbackHelper implements Serializable {
   protected Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String commit) {
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(3);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().requestedTime());
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commit);
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));

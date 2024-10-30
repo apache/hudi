@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -129,10 +128,6 @@ public class FSUtils {
   public static String maskWithoutFileId(String instantTime, int taskPartitionId) {
     return String.format("*_%s_%s%s", taskPartitionId, instantTime, HoodieTableConfig.BASE_FILE_FORMAT
         .defaultValue().getFileExtension());
-  }
-
-  public static String getCommitFromCommitFile(String commitFileName) {
-    return HoodieInstant.extractTimestamp(commitFileName);
   }
 
   public static String getCommitTime(String fullFileName) {

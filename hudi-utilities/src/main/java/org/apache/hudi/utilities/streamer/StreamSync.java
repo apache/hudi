@@ -50,6 +50,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -141,6 +142,8 @@ import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
@@ -527,7 +530,7 @@ public class StreamSync implements Serializable, Closeable {
   private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
     if (commitTimelineOpt.isPresent()) {
       Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().getLastPendingClusterInstant();
-      return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().getTimestamp()) : Option.empty();
+      return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().requestedTime()) : Option.empty();
     }
     return Option.empty();
   }
@@ -535,7 +538,7 @@ public class StreamSync implements Serializable, Closeable {
   private Option<String> getLastPendingCompactionInstant(Option<HoodieTimeline> commitTimelineOpt) {
     if (commitTimelineOpt.isPresent()) {
       Option<HoodieInstant> pendingCompactionInstant = commitTimelineOpt.get().filterPendingCompactionTimeline().lastInstant();
-      return pendingCompactionInstant.isPresent() ? Option.of(pendingCompactionInstant.get().getTimestamp()) : Option.empty();
+      return pendingCompactionInstant.isPresent() ? Option.of(pendingCompactionInstant.get().requestedTime()) : Option.empty();
     }
     return Option.empty();
   }
@@ -814,8 +817,8 @@ public class StreamSync implements Serializable, Closeable {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
           String value = commitMetadata.getMetadata(CHECKPOINT_KEY);
           resumeCheckpointStr = Option.of(value);
-        } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-            HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
+        } else if (compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+            LESSER_THAN, lastCommit.get().requestedTime())) {
           throw new HoodieStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
                   + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
@@ -835,8 +838,9 @@ public class StreamSync implements Serializable, Closeable {
   protected Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
     return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        TimelineLayout layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion());
+        HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
+            .deserialize(instant, timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
           return Option.of(Pair.of(instant.toString(), commitMetadata));
         } else {

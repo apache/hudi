@@ -237,7 +237,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     }
     Option<HoodieInstant> lastInstant = metaClient.getCommitsTimeline().lastInstant();
     if (lastInstant.isPresent()) {
-      return lastInstant.get().getTimestamp();
+      return lastInstant.get().requestedTime();
     } else {
       return EMPTY_STRING;
     }

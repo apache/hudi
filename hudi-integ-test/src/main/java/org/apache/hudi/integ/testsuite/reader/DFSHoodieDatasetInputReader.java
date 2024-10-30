@@ -290,7 +290,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
                   .collect(Collectors.toList()))
           .withReaderSchema(new Schema.Parser().parse(schemaStr))
           .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline()
-              .filterCompletedInstants().lastInstant().get().getTimestamp())
+              .filterCompletedInstants().lastInstant().get().getRequestTime())
           .withMaxMemorySizeInBytes(
               HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
           .withReverseReader(false)
