@@ -284,7 +284,8 @@ public class StreamReadMonitoringFunction
     readMetrics.registerMetrics();
   }
 
-  public String getIssuedInstant() {
-    return issuedInstant;
+  public String getIssuedOffset() {
+    return issuedOffset;
   }
+
 }

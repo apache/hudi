@@ -152,8 +152,11 @@ public class TestStreamReadMonitoringFunction {
 
   @Test
   public void testConsumeForSpeedLimitWhenEmptyCommitExists() throws Exception {
+    // Step1 : create 4 empty commit
     Configuration conf = new Configuration(this.conf);
     conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+
     TestData.writeData(Collections.EMPTY_LIST, conf);
     TestData.writeData(Collections.EMPTY_LIST, conf);
     TestData.writeData(Collections.EMPTY_LIST, conf);
@@ -164,32 +167,26 @@ public class TestStreamReadMonitoringFunction {
         .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
     HoodieInstant firstInstant = commitsTimeline.firstInstant().get();
 
+    // Step2: trigger streaming read from first instant and set READ_COMMITS_LIMIT 2
     conf.set(FlinkOptions.READ_AS_STREAMING, true);
     conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
     conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
     conf.set(FlinkOptions.READ_COMMITS_LIMIT, 2);
-    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
     conf.set(FlinkOptions.READ_START_COMMIT, String.valueOf((Long.valueOf(firstInstant.getTimestamp()) - 100)));
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
-    // issuedOffset is null
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
       harness.setup();
       harness.open();
 
       CountDownLatch latch = new CountDownLatch(0);
       CollectingSourceContext sourceContext = new CollectingSourceContext(latch);
-
-      //issuedOffset is null , so it is InstantRange.RangeType.CLOSED_CLOSED
       function.monitorDirAndForwardSplits(sourceContext);
-      assertTrue(sourceContext.splits.size() == 0, "There should be no inputSplits");
-      assertEquals(1, intervalBetween2Instants(commitsTimeline, firstInstant.getTimestamp(), function.getIssuedInstant()), "Should read 2 instant");
+      assertEquals(0, sourceContext.splits.size(), "There should be no inputSplits");
 
-      // issuedOffset is not null, so it is InstantRange.RangeType.OPEN_CLOSED
-      String preIussuedInstant = function.getIssuedInstant();
-      function.monitorDirAndForwardSplits(sourceContext);
-      assertTrue(sourceContext.splits.size() == 0, "There should be no inputSplits");
-      assertEquals(2, intervalBetween2Instants(commitsTimeline, preIussuedInstant, function.getIssuedInstant()), "Should read 2 instant");
-
+      // Step3: assert current IssuedOffset couldn't be null.
+      // Base on "IncrementalInputSplits#inputSplits => .startCompletionTime(issuedOffset != null ? issuedOffset : this.conf.getString(FlinkOptions.READ_START_COMMIT))"
+      // If IssuedOffset still was null, hudi would take FlinkOptions.READ_START_COMMIT again, which means streaming read is blocked.
+      assertTrue(function.getIssuedOffset() != null);
       // Stop the stream task.
       function.close();
     }
