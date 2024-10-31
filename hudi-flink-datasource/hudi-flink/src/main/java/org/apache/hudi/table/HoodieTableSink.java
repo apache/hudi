@@ -32,6 +32,7 @@ import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.DataModificationInfos;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.table.catalog.Column;
@@ -110,11 +111,16 @@ public class HoodieTableSink implements
       }
 
       DataStream<Object> pipeline;
-      // bootstrap
-      final DataStream<HoodieRecord> hoodieRecordDataStream =
-          Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
-      // write pipeline
-      pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      if (conf.getBoolean(FlinkOptions.WRITE_FAST_TO_PARQUET_BLOCKS)) {
+        final DataStream<Tuple> rowDataStream = Pipelines.rowDataEnrich(conf, rowType, dataStream);
+        pipeline = Pipelines.hoodieStreamWriteRowData(conf, rowType, rowDataStream);
+      } else {
+        // bootstrap
+        final DataStream<HoodieRecord> hoodieRecordDataStream =
+            Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
+        // write pipeline
+        pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      }
       // compaction
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         // use synchronous compaction for bounded source.

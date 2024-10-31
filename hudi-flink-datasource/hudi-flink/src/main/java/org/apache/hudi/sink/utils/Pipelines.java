@@ -34,6 +34,7 @@ import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bucket.BucketStreamWriteOperator;
+import org.apache.hudi.sink.bucket.BucketStreamWriteOperatorRowData;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
@@ -51,11 +52,17 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
+import org.apache.hudi.sink.partitioner.BucketIndexPartitionerRowData;
+import org.apache.hudi.sink.transform.RowDataEnrichFunctions;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.api.common.functions.Partitioner;
+import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.tuple.Tuple;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -64,6 +71,7 @@ import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.binary.BinaryStringData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
@@ -311,6 +319,12 @@ public class Pipelines {
         .setParallelism(dataStream.getParallelism()).name("row_data_to_hoodie_record");
   }
 
+  public static DataStream<Tuple> rowDataEnrich(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
+    return dataStream.map(RowDataEnrichFunctions.create(rowType, conf), new TupleTypeInfo<>(TypeInformation.of(new TypeHint<Tuple2<BinaryStringData, BinaryStringData>>(){}), dataStream.getType()))
+        .setParallelism(dataStream.getParallelism())
+        .name("row_data_enrich");
+  }
+
   /**
    * The streaming write pipeline.
    *
@@ -387,6 +401,19 @@ public class Pipelines {
           .uid(opUID("stream_write", conf))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
     }
+  }
+
+  public static DataStream<Object> hoodieStreamWriteRowData(Configuration conf, RowType rowType, DataStream<Tuple> dataStream) {
+    int bucketNum = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+    String indexKeyFields = OptionsResolver.getIndexKeyField(conf);
+    BucketIndexPartitionerRowData<Tuple> partitioner = new BucketIndexPartitionerRowData<>(bucketNum, indexKeyFields);
+    return dataStream.partitionCustom(partitioner, (row -> row.getFieldNotNull(0)))
+        .transform(
+            opName("bucket_write", conf),
+            TypeInformation.of(Object.class),
+            BucketStreamWriteOperatorRowData.getFactory(conf, rowType))
+        .uid(opUID("bucket_write", conf))
+        .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
   }
 
   /**

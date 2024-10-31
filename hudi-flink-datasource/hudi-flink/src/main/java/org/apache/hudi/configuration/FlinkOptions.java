@@ -675,6 +675,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(ClientIds.INIT_CLIENT_ID)
       .withDescription("Unique identifier used to distinguish different writer pipelines for concurrent mode");
 
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_FAST_TO_PARQUET_BLOCKS = ConfigOptions
+      .key("write.fast.to.parquet.blocks")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Optimized write of row data to MOR log files. Note, that Parquet data blocks should be used in log files.");
+
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
