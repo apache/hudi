@@ -359,7 +359,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
-  private Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath) {
+  private Object[] getPartitionColumnValues(String[] partitionColumns, String partitionPath) {
     Object[] partitionColumnValues = doParsePartitionColumnValues(partitionColumns, partitionPath);
     if (shouldListLazily && partitionColumnValues.length != partitionColumns.length) {
       throw new HoodieException("Failed to parse partition column values from the partition-path:"
@@ -484,7 +484,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected PartitionPath convertToPartitionPath(String partitionPath) {
-    Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
+    Object[] partitionColumnValues = getPartitionColumnValues(partitionColumns, partitionPath);
     return new PartitionPath(partitionPath, partitionColumnValues);
   }
 

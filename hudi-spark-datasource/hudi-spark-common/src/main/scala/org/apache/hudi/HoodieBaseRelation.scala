@@ -495,11 +495,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       val partitionPathWithoutScheme = file.getPath.getParent.getPathWithoutSchemeAndAuthority
       val relativePath = tablePathWithoutScheme.toUri.relativize(partitionPathWithoutScheme.toUri).toString
       val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
-      val rowValues = HoodieSparkUtils.parsePartitionColumnValues(
+      val rowValues = HoodieSparkUtils.doParsePartitionColumnValues(
         partitionColumns,
         relativePath,
         basePath,
         tableStructSchema,
+        tableConfig.propsMap,
         timeZoneId,
         sparkAdapter.getSparkParsePartitionUtil,
         conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
