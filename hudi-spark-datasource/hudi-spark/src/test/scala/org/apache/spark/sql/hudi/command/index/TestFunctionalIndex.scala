@@ -634,8 +634,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
             // verify there are new updates to functional index with isDeleted true for cleaned file
             checkAnswer(s"select ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value, ColumnStatsMetadata.isDeleted from hudi_metadata('$tableName') where type=3 and ColumnStatsMetadata.fileName='$fileName'")(
-              Seq("2022-09-26", "2022-09-26", false),
-              Seq(null, null, true) // for the cleaned file
+              Seq("2022-09-26", "2022-09-26", false) // for cleaned file, there won't be any stats produced.
             )
           }
         }

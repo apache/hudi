@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.FooterMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
@@ -154,7 +155,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // 4. Read the header for a log block, if present
 
     Map<HeaderMetadataType, String> header =
-        nextBlockVersion.hasHeader() ? HoodieLogBlock.getLogMetadata(inputStream) : null;
+        nextBlockVersion.hasHeader() ? HoodieLogBlock.getHeaderMetadata(inputStream) : null;
 
     // 5. Read the content length for the content
     // Fallback to full-block size if no content-length
@@ -168,8 +169,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     Option<byte[]> content = HoodieLogBlock.tryReadContent(inputStream, contentLength, shouldReadLazily);
 
     // 7. Read footer if any
-    Map<HeaderMetadataType, String> footer =
-        nextBlockVersion.hasFooter() ? HoodieLogBlock.getLogMetadata(inputStream) : null;
+    Map<FooterMetadataType, String> footer =
+        nextBlockVersion.hasFooter() ? HoodieLogBlock.getFooterMetadata(inputStream) : null;
 
     // 8. Read log block length, if present. This acts as a reverse pointer when traversing a
     // log file in reverse

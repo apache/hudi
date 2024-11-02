@@ -1246,7 +1246,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
 
     // Write out some header
-    outputStream.write(HoodieLogBlock.getLogMetadataBytes(header));
+    outputStream.write(HoodieLogBlock.getHeaderMetadataBytes(header));
     outputStream.writeLong(getUTF8Bytes("something-random").length);
     outputStream.write(getUTF8Bytes("something-random"));
     outputStream.flush();
@@ -2569,7 +2569,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.writeInt(1);
     // Write out some metadata
     // TODO : test for failure to write metadata - NA ?
-    outputStream.write(HoodieLogBlock.getLogMetadataBytes(header));
+    outputStream.write(HoodieLogBlock.getHeaderMetadataBytes(header));
     outputStream.write(getUTF8Bytes("something-random"));
     outputStream.flush();
     outputStream.close();

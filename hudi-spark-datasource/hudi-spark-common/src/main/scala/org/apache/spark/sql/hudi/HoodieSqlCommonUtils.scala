@@ -30,7 +30,8 @@ import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstan
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.storage.{HoodieStorage, StoragePathInfo}
+import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathInfo}
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -43,7 +44,6 @@ import org.apache.spark.sql.types._
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Locale
-
 import scala.collection.JavaConverters._
 import scala.util.Try
 
@@ -176,7 +176,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val uri = if (isManaged) {
       Some(sparkSession.sessionState.catalog.defaultTablePath(identifier))
     } else {
-      Some(new Path(location.get).toUri)
+      Some(new StoragePath(location.get).toUri)
     }
     getTableLocation(uri, identifier, sparkSession)
   }
@@ -214,11 +214,10 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   /**
    * Check if the hoodie.properties exists in the table path.
    */
-  def tableExistsInPath(tablePath: String, conf: Configuration): Boolean = {
-    val basePath = new Path(tablePath)
-    val fs = basePath.getFileSystem(conf)
-    val metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)
-    fs.exists(metaPath)
+  def tableExistsInPath(tablePath: String, storage: HoodieStorage): Boolean = {
+    val basePath = new StoragePath(tablePath)
+    val metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME)
+    storage.exists(metaPath)
   }
 
   /**

@@ -373,10 +373,14 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       staticPartitionColumnValues.map(_._1): _*)
   }
 
-  protected def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
+  /**
+   * @VisibleForTesting
+   */
+  def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
     val tableConfig = metaClient.getTableConfig
     if (null != tableConfig.getKeyGeneratorClassName
       && tableConfig.getKeyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
+      && null != tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
       && tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
       .matches("SCALAR|UNIX_TIMESTAMP|EPOCHMILLISECONDS|EPOCHMICROSECONDS")) {
       // For TIMESTAMP key generator when TYPE is SCALAR, UNIX_TIMESTAMP,

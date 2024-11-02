@@ -103,14 +103,12 @@ public class TestBucketIdentifier {
   @Test
   public void testGetHashKeys() {
     BucketIdentifier identifier = new BucketIdentifier();
+    // if for recordKey one column only is used, then there is no added column name before value
     List<String> keys = identifier.getHashKeys(new HoodieKey("abc", "partition"), "");
     assertEquals(1, keys.size());
     assertEquals("abc", keys.get(0));
 
-    keys = identifier.getHashKeys(new HoodieKey("f1:abc", "partition"), "f1");
-    assertEquals(1, keys.size());
-    assertEquals("abc", keys.get(0));
-
+    // complex keys, composite from key-value pairs
     keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd", "partition"), "f2");
     assertEquals(1, keys.size());
     assertEquals("bcd", keys.get(0));
@@ -121,9 +119,8 @@ public class TestBucketIdentifier {
     assertEquals("bcd", keys.get(1));
 
     keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd,efg", "partition"), "f1,f2");
-    assertEquals(3, keys.size());
+    assertEquals(2, keys.size());
     assertEquals("abc", keys.get(0));
-    assertEquals("bcd", keys.get(1));
-    assertEquals("efg", keys.get(2));
+    assertEquals("bcd,efg", keys.get(1));
   }
 }

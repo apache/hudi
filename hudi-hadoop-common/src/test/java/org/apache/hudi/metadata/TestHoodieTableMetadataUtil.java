@@ -26,8 +26,10 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -206,7 +208,12 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
   public void testGetLogFileColumnRangeMetadata() throws Exception {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     String instant1 = "20230918120000000";
-    hoodieTestTable = hoodieTestTable.addCommit(instant1);
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addMetadata("test", "test");
+    commitMetadata.setOperationType(WriteOperationType.INSERT);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS.toString());
+    hoodieTestTable = hoodieTestTable.addCommit(instant1, Option.of(commitMetadata));
     String instant2 = "20230918121110000";
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
     List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList = new ArrayList<>();
@@ -243,7 +250,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             storagePath2.toString(),
             metaClient,
             columnsToIndex,
-            Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS));
+            Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
+            HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue());
         // there must be two ranges for rider and driver
         assertEquals(2, columnRangeMetadataLogFile.size());
       } catch (Exception e) {
