@@ -19,9 +19,11 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.HoodieMergeKey;
 import org.apache.hudi.common.model.HoodieMetadataRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieSimpleMergeKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -50,7 +52,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 /**
  * Merged log record scanner for metadata table using {@link HoodieMetadataRecordMerger}.
  */
-public class HoodieMetadataMergedLogRecordScanner extends BaseHoodieMergedLogRecordScanner<String> {
+public class HoodieMetadataMergedLogRecordScanner extends BaseHoodieMergedLogRecordScanner<HoodieMergeKey> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataMergedLogRecordScanner.class);
 
@@ -72,22 +74,32 @@ public class HoodieMetadataMergedLogRecordScanner extends BaseHoodieMergedLogRec
   }
 
   @Override
-  public Map<String, HoodieRecord> getRecords() {
+  public Map<HoodieMergeKey, HoodieRecord> getRecords() {
     return records;
+  }
+
+  private String getRecordKey(HoodieMergeKey mergeKey) {
+    return mergeKey.getRecordKey().toString();
   }
 
   @Override
   public <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
     // Merge the new record with the existing record in the map
-    HoodieRecord<T> oldRecord = (HoodieRecord<T>) records.get(newRecord.getRecordKey());
+    HoodieMergeKey mergeKey = newRecord.getMergeKey();
+    if (mergeKey == null) {
+      // If mergeKey is null, then create a simple merge key using record key
+      mergeKey = new HoodieSimpleMergeKey(newRecord.getKey());
+    }
+    HoodieRecord<T> oldRecord = (HoodieRecord<T>) records.get(mergeKey);
     if (oldRecord != null) {
       LOG.debug("Merging new record with existing record in the map. Key: {}", newRecord.getRecordKey());
+      HoodieMergeKey finalMergeKey = mergeKey;
       recordMerger.fullOuterMerge(oldRecord, readerSchema, newRecord, readerSchema, this.getPayloadProps()).forEach(
           mergedRecord -> {
             HoodieRecord<T> combinedRecord = mergedRecord.getLeft();
             if (combinedRecord.getData() != oldRecord.getData()) {
               HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, newRecord.getRecordKey());
-              records.put(newRecord.getRecordKey(), latestHoodieRecord.copy());
+              records.put(finalMergeKey, latestHoodieRecord.copy());
             }
           });
     } else {
@@ -95,7 +107,7 @@ public class HoodieMetadataMergedLogRecordScanner extends BaseHoodieMergedLogRec
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
-      records.put(newRecord.getRecordKey(), newRecord.copy());
+      records.put(mergeKey, newRecord.copy());
     }
   }
 

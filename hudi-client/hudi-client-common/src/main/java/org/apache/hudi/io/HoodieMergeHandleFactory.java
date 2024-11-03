@@ -20,11 +20,15 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCompositeMergeKey;
+import org.apache.hudi.common.model.HoodieMergeKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieSimpleMergeKey;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
@@ -32,6 +36,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.Map;
+
+import static java.util.stream.Collectors.toMap;
 
 /**
  * Factory class for hoodie merge handle.
@@ -85,17 +91,22 @@ public class HoodieMergeHandleFactory {
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt) {
     LOG.info("Get updateHandle for fileId {} and partitionPath {} at commit {}", fileId, partitionPath, instantTime);
+    // transform keyToNewRecords from Map<String, HoodieRecord> to Map<HoodieMergeKey, HoodieRecord>
+    // if it is a metadata table and partition path corresponds to a secondary index, then we need to use HoodieCompositeMergeKey, else use HoodieSimpleMergeKey
+    boolean isMergingSecondaryIndex = table.isMetadataTable() && partitionPath.startsWith(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+    Map<HoodieMergeKey, HoodieRecord<T>> mergeKeyToNewRecords = keyToNewRecords.entrySet().stream()
+        .collect(toMap(e -> isMergingSecondaryIndex ? new HoodieCompositeMergeKey<>(e.getKey(), partitionPath) : new HoodieSimpleMergeKey(e.getValue().getKey()), Map.Entry::getValue));
     if (table.requireSortedRecords()) {
-      return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
+      return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, mergeKeyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     } else if (table.getMetaClient().getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor()) {
       // IMPORTANT: only index type that yields pure log files need to enable the cdc log files for compaction,
       // index type such as the BLOOM does not need this because it would do delta merge for inserts and generates log for updates,
       // both of these two cases are already handled in HoodieCDCExtractor.
-      return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
+      return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, mergeKeyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     } else {
-      return new HoodieMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
+      return new HoodieMergeHandle<>(writeConfig, instantTime, table, mergeKeyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     }
   }
