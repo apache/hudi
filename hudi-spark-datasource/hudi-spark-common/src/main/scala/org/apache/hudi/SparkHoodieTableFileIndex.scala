@@ -376,8 +376,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   /**
    * @VisibleForTesting
    */
-  def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
-    HoodieSparkUtils.doParsePartitionColumnValues(
+  def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
+    HoodieSparkUtils.parsePartitionColumnValues(
       partitionColumns,
       partitionPath,
       getBasePath,

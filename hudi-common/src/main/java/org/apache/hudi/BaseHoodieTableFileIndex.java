@@ -169,7 +169,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     doRefresh();
   }
 
-  protected abstract Object[] doParsePartitionColumnValues(String[] partitionColumns, String partitionPath);
+  protected abstract Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath);
 
   /**
    * Returns latest completed instant as seen by this instance of the file-index
@@ -360,7 +360,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private Object[] getPartitionColumnValues(String[] partitionColumns, String partitionPath) {
-    Object[] partitionColumnValues = doParsePartitionColumnValues(partitionColumns, partitionPath);
+    Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
     if (shouldListLazily && partitionColumnValues.length != partitionColumns.length) {
       throw new HoodieException("Failed to parse partition column values from the partition-path:"
           + " likely non-encoded slashes being used in partition column's values. You can try to"

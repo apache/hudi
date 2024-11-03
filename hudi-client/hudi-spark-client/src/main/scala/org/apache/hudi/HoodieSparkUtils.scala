@@ -229,7 +229,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     sparkAdapter.createSparkRowSerDe(structType)
   }
 
-  def doParsePartitionColumnValues(partitionColumns: Array[String],
+  def parsePartitionColumnValues(partitionColumns: Array[String],
                                    partitionPath: String,
                                    tableBasePath: StoragePath,
                                    tableSchema: StructType,
@@ -249,12 +249,12 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else {
-      parsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
+      doParsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
         sparkParsePartitionUtil, shouldValidatePartitionColumns)
     }
   }
 
-  def parsePartitionColumnValues(partitionColumns: Array[String],
+  def doParsePartitionColumnValues(partitionColumns: Array[String],
                                  partitionPath: String,
                                  basePath: StoragePath,
                                  schema: StructType,
