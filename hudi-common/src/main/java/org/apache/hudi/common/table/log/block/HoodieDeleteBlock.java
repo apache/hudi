@@ -197,7 +197,8 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
           .map(record -> DeleteRecord.create(
               record.getRecordKey(),
               record.getPartitionPath(),
-              unwrapAvroValueWrapper(record.getOrderingVal())))
+              unwrapAvroValueWrapper(record.getOrderingVal()),
+              Option.empty()))
           .toArray(DeleteRecord[]::new);
     }
   }

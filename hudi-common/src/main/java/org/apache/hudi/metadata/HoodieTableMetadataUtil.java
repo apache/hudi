@@ -46,9 +46,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -56,7 +54,6 @@ import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -2036,6 +2033,20 @@ public class HoodieTableMetadataUtil {
         .withTableMetaClient(metaClient)
         .build();
 
+    // read log file records without merging
+    List<HoodieRecord> records = new ArrayList<>();
+    HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
+        .withStorage(metaClient.getStorage())
+        .withBasePath(metaClient.getBasePath())
+        .withLogFilePaths(logFilePaths)
+        .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue())
+        .withLatestInstantTime(instantTime)
+        .withReaderSchema(tableSchema)
+        .withTableMetaClient(metaClient)
+        .withLogRecordScannerCallback(records::add)
+        .build();
+    scanner.scan();
+
     Option<HoodieFileReader> baseFileReader = Option.empty();
     if (dataFilePath.isPresent()) {
       baseFileReader = Option.of(HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType()).getFileReader(getReaderConfigs(storageConf), dataFilePath.get()));
@@ -2045,6 +2056,8 @@ public class HoodieTableMetadataUtil {
         Option.empty());
     ClosableIterator<HoodieRecord> fileSliceIterator = ClosableIterator.wrap(fileSliceReader);
     return new ClosableIterator<HoodieRecord>() {
+      private HoodieRecord nextValidRecord;
+
       @Override
       public void close() {
         fileSliceIterator.close();
@@ -2072,10 +2085,30 @@ public class HoodieTableMetadataUtil {
           throw new RuntimeException("Failed to fetch records." + e);
         }
         if (secondaryKey == null) {
-          return new HoodieAvroRecord<>(new HoodieKey("dummyKey", indexDefinition.getIndexName()), new EmptyHoodieRecordPayload());
+          // If secondary key is null, then it means data is being deleted. Check in unmerged records.
+          /*for (HoodieRecord unmergedRecord : records) {
+            if (unmergedRecord.getRecordKey(tableSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD).equals(recordKey)) {
+              secondaryKey = getSecondaryKey(unmergedRecord);
+              break;
+            }
+          }*/
+          return HoodieMetadataPayload.createSecondaryIndex(recordKey, "dummySecondaryKey", indexDefinition.getIndexName(), false);
         } else {
           return HoodieMetadataPayload.createSecondaryIndex(recordKey, secondaryKey, indexDefinition.getIndexName(), false);
         }
+      }
+
+      private String getSecondaryKey(HoodieRecord record) {
+        try {
+          if (record.toIndexedRecord(tableSchema, CollectionUtils.emptyProps()).isPresent()) {
+            GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(tableSchema, CollectionUtils.emptyProps()).get()).getData();
+            String secondaryKeyFields = String.join(".", indexDefinition.getSourceFields());
+            return HoodieAvroUtils.getNestedFieldValAsString(genericRecord, secondaryKeyFields, true, false);
+          }
+        } catch (IOException e) {
+          throw new RuntimeException("Failed to fetch records: " + e);
+        }
+        return null;
       }
     };
   }

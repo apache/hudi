@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -51,25 +53,28 @@ public class DeleteRecord implements Serializable {
    */
   private final Comparable<?> orderingVal;
 
-  private DeleteRecord(HoodieKey hoodieKey, Comparable orderingVal) {
+  private final HoodieMergeKey mergeKey;
+
+  private DeleteRecord(HoodieKey hoodieKey, Comparable orderingVal, Option<HoodieMergeKey> mergeKeyOpt) {
     this.hoodieKey = hoodieKey;
     this.orderingVal = orderingVal;
+    this.mergeKey = mergeKeyOpt.orElse(new HoodieCompositeMergeKey<>(hoodieKey.getRecordKey(), hoodieKey.getPartitionPath()));
   }
 
   public static DeleteRecord create(HoodieKey hoodieKey) {
-    return create(hoodieKey, 0);
+    return create(hoodieKey, 0, Option.empty());
   }
 
   public static DeleteRecord create(String recordKey, String partitionPath) {
-    return create(recordKey, partitionPath, 0);
+    return create(recordKey, partitionPath, 0, Option.empty());
   }
 
-  public static DeleteRecord create(String recordKey, String partitionPath, Comparable orderingVal) {
-    return create(new HoodieKey(recordKey, partitionPath), orderingVal);
+  public static DeleteRecord create(String recordKey, String partitionPath, Comparable orderingVal, Option<HoodieMergeKey> mergeKeyOpt) {
+    return create(new HoodieKey(recordKey, partitionPath), orderingVal, mergeKeyOpt);
   }
 
-  public static DeleteRecord create(HoodieKey hoodieKey, Comparable orderingVal) {
-    return new DeleteRecord(hoodieKey, orderingVal);
+  public static DeleteRecord create(HoodieKey hoodieKey, Comparable orderingVal, Option<HoodieMergeKey> mergeKeyOpt) {
+    return new DeleteRecord(hoodieKey, orderingVal, mergeKeyOpt);
   }
 
   public String getRecordKey() {
@@ -86,6 +91,10 @@ public class DeleteRecord implements Serializable {
 
   public Comparable<?> getOrderingValue() {
     return orderingVal;
+  }
+
+  public HoodieMergeKey getMergeKey() {
+    return mergeKey;
   }
 
   @Override

@@ -354,7 +354,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
     // TODO: change on the basis of whether merging secondary indexes or not
-    HoodieMergeKey mergeKey = new HoodieSimpleMergeKey(oldRecord.getKey());
+    HoodieMergeKey mergeKey = new HoodieSimpleMergeKey(new HoodieKey(key, partitionPath));
     if (keyToNewRecords.containsKey(mergeKey)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged

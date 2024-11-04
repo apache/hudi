@@ -59,7 +59,7 @@ public class TestHoodieDeleteBlock {
   @Test
   public void testSerializeAndDeserializeV3DeleteBlock() throws IOException {
     DeleteRecord[] deleteRecords = IntStream.range(0, 100)
-        .mapToObj(i -> DeleteRecord.create(KEY_PREFIX + i, PARTITION_PATH, random.nextLong()))
+        .mapToObj(i -> DeleteRecord.create(KEY_PREFIX + i, PARTITION_PATH, random.nextLong(), Option.empty()))
         .toArray(DeleteRecord[]::new);
     testDeleteBlockWithValidation(deleteRecords);
   }
@@ -80,7 +80,7 @@ public class TestHoodieDeleteBlock {
     };
 
     DeleteRecord[] deleteRecords = IntStream.range(1, 3)
-        .mapToObj(i -> DeleteRecord.create(KEY_PREFIX + i, PARTITION_PATH, i * 5873))
+        .mapToObj(i -> DeleteRecord.create(KEY_PREFIX + i, PARTITION_PATH, i * 5873, Option.empty()))
         .toArray(DeleteRecord[]::new);
     HoodieDeleteBlock deserializeDeleteBlock = new HoodieDeleteBlock(
         Option.of(contentBytes), null, true, Option.empty(), new HashMap<>(), new HashMap<>());
@@ -114,7 +114,7 @@ public class TestHoodieDeleteBlock {
     DeleteRecord[] deleteRecords = new DeleteRecord[orderingValues.length];
     for (int i = 0; i < orderingValues.length; i++) {
       deleteRecords[i] = DeleteRecord.create(
-          KEY_PREFIX + i, PARTITION_PATH, orderingValues[i]);
+          KEY_PREFIX + i, PARTITION_PATH, orderingValues[i], Option.empty());
     }
     testDeleteBlockWithValidation(deleteRecords);
   }

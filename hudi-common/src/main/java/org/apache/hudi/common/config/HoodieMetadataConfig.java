@@ -83,7 +83,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Maximum delta commits before compaction occurs
   public static final ConfigProperty<Integer> COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.commits")
-      .defaultValue(10)
+      .defaultValue(20)
       .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
@@ -98,7 +98,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Log blocks threshold, after a file slice crosses this threshold log compact operation is scheduled.
   public static final ConfigProperty<Integer> LOG_COMPACT_BLOCKS_THRESHOLD = ConfigProperty
       .key(METADATA_PREFIX + ".log.compaction.blocks.threshold")
-      .defaultValue(5)
+      .defaultValue(10)
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
@@ -244,14 +244,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.min.filegroup.count")
-      .defaultValue(10)
+      .defaultValue(1)
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Minimum number of file groups to use for Record Index.");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.max.filegroup.count")
-      .defaultValue(10000)
+      .defaultValue(1)
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of file groups to use for Record Index.");

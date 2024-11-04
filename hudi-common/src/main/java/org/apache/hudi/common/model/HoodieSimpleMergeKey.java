@@ -56,12 +56,12 @@ public class HoodieSimpleMergeKey implements HoodieMergeKey {
       return false;
     }
     HoodieSimpleMergeKey that = (HoodieSimpleMergeKey) o;
-    return Objects.equals(simpleKey.getRecordKey(), that.simpleKey.getRecordKey());
+    return Objects.equals(simpleKey, that.simpleKey);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(simpleKey.getRecordKey());
+    return Objects.hash(simpleKey);
   }
 
   @Override

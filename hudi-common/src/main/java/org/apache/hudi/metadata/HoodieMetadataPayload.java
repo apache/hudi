@@ -627,6 +627,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return new HoodieAvroRecord<>(key, payload);
   }
 
+  public HoodieSecondaryIndexInfo getSecondaryIndexMetadata() {
+    return secondaryIndexMetadata;
+  }
+
   public String getRecordKeyFromSecondaryIndex() {
     return secondaryIndexMetadata.getRecordKey();
   }

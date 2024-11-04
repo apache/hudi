@@ -95,7 +95,12 @@ public class HoodieMergeHandleFactory {
     // if it is a metadata table and partition path corresponds to a secondary index, then we need to use HoodieCompositeMergeKey, else use HoodieSimpleMergeKey
     boolean isMergingSecondaryIndex = table.isMetadataTable() && partitionPath.startsWith(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
     Map<HoodieMergeKey, HoodieRecord<T>> mergeKeyToNewRecords = keyToNewRecords.entrySet().stream()
-        .collect(toMap(e -> isMergingSecondaryIndex ? new HoodieCompositeMergeKey<>(e.getKey(), partitionPath) : new HoodieSimpleMergeKey(e.getValue().getKey()), Map.Entry::getValue));
+        .collect(toMap(e -> isMergingSecondaryIndex ? new HoodieCompositeMergeKey<>(e.getKey(), partitionPath) : new HoodieSimpleMergeKey(e.getValue().getKey()), e -> {
+          HoodieRecord<T> record = e.getValue();
+          HoodieMergeKey mergeKey = isMergingSecondaryIndex ? new HoodieCompositeMergeKey<>(e.getKey(), partitionPath) : new HoodieSimpleMergeKey(record.getKey());
+          record.setMergeKey(mergeKey);
+          return record;
+        }));
     if (table.requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, mergeKeyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);

@@ -782,7 +782,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql("set hoodie.enable.data.skipping=true")
       spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz1')")(
-        Seq(2, "row2", "abc", "p2")
+
+      )
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz2')")(
+        Seq(3, "row3", "xyz2", "p2")
       )
     }
   }
@@ -849,11 +852,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            | (4, 'row4', 'def', "p1")
            """.stripMargin)
 
-      /*spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row3'")
       spark.sql(s"update $tableName set not_record_key_col = 'xyz1' where record_key_col = 'row3'")
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row3'")
-      spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row3'")*/
-      // spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row3'")
       val metadataTableFSView = HoodieSparkTable.create(getWriteConfig(hudiOpts), context()).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
       try {
         val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
@@ -881,7 +883,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql("set hoodie.enable.data.skipping=true")
       spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz1')")(
-        Seq(2, "row2", "abc", "p2")
+
+      )
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz2')")(
+        Seq(3, "row3", "xyz2", "p1")
       )
     }
   }
@@ -1062,6 +1067,9 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql("set hoodie.metadata.enable=true")
       spark.sql("set hoodie.enable.data.skipping=true")
       spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz1')")(
+        Seq(3, "row3", "xyz1", "p1")
+      )
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('abc')")(
         Seq(1, "row1", "abc", "p1")
       )
@@ -1151,8 +1159,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql("set hoodie.metadata.enable=true")
       spark.sql("set hoodie.enable.data.skipping=true")
       spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
-      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz1')")(
-        Seq(2, "row2", "abc", "p2")
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('abc')")(
+        Seq(3, "row3", "abc", "p2")
       )
     }
   }

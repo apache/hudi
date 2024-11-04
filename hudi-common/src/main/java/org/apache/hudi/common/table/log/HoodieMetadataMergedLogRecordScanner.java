@@ -19,6 +19,10 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieCompositeMergeKey;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieMergeKey;
 import org.apache.hudi.common.model.HoodieMetadataRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,8 +31,12 @@ import org.apache.hudi.common.model.HoodieSimpleMergeKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -85,10 +93,19 @@ public class HoodieMetadataMergedLogRecordScanner extends BaseHoodieMergedLogRec
   @Override
   public <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
     // Merge the new record with the existing record in the map
+    boolean isMergingSecondaryIndex = MetadataPartitionType.SECONDARY_INDEX.equals(MetadataPartitionType.fromPartitionPath(newRecord.getPartitionPath()));
     HoodieMergeKey mergeKey = newRecord.getMergeKey();
     if (mergeKey == null) {
       // If mergeKey is null, then create a simple merge key using record key
-      mergeKey = new HoodieSimpleMergeKey(newRecord.getKey());
+      if (isMergingSecondaryIndex) {
+        HoodieMetadataPayload payload = (HoodieMetadataPayload) newRecord.getData();
+        String secondaryKey = newRecord.getRecordKey();
+        String recordKey = payload.getRecordKeyFromSecondaryIndex();
+        mergeKey = new HoodieCompositeMergeKey<>(secondaryKey.concat(recordKey), newRecord.getPartitionPath());
+      } else {
+        mergeKey = new HoodieSimpleMergeKey(newRecord.getKey());
+      }
+      newRecord.setMergeKey(mergeKey);
     }
     HoodieRecord<T> oldRecord = (HoodieRecord<T>) records.get(mergeKey);
     if (oldRecord != null) {
@@ -108,6 +125,49 @@ public class HoodieMetadataMergedLogRecordScanner extends BaseHoodieMergedLogRec
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
       records.put(mergeKey, newRecord.copy());
+    }
+  }
+
+  @Override
+  protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
+    boolean isMergingSecondaryIndex = MetadataPartitionType.SECONDARY_INDEX.equals(MetadataPartitionType.fromPartitionPath(deleteRecord.getPartitionPath()));
+    if (!isMergingSecondaryIndex) {
+      super.processNextDeletedRecord(deleteRecord);
+      return;
+    }
+
+    HoodieMergeKey mergeKey = deleteRecord.getMergeKey();
+    if (mergeKey == null) {
+      // If mergeKey is null, then create a simple merge key using record key
+      mergeKey = new HoodieSimpleMergeKey(deleteRecord.getHoodieKey());
+    }
+    HoodieRecord oldRecord = records.get(mergeKey);
+    String key = deleteRecord.getRecordKey();
+    //HoodieRecord oldRecord = records.get(key);
+    if (oldRecord != null) {
+      // Merge and store the merged record. The ordering val is taken to decide whether the same key record
+      // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
+      // For same ordering values, uses the natural order(arrival time semantics).
+
+      Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
+      Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+      // Checks the ordering value does not equal to 0
+      // because we use 0 as the default value which means natural order
+      boolean choosePrev = !deleteOrderingVal.equals(0)
+          && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
+          && curOrderingVal.compareTo(deleteOrderingVal) > 0;
+      if (choosePrev) {
+        // The DELETE message is obsolete if the old message has greater orderingVal.
+        return;
+      }
+    }
+    // Put the DELETE record
+    if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
+      records.put(mergeKey, SpillableMapUtils.generateEmptyPayload(key,
+          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
+    } else {
+      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
+      records.put(mergeKey, record);
     }
   }
 

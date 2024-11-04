@@ -1591,7 +1591,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
     deleteRecordList = copyOfRecords1.subList(10, 20).stream()
         .map(s -> Pair.of(DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
-            ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), -1), -1L))
+            ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), -1, Option.empty()), -1L))
         .collect(Collectors.toList());
 
     HoodieDeleteBlock deleteBlock2 = new HoodieDeleteBlock(deleteRecordList, false, header);
@@ -1601,7 +1601,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // The deletion should work because the keys has greater ordering value.
     List<DeleteRecord> deletedRecords3 = copyOfRecords1.subList(20, 30).stream()
         .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
-            ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), 1)))
+            ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), 1, Option.empty())))
         .collect(Collectors.toList());
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "104");

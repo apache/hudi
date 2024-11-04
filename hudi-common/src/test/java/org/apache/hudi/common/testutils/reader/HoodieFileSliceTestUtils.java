@@ -239,7 +239,7 @@ public class HoodieFileSliceTestUtils {
     return new HoodieDeleteBlock(
         hoodieRecords.stream().map(
             r -> Pair.of(DeleteRecord.create(
-                r.getKey(), r.getOrderingValue(schema, props)), r.getCurrentLocation().getPosition()))
+                r.getKey(), r.getOrderingValue(schema, props), Option.empty()), r.getCurrentLocation().getPosition()))
             .collect(Collectors.toList()),
         writePositions,
         header

@@ -595,7 +595,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
     } else {
       long position = shouldWriteRecordPositions ? record.getCurrentPosition() : -1L;
-      recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(record.getKey(), orderingVal), position));
+      recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(record.getKey(), orderingVal, Option.empty()), position));
     }
     numberOfRecords++;
   }

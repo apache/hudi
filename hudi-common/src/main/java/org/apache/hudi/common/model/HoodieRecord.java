@@ -213,6 +213,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return key;
   }
 
+  public void setMergeKey(HoodieMergeKey mergeKey) {
+    this.mergeKey = mergeKey;
+  }
+
   public HoodieMergeKey getMergeKey() {
     return mergeKey;
   }

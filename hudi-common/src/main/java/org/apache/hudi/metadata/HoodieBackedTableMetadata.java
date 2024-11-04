@@ -30,6 +30,7 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCompositeMergeKey;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -841,6 +842,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       Set<String> keySet = new TreeSet<>(recordKeys);
       Set<String> deletedRecordsFromLogs = new HashSet<>();
+      // Map of primary key -> log record that is not deleted for all input recordKeys
       Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
       logRecordScanner.getRecords().forEach(record -> {
         HoodieMetadataPayload payload = record.getData();
@@ -957,7 +959,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         HoodieMetadataPayload payload = record.getData();
         if (!payload.isDeleted()) {
           String secondaryKey = payload.key;
-          if (secondaryKeySet.contains(secondaryKey)) {
+          if (secondaryKeySet.contains(secondaryKey) || secondaryKey.equals("dummySecondaryKey")) {
             String recordKey = payload.getRecordKeyFromSecondaryIndex();
             logRecordsMap.computeIfAbsent(secondaryKey, k -> new HashMap<>()).put(recordKey, record);
           }
@@ -999,12 +1001,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
 
     HoodieTimer readTimer = HoodieTimer.start();
+    // baseFileRecordsMap: secondary key -> List of records in secondary index base file (possible that it is not compacted)
     Map<String, List<HoodieRecord<HoodieMetadataPayload>>> baseFileRecordsMap =
         fetchBaseFileAllRecordsByKeys(reader, sortedKeys, true, partitionName);
+    // logRecordsMap: secondaryKey -> Map[recordKey -> HoodieRecord] for the given secondary key
     if (logRecordsMap.isEmpty() && !baseFileRecordsMap.isEmpty()) {
       // file slice has only base file
       timings.add(timer.endTimer());
       if (!deleteRecordKeysFromLogs.isEmpty()) { // remove deleted records from log from base file record list
+        // TODO: baseFileRecordsMap could have multiple records for a single secondary key. Remove only the one corresponding to mergeKey.
         deleteRecordKeysFromLogs.forEach(key -> baseFileRecordsMap.remove(key));
       }
       return baseFileRecordsMap;
@@ -1012,7 +1017,21 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     // check why we are not considering records missing from logs, but only from base file.
     logRecordsMap.forEach((secondaryKey, logRecords) -> {
-      if (!baseFileRecordsMap.containsKey(secondaryKey)) {
+      // Handle the dummy case first
+      if (secondaryKey.equals("dummySecondaryKey")) {
+        Set<String> recordKeysForDummySecondaryKeys = logRecords.keySet();
+        // iterate over baseFileRecordsMap and for each entry, remove the item from the value that has same record key as the recordKeysForDummySecondaryKeys
+        baseFileRecordsMap.forEach((key, value) -> value.removeIf(record -> {
+          HoodieMetadataPayload secondaryIndexPayload = record.getData();
+          if (recordKeysForDummySecondaryKeys.contains(secondaryIndexPayload.getRecordKeyFromSecondaryIndex())) {
+            logRecords.remove(secondaryIndexPayload.getRecordKeyFromSecondaryIndex());
+            return true;
+          }
+          return false;
+        }));
+      }
+
+      if (!baseFileRecordsMap.containsKey(secondaryKey) && !secondaryKey.equals("dummySecondaryKey")) {
         List<HoodieRecord<HoodieMetadataPayload>> recordList = logRecords
             .values()
             .stream()
@@ -1021,31 +1040,44 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
         resultMap.put(secondaryKey, recordList);
       } else {
-        List<HoodieRecord<HoodieMetadataPayload>> baseFileRecords = baseFileRecordsMap.get(secondaryKey);
+        List<HoodieRecord<HoodieMetadataPayload>> baseFileRecords =
+            secondaryKey.equals("dummySecondaryKey") ? baseFileRecordsMap.values().stream().flatMap(List::stream).collect(Collectors.toList()) : baseFileRecordsMap.get(secondaryKey);
         List<HoodieRecord<HoodieMetadataPayload>> resultRecords = new ArrayList<>();
 
         baseFileRecords.forEach(prevRecord -> {
           HoodieMetadataPayload prevPayload = prevRecord.getData();
           String recordKey = prevPayload.getRecordKeyFromSecondaryIndex();
-
-          if (!logRecords.containsKey(recordKey)) {
+          // TODO: fix here based on merge key. prevRecord is a secondary index record in previous base file
+          // logRecords: row3 -> "HoodieRecord{key=HoodieKey { recordKey=abc partitionPath=secondary_index_idx_not_record_key_col}, currentLocation='null', newLocation='null'}"
+          // prevRecord: HoodieRecord{key=HoodieKey { recordKey=abc partitionPath=secondary_index_idx_not_record_key_col}, currentLocation='null', newLocation='null'}
+          // by this time, all log records with dummySecondaryKey should have been removed from logRecords
+          if (logRecords.isEmpty() || (!logRecords.containsKey(recordKey) && !deleteRecordKeysFromLogs.contains(prevPayload.key))) {
             resultRecords.add(prevRecord);
           } else {
             // Merge the records
-            HoodieRecord<HoodieMetadataPayload> newRecord = logRecords.get(recordKey);
-            HoodieMetadataPayload newPayload = newRecord.getData();
-            checkState(recordKey.equals(newPayload.getRecordKeyFromSecondaryIndex()), "Record key mismatch between log record and secondary index record");
-            // The rules for merging the prevRecord and the latestRecord is noted below. Note that this only applies for SecondaryIndex
-            // records in the metadata table (which is the only user of this API as of this implementation)
-            // 1. Iff latestRecord is deleted (i.e it is a tombstone) AND prevRecord is null (i.e not buffered), then discard latestRecord
-            //    basefile never had a matching record?
-            // 2. Iff latestRecord is deleted AND prevRecord is non-null, then remove prevRecord from the buffer AND discard the latestRecord
-            // 3. Iff latestRecord is not deleted AND prevRecord is non-null, then remove the prevRecord from the buffer AND retain the latestRecord
-            //    The rationale is that the most recent record is always retained (based on arrival time). TODO: verify this logic
-            // 4. Iff latestRecord is not deleted AND prevRecord is null, then retain the latestRecord (same rationale as #1)
-            if (!newPayload.isSecondaryIndexDeleted()) {
-              // All the four cases boils down to just "Retain newRecord iff it is not deleted"
-              resultRecords.add(newRecord);
+            if (logRecords.containsKey(recordKey)) {
+              HoodieRecord<HoodieMetadataPayload> newRecord = logRecords.get(recordKey);
+              HoodieMetadataPayload newPayload = newRecord.getData();
+              checkState(recordKey.equals(newPayload.getRecordKeyFromSecondaryIndex()), "Record key mismatch between log record and secondary index record");
+              // The rules for merging the prevRecord and the latestRecord is noted below. Note that this only applies for SecondaryIndex
+              // records in the metadata table (which is the only user of this API as of this implementation)
+              // 1. Iff latestRecord is deleted (i.e it is a tombstone) AND prevRecord is null (i.e not buffered), then discard latestRecord
+              //    basefile never had a matching record?
+              // 2. Iff latestRecord is deleted AND prevRecord is non-null, then remove prevRecord from the buffer AND discard the latestRecord
+              // 3. Iff latestRecord is not deleted AND prevRecord is non-null, then remove the prevRecord from the buffer AND retain the latestRecord
+              //    The rationale is that the most recent record is always retained (based on arrival time). TODO: verify this logic
+              // 4. Iff latestRecord is not deleted AND prevRecord is null, then retain the latestRecord (same rationale as #1)
+              if (!newPayload.isSecondaryIndexDeleted()) {
+                // All the four cases boils down to just "Retain newRecord iff it is not deleted"
+                resultRecords.add(newRecord);
+              }
+            } else {
+              logRecords.entrySet().stream().filter(e -> {
+                HoodieMetadataPayload payload = (HoodieMetadataPayload) e.getValue().getData();
+                return sortedKeys.contains(payload.key);
+              }).forEach(e -> {
+                resultRecords.add((HoodieRecord<HoodieMetadataPayload>) e.getValue());
+              });
             }
           }
         });
@@ -1076,7 +1108,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return keySet.contains(payload.getRecordKeyFromSecondaryIndex());
     }).collect(Collectors.toMap(record -> {
       HoodieMetadataPayload payload = (HoodieMetadataPayload) record.getData();
-      return payload.getRecordKeyFromSecondaryIndex();
+      String secondaryKey = record.getRecordKey();
+      String recordKey = payload.getRecordKeyFromSecondaryIndex();
+      String mergeKey = secondaryKey.concat(recordKey);
+      record.setMergeKey(new HoodieCompositeMergeKey<>(mergeKey, record.getPartitionPath()));
+      return recordKey;
     }, record -> record));
   }
 }
