@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hadoop.fs.GlobPattern;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -175,20 +176,22 @@ public class HoodieCommitMetadata implements Serializable {
    * @param basePath    The base path
    * @return the file full path to file status mapping
    */
-  public Map<String, StoragePathInfo> getFullPathToInfo(HoodieStorage storage,
-                                                        String basePath) {
+  public Map<String, StoragePathInfo> getFullPathToInfo(HoodieStorage storage, String basePath, String fileNamePattern) {
     Map<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
+    GlobPattern globMatcher = new GlobPattern(fileNamePattern);
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
       // Iterate through all the written files.
       for (HoodieWriteStat stat : stats) {
         String relativeFilePath = stat.getPath();
-        StoragePath fullPath = relativeFilePath != null
-            ? FSUtils.constructAbsolutePath(basePath, relativeFilePath) : null;
-        if (fullPath != null) {
-          long blockSize = storage.getDefaultBlockSize(fullPath);
-          StoragePathInfo pathInfo = new StoragePathInfo(
-              fullPath, stat.getFileSizeInBytes(), false, (short) 0, blockSize, 0);
-          fullPathToInfoMap.put(fullPath.getName(), pathInfo);
+        if (fileNamePattern.isEmpty() || globMatcher.matches(relativeFilePath)) {
+          StoragePath fullPath = relativeFilePath != null
+              ? FSUtils.constructAbsolutePath(basePath, relativeFilePath) : null;
+          if (fullPath != null) {
+            long blockSize = storage.getDefaultBlockSize(fullPath);
+            StoragePathInfo pathInfo = new StoragePathInfo(
+                    fullPath, stat.getFileSizeInBytes(), false, (short) 0, blockSize, 0);
+            fullPathToInfoMap.put(fullPath.getName(), pathInfo);
+          }
         }
       }
     }

@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 
@@ -80,7 +81,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     // TODO : check if maxMemory is not greater than JVM or executor memory
     // TODO - rollback any compactions in flight
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
+    List<String> partitionPaths = listPartitionsPaths(engineContext, metaClient.getStorage(), writeConfig, metaClient.getBasePath());
 
     // filter the partition paths if needed to reduce list status
     partitionPaths = filterPartitionPathsByStrategy(writeConfig, partitionPaths);
@@ -157,6 +158,10 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
       LOG.warn("After filtering, Nothing to compact for {}", metaClient.getBasePathV2());
     }
     return compactionPlan;
+  }
+
+  protected List<String> listPartitionsPaths(HoodieEngineContext engineContext, HoodieStorage storage, HoodieWriteConfig writeConfig, String basePathStr) {
+    return FSUtils.getAllPartitionPaths(engineContext, storage, writeConfig.getMetadataConfig(), basePathStr);
   }
 
   protected abstract HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations);

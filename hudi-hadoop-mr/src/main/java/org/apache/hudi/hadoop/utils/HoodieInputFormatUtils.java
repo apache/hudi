@@ -520,15 +520,13 @@ public class HoodieInputFormatUtils {
    * @param metadataList The metadata list to read the data from
    * @return the affected file status array
    */
-  public static List<StoragePathInfo> listAffectedFilesForCommits(Configuration hadoopConf,
-                                                                  StoragePath basePath,
-                                                                  List<HoodieCommitMetadata> metadataList) {
+  public static List<StoragePathInfo> listAffectedFilesForCommits(Configuration hadoopConf, StoragePath basePath, List<HoodieCommitMetadata> metadataList, String fileNamePattern) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
     HoodieStorage storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata : metadataList) {
-      fullPathToInfoMap.putAll(metadata.getFullPathToInfo(storage, basePath.toString()));
+      fullPathToInfoMap.putAll(metadata.getFullPathToInfo(storage, basePath.toString(), fileNamePattern));
     }
     return new ArrayList<>(fullPathToInfoMap.values());
   }

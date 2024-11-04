@@ -26,11 +26,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static java.util.stream.Collectors.toList;
@@ -50,6 +52,21 @@ public class HoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, 
     // compactions only
     return writeConfig.getCompactionStrategy().generateCompactionPlan(writeConfig, operations,
         CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
+  }
+
+  @Override
+  protected List<String> listPartitionsPaths(HoodieEngineContext engineContext, HoodieStorage storage, HoodieWriteConfig writeConfig, String basePathStr) {
+    String compactionStrategy = writeConfig.getCompactionStrategy().getClass().getName();
+    LOG.info("Compaction strategy is " + compactionStrategy);
+    if (compactionStrategy.equals("com.heap.datalake.compaction.SpecificPartitionsCompactionStrategy")) {
+      String[] partitions = writeConfig.getString("hoodie.compaction.include.partitions").split(",");
+      if (partitions.length > 0) {
+        LOG.info("Skipping listing all partitions in favor of partitions provided in config: " + Arrays.toString(partitions));
+        return Arrays.asList(partitions);
+      }
+    }
+    LOG.info("Defaulting to listing all partitions");
+    return super.listPartitionsPaths(engineContext, storage, writeConfig, basePathStr);
   }
 
   @Override

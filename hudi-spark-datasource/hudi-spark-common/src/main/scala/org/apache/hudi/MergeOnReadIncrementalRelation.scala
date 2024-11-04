@@ -108,13 +108,14 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
           metaClient, timeline, affectedFilesInCommits)
 
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
+        val globMatcher = new GlobPattern("*" + globPartitionPattern)
 
-        modifiedPartitions.asScala.flatMap { relativePartitionPath =>
+        modifiedPartitions.asScala.filter(p => globMatcher.matches(p)).flatMap { relativePartitionPath =>
           fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
         }.toSeq
       }
 
-      buildSplits(filterFileSlices(fileSlices, globPattern))
+      buildSplits(fileSlices)
     }
   }
 
@@ -181,7 +182,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
 
   protected lazy val affectedFilesInCommits: java.util.List[StoragePathInfo] = {
-    listAffectedFilesForCommits(conf, metaClient.getBasePathV2, commitsMetadata)
+    listAffectedFilesForCommits(conf, metaClient.getBasePathV2, commitsMetadata, "*" + globPathPattern)
   }
 
   protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {
@@ -233,8 +234,10 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     }
   }
 
-  protected def globPattern: String =
+  protected def globPathPattern: String =
     optParams.getOrElse(DataSourceReadOptions.INCR_PATH_GLOB.key, DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
 
+  protected def globPartitionPattern: String =
+    optParams.getOrElse(DataSourceReadOptions.INCR_PARTITION_GLOB.key, DataSourceReadOptions.INCR_PARTITION_GLOB.defaultValue)
 }
 

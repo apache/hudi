@@ -151,7 +151,7 @@ public class WriteProfiles {
       case COPY_ON_WRITE:
         return metadata.getFileIdToInfo(basePath);
       case MERGE_ON_READ:
-        return metadata.getFullPathToInfo(new HoodieHadoopStorage(basePath, hadoopConf), basePath);
+        return metadata.getFullPathToInfo(new HoodieHadoopStorage(basePath, hadoopConf), basePath, "");
       default:
         throw new AssertionError();
     }
