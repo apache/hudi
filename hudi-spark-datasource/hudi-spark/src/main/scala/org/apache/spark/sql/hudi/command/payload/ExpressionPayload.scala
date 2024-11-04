@@ -23,11 +23,12 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
-import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils, ValidationUtils, Option => HOption}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, StringUtils, ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
@@ -132,12 +133,23 @@ class ExpressionPayload(@transient record: GenericRecord,
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
-        if (targetRecord.isEmpty || needUpdatingPersistedRecord(targetRecord.get, resultingAvroRecord, properties)) {
+        if (targetRecord.isEmpty) {
           resultRecordOpt = HOption.of(resultingAvroRecord)
         } else {
-          // if the PreCombine field value of targetRecord is greater
-          // than the new incoming record, just keep the old record value.
-          resultRecordOpt = HOption.of(targetRecord.get)
+          val orderingField = ConfigUtils.getOrderingField(properties)
+          if (StringUtils.isNullOrEmpty(orderingField)) {
+            resultRecordOpt = HOption.of(resultingAvroRecord)
+          } else {
+            val originalPayload = properties.getProperty(PAYLOAD_ORIGINAL_AVRO_PAYLOAD)
+            val consistentLogicalTimestampEnabled = properties.getProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
+              KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean
+            val incomingRecordPayload = HoodieRecordUtils.loadPayload(originalPayload, resultingAvroRecord,
+              HoodieAvroUtils.getNestedFieldVal(resultingAvroRecord, orderingField, true, consistentLogicalTimestampEnabled)
+                .asInstanceOf[Comparable[_]]).asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
+            // if the PreCombine field value of targetRecord is greater
+            // than the new incoming record, just keep the old record value.
+            resultRecordOpt = incomingRecordPayload.combineAndGetUpdateValue(targetRecord.get, writerSchema, properties)
+          }
         }
       }
     }
@@ -313,6 +325,11 @@ object ExpressionPayload {
    * Property holding record's original (Avro) schema
    */
   val PAYLOAD_RECORD_AVRO_SCHEMA = "hoodie.payload.record.schema"
+
+  /**
+   * Original record payload
+   */
+  val PAYLOAD_ORIGINAL_AVRO_PAYLOAD = "hoodie.payload.original.avro.payload"
 
   /**
    * Property associated w/ expected combined schema of the joined records of the source (incoming batch)
