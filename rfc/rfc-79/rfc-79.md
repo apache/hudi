@@ -95,7 +95,7 @@ The new cancel API request_cancel will perform the following steps
 
 1. Start a transaction
 2. Reload active timeline
-3. If instant is already comitted, abort
+3. If instant is already comitted, throw an exception
 4. If instant is already aborted, exit without throwing exception
 5. create a file under /.cancel with the target instant name
 6. End the transaction
