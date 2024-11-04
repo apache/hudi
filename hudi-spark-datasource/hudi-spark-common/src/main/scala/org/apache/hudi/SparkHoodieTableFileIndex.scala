@@ -376,23 +376,16 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   /**
    * @VisibleForTesting
    */
-  def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
-    val tableConfig = metaClient.getTableConfig
-    if (null != tableConfig.getKeyGeneratorClassName
-      && tableConfig.getKeyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
-      && null != tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
-      && tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
-      .matches("SCALAR|UNIX_TIMESTAMP|EPOCHMILLISECONDS|EPOCHMICROSECONDS")) {
-      // For TIMESTAMP key generator when TYPE is SCALAR, UNIX_TIMESTAMP,
-      // EPOCHMILLISECONDS, or EPOCHMICROSECONDS,
-      // we couldn't reconstruct initial partition column values from partition paths due to lost data after formatting in most cases.
-      // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
-      Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
-    } else {
-      HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
-        configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-        sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
-    }
+  def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
+    HoodieSparkUtils.parsePartitionColumnValues(
+      partitionColumns,
+      partitionPath,
+      getBasePath,
+      schema,
+      metaClient.getTableConfig.propsMap,
+      configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
+      sparkParsePartitionUtil,
+      shouldValidatePartitionColumns(spark))
   }
 
   private def arePartitionPathsUrlEncoded: Boolean =
