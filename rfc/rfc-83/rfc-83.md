@@ -35,13 +35,12 @@ JIRA:
 
 ## Abstract
 
-For Hudi incremental queries, Hudi needs to scan the timeline to find the incremental commits to be pulled.
+Hudi incremental queries require scanning the timeline to find the relevant commits.
 Current incremental queries use commits' start times(instant times) to sort the timeline and find eligible commits, 
 but this introduces the necessity of handling hollow commits, which complicates the incremental logic.
 
-Since Hudi 1.x, Hudi introduces completion time and each instant will now have two important timestamps: 
-start time and completion time, making an instant no longer a "dot" in the timeline but a "range" which is more realistic
-and offers finer control and management over the timeline.
+Since Hudi 1.x, each instant has two important timestamps: start time and completion time. 
+This change makes an instant a "range" rather than a single "dot" in the timeline, enabling finer control and management.
 
 This RFC aims to change Hudi incremental-related logic to use commits' completion times by default instead of start times 
 to simplify the timeline scanning logic and improve the overall incremental experience.
@@ -55,15 +54,14 @@ C1              [------]
 C2                    [---------
 C3                       [----]
 ```
-In the timeline above, there are three Hudi commits: C1, C2, and C3. Among which, C1 and C3 are completed instants, while C2 is still inflight.
+In the timeline above, there are three Hudi commits: C1, C2, and C3. C1 and C3 are completed instants, while C2 is still inflight.
 Suppose a query is scanning the entire timeline that includes all three commits, then C2 would be considered a hollow commit 
 as it hasn't completed yet. 
 
-Incremental query relies on checkpointing, which also uses start times, and will return a new checkpoint when it finishes. 
-If the query reads to C3, then the next checkpoint would be C3 and the future incremental queries 
-would only read commits that start later than C3.
-But C2, if completed normally after some time later, would never be read again because the checkpoint has already been moved 
-to `C3.start`. This will cause the data loss.
+Incremental query relies on checkpointing, which also uses start times, and will return a new checkpoint when it finishes.
+If the query reads to C3, the next checkpoint will be `C3.start`, and future incremental queries will only read commits that start after `C3.start`.
+However, if C2 completes later, it will never be read, as the checkpoint has already moved to `C3.start`. 
+This will cause the data loss.
 ```
 If we ignore the hollow commit, then the checkpoint would be moved to C3.start
 Timeline —----------------------
@@ -95,8 +93,8 @@ larger than `C3.completion` thus C2 can be picked up by future incremental query
 we no longer need to concern about handling hollow commits when running incremental queries.
 
 ### Problem 2: Cloud Events Source Incremental Query
-Existing Hudi supports S3/GCS events incremental source, it's tightly coupled with `QueryInfo` that uses 
-instant start times everywhere.
+Existing Hudi supports an S3/GCS events incremental source, which is tightly coupled with `QueryInfo`, 
+using instant start times throughout.
 To better support the new incremental assumptions and cleaner modularization, 
 it's necessary to refactor the existing cloud events incremental classes and provide a unified interface that 
 can work across Hudi incremental source, Flink incremental source, and cloud events incremental source.
@@ -104,8 +102,7 @@ can work across Hudi incremental source, Flink incremental source, and cloud eve
 For the background, let's first review how existing cloud events source operate. We will cover the refactoring
 design in the implementation section.
 
-The existing cloud events source is consisted of 
-mainly five steps:
+The existing cloud events source consists of five main steps:
 1. Generate `QueryInfo` based on last checkpoint and configs
 2. Pass `QueryInfo` to `QueryRunner` and get events info from Hudi cloud metadata table
 3. Apply filters (e.g. source limiting filters, file filters, etc.) to events info returned by `QueryRunner`
@@ -128,8 +125,8 @@ and helps scan the timeline to find eligible commits and use commits metadata to
 Hudi table. This class was the focus of [HUDI-8141](https://issues.apache.org/jira/browse/HUDI-8141).
 - `QueryInfo`: This class contains the logic of finding timeline based on start time range.
 
-Existing `HoodieIncrSource` will analyze the table timeline and generate `QueryInfo` that contains start and 
-end instant times. This range would be passed to `IncrementalRelation` for further analyzing and filtering.
+`HoodieIncrSource` analyzes the table timeline and generates `QueryInfo` containing start and end instant times. 
+This range would be passed to `IncrementalRelation` for further analyzing and filtering.
 `IncrementalRelation` will fetch available commits within the range and build a scan RDD that covers the incremental data.
 The filter would be applied on the returned dataset: 
 ```
@@ -139,7 +136,7 @@ spark.read.load(...)
 .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, endInstantTime))
 ```
 
-After switching to use completion time, there are these key changes:
+Switching to completion time introduces the following key changes:
 1. `HoodieIncrSource` would use `IncrementalQueryAnalyzer` and `QueryContext` that work under completion time
 semantics instead of using `QueryInfo`.
 2. For filtering, we cannot rely on some range like (start, end] because there may be hollow commits in the range.
@@ -148,7 +145,7 @@ We will need to rely on the list of eligible commits stored in the `QueryContext
 .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               String.join("','", instantTimeList)));
 ```
-This would enough to cover incremental query logic that goes through `HoodieIncrSource` and `IncrementalRelation`.
+This change is enough to cover incremental query logic for `HoodieIncrSource` and `IncrementalRelation`.
 After the change, now `HoodieIncrSource` would behave like this:
 1. Use the last checkpoint and query configs to build `IncrementalQueryAnalyzer` and get `QueryContext`.
 2. Run snapshot/incremental query with the info from `QueryContext` and this will trigger the underlying `IncrementalRelation`.
@@ -161,7 +158,7 @@ it's very challenging to plug in `IncrementalQueryAnalyzer` and migrate logic we
 cloud events incremental source. Even if we managed to do so, the code would not be maintainable. Hence, a refactoring is necessary.
 
 We've already covered the updated logic flow of `HoodieIncrSource` and cloud events incremental source.
-By comparing them, we can come up with three abstract steps:
+Comparison of these sources reveals three abstract steps:
 - Get metadata
 - Fetch data
 - Post actions
@@ -208,5 +205,5 @@ The dependency graph is presented here:
 
 ## Test Plan
 
-This RFC does not add a new feature, it's changing the behavior of incremental query and refactoring 
-the incremental logic flow. Existing unit tests should be able to cover this change.
+This RFC does not add a new feature; it changes the behavior of incremental queries and refactors the incremental logic flow.
+Existing unit tests should be able to cover this change.
