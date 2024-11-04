@@ -3123,7 +3123,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withAutoCommit(boolean autoCommit) {
-      writeConfig.setValue(AUTO_COMMIT_ENABLE, String.valueOf(autoCommit));
+      // writeConfig.setValue(AUTO_COMMIT_ENABLE, String.valueOf(autoCommit));
       return this;
     }
 
