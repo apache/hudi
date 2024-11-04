@@ -112,9 +112,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   }
 
   /**
-   * Unit test for `doParsePartitionColumnValues` method in `HoodieFileIndex`.
+   * Unit test for `parsePartitionColumnValues` method in `SparkHoodieTableFileIndex`.
    *
-   * This test verifies that the `doParsePartitionColumnValues` method correctly returns
+   * This test verifies that the `parsePartitionColumnValues` method correctly returns
    * partition values when the `propsMap` in the table configuration does not contain the
    * expected timestamp configuration key, simulating a `null` scenario. Specifically,
    * this test validates the behavior for the `TIMESTAMP` key generator type, ensuring
@@ -136,7 +136,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val partitionPath = "2023/10/28"
     val fileIndex = HoodieFileIndex(spark, metaClient, Some(schema), queryOpts)
     // Create file index and validate the result
-    val result = fileIndex.doParsePartitionColumnValues(partitionColumns, partitionPath)
+    val result = fileIndex.parsePartitionColumnValues(partitionColumns, partitionPath)
     assertEquals(1, result.length)
     assertEquals(UTF8String.fromString(partitionPath), result(0))
   }

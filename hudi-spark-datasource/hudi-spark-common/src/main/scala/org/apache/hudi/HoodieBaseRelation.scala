@@ -500,6 +500,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         relativePath,
         basePath,
         tableStructSchema,
+        tableConfig.propsMap,
         timeZoneId,
         sparkAdapter.getSparkParsePartitionUtil,
         conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
