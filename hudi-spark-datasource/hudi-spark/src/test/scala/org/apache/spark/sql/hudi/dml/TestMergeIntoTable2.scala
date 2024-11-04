@@ -1228,6 +1228,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             ""
           }
           val sourceTable = generateTableName
+
           spark.sql(
             s"""
                |CREATE TABLE $sourceTable (
@@ -1238,6 +1239,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |) USING hudi
                |LOCATION '${tmp.getCanonicalPath}/$sourceTable'
                |""".stripMargin)
+
           spark.sql(
             s"""
                | INSERT INTO $sourceTable
@@ -1295,7 +1297,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |VALUES
                |    (s.id, s.name, s.price, s.ts)
                |""".stripMargin)
-
 
           checkAnswer(s"select id, name, price, ts from $targetTable ORDER BY id")(
             Seq(1, "John Doe", 19, if (recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING.name()) 1L else 1598886001L),

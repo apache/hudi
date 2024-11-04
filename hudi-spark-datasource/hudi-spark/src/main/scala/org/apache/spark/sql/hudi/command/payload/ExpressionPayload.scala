@@ -186,8 +186,6 @@ class ExpressionPayload(@transient record: GenericRecord,
         val incomingRecordPayload = HoodieRecordUtils.loadPayload(originalPayload, incomingRecord,
           HoodieAvroUtils.getNestedFieldVal(incomingRecord, orderingField, true, consistentLogicalTimestampEnabled)
             .asInstanceOf[Comparable[_]]).asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
-        // if the PreCombine field value of targetRecord is greater
-        // than the new incoming record, just keep the old record value.
         incomingRecordPayload.combineAndGetUpdateValue(existingRecord, schema, properties)
       }
     }
