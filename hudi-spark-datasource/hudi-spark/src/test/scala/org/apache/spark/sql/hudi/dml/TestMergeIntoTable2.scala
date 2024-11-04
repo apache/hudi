@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.common.model.FirstValueAvroPayload
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -954,7 +955,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MOR Table with create empty partitions") {
     withTempDir { tmp =>
-
       val sourceTable = generateTableName
       val path1 = tmp.getCanonicalPath.concat("/source")
       spark.sql(
@@ -1220,7 +1220,13 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   test("Test MergeInto with various payloads") {
       withTempDir { tmp =>
         Seq(RecordMergeMode.EVENT_TIME_ORDERING.name(),
-          RecordMergeMode.OVERWRITE_WITH_LATEST.name()).foreach { recordMergeMode =>
+          RecordMergeMode.COMMIT_TIME_ORDERING.name(),
+          RecordMergeMode.CUSTOM.name()).foreach { recordMergeMode =>
+          val payloadClassExtraString = if (recordMergeMode == RecordMergeMode.CUSTOM.name()) {
+            s" payloadClass = '${classOf[FirstValueAvroPayload].getName}',"
+          } else {
+            ""
+          }
           val sourceTable = generateTableName
           spark.sql(
             s"""
@@ -1236,7 +1242,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             s"""
                | INSERT INTO $sourceTable
                | VALUES (1, 'John Doe', 19, 1),
-               |        (4, 'Alice Johnson', 49, 2)
+               |        (4, 'Alice Johnson', 49, 2),
+               |        (5, 'Baker Mayfield', 6, 10)
                |""".stripMargin)
 
           val targetTable = generateTableName
@@ -1252,6 +1259,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |  type = 'cow',
                |  primaryKey = 'id',
                |  preCombineField = 'ts',
+               |  $payloadClassExtraString
                |  recordMergeMode = '$recordMergeMode'
                | )
                |LOCATION '${tmp.getCanonicalPath}/$targetTable'
@@ -1267,6 +1275,8 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |     SELECT 2, 'Jane Doe', 24, 1598972400
                |     UNION ALL
                |     SELECT 3, 'Bob Smith', 14, 1599058800
+               |     UNION ALL
+               |     SELECT 5, 'Baker Mayfield', 60, 10
                |)
                |""".stripMargin)
 
@@ -1288,10 +1298,11 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
 
           checkAnswer(s"select id, name, price, ts from $targetTable ORDER BY id")(
-            Seq(1, "John Doe", 19, if (recordMergeMode == RecordMergeMode.EVENT_TIME_ORDERING.name()) 1598886001L else 1L),
+            Seq(1, "John Doe", 19, if (recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING.name()) 1L else 1598886001L),
             Seq(2, "Jane Doe", 24, 1598972400L),
             Seq(3, "Bob Smith", 14, 1599058800L),
-            Seq(4, "Alice Johnson", 49, 2L))
+            Seq(4, "Alice Johnson", 49, 2L),
+            Seq(5, "Baker Mayfield", if (recordMergeMode == RecordMergeMode.CUSTOM.name()) 60 else 6, 10L))
         }
       }
   }
