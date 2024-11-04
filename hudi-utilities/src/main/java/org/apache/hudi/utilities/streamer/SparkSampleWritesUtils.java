@@ -106,8 +106,8 @@ public class SparkSampleWritesUtils {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withSchemaEvolutionEnable(false)
         .withBulkInsertParallelism(1)
-        .withAutoCommit(true)
         .withPath(sampleWritesBasePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
     Pair<Boolean, String> emptyRes = Pair.of(false, null);
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
@@ -131,6 +131,7 @@ public class SparkSampleWritesUtils {
           }
           return emptyRes;
         } else {
+          sampleWriteClient.commit(instantTime, writeStatusRDD);
           return Pair.of(true, sampleWritesBasePath);
         }
       }).orElse(emptyRes);

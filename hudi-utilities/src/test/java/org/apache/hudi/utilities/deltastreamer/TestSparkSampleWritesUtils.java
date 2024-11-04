@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -91,6 +92,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
     TypedProperties props = new TypedProperties();
     props.put(HoodieStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
     props.put(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(originalRecordSize));
+    props.put(HoodieMetadataConfig.ENABLE.key(), "false");
     HoodieWriteConfig originalWriteConfig = HoodieWriteConfig.newBuilder()
         .withProperties(props)
         .forTable("foo")
