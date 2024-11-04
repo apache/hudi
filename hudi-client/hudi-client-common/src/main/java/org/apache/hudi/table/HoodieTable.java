@@ -47,6 +47,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -146,6 +147,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public boolean isMetadataTable() {
     return isMetadataTable;
+  }
+
+  public HoodieTableVersion version() {
+    return metaClient.getTableConfig().getTableVersion();
   }
 
   protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);

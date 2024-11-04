@@ -20,16 +20,44 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class CommonClientUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(CommonClientUtils.class);
+
   public static void validateTableVersion(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
     if (!tableConfig.getTableVersion().equals(writeConfig.getWriteVersion())) {
       throw new HoodieNotSupportedException(String.format("Table version (%s) and Writer version (%s) do not match.",
           tableConfig.getTableVersion(), writeConfig.getWriteVersion()));
+    }
+    // incompatible configurations.
+    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.shouldWritePartialUpdates()) {
+      throw new HoodieNotSupportedException("Partial updates are not supported for table versions < 8. "
+          + "Please unset " + HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key());
+    }
+  }
+
+  public static String generateWriteToken(TaskContextSupplier taskContextSupplier) {
+    try {
+      return FSUtils.makeWriteToken(
+          taskContextSupplier.getPartitionIdSupplier().get(),
+          taskContextSupplier.getStageIdSupplier().get(),
+          taskContextSupplier.getAttemptIdSupplier().get()
+      );
+    } catch (Throwable t) {
+      LOG.warn("Error generating write token, using default.", t);
+      return HoodieLogFormat.DEFAULT_WRITE_TOKEN;
     }
   }
 }

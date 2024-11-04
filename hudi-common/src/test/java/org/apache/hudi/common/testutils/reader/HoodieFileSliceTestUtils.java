@@ -302,7 +302,7 @@ public class HoodieFileSliceTestUtils {
                  .onParentPath(new StoragePath(logFilePath).getParent())
                  .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
                  .withFileId(fileId)
-                 .withDeltaCommit(logInstantTime)
+                 .withInstantTime(logInstantTime)
                  .withLogVersion(version)
                  .withStorage(storage).build()) {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();

@@ -920,13 +920,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), partitionName))
             .withFileId(fileGroupFileId)
-            .withDeltaCommit(instantTime)
+            .withInstantTime(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
             .withStorage(dataMetaClient.getStorage())
-            .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            .withTableVersion(metadataWriteConfig.getWriteVersion())
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build()) {
           writer.appendBlock(block);
         }
