@@ -100,13 +100,11 @@ class FunctionalIndexSupport(spark: SparkSession,
       checkState(functionToColumnNames.size == 1, "Currently, only one function with functional index in the query is supported")
       val (indexFunction, targetColumnName) = functionToColumnNames.head
       val indexDefinitions = metaClient.getIndexMetadata.get().getIndexDefinitions
-      indexDefinitions.asScala.foreach {
-        case (indexPartition, indexDefinition) =>
-          if (indexDefinition.getIndexFunction.equals(indexFunction) && indexDefinition.getSourceFields.contains(targetColumnName)) {
-            Option.apply(indexPartition)
-          }
+      indexDefinitions.asScala.collectFirst {
+        case (indexPartition, indexDefinition)
+          if indexDefinition.getIndexFunction.equals(indexFunction) && indexDefinition.getSourceFields.contains(targetColumnName) =>
+          indexPartition
       }
-      Option.empty
     } else {
       Option.empty
     }
