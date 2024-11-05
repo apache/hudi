@@ -70,7 +70,11 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
             castPartValueToDesiredType(typedValue.dataType, typedValue.value, tz.toZoneId)
           } catch {
             case NonFatal(_) =>
-              if (validatePartitionValues) {
+              // If the exception happens, there was some transformation on the original value.
+              // String value should be universal type for type casting.
+              if (userSpecifiedDataTypes.contains(columnName)) {
+                castPartValueToDesiredType(StringType, typedValue.value, tz.toZoneId)
+              } else if (validatePartitionValues) {
                 throw new RuntimeException(s"Failed to cast value `${typedValue.value}` to " +
                   s"`${typedValue.dataType}` for partition column `$columnName`")
               } else null
