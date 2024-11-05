@@ -1032,96 +1032,92 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     }
   }
 
-
-
   test("Test MergeInto with various payloads") {
+    withSQLConf("hoodie.merge.small.file.group.candidates.limit" -> "0") {
       withTempDir { tmp =>
         Seq(RecordMergeMode.EVENT_TIME_ORDERING.name(),
           RecordMergeMode.OVERWRITE_WITH_LATEST.name(),
           RecordMergeMode.CUSTOM.name()).foreach { recordMergeMode =>
-          val payloadClassExtraString = if (recordMergeMode == RecordMergeMode.CUSTOM.name()) {
-            s" payloadClass = '${classOf[FirstValueAvroPayload].getName}',"
-          } else {
-            ""
+          Seq("cow", "mor").foreach { tableType =>
+            val payloadClassExtraString = if (recordMergeMode == RecordMergeMode.CUSTOM.name()) {
+              s" payloadClass = '${classOf[FirstValueAvroPayload].getName}',"
+            } else {
+              ""
+            }
+
+            val sourceTable = generateTableName
+            spark.sql(
+              s"""
+                 |CREATE TABLE $sourceTable (
+                 |    id INT,
+                 |    name STRING,
+                 |    price INT,
+                 |    ts BIGINT
+                 |) USING hudi
+                 |LOCATION '${tmp.getCanonicalPath}/$sourceTable'
+                 |""".stripMargin)
+
+            spark.sql(
+              s"""
+                 | INSERT INTO $sourceTable
+                 | VALUES (1, 'John Doe', 19, 1),
+                 |        (4, 'Alice Johnson', 49, 2),
+                 |        (5, 'Baker Mayfield', 6, 10)
+                 |""".stripMargin)
+
+            val targetTable = generateTableName
+            spark.sql(
+              s"""
+                 |create table $targetTable (
+                 |  id INT,
+                 |  name STRING,
+                 |  price INT,
+                 |  ts BIGINT
+                 |) using hudi
+                 |TBLPROPERTIES (
+                 |  type = '$tableType',
+                 |  primaryKey = 'id',
+                 |  preCombineField = 'ts',
+                 |  $payloadClassExtraString
+                 |  recordMergeMode = '$recordMergeMode'
+                 | )
+                 |LOCATION '${tmp.getCanonicalPath}/$targetTable'
+                 |""".stripMargin)
+
+            spark.sql(
+              s"""
+                 | INSERT INTO $targetTable
+                 | VALUES (1, 'John Doe', 19, 1598886001),
+                 |        (2, 'Jane Doe', 24, 1598972400),
+                 |        (3, 'Bob Smith', 14, 1599058800),
+                 |        (5, 'Baker Mayfield', 60, 10)
+                 |""".stripMargin)
+
+            spark.sql(
+              s"""
+                 |MERGE INTO $targetTable t
+                 |USING $sourceTable s
+                 |ON t.price = s.price
+                 |WHEN MATCHED THEN UPDATE SET
+                 |    t.id = s.id,
+                 |    t.name = s.name,
+                 |    t.price = s.price,
+                 |    t.ts = s.ts
+                 |WHEN NOT MATCHED THEN INSERT
+                 |    (id, name, price, ts)
+                 |VALUES
+                 |    (s.id, s.name, s.price, s.ts)
+                 |""".stripMargin)
+
+            checkAnswer(s"select id, name, price, ts from $targetTable ORDER BY id")(
+              Seq(1, "John Doe", 19, if (recordMergeMode == RecordMergeMode.OVERWRITE_WITH_LATEST.name()) 1L else 1598886001L),
+              Seq(2, "Jane Doe", 24, 1598972400L),
+              Seq(3, "Bob Smith", 14, 1599058800L),
+              Seq(4, "Alice Johnson", 49, 2L),
+              Seq(5, "Baker Mayfield", if (recordMergeMode == RecordMergeMode.CUSTOM.name()) 60 else 6, 10L))
           }
-          val sourceTable = generateTableName
-
-          spark.sql(
-            s"""
-               |CREATE TABLE $sourceTable (
-               |    id INT,
-               |    name STRING,
-               |    price INT,
-               |    ts BIGINT
-               |) USING hudi
-               |LOCATION '${tmp.getCanonicalPath}/$sourceTable'
-               |""".stripMargin)
-
-          spark.sql(
-            s"""
-               | INSERT INTO $sourceTable
-               | VALUES (1, 'John Doe', 19, 1),
-               |        (4, 'Alice Johnson', 49, 2),
-               |        (5, 'Baker Mayfield', 6, 10)
-               |""".stripMargin)
-
-          val targetTable = generateTableName
-          spark.sql(
-            s"""
-               |create table $targetTable (
-               |  id INT,
-               |  name STRING,
-               |  price INT,
-               |  ts BIGINT
-               |) using hudi
-               |TBLPROPERTIES (
-               |  type = 'cow',
-               |  primaryKey = 'id',
-               |  preCombineField = 'ts',
-               |  $payloadClassExtraString
-               |  recordMergeMode = '$recordMergeMode'
-               | )
-               |LOCATION '${tmp.getCanonicalPath}/$targetTable'
-               |""".stripMargin)
-
-          spark.sql(
-            s"""
-               |INSERT INTO $targetTable
-               |SELECT id, name, price, ts
-               |FROM (
-               |    SELECT 1 as id, 'John Doe' as name, 19 as price, 1598886001 as ts
-               |     UNION ALL
-               |     SELECT 2, 'Jane Doe', 24, 1598972400
-               |     UNION ALL
-               |     SELECT 3, 'Bob Smith', 14, 1599058800
-               |     UNION ALL
-               |     SELECT 5, 'Baker Mayfield', 60, 10
-               |)
-               |""".stripMargin)
-
-          spark.sql(
-            s"""
-               |MERGE INTO $targetTable t
-               |USING $sourceTable s
-               |ON t.price = s.price
-               |WHEN MATCHED THEN UPDATE SET
-               |    t.id = s.id,
-               |    t.name = s.name,
-               |    t.price = s.price,
-               |    t.ts = s.ts
-               |WHEN NOT MATCHED THEN INSERT
-               |    (id, name, price, ts)
-               |VALUES
-               |    (s.id, s.name, s.price, s.ts)
-               |""".stripMargin)
-
-          checkAnswer(s"select id, name, price, ts from $targetTable ORDER BY id")(
-            Seq(1, "John Doe", 19, if (recordMergeMode == RecordMergeMode.OVERWRITE_WITH_LATEST.name()) 1L else 1598886001L),
-            Seq(2, "Jane Doe", 24, 1598972400L),
-            Seq(3, "Bob Smith", 14, 1599058800L),
-            Seq(4, "Alice Johnson", 49, 2L),
-            Seq(5, "Baker Mayfield", if (recordMergeMode == RecordMergeMode.CUSTOM.name()) 60 else 6, 10L))
         }
       }
+    }
   }
 }
