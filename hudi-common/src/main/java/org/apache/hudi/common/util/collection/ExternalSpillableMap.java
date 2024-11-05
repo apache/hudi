@@ -155,6 +155,10 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     return inMemoryMap.size();
   }
 
+  public double getInDiskRecordsNumRatio() {
+    return (double) getDiskBasedMap().size() / (inMemoryMap.size() + getDiskBasedMap().size());
+  }
+
   /**
    * Approximate memory footprint of the in-memory map.
    */

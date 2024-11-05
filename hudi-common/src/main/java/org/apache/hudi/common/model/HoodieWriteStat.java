@@ -423,6 +423,16 @@ public class HoodieWriteStat implements Serializable {
      */
     private long totalCreateTime;
 
+    /**
+     * Ratio of log records spilled to total log records.
+     */
+    private double logRecordsSpillRatio;
+
+    /**
+     * Max memory used for compaction.
+     */
+    private long maxMemoryForCompaction;
+
     public long getTotalScanTime() {
       return totalScanTime;
     }
@@ -445,6 +455,22 @@ public class HoodieWriteStat implements Serializable {
 
     public void setTotalCreateTime(long totalCreateTime) {
       this.totalCreateTime = totalCreateTime;
+    }
+
+    public double getLogRecordsSpillRatio() {
+      return logRecordsSpillRatio;
+    }
+
+    public void setLogRecordsSpillRatio(double logRecordsSpillRatio) {
+      this.logRecordsSpillRatio = logRecordsSpillRatio;
+    }
+
+    public long getMaxMemoryForCompaction() {
+      return maxMemoryForCompaction;
+    }
+
+    public void setMaxMemoryForCompaction(long maxMemoryForCompaction) {
+      this.maxMemoryForCompaction = maxMemoryForCompaction;
     }
   }
 }
