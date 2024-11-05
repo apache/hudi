@@ -96,6 +96,8 @@ public class HoodieTableSink implements
 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
+        // close compaction for append mode
+        conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
         DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream);
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);

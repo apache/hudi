@@ -19,8 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.JsonUtils;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import javax.annotation.Nullable;
 
@@ -364,7 +363,7 @@ public class HoodieWriteStat implements Serializable {
   /**
    * Set path and tempPath relative to the given basePath.
    */
-  public void setPath(Path basePath, Path path) {
+  public void setPath(StoragePath basePath, StoragePath path) {
     this.path = path.toString().replace(basePath + "/", "");
   }
 
@@ -412,45 +411,39 @@ public class HoodieWriteStat implements Serializable {
     /**
      * Total time taken to read and merge logblocks in a log file.
      */
-    @Nullable
     private long totalScanTime;
 
     /**
      * Total time taken by a Hoodie Merge for an existing file.
      */
-    @Nullable
     private long totalUpsertTime;
 
     /**
      * Total time taken by a Hoodie Insert to a file.
      */
-    @Nullable
     private long totalCreateTime;
 
-    @Nullable
     public long getTotalScanTime() {
       return totalScanTime;
     }
 
-    public void setTotalScanTime(@Nullable long totalScanTime) {
+    public void setTotalScanTime(long totalScanTime) {
       this.totalScanTime = totalScanTime;
     }
 
-    @Nullable
     public long getTotalUpsertTime() {
       return totalUpsertTime;
     }
 
-    public void setTotalUpsertTime(@Nullable long totalUpsertTime) {
+    public void setTotalUpsertTime(long totalUpsertTime) {
       this.totalUpsertTime = totalUpsertTime;
     }
 
-    @Nullable
     public long getTotalCreateTime() {
       return totalCreateTime;
     }
 
-    public void setTotalCreateTime(@Nullable long totalCreateTime) {
+    public void setTotalCreateTime(long totalCreateTime) {
       this.totalCreateTime = totalCreateTime;
     }
   }

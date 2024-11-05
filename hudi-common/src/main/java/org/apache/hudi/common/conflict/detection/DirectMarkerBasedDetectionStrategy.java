@@ -21,21 +21,19 @@ package org.apache.hudi.common.conflict.detection;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,16 +46,17 @@ public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflic
 
   private static final Logger LOG = LoggerFactory.getLogger(DirectMarkerBasedDetectionStrategy.class);
 
-  protected final FileSystem fs;
+  protected final HoodieStorage storage;
   protected final String partitionPath;
   protected final String fileId;
   protected final String instantTime;
   protected final HoodieActiveTimeline activeTimeline;
   protected final HoodieConfig config;
 
-  public DirectMarkerBasedDetectionStrategy(HoodieWrapperFileSystem fs, String partitionPath, String fileId, String instantTime,
+  public DirectMarkerBasedDetectionStrategy(HoodieStorage storage, String partitionPath, String fileId,
+                                            String instantTime,
                                             HoodieActiveTimeline activeTimeline, HoodieConfig config) {
-    this.fs = fs;
+    this.storage = storage;
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.instantTime = instantTime;
@@ -77,24 +76,28 @@ public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflic
    * @throws IOException upon errors.
    */
   public boolean checkMarkerConflict(String basePath, long maxAllowableHeartbeatIntervalInMs) throws IOException {
-    String tempFolderPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
+    String tempFolderPath = basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.TEMPFOLDER_NAME;
 
-    List<String> candidateInstants = MarkerUtils.getCandidateInstants(activeTimeline, Arrays.stream(fs.listStatus(new Path(tempFolderPath))).map(FileStatus::getPath).collect(Collectors.toList()),
-        instantTime, maxAllowableHeartbeatIntervalInMs, fs, basePath);
+    List<String> candidateInstants = MarkerUtils.getCandidateInstants(activeTimeline,
+        storage.listDirectEntries(new StoragePath(tempFolderPath)).stream()
+            .map(StoragePathInfo::getPath)
+            .collect(Collectors.toList()),
+        instantTime, maxAllowableHeartbeatIntervalInMs, storage,
+        basePath);
 
     long res = candidateInstants.stream().flatMap(currentMarkerDirPath -> {
       try {
-        Path markerPartitionPath;
+        StoragePath markerPartitionPath;
         if (StringUtils.isNullOrEmpty(partitionPath)) {
-          markerPartitionPath = new Path(currentMarkerDirPath);
+          markerPartitionPath = new StoragePath(currentMarkerDirPath);
         } else {
-          markerPartitionPath = new Path(currentMarkerDirPath, partitionPath);
+          markerPartitionPath = new StoragePath(currentMarkerDirPath, partitionPath);
         }
 
-        if (!StringUtils.isNullOrEmpty(partitionPath) && !fs.exists(markerPartitionPath)) {
+        if (!StringUtils.isNullOrEmpty(partitionPath) && !storage.exists(markerPartitionPath)) {
           return Stream.empty();
         } else {
-          return Arrays.stream(fs.listStatus(markerPartitionPath)).parallel()
+          return storage.listDirectEntries(markerPartitionPath).stream().parallel()
               .filter((path) -> path.toString().contains(fileId));
         }
       } catch (IOException e) {

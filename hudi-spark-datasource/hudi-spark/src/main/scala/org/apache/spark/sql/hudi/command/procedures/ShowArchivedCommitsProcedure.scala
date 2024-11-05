@@ -19,12 +19,10 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieDefaultTimeline, HoodieInstant}
 import org.apache.hudi.common.util.StringUtils
+
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.time.ZonedDateTime
@@ -87,7 +85,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     // start time for commits, default: now - 10 days
     // end time for commits, default: now - 1 day
@@ -113,15 +111,15 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
   private def getCommitsWithMetadata(timeline: HoodieDefaultTimeline,
                                      limit: Int): Seq[Row] = {
-    import scala.collection.JavaConversions._
+    import scala.collection.JavaConverters._
 
     val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet) {
-        for (hoodieWriteStat <- partitionWriteStat.getValue) {
+      for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet.asScala) {
+        for (hoodieWriteStat <- partitionWriteStat.getValue.asScala) {
           rows.add(Row(
             commit.getTimestamp, commit.getStateTransitionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
             hoodieWriteStat.getFileId, hoodieWriteStat.getPrevCommit, hoodieWriteStat.getNumWrites,

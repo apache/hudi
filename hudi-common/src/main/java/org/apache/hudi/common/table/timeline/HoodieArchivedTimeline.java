@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -30,17 +29,18 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +50,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -133,8 +132,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     in.defaultReadObject();
   }
 
-  public static Path getArchiveLogPath(String archiveFolder) {
-    return new Path(archiveFolder, HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX);
+  public static StoragePath getArchiveLogPath(String archiveFolder) {
+    return new StoragePath(archiveFolder, HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX);
   }
 
   public void loadInstantDetailsInMemory(String startTs, String endTs) {
@@ -252,16 +251,16 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
        Function<GenericRecord, Boolean> commitsFilter) {
     try {
       // List all files
-      FileStatus[] fsStatuses = metaClient.getFs().globStatus(
-              new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
+      List<StoragePathInfo> entryList = metaClient.getStorage().globEntries(
+              new StoragePath(metaClient.getArchivePath() + "/.commits_.archive*"));
 
       // Sort files by version suffix in reverse (implies reverse chronological order)
-      Arrays.sort(fsStatuses, new ArchiveFileVersionComparator());
+      entryList.sort(new ArchiveFileVersionComparator());
 
       Set<HoodieInstant> instantsInRange = new HashSet<>();
-      for (FileStatus fs : fsStatuses) {
+      for (StoragePathInfo fs : entryList) {
         // Read the archived file
-        try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
+        try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getStorage(),
             new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
@@ -295,10 +294,10 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           // merge small archive files may left uncompleted archive file which will cause exception.
           // need to ignore this kind of exception here.
           try {
-            Path planPath = new Path(metaClient.getArchivePath(), MERGE_ARCHIVE_PLAN_NAME);
-            HoodieWrapperFileSystem fileSystem = metaClient.getFs();
-            if (fileSystem.exists(planPath)) {
-              HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadata(FileIOUtils.readDataFromPath(fileSystem, planPath).get(), HoodieMergeArchiveFilePlan.class);
+            StoragePath planPath = new StoragePath(metaClient.getArchivePath(), MERGE_ARCHIVE_PLAN_NAME);
+            HoodieStorage storage = metaClient.getStorage();
+            if (storage.exists(planPath)) {
+              HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadata(FileIOUtils.readDataFromPath(storage, planPath).get(), HoodieMergeArchiveFilePlan.class);
               String mergedArchiveFileName = plan.getMergedArchiveFileName();
               if (!StringUtils.isNullOrEmpty(mergedArchiveFileName) && fs.getPath().getName().equalsIgnoreCase(mergedArchiveFileName)) {
                 LOG.warn("Catch exception because of reading uncompleted merging archive file " + mergedArchiveFileName + ". Ignore it here.");
@@ -353,13 +352,13 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   /**
    * Sort files by reverse order of version suffix in file name.
    */
-  public static class ArchiveFileVersionComparator implements Comparator<FileStatus>, Serializable {
+  public static class ArchiveFileVersionComparator implements Comparator<StoragePathInfo>, Serializable {
     @Override
-    public int compare(FileStatus f1, FileStatus f2) {
+    public int compare(StoragePathInfo f1, StoragePathInfo f2) {
       return Integer.compare(getArchivedFileSuffix(f2), getArchivedFileSuffix(f1));
     }
 
-    private int getArchivedFileSuffix(FileStatus f) {
+    private int getArchivedFileSuffix(StoragePathInfo f) {
       try {
         Matcher fileMatcher = ARCHIVE_FILE_PATTERN.matcher(f.getPath().getName());
         if (fileMatcher.matches()) {

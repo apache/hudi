@@ -24,6 +24,7 @@ import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+
 import org.apache.spark.sql.execution.vectorized.WritableColumnVector;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.ArrayType$;
@@ -61,7 +62,6 @@ import org.apache.spark.sql.types.TimestampType$;
 import org.apache.spark.sql.types.UserDefinedType;
 import org.apache.spark.sql.types.VarcharType;
 
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -70,6 +70,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class SparkInternalSchemaConverter {
   private SparkInternalSchemaConverter() {
@@ -307,7 +309,7 @@ public class SparkInternalSchemaConverter {
         } else if (newType instanceof DoubleType) {
           newV.putDouble(i, isInt ? oldV.getInt(i) : oldV.getLong(i));
         } else if (newType instanceof StringType) {
-          newV.putByteArray(i, ((isInt ? oldV.getInt(i) : oldV.getLong(i)) + "").getBytes(StandardCharsets.UTF_8));
+          newV.putByteArray(i, getUTF8Bytes((isInt ? oldV.getInt(i) : oldV.getLong(i)) + ""));
         } else if (newType instanceof DecimalType) {
           Decimal oldDecimal = Decimal.apply(isInt ? oldV.getInt(i) : oldV.getLong(i));
           oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
@@ -335,7 +337,7 @@ public class SparkInternalSchemaConverter {
         if (newType instanceof DoubleType) {
           newV.putDouble(i, Double.valueOf(oldV.getFloat(i) + ""));
         } else if (newType instanceof StringType) {
-          newV.putByteArray(i, (oldV.getFloat(i) + "").getBytes(StandardCharsets.UTF_8));
+          newV.putByteArray(i, getUTF8Bytes(oldV.getFloat(i) + ""));
         } else if (newType instanceof DecimalType) {
           Decimal oldDecimal = Decimal.apply(oldV.getFloat(i));
           oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
@@ -365,7 +367,7 @@ public class SparkInternalSchemaConverter {
           oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
           newV.putDecimal(i, oldDecimal, ((DecimalType) newType).precision());
         } else if (newType instanceof StringType) {
-          newV.putByteArray(i, (oldV.getDouble(i) + "").getBytes(StandardCharsets.UTF_8));
+          newV.putByteArray(i, getUTF8Bytes(oldV.getDouble(i) + ""));
         }
       }
       return true;
@@ -391,7 +393,7 @@ public class SparkInternalSchemaConverter {
           oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
           newV.putDecimal(i, oldDecimal, ((DecimalType) newType).precision());
         } else if (newType instanceof StringType) {
-          newV.putByteArray(i, oldDecimal.toString().getBytes(StandardCharsets.UTF_8));
+          newV.putByteArray(i, getUTF8Bytes(oldDecimal.toString()));
         }
       }
       return true;
@@ -413,7 +415,7 @@ public class SparkInternalSchemaConverter {
         }
         // to do support rebaseDate
         String res = org.apache.spark.sql.catalyst.util.DateTimeUtils.toJavaDate(oldV.getInt(i)).toString();
-        newV.putByteArray(i, res.getBytes(StandardCharsets.UTF_8));
+        newV.putByteArray(i, getUTF8Bytes(res));
       }
       return true;
     }

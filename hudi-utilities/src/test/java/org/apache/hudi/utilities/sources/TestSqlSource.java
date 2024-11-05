@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestSqlSource extends UtilitiesTestBase {
 
   private final boolean useFlattenedSchema = false;
-  private final String sqlSourceConfig = "hoodie.deltastreamer.source.sql.sql.query";
+  private final String sqlSourceConfig = "hoodie.streamer.source.sql.sql.query";
   protected FilebasedSchemaProvider schemaProvider;
   protected HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
   private String dfsRoot;
@@ -64,7 +64,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 

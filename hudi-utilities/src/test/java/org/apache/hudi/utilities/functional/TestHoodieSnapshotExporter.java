@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -28,7 +27,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.HoodieSnapshotExporter;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Config;
@@ -36,11 +40,6 @@ import org.apache.hudi.utilities.HoodieSnapshotExporter.OutputFormatValidator;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Partitioner;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameWriter;
@@ -58,7 +57,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -76,20 +74,20 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
   static final String TABLE_NAME = "testing";
   String sourcePath;
   String targetPath;
-  LocalFileSystem lfs;
+  HoodieStorage storage;
 
   @BeforeEach
   public void init() throws Exception {
     // Initialize test data dirs
     sourcePath = Paths.get(basePath(), "source").toString();
     targetPath = Paths.get(basePath(), "target").toString();
-    lfs = (LocalFileSystem) FSUtils.getFs(basePath(), jsc().hadoopConfiguration());
+    storage = HoodieStorageUtils.getStorage(basePath(), HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()));
 
     HoodieTableMetaClient.withPropertyBuilder()
-      .setTableType(HoodieTableType.COPY_ON_WRITE)
-      .setTableName(TABLE_NAME)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .initTable(jsc().hadoopConfiguration(), sourcePath);
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(TABLE_NAME)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc().hadoopConfiguration()), sourcePath);
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);
@@ -100,15 +98,15 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
       writeClient.bulkInsert(recordsRDD, COMMIT_TIME);
     }
-    RemoteIterator<LocatedFileStatus> itr = lfs.listFiles(new Path(sourcePath), true);
-    while (itr.hasNext()) {
-      LOG.info(">>> Prepared test file: " + itr.next().getPath());
+    List<StoragePathInfo> pathInfoList = storage.listFiles(new StoragePath(sourcePath));
+    for (StoragePathInfo pathInfo : pathInfoList) {
+      LOG.info(">>> Prepared test file: " + pathInfo.getPath());
     }
   }
 
   @AfterEach
   public void cleanUp() throws IOException {
-    lfs.close();
+    storage.close();
   }
 
   private HoodieWriteConfig getHoodieWriteConfig(String basePath) {
@@ -142,18 +140,18 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       new HoodieSnapshotExporter().export(jsc(), cfg);
 
       // Check results
-      assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit")));
-      assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit.requested")));
-      assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".inflight")));
-      assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/hoodie.properties")));
+      assertTrue(storage.exists(new StoragePath(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit")));
+      assertTrue(storage.exists(new StoragePath(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit.requested")));
+      assertTrue(storage.exists(new StoragePath(targetPath + "/.hoodie/" + COMMIT_TIME + ".inflight")));
+      assertTrue(storage.exists(new StoragePath(targetPath + "/.hoodie/hoodie.properties")));
       String partition = targetPath + "/" + PARTITION_PATH;
-      long numParquetFiles = Arrays.stream(lfs.listStatus(new Path(partition)))
+      long numParquetFiles = storage.listDirectEntries(new StoragePath(partition)).stream()
           .filter(fileStatus -> fileStatus.getPath().toString().endsWith(".parquet"))
           .count();
       assertTrue(numParquetFiles >= 1, "There should exist at least 1 parquet file.");
       assertEquals(NUM_RECORDS, sqlContext().read().parquet(partition).count());
-      assertTrue(lfs.exists(new Path(partition + "/.hoodie_partition_metadata")));
-      assertTrue(lfs.exists(new Path(targetPath + "/_SUCCESS")));
+      assertTrue(storage.exists(new StoragePath(partition + "/.hoodie_partition_metadata")));
+      assertTrue(storage.exists(new StoragePath(targetPath + "/_SUCCESS")));
     }
   }
 
@@ -173,7 +171,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     @Test
     public void testExportWhenTargetPathExists() throws IOException {
       // make target output path present
-      lfs.mkdirs(new Path(targetPath));
+      storage.createDirectory(new StoragePath(targetPath));
 
       // export
       final Throwable thrown = assertThrows(HoodieSnapshotExporterException.class, () -> {
@@ -185,12 +183,13 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     @Test
     public void testExportDatasetWithNoCommit() throws IOException {
       // delete commit files
-      List<Path> commitFiles = Arrays.stream(lfs.listStatus(new Path(sourcePath + "/.hoodie")))
-          .map(FileStatus::getPath)
-          .filter(filePath -> filePath.getName().endsWith(".commit"))
-          .collect(Collectors.toList());
-      for (Path p : commitFiles) {
-        lfs.delete(p, false);
+      List<StoragePath> commitFiles =
+          storage.listDirectEntries(new StoragePath(sourcePath + "/.hoodie")).stream()
+              .map(StoragePathInfo::getPath)
+              .filter(filePath -> filePath.getName().endsWith(".commit"))
+              .collect(Collectors.toList());
+      for (StoragePath p : commitFiles) {
+        storage.deleteFile(p);
       }
 
       // export
@@ -203,9 +202,9 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     @Test
     public void testExportDatasetWithNoPartition() throws IOException {
       // delete all source data
-      lfs.delete(new Path(sourcePath + "/" + PARTITION_PATH), true);
+      storage.deleteDirectory(new StoragePath(sourcePath + "/" + PARTITION_PATH));
       // delete hudi metadata table too.
-      lfs.delete(new Path(cfg.sourceBasePath + "/" + ".hoodie/metadata"), true);
+      storage.deleteDirectory(new StoragePath(cfg.sourceBasePath + "/" + ".hoodie/metadata"));
 
       // export
       final Throwable thrown = assertThrows(HoodieSnapshotExporterException.class, () -> {
@@ -233,7 +232,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       cfg.outputFormat = format;
       new HoodieSnapshotExporter().export(jsc(), cfg);
       assertEquals(NUM_RECORDS, sqlContext().read().format(format).load(targetPath).count());
-      assertTrue(lfs.exists(new Path(targetPath + "/_SUCCESS")));
+      assertTrue(storage.exists(new StoragePath(targetPath + "/_SUCCESS")));
     }
   }
 
@@ -271,8 +270,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       new HoodieSnapshotExporter().export(jsc(), cfg);
 
       assertEquals(NUM_RECORDS, sqlContext().read().format("json").load(targetPath).count());
-      assertTrue(lfs.exists(new Path(targetPath + "/_SUCCESS")));
-      assertTrue(lfs.listStatus(new Path(targetPath)).length > 1);
+      assertTrue(storage.exists(new StoragePath(targetPath + "/_SUCCESS")));
+      assertTrue(storage.listDirectEntries(new StoragePath(targetPath)).size() > 1);
     }
 
     @Test
@@ -281,8 +280,11 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       new HoodieSnapshotExporter().export(jsc(), cfg);
 
       assertEquals(NUM_RECORDS, sqlContext().read().format("json").load(targetPath).count());
-      assertTrue(lfs.exists(new Path(targetPath + "/_SUCCESS")));
-      assertTrue(lfs.exists(new Path(String.format("%s/%s=%s", targetPath, UserDefinedPartitioner.PARTITION_NAME, PARTITION_PATH))));
+      assertTrue(storage.exists(new StoragePath(targetPath + "/_SUCCESS")));
+      assertTrue(
+          storage.exists(new StoragePath(
+              String.format("%s/%s=%s", targetPath, UserDefinedPartitioner.PARTITION_NAME,
+                  PARTITION_PATH))));
     }
   }
 }

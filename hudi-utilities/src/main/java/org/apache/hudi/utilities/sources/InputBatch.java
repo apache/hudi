@@ -55,12 +55,16 @@ public class InputBatch<T> {
     if (batch.isPresent() && schemaProvider == null) {
       throw new HoodieException("Please provide a valid schema provider class!");
     }
-    return Option.ofNullable(schemaProvider).orElse(new NullSchemaProvider());
+    return Option.ofNullable(schemaProvider).orElseGet(NullSchemaProvider::getInstance);
   }
 
   public static class NullSchemaProvider extends SchemaProvider {
+    private static final NullSchemaProvider INSTANCE = new NullSchemaProvider();
+    public static NullSchemaProvider getInstance() {
+      return INSTANCE;
+    }
 
-    public NullSchemaProvider() {
+    private NullSchemaProvider() {
       this(null, null);
     }
 

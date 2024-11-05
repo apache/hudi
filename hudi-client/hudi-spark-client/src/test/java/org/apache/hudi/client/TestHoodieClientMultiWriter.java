@@ -48,6 +48,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.marker.SimpleDirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedDetectionStrategy;
@@ -55,7 +56,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy;
 
 import org.apache.curator.test.TestingServer;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -135,9 +135,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     initPath();
     initSparkContexts();
     initTestDataGenerator();
-    initFileSystem();
-    fs.mkdirs(new Path(basePath));
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, HoodieFileFormat.PARQUET);
+    initHoodieStorage();
+    storage.createDirectory(new StoragePath(basePath));
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ,
+        HoodieFileFormat.PARQUET);
     initTestDataGenerator();
   }
 
@@ -244,7 +245,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     // this commit 003 will fail quickly because early conflict detection before create marker.
     final String nextCommitTime3 = "003";
     assertThrows(SparkException.class, () -> {
-      final JavaRDD<WriteStatus> writeStatusList3 = startCommitForUpdate(writeConfig, client3, nextCommitTime3, 100);
+      final JavaRDD<WriteStatus> writeStatusList3 =
+          startCommitForUpdate(writeConfig, client3, nextCommitTime3, 100);
       client3.commit(nextCommitTime3, writeStatusList3);
     }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
 
@@ -253,11 +255,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       client2.commit(nextCommitTime2, writeStatusList2);
     });
 
-    HoodieWriteConfig config4 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).withHeartbeatIntervalInMs(heartBeatIntervalForCommit4).build();
+    HoodieWriteConfig config4 =
+        HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
+            .withHeartbeatIntervalInMs(heartBeatIntervalForCommit4).build();
     final SparkRDDWriteClient client4 = getHoodieWriteClient(config4);
 
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + nextCommitTime3);
-    fs.create(heartbeatFilePath, true);
+    StoragePath heartbeatFilePath = new StoragePath(
+        HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + StoragePath.SEPARATOR + nextCommitTime3);
+    storage.create(heartbeatFilePath, true);
 
     // Wait for heart beat expired for failed commitTime3 "003"
     // Otherwise commit4 still can see conflict between failed write 003.
@@ -265,7 +270,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     final String nextCommitTime4 = "004";
     assertDoesNotThrow(() -> {
-      final JavaRDD<WriteStatus> writeStatusList4 = startCommitForUpdate(writeConfig, client4, nextCommitTime4, 100);
+      final JavaRDD<WriteStatus> writeStatusList4 =
+          startCommitForUpdate(writeConfig, client4, nextCommitTime4, 100);
       client4.commit(nextCommitTime4, writeStatusList4);
     });
 

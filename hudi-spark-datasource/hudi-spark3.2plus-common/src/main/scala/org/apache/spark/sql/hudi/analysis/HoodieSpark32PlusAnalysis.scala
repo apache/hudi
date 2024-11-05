@@ -17,8 +17,10 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
+import org.apache.hudi.storage.StoragePath
+
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, EliminateSubqueryAliases, NamedRelation, UnresolvedAttribute, UnresolvedPartitionSpec}
@@ -29,14 +31,13 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
-import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -47,34 +48,6 @@ import org.apache.spark.sql.{AnalysisException, SQLContext, SparkSession}
  *
  * Check out HUDI-4178 for more details
  */
-case class HoodieDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[LogicalPlan]
-  with ProvidesHoodieConfig {
-
-  override def apply(plan: LogicalPlan): LogicalPlan = plan match {
-    // The only place we're avoiding fallback is in [[AlterTableCommand]]s since
-    // current implementation relies on DSv2 features
-    case _: AlterTableCommand => plan
-
-    // NOTE: Unfortunately, [[InsertIntoStatement]] is implemented in a way that doesn't expose
-    //       target relation as a child (even though there's no good reason for that)
-    case iis@InsertIntoStatement(rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _), _, _, _, _, _) =>
-      iis.copy(table = convertToV1(rv2, v2Table))
-
-    case _ =>
-      plan.resolveOperatorsDown {
-        case rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _) => convertToV1(rv2, v2Table)
-      }
-  }
-
-  private def convertToV1(rv2: DataSourceV2Relation, v2Table: HoodieInternalV2Table) = {
-    val output = rv2.output
-    val catalogTable = v2Table.catalogTable.map(_ => v2Table.v1Table)
-    val relation = new DefaultSource().createRelation(new SQLContext(sparkSession),
-      buildHoodieConfig(v2Table.hoodieCatalogTable), v2Table.hoodieCatalogTable.tableSchema)
-
-    LogicalRelation(relation, output, catalogTable, isStreaming = false)
-  }
-}
 
 /**
  * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
@@ -119,7 +92,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
     case HoodieTableChanges(args) =>
       val (tablePath, opts) = HoodieTableChangesOptionsParser.parseOptions(args, HoodieTableChanges.FUNC_NAME)
       val hoodieDataSource = new DefaultSource
-      if (tablePath.contains(Path.SEPARATOR)) {
+      if (tablePath.contains(StoragePath.SEPARATOR)) {
         // the first param is table path
         val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> tablePath))
         LogicalRelation(relation)

@@ -18,16 +18,17 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.FileIOUtils;
-
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
@@ -131,7 +132,7 @@ public class DataSourceTestUtils {
   public static boolean isLogFileOnly(String basePath) throws IOException {
     Configuration conf = new Configuration();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-            .setConf(conf).setBasePath(basePath)
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(conf)).setBasePath(basePath)
             .build();
     String baseDataFormat = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     Path path = new Path(basePath);

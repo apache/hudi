@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,7 +63,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
   public void init() throws IOException {
     tableName = tableName();
     tablePath = tablePath(tableName);
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
   }
 
   @Test
@@ -76,7 +77,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
-        .initTable(HoodieCLI.conf, tablePath);
+        .initTable(HoodieCLI.conf.newInstance(), tablePath);
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
@@ -93,7 +94,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     }
 
     // verify that metadata partitions are filled in as part of table config.
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tablePath).build();
+    HoodieTableMetaClient metaClient = createMetaClient(jsc(), tablePath);
     assertFalse(metaClient.getTableConfig().getMetadataPartitions().isEmpty());
 
     new TableCommand().connect(tablePath, null, false, 0, 0, 0);

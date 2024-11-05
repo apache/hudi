@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
@@ -37,8 +39,6 @@ import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.http.Context;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,11 +102,11 @@ public class MarkerHandler extends Handler {
   private String currentMarkerDir = null;
   private TimelineServerBasedDetectionStrategy earlyConflictDetectionStrategy;
 
-  public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
-                       HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
+  public MarkerHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
+                       HoodieEngineContext hoodieEngineContext, HoodieStorage storage,
                        FileSystemViewManager viewManager, Registry metricsRegistry) throws IOException {
-    super(conf, timelineServiceConfig, fileSystem, viewManager);
-    LOG.debug("MarkerHandler FileSystem: " + this.fileSystem.getScheme());
+    super(conf, timelineServiceConfig, storage, viewManager);
+    LOG.debug("MarkerHandler FileSystem: " + this.storage.getScheme());
     LOG.debug("MarkerHandler batching params: batchNumThreads=" + timelineServiceConfig.markerBatchNumThreads
         + " batchIntervalMs=" + timelineServiceConfig.markerBatchIntervalMs + "ms");
     this.hoodieEngineContext = hoodieEngineContext;
@@ -128,6 +128,9 @@ public class MarkerHandler extends Handler {
     }
     dispatchingExecutorService.shutdownNow();
     batchingExecutorService.shutdownNow();
+    if (earlyConflictDetectionStrategy != null) {
+      earlyConflictDetectionStrategy.stop();
+    }
   }
 
   /**
@@ -159,6 +162,16 @@ public class MarkerHandler extends Handler {
   public Set<String> getCreateAndMergeMarkers(String markerDir) {
     return getAllMarkers(markerDir).stream()
         .filter(markerName -> !markerName.endsWith(IOType.APPEND.name()))
+        .collect(Collectors.toSet());
+  }
+
+  /**
+   * @param markerDir marker directory path
+   * @return all marker paths of write IO type "APPEND"
+   */
+  public Set<String> getAppendMarkers(String markerDir) {
+    return getAllMarkers(markerDir).stream()
+        .filter(markerName -> markerName.endsWith(IOType.APPEND.name()))
         .collect(Collectors.toSet());
   }
 
@@ -218,7 +231,7 @@ public class MarkerHandler extends Handler {
                 timelineServiceConfig.asyncConflictDetectorInitialDelayMs,
                 timelineServiceConfig.asyncConflictDetectorPeriodMs,
                 markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs,
-                fileSystem, this, completedCommits);
+                storage, this, completedCommits);
           }
         }
 
@@ -294,7 +307,7 @@ public class MarkerHandler extends Handler {
                   ? Option.of(earlyConflictDetectionStrategy) : Option.empty();
           markerDirState = new MarkerDirState(
               markerDir, timelineServiceConfig.markerBatchNumThreads,
-              strategy, fileSystem, metricsRegistry, hoodieEngineContext, parallelism);
+              strategy, storage, metricsRegistry, hoodieEngineContext, parallelism);
           markerDirStateMap.put(markerDir, markerDirState);
         } else {
           markerDirState = markerDirStateMap.get(markerDir);

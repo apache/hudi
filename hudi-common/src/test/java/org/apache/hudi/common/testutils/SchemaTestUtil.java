@@ -38,6 +38,7 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -67,6 +68,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.genPseudo
 public final class SchemaTestUtil {
 
   private static final String RESOURCE_SAMPLE_DATA = "/sample.data";
+  private static final MercifulJsonConverter CONVERTER = new MercifulJsonConverter();
 
   private final Random random = new Random(0xDEED);
 
@@ -267,13 +269,12 @@ public final class SchemaTestUtil {
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
       String fileId, boolean populateMetaFields) throws IOException {
     SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId, populateMetaFields);
-    MercifulJsonConverter converter = new MercifulJsonConverter();
-    return converter.convert(record.toJsonString(), schema);
+    return CONVERTER.convert(record.toJsonString(), schema);
   }
 
   public static Schema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
-    try {
-      Schema schema = new Schema.Parser().parse(clazz.getResourceAsStream(name));
+    try (InputStream schemaInputStream = clazz.getResourceAsStream(name)) {
+      Schema schema = new Schema.Parser().parse(schemaInputStream);
       return withHoodieMetadata ? HoodieAvroUtils.addMetadataFields(schema) : schema;
     } catch (IOException e) {
       throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));

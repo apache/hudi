@@ -33,7 +33,7 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
     return String.format("%s %s %s", left, operator.sqlOperator, right);
   }
 
-  private String quoteStringLiteral(String value) {
+  protected String quoteStringLiteral(String value) {
     if (!value.contains("\"")) {
       return "\"" + value + "\"";
     } else if (!value.contains("'")) {

@@ -29,8 +29,6 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.util.Arrays;
 
-import static org.apache.hudi.table.BulkInsertPartitioner.tryPrependPartitionPathColumns;
-
 /**
  * A partitioner that globally sorts a {@link JavaRDD<HoodieRecord>} based on partition path column and custom columns.
  *
@@ -46,12 +44,12 @@ public class RDDCustomColumnsSortPartitioner<T>
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
-    this.sortColumnNames = tryPrependPartitionPathColumns(getSortColumnName(config), config);
+    this.sortColumnNames = getSortColumnName(config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
   public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
-    this.sortColumnNames = tryPrependPartitionPathColumns(columnNames, config);
+    this.sortColumnNames = columnNames;
     this.serializableSchema = new SerializableSchema(schema);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
@@ -63,11 +61,11 @@ public class RDDCustomColumnsSortPartitioner<T>
     final SerializableSchema schema = this.serializableSchema;
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
     return records.sortBy(
-        record -> {
-          Object[] columnValues = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
-          return FlatLists.ofComparableArray(columnValues);
-        },
-        true, outputSparkPartitions);
+        record -> FlatLists.ofComparableArray(
+            BulkInsertPartitioner.prependPartitionPath(
+                record.getPartitionPath(),
+                record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled))
+        ), true, outputSparkPartitions);
   }
 
   @Override

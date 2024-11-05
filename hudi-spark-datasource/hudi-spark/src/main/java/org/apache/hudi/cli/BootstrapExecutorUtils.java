@@ -34,6 +34,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.index.HoodieIndex;
@@ -267,7 +268,7 @@ public class BootstrapExecutorUtils implements Serializable {
         .setKeyGeneratorClassProp(keyGenClassAndParCols.getLeft())
         .setPartitionFields(keyGenClassAndParCols.getRight());
 
-    builder.initTable(new Configuration(jssc.hadoopConfiguration()), cfg.basePath);
+    builder.initTable(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()), cfg.basePath);
   }
 
   private Pair<String, String> genKeyGenClassAndPartitionColumns() {

@@ -89,6 +89,7 @@ public class TestHoodieWriteConfig {
     assertEquals(5, config.getMaxCommitsToKeep());
     assertEquals(2, config.getMinCommitsToKeep());
     assertTrue(config.shouldUseExternalSchemaTransformation());
+    assertTrue(config.allowDuplicateInserts());
   }
 
   @Test

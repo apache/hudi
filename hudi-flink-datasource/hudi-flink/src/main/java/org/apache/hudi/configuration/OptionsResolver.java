@@ -78,6 +78,14 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the table operation is 'upsert'.
+   */
+  public static boolean isUpsertOperation(Configuration conf) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return operationType == WriteOperationType.UPSERT;
+  }
+
+  /**
    * Returns whether the table operation is 'bulk_insert'.
    */
   public static boolean isBulkInsertOperation(Configuration conf) {
@@ -142,8 +150,18 @@ public class OptionsResolver {
     return FilePathUtils.extractPartitionKeys(conf).length > 0;
   }
 
+  /**
+   * Returns whether the table index is bucket index.
+   */
   public static boolean isBucketIndexType(Configuration conf) {
     return conf.getString(FlinkOptions.INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name());
+  }
+
+  /**
+   * Returns whether it is a MERGE_ON_READ table, and updates by bucket index.
+   */
+  public static boolean isMorWithBucketIndexUpsert(Configuration conf) {
+    return isMorTable(conf) && isUpsertOperation(conf) && isBucketIndexType(conf);
   }
 
   public static HoodieIndex.BucketIndexEngineType getBucketEngineType(Configuration conf) {
@@ -327,7 +345,7 @@ public class OptionsResolver {
    * Returns the index type.
    */
   public static HoodieIndex.IndexType getIndexType(Configuration conf) {
-    return HoodieIndex.IndexType.valueOf(conf.getString(FlinkOptions.INDEX_TYPE));
+    return HoodieIndex.IndexType.valueOf(conf.getString(FlinkOptions.INDEX_TYPE).toUpperCase());
   }
 
   /**

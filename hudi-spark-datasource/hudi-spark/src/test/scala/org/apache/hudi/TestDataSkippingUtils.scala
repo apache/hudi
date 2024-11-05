@@ -48,17 +48,17 @@ case class IndexRow(fileName: String,
                     // Corresponding A column is LongType
                     A_minValue: Long = -1,
                     A_maxValue: Long = -1,
-                    A_nullCount: Long = -1,
+                    A_nullCount: java.lang.Long = null,
 
                     // Corresponding B column is StringType
                     B_minValue: String = null,
                     B_maxValue: String = null,
-                    B_nullCount: Long = -1,
+                    B_nullCount: java.lang.Long = null,
 
                     // Corresponding B column is TimestampType
                     C_minValue: Timestamp = null,
                     C_maxValue: Timestamp = null,
-                    C_nullCount: Long = -1) {
+                    C_nullCount: java.lang.Long = null) {
   def toRow: Row = Row(productIterator.toSeq: _*)
 }
 
@@ -89,7 +89,8 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
   @MethodSource(Array(
     "testBasicLookupFilterExpressionsSource",
     "testAdvancedLookupFilterExpressionsSource",
-    "testCompositeFilterExpressionsSource"
+    "testCompositeFilterExpressionsSource",
+    "testSupportedAndUnsupportedDataSkippingColumnsSource"
   ))
   def testLookupFilterExpressions(sourceFilterExprStr: String, input: Seq[IndexRow], expectedOutput: Seq[String]): Unit = {
     // We have to fix the timezone to make sure all date-bound utilities output
@@ -194,6 +195,38 @@ object TestDataSkippingUtils {
           IndexRow("file_4", valueCount = 1, B_minValue = "ABC123", B_maxValue = "ABC345", B_nullCount = 0) // all strings start w/ "ABC" (after upper)
         ),
         Seq("file_1", "file_2", "file_3"))
+    )
+  }
+
+  def testSupportedAndUnsupportedDataSkippingColumnsSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(
+        "A = 1 and B is not null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null)
+        ),
+        Seq("file_1", "file_2")
+      ),
+      arguments(
+        "B = 1 and B is not null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null)
+        ),
+        Seq("file_1", "file_2", "file_3")
+      ),
+      arguments(
+        "A = 1 and A is not null and B is not null and B > 2",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null)
+        ),
+        Seq("file_1", "file_2")
+      )
     )
   }
 

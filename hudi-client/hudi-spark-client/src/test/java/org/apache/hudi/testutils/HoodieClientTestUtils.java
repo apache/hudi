@@ -19,10 +19,8 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -36,40 +34,39 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.storage.HoodieHFileUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
+import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFile;
 
 /**
  * Utility methods to aid testing inside the HoodieClient module.
@@ -94,7 +91,7 @@ public class HoodieClientTestUtils {
    */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
-        .setMaster("local[4]")
+        .setMaster("local[8]")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
         .set("spark.sql.shuffle.partitions", "4")
@@ -123,6 +120,18 @@ public class HoodieClientTestUtils {
 
     return SparkRDDReadClient.addHoodieSupport(sparkConf);
   }
+  
+  public static void overrideSparkHadoopConfiguration(SparkContext sparkContext) {
+    try {
+      // Clean the default Hadoop configurations since in our Hudi tests they are not used.
+      Field hadoopConfigurationField = sparkContext.getClass().getDeclaredField("_hadoopConfiguration");
+      hadoopConfigurationField.setAccessible(true);
+      Configuration testHadoopConfig = new Configuration(false);
+      hadoopConfigurationField.set(sparkContext, testHadoopConfig);
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      LOG.warn(e.getMessage());
+    }
+  }
 
   private static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
                                                                     List<HoodieInstant> commitsToReturn) throws IOException {
@@ -130,7 +139,7 @@ public class HoodieClientTestUtils {
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
           HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
-      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new Path(basePath)));
+      fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new StoragePath(basePath)));
     }
     return fileIdToFullPath;
   }
@@ -191,7 +200,7 @@ public class HoodieClientTestUtils {
           return rows.count();
         }
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        Stream<GenericRecord> genericRecordStream = readHFile(jsc, paths);
+        Stream<GenericRecord> genericRecordStream = readHFile(jsc.hadoopConfiguration(), paths);
         if (lastCommitTimeOpt.isPresent()) {
           return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
               gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
@@ -210,18 +219,22 @@ public class HoodieClientTestUtils {
       }
       throw new HoodieException("Unsupported base file format for file :" + paths[0]);
     } catch (IOException e) {
-      throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTimeOpt.get(), e);
+      throw new HoodieException(
+          "Error pulling data incrementally from commitTimestamp :" + lastCommitTimeOpt.get(), e);
     }
   }
 
-  public static List<HoodieBaseFile> getLatestBaseFiles(String basePath, FileSystem fs,
-                                                String... paths) {
+  public static List<HoodieBaseFile> getLatestBaseFiles(String basePath,
+                                                        HoodieStorage storage,
+                                                        String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();
     try {
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, basePath);
       for (String path : paths) {
-        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
-            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
+        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(
+            metaClient,
+            metaClient.getCommitsTimeline().filterCompletedInstants(),
+            storage.globEntries(new StoragePath(path)));
         latestFiles.addAll(fileSystemView.getLatestBaseFiles().collect(Collectors.toList()));
       }
     } catch (Exception e) {
@@ -233,11 +246,12 @@ public class HoodieClientTestUtils {
   /**
    * Reads the paths under the hoodie table out as a DataFrame.
    */
-  public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext, FileSystem fs,
+  public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
+                                  HoodieStorage storage,
                                   String... paths) {
     List<String> filteredPaths = new ArrayList<>();
     try {
-      List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, fs, paths);
+      List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, storage, paths);
       for (HoodieBaseFile file : latestFiles) {
         filteredPaths.add(file.getPath());
       }
@@ -254,38 +268,6 @@ public class HoodieClientTestUtils {
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }
-  }
-
-  public static Stream<GenericRecord> readHFile(JavaSparkContext jsc, String[] paths) {
-    // TODO: this should be ported to use HoodieStorageReader
-    List<GenericRecord> valuesAsList = new LinkedList<>();
-
-    FileSystem fs = FSUtils.getFs(paths[0], jsc.hadoopConfiguration());
-    CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    Schema schema = null;
-    for (String path : paths) {
-      try {
-        HFile.Reader reader =
-            HoodieHFileUtils.createHFileReader(fs, new Path(path), cacheConfig, fs.getConf());
-        if (schema == null) {
-          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(SCHEMA_KEY.getBytes())));
-        }
-        HFileScanner scanner = reader.getScanner(false, false);
-        if (!scanner.seekTo()) {
-          // EOF reached
-          continue;
-        }
-
-        do {
-          Cell c = scanner.getCell();
-          byte[] value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
-          valuesAsList.add(HoodieAvroUtils.bytesToAvro(value, schema));
-        } while (scanner.next());
-      } catch (IOException e) {
-        throw new HoodieException("Error reading hfile " + path + " as a dataframe", e);
-      }
-    }
-    return valuesAsList.stream();
   }
 
   /**
@@ -307,9 +289,8 @@ public class HoodieClientTestUtils {
       TimelineService timelineService = new TimelineService(context, new Configuration(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          FileSystem.get(new Configuration()),
-          FileSystemViewManager.createViewManager(context, config.getMetadataConfig(),
-              config.getViewStorageConfig(), config.getCommonConfig()));
+          HoodieStorageUtils.getStorage(HoodieTestUtils.getDefaultStorageConf()),
+          FileSystemViewManager.createViewManager(context, config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();
       LOG.info("Timeline service server port: " + timelineServicePort);
       return timelineService;
@@ -325,6 +306,24 @@ public class HoodieClientTestUtils {
     } else {
       return Option.empty();
     }
+  }
+
+  /**
+   * @param jsc      {@link JavaSparkContext} instance.
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(JavaSparkContext jsc, String basePath) {
+    return HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(jsc.hadoopConfiguration()), basePath);
+  }
+
+  /**
+   * @param spark    {@link SparkSession} instance.
+   * @param basePath base path of the Hudi table.
+   * @return a new {@link HoodieTableMetaClient} instance.
+   */
+  public static HoodieTableMetaClient createMetaClient(SparkSession spark, String basePath) {
+    return HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(spark.sessionState().newHadoopConf()), basePath);
   }
 
   private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {

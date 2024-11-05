@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
@@ -30,7 +29,9 @@ import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.hadoop.RecordReaderValueIterator;
 import org.apache.hudi.hadoop.SafeParquetRecordReaderWrapper;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.io.ArrayWritable;
@@ -76,12 +77,11 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
 
     HoodieUnMergedLogRecordScanner.Builder scannerBuilder =
         HoodieUnMergedLogRecordScanner.newBuilder()
-          .withFileSystem(FSUtils.getFs(split.getPath().toString(), this.jobConf))
+          .withStorage(HoodieStorageUtils.getStorage(split.getPath().toString(), HadoopFSUtils.getStorageConf(this.jobConf)))
           .withBasePath(split.getBasePath())
           .withLogFilePaths(split.getDeltaLogPaths())
           .withReaderSchema(getReaderSchema())
           .withLatestInstantTime(split.getMaxCommitTime())
-          .withReadBlocksLazily(Boolean.parseBoolean(this.jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
           .withReverseReader(false)
           .withBufferSize(this.jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE));
 

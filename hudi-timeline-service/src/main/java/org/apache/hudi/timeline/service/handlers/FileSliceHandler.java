@@ -25,14 +25,13 @@ import org.apache.hudi.common.table.timeline.dto.DTOUtils;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -42,9 +41,9 @@ import java.util.stream.Collectors;
  */
 public class FileSliceHandler extends Handler {
 
-  public FileSliceHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
-                          FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
-    super(conf, timelineServiceConfig, fileSystem, viewManager);
+  public FileSliceHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
+                          HoodieStorage storage, FileSystemViewManager viewManager) throws IOException {
+    super(conf, timelineServiceConfig, storage, viewManager);
   }
 
   public List<FileSliceDTO> getAllFileSlices(String basePath, String partitionPath) {
@@ -97,7 +96,7 @@ public class FileSliceHandler extends Handler {
 
   public List<FileSliceDTO> getLatestFileSlice(String basePath, String partitionPath, String fileId) {
     return viewManager.getFileSystemView(basePath).getLatestFileSlice(partitionPath, fileId)
-        .map(FileSliceDTO::fromFileSlice).map(Arrays::asList).orElse(new ArrayList<>());
+        .map(FileSliceDTO::fromFileSlice).map(Arrays::asList).orElse(Collections.emptyList());
   }
 
   public List<CompactionOpDTO> getPendingCompactionOperations(String basePath) {
@@ -161,6 +160,11 @@ public class FileSliceHandler extends Handler {
 
   public boolean loadAllPartitions(String basePath) {
     viewManager.getFileSystemView(basePath).loadAllPartitions();
+    return true;
+  }
+
+  public boolean loadPartitions(String basePath, List<String> partitionPaths) {
+    viewManager.getFileSystemView(basePath).loadPartitions(partitionPaths);
     return true;
   }
 }

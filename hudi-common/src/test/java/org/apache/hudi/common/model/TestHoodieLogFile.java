@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,30 +34,32 @@ public class TestHoodieLogFile {
   private final String fileExtension = "log";
 
   private final int length = 10;
+  private final short blockReplication = 2;
+  private final long blockSize = 1000000L;
 
   @Test
   void createFromLogFile() {
-    FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(fileStatus);
-    assertFileGetters(fileStatus, new HoodieLogFile(hoodieLogFile), length);
+    StoragePathInfo pathInfo = new StoragePathInfo(new StoragePath(pathStr), length, false, blockReplication, blockSize, 0);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(pathInfo);
+    assertFileGetters(pathInfo, new HoodieLogFile(hoodieLogFile), length);
   }
 
   @Test
   void createFromFileStatus() {
-    FileStatus fileStatus = new FileStatus(length, false, 0, 0, 0, 0, null, null, null, new Path(pathStr));
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(fileStatus);
-    assertFileGetters(fileStatus, hoodieLogFile, length);
+    StoragePathInfo pathInfo = new StoragePathInfo(new StoragePath(pathStr), length, false, blockReplication, blockSize, 0);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(pathInfo);
+    assertFileGetters(pathInfo, hoodieLogFile, length);
   }
 
   @Test
   void createFromPath() {
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(new Path(pathStr));
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(new StoragePath(pathStr));
     assertFileGetters(null, hoodieLogFile, -1);
   }
 
   @Test
   void createFromPathAndLength() {
-    HoodieLogFile hoodieLogFile = new HoodieLogFile(new Path(pathStr), length);
+    HoodieLogFile hoodieLogFile = new HoodieLogFile(new StoragePath(pathStr), length);
     assertFileGetters(null, hoodieLogFile, length);
   }
 
@@ -74,19 +77,22 @@ public class TestHoodieLogFile {
     assertFileGetters(pathWithSuffix, null, hoodieLogFile, -1, suffix);
   }
 
-  private void assertFileGetters(FileStatus fileStatus, HoodieLogFile hoodieLogFile, long fileLength) {
-    assertFileGetters(pathStr, fileStatus, hoodieLogFile, fileLength, "");
+  private void assertFileGetters(StoragePathInfo pathInfo, HoodieLogFile hoodieLogFile,
+                                 long fileLength) {
+    assertFileGetters(pathStr, pathInfo, hoodieLogFile, fileLength, "");
   }
 
-  private void assertFileGetters(String pathStr, FileStatus fileStatus, HoodieLogFile hoodieLogFile, long fileLength, String suffix) {
+  private void assertFileGetters(String pathStr, StoragePathInfo pathInfo,
+                                 HoodieLogFile hoodieLogFile,
+                                 long fileLength, String suffix) {
     assertEquals(fileId, hoodieLogFile.getFileId());
     assertEquals(baseCommitTime, hoodieLogFile.getBaseCommitTime());
     assertEquals(logVersion, hoodieLogFile.getLogVersion());
     assertEquals(writeToken, hoodieLogFile.getLogWriteToken());
     assertEquals(fileExtension, hoodieLogFile.getFileExtension());
-    assertEquals(new Path(pathStr), hoodieLogFile.getPath());
+    assertEquals(new StoragePath(pathStr), hoodieLogFile.getPath());
     assertEquals(fileLength, hoodieLogFile.getFileSize());
-    assertEquals(fileStatus, hoodieLogFile.getFileStatus());
+    assertEquals(pathInfo, hoodieLogFile.getPathInfo());
     assertEquals(suffix, hoodieLogFile.getSuffix());
   }
 }

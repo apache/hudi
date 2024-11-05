@@ -23,10 +23,12 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -85,6 +87,10 @@ public class HiveSyncFunctionalTestHarness {
     return hiveTestService.getHiveServer().getHiveConf();
   }
 
+  public StorageConfiguration<Configuration> storageConf() {
+    return HadoopFSUtils.getStorageConf(hiveConf());
+  }
+
   public ZookeeperTestService zkService() {
     return zookeeperTestService;
   }
@@ -108,7 +114,7 @@ public class HiveSyncFunctionalTestHarness {
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(hadoopConf, hiveSyncConfig.getString(META_SYNC_BASE_PATH));
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
     return new HoodieHiveSyncClient(hiveSyncConfig);
   }
 

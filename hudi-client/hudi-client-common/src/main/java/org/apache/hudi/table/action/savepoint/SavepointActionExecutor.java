@@ -90,7 +90,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         } catch (IOException e) {
           throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
         }
-      }).orElse(table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp());
+      }).orElseGet(() -> table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp());
 
       // Cannot allow savepoint time on a commit that could have been cleaned
       ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCommitRetained),
@@ -123,7 +123,8 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
                   return latestFiles;
                 }));
       } else {
-        List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+        List<String> partitions = FSUtils.getAllPartitionPaths(
+            context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath());
         latestFilesMap = context.mapToPair(partitions, partitionPath -> {
           // Scan all partitions files with this commit time
           LOG.info("Collecting latest files in partition path " + partitionPath);

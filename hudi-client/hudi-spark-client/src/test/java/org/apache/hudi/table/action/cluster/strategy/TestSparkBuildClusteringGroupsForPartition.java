@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
@@ -41,6 +42,9 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestSparkBuildClusteringGroupsForPartition {
+
+  protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
+
   @Mock
   HoodieSparkCopyOnWriteTable table;
   @Mock
@@ -109,13 +113,13 @@ public class TestSparkBuildClusteringGroupsForPartition {
 
   private FileSlice generateFileSlice(String partitionPath, String fileId, String baseInstant) {
     FileSlice fs = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant);
-    fs.setBaseFile(new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId)));
+    fs.setBaseFile(new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId, BASE_FILE_EXTENSION)));
     return fs;
   }
 
   private FileSlice generateFileSliceWithLen(String partitionPath, String fileId, String baseInstant, long fileLen) {
     FileSlice fs = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant);
-    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId));
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId, BASE_FILE_EXTENSION));
     hoodieBaseFile.setFileLen(fileLen);
     fs.setBaseFile(hoodieBaseFile);
     return fs;

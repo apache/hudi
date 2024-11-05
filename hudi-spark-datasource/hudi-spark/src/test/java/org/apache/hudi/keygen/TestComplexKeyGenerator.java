@@ -78,7 +78,7 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testNullRecordKeyFields() {
     GenericRecord record = getRecord();
-    Assertions.assertThrows(StringIndexOutOfBoundsException.class, () ->   {
+    Assertions.assertThrows(HoodieKeyException.class, () ->   {
       ComplexKeyGenerator keyGenerator = new ComplexKeyGenerator(getPropertiesWithoutRecordKeyProp());
       keyGenerator.getRecordKey(record);
     });

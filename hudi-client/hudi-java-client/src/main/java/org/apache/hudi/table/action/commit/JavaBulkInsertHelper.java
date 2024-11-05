@@ -78,7 +78,7 @@ public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<Hoo
           config.shouldAllowMultiWriteOnSameInstant());
     }
 
-    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElse(JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode()));
+    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElseGet(() -> JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode()));
 
     // write new files
     List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,

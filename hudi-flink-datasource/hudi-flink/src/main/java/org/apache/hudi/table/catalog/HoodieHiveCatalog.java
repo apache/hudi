@@ -18,9 +18,9 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,11 +29,13 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.table.HoodieTableFactory;
@@ -47,9 +49,6 @@ import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabase;
-import org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabaseOwner;
-import org.apache.flink.sql.parser.hive.ddl.SqlCreateHiveDatabase;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
@@ -107,13 +106,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabase.ALTER_DATABASE_OP;
-import static org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabaseOwner.DATABASE_OWNER_NAME;
-import static org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabaseOwner.DATABASE_OWNER_TYPE;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
+import static org.apache.hudi.adapter.HiveCatalogConstants.ALTER_DATABASE_OP;
+import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_LOCATION_URI;
+import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_NAME;
+import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_TYPE;
+import static org.apache.hudi.adapter.HiveCatalogConstants.ROLE_OWNER;
+import static org.apache.hudi.adapter.HiveCatalogConstants.USER_OWNER;
 import static org.apache.hudi.configuration.FlinkOptions.PATH;
 import static org.apache.hudi.table.catalog.TableOptionProperties.COMMENT;
 import static org.apache.hudi.table.catalog.TableOptionProperties.PK_CONSTRAINT_NAME;
@@ -219,7 +221,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     Map<String, String> properties = new HashMap<>(hiveDatabase.getParameters());
 
-    properties.put(SqlCreateHiveDatabase.DATABASE_LOCATION_URI, hiveDatabase.getLocationUri());
+    properties.put(DATABASE_LOCATION_URI, hiveDatabase.getLocationUri());
 
     return new CatalogDatabaseImpl(properties, hiveDatabase.getDescription());
   }
@@ -248,7 +250,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     Map<String, String> properties = database.getProperties();
 
-    String dbLocationUri = properties.remove(SqlCreateHiveDatabase.DATABASE_LOCATION_URI);
+    String dbLocationUri = properties.remove(DATABASE_LOCATION_URI);
     if (dbLocationUri == null && this.catalogPath != null) {
       // infer default location uri
       dbLocationUri = new Path(this.catalogPath, databaseName).toString();
@@ -318,11 +320,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     String opStr = newParams.remove(ALTER_DATABASE_OP);
     if (opStr == null) {
       // by default is to alter db properties
-      opStr = SqlAlterHiveDatabase.AlterHiveDatabaseOp.CHANGE_PROPS.name();
+      opStr = AlterHiveDatabaseOp.CHANGE_PROPS.name();
     }
-    String newLocation = newParams.remove(SqlCreateHiveDatabase.DATABASE_LOCATION_URI);
-    SqlAlterHiveDatabase.AlterHiveDatabaseOp op =
-        SqlAlterHiveDatabase.AlterHiveDatabaseOp.valueOf(opStr);
+    String newLocation = newParams.remove(DATABASE_LOCATION_URI);
+    AlterHiveDatabaseOp op = AlterHiveDatabaseOp.valueOf(opStr);
     switch (op) {
       case CHANGE_PROPS:
         hiveDB.setParameters(newParams);
@@ -335,10 +336,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         String ownerType = newParams.remove(DATABASE_OWNER_TYPE);
         hiveDB.setOwnerName(ownerName);
         switch (ownerType) {
-          case SqlAlterHiveDatabaseOwner.ROLE_OWNER:
+          case ROLE_OWNER:
             hiveDB.setOwnerType(PrincipalType.ROLE);
             break;
-          case SqlAlterHiveDatabaseOwner.USER_OWNER:
+          case USER_OWNER:
             hiveDB.setOwnerType(PrincipalType.USER);
             break;
           default:
@@ -397,7 +398,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           } else {
             // fallback to the partition path pattern
             Path hoodieTablePath = new Path(path);
-            hiveStyle = Arrays.stream(FSUtils.getFs(hoodieTablePath, hiveConf).listStatus(hoodieTablePath))
+            hiveStyle = Arrays.stream(HadoopFSUtils.getFs(hoodieTablePath, hiveConf).listStatus(hoodieTablePath))
                 .map(fileStatus -> fileStatus.getPath().getName())
                 .filter(f -> !f.equals(".hoodie") && !f.equals("default"))
                 .anyMatch(FilePathUtils::isHiveStylePartitioning);
@@ -506,6 +507,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     if (catalogTable.isPartitioned() && !flinkConf.contains(FlinkOptions.PARTITION_PATH_FIELD)) {
       final String partitions = String.join(",", catalogTable.getPartitionKeys());
       flinkConf.setString(FlinkOptions.PARTITION_PATH_FIELD, partitions);
+      final String[] pks = flinkConf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      boolean complexHoodieKey = pks.length > 1 || catalogTable.getPartitionKeys().size() > 1;
+      StreamerUtil.checkKeygenGenerator(complexHoodieKey, flinkConf);
     }
 
     if (!catalogTable.isPartitioned()) {
@@ -553,6 +557,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = new HashMap<>(table.getOptions());
+    if (properties.containsKey(FlinkOptions.INDEX_TYPE.key())
+        && !properties.containsKey(HoodieIndexConfig.INDEX_TYPE.key())) {
+      properties.put(HoodieIndexConfig.INDEX_TYPE.key(), properties.get(FlinkOptions.INDEX_TYPE.key()));
+    }
+    properties.remove(FlinkOptions.INDEX_TYPE.key());
+    hiveConf.getAllProperties().forEach((k, v) -> properties.put("hadoop." + k, String.valueOf(v)));
 
     if (external) {
       hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
@@ -709,11 +719,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           //update hoodie
           StorageDescriptor sd = hiveTable.getSd();
           String location = sd.getLocation();
-          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location).setConf(hiveConf).build();
+          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location)
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(hiveConf)).build();
           //Init table with new name
           HoodieTableMetaClient.withPropertyBuilder().fromProperties(metaClient.getTableConfig().getProps())
               .setTableName(newTableName)
-              .initTable(hiveConf, location);
+              .initTable(HadoopFSUtils.getStorageConfWithCopy(hiveConf), location);
 
           hiveTable.setTableName(newTableName);
           client.alter_table(
@@ -1000,7 +1011,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
             .set(FlinkOptions.SOURCE_AVRO_SCHEMA,
-                HoodieTableMetaClient.builder().setBasePath(inferTablePath(tablePath, table)).setConf(hiveConf).build()
+                HoodieTableMetaClient.builder().setBasePath(inferTablePath(tablePath, table)).setConf(HadoopFSUtils.getStorageConfWithCopy(hiveConf)).build()
                     .getTableConfig().getTableCreateSchema().get().toString()));
   }
 

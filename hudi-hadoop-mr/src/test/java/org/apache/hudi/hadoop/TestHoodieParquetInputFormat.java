@@ -18,20 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.ql.io.IOConstants;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapreduce.Job;
-
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -55,6 +41,20 @@ import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.IOConstants;
+import org.apache.hadoop.hive.serde2.io.TimestampWritable;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapreduce.Job;
 import org.apache.hive.common.util.HiveVersionInfo;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,18 +65,20 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hadoop.HoodieColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -211,8 +213,8 @@ public class TestHoodieParquetInputFormat {
   public void testInputFormatLoadWithEmptyTable() throws IOException {
     // initial hoodie table
     String bathPathStr = "/tmp/test_empty_table";
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, bathPathStr);
 
@@ -342,8 +344,8 @@ public class TestHoodieParquetInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
-            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+        HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
 
@@ -357,8 +359,8 @@ public class TestHoodieParquetInputFormat {
     assertEquals(0, files.length,
         "We should exclude commit 100 when returning incremental pull with start commit time as 100");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
         String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
 
@@ -379,8 +381,8 @@ public class TestHoodieParquetInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.HOODIE_DATABASE, true);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
-            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+        HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
 
@@ -388,8 +390,8 @@ public class TestHoodieParquetInputFormat {
     assertEquals(10, files.length,
         "When hoodie.database.name is null, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, "");
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, "");
     assertEquals("", metaClient.getTableConfig().getDatabaseName(),
         "The hoodie.database.name should be empty");
 
@@ -397,8 +399,8 @@ public class TestHoodieParquetInputFormat {
     assertEquals(10, files.length,
         "When hoodie.database.name is empty, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
             String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
 
@@ -495,7 +497,7 @@ public class TestHoodieParquetInputFormat {
     File file = basePath.resolve(".hoodie").resolve(commitNumber + ".commit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
-    fileOutputStream.write(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    fileOutputStream.write(getUTF8Bytes(commitMetadata.toJsonString()));
     fileOutputStream.flush();
     fileOutputStream.close();
   }
@@ -765,6 +767,7 @@ public class TestHoodieParquetInputFormat {
         }
         totalCount++;
       }
+      recordReader.close();
     }
     assertEquals(expectedNumberOfRecordsInCommit, actualCount, msg);
     assertEquals(totalExpected, totalCount, msg);
@@ -777,7 +780,7 @@ public class TestHoodieParquetInputFormat {
 
     Schema schema = SchemaTestUtil.getSchemaFromResource(getClass(), "/test_timetype.avsc");
     String commit = "20160628071126";
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
         HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "06", "28"));
     String fileId = FSUtils.makeBaseFileName(commit, "1-0-1", "fileid1",
@@ -813,13 +816,18 @@ public class TestHoodieParquetInputFormat {
               Instant.ofEpochMilli(testTimestampLong), ZoneOffset.UTC);
           assertEquals(Timestamp.valueOf(localDateTime).toString(), String.valueOf(writable.get()[0]));
         } else {
-          assertEquals(new Timestamp(testTimestampLong).toString(), String.valueOf(writable.get()[0]));
+          Date date = new Date();
+          date.setTime(testTimestampLong);
+          Timestamp actualTime = ((TimestampWritable) writable.get()[0]).getTimestamp();
+          SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+          assertEquals(dateFormat.format(date), dateFormat.format(actualTime));
         }
         // test long
         assertEquals(testTimestampLong * 1000, ((LongWritable) writable.get()[1]).get());
         // test date
         assertEquals(LocalDate.ofEpochDay(testDate).toString(), String.valueOf(writable.get()[2]));
       }
+      recordReader.close();
     }
   }
 }

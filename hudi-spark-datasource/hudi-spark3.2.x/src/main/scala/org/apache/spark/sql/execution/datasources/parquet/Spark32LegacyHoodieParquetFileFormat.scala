@@ -17,11 +17,6 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapred.FileSplit
-import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
-import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
@@ -31,6 +26,13 @@ import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.FileSplit
+import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
+import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -157,7 +159,9 @@ class Spark32LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       val fileSchema = if (shouldUseInternalSchema) {
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
-        InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath, sharedConf, if (validCommits == null) "" else validCommits)
+        val storage = new HoodieHadoopStorage(tablePath, sharedConf)
+        InternalSchemaCache.getInternalSchemaByVersionId(
+          commitInstantTime, tablePath, storage, if (validCommits == null) "" else validCommits)
       } else {
         null
       }
@@ -185,7 +189,7 @@ class Spark32LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         } else {
           // Spark 3.2.0
           val datetimeRebaseMode =
-            Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           createParquetFilters(
             parquetSchema,
             pushDownDate,
@@ -285,9 +289,9 @@ class Spark32LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
           } else {
             // Spark 3.2.0
             val datetimeRebaseMode =
-              Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+              Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
             val int96RebaseMode =
-              Spark32PlusDataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+              Spark32DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             createVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseMode.toString,
@@ -347,9 +351,9 @@ class Spark32LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
             int96RebaseSpec)
         } else {
           val datetimeRebaseMode =
-            Spark32PlusDataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark32DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           val int96RebaseMode =
-            Spark32PlusDataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+            Spark32DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
           createParquetReadSupport(
             convertTz,
             /* enableVectorizedReader = */ false,

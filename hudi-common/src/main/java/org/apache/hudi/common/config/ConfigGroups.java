@@ -30,10 +30,12 @@ public class ConfigGroups {
    * {@link ConfigGroups#getDescription}.
    */
   public enum Names {
+    TABLE_CONFIG("Hudi Table Config"),
     ENVIRONMENT_CONFIG("Environment Config"),
     SPARK_DATASOURCE("Spark Datasource Configs"),
     FLINK_SQL("Flink Sql Configs"),
     WRITE_CLIENT("Write Client Configs"),
+    READER("Reader Configs"),
     META_SYNC("Metastore and Catalog Sync Configs"),
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
@@ -93,6 +95,9 @@ public class ConfigGroups {
   public static String getDescription(Names names) {
     String description;
     switch (names) {
+      case TABLE_CONFIG:
+        description = "Basic Hudi Table configuration parameters.";
+        break;
       case ENVIRONMENT_CONFIG:
         description = "Hudi supports passing configurations via a configuration file "
             + "`hudi-default.conf` in which each line consists of a key and a value "

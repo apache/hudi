@@ -18,15 +18,16 @@
 
 package org.apache.hudi.utilities.sources;
 
-import com.google.protobuf.ByteString;
-import com.google.pubsub.v1.PubsubMessage;
-import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import com.google.protobuf.ByteString;
+import com.google.pubsub.v1.PubsubMessage;
+import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,14 +35,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
 import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -139,10 +143,10 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @Test
   public void shouldFetchMessagesInBatches() {
-    ReceivedMessage msg1 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
-    ReceivedMessage msg2 = fileCreateMessage("objectId-2", "{'data':{'bucket':'bucket-2'}}");
-    ReceivedMessage msg3 = fileCreateMessage("objectId-3", "{'data':{'bucket':'bucket-3'}}");
-    ReceivedMessage msg4 = fileCreateMessage("objectId-4", "{'data':{'bucket':'bucket-4'}}");
+    ReceivedMessage msg1 = fileCreateMessage("objectId-1", "{\"data\":{\"bucket\":\"bucket-1\"}, \"size\": \"1024\"}");
+    ReceivedMessage msg2 = fileCreateMessage("objectId-2", "{\"data\":{\"bucket\":\"bucket-2\"}, \"size\": \"1024\"}");
+    ReceivedMessage msg3 = fileCreateMessage("objectId-3", "{\"data\":{\"bucket\":\"bucket-3\"}, \"size\": \"1024\"}");
+    ReceivedMessage msg4 = fileCreateMessage("objectId-4", "{\"data\":{\"bucket\":\"bucket-4\"}, \"size\": \"1024\"}");
 
     // dataFetcher should return only two messages each time it's called
     when(pubsubMessagesFetcher.fetchMessages())
@@ -171,9 +175,9 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @Test
   public void shouldSkipInvalidMessages1() {
-    ReceivedMessage invalid1 = fileDeleteMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
-    ReceivedMessage invalid2 = fileCreateMessageWithOverwroteGen("objectId-2", "{'data':{'bucket':'bucket-2'}}");
-    ReceivedMessage valid1 = fileCreateMessage("objectId-3", "{'data':{'bucket':'bucket-3'}}");
+    ReceivedMessage invalid1 = fileDeleteMessage("objectId-1", "{\"data\":{\"bucket\":\"bucket-1\"}, \"size\": \"1024\"}");
+    ReceivedMessage invalid2 = fileCreateMessageWithOverwroteGen("objectId-2", "{\"data\":{\"bucket\":\"bucket-2\"}, \"size\": \"1024\"}");
+    ReceivedMessage valid1 = fileCreateMessage("objectId-3", "{\"data\":{\"bucket\":\"bucket-3\"}, \"size\": \"1024\"}");
 
     when(pubsubMessagesFetcher.fetchMessages()).thenReturn(Arrays.asList(invalid1, valid1, invalid2));
 
@@ -194,8 +198,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @Test
   public void shouldGcsEventsSourceDoesNotDedupeInternally() {
-    ReceivedMessage dupe1 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
-    ReceivedMessage dupe2 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
+    ReceivedMessage dupe1 = fileCreateMessage("objectId-1", "{\"data\":{\"bucket\":\"bucket-1\"}, \"size\": \"1024\"}");
+    ReceivedMessage dupe2 = fileCreateMessage("objectId-1", "{\"data\":{\"bucket\":\"bucket-1\"}, \"size\": \"1024\"}");
 
     when(pubsubMessagesFetcher.fetchMessages()).thenReturn(Arrays.asList(dupe1, dupe2));
 
@@ -266,8 +270,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   private PubsubMessage.Builder messageWithAttrs(Map<String, String> attrs, String dataMessage) {
     return PubsubMessage.newBuilder()
-            .putAllAttributes(new HashMap<>(attrs))
-            .setData(ByteString.copyFrom(dataMessage.getBytes()));
+        .putAllAttributes(new HashMap<>(attrs))
+        .setData(ByteString.copyFrom(getUTF8Bytes(dataMessage)));
   }
 
   private void assertBucket(Row row, String expectedBucketName) {

@@ -38,11 +38,12 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -177,20 +178,20 @@ public class TestPostgresDebeziumAvroPayload {
     GenericRecord oldVal = new GenericData.Record(avroSchema);
     oldVal.put(DebeziumConstants.FLATTENED_LSN_COL_NAME, 100L);
     oldVal.put("string_col", "valid string value");
-    oldVal.put("byte_col", ByteBuffer.wrap("valid byte value".getBytes()));
+    oldVal.put("byte_col", ByteBuffer.wrap(getUTF8Bytes("valid byte value")));
     oldVal.put("string_null_col_1", "valid string value");
-    oldVal.put("byte_null_col_1", ByteBuffer.wrap("valid byte value".getBytes()));
+    oldVal.put("byte_null_col_1", ByteBuffer.wrap(getUTF8Bytes("valid byte value")));
     oldVal.put("string_null_col_2", null);
     oldVal.put("byte_null_col_2", null);
 
     GenericRecord newVal = new GenericData.Record(avroSchema);
     newVal.put(DebeziumConstants.FLATTENED_LSN_COL_NAME, 105L);
     newVal.put("string_col", PostgresDebeziumAvroPayload.DEBEZIUM_TOASTED_VALUE);
-    newVal.put("byte_col", ByteBuffer.wrap(PostgresDebeziumAvroPayload.DEBEZIUM_TOASTED_VALUE.getBytes()));
+    newVal.put("byte_col", ByteBuffer.wrap(getUTF8Bytes(PostgresDebeziumAvroPayload.DEBEZIUM_TOASTED_VALUE)));
     newVal.put("string_null_col_1", null);
     newVal.put("byte_null_col_1", null);
     newVal.put("string_null_col_2", "valid string value");
-    newVal.put("byte_null_col_2", ByteBuffer.wrap("valid byte value".getBytes()));
+    newVal.put("byte_null_col_2", ByteBuffer.wrap(getUTF8Bytes("valid byte value")));
 
     PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(Option.of(newVal));
 
@@ -198,11 +199,11 @@ public class TestPostgresDebeziumAvroPayload {
         .combineAndGetUpdateValue(oldVal, avroSchema).get();
 
     assertEquals("valid string value", outputRecord.get("string_col"));
-    assertEquals("valid byte value", new String(((ByteBuffer) outputRecord.get("byte_col")).array(), StandardCharsets.UTF_8));
+    assertEquals("valid byte value", fromUTF8Bytes(((ByteBuffer) outputRecord.get("byte_col")).array()));
     assertNull(outputRecord.get("string_null_col_1"));
     assertNull(outputRecord.get("byte_null_col_1"));
     assertEquals("valid string value", ((Utf8) outputRecord.get("string_null_col_2")).toString());
-    assertEquals("valid byte value", new String(((ByteBuffer) outputRecord.get("byte_null_col_2")).array(), StandardCharsets.UTF_8));
+    assertEquals("valid byte value", fromUTF8Bytes(((ByteBuffer) outputRecord.get("byte_null_col_2")).array()));
   }
 
   private GenericRecord createRecord(int primaryKeyValue, @Nullable Operation op, @Nullable Long lsnValue) {

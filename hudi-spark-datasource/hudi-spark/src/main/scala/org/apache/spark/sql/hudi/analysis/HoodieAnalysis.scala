@@ -77,7 +77,16 @@ object HoodieAnalysis extends SparkAdapterSupport {
       }
     } else {
       rules += adaptIngestionTargetLogicalRelations
-      val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
+      val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark3_5)
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
+      else if (HoodieSparkUtils.isSpark3_4)
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
+      else if (HoodieSparkUtils.isSpark3_3)
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
+      else {
+        // Spark 3.2.x
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark32DataSourceV2ToV1Fallback"
+      }
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
@@ -95,7 +104,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     if (HoodieSparkUtils.isSpark3) {
       val resolveAlterTableCommandsClass =
-        if (HoodieSparkUtils.gteqSpark3_4) {
+        if (HoodieSparkUtils.gteqSpark3_5) {
+          "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
+        } else if (HoodieSparkUtils.gteqSpark3_4) {
           "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
         } else if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
@@ -120,7 +131,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //       Please check rule's scala-doc for more details
     rules += (_ => ResolveImplementationsEarly())
 
-    rules
+    rules.toSeq
   }
 
   def customPostHocResolutionRules: Seq[RuleBuilder] = {
@@ -139,7 +150,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       rules += spark3PostHocResolution
     }
 
-    rules
+    rules.toSeq
   }
 
   def customOptimizerRules: Seq[RuleBuilder] = {
@@ -149,7 +160,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     if (HoodieSparkUtils.gteqSpark3_0) {
       val nestedSchemaPruningClass =
-        if (HoodieSparkUtils.gteqSpark3_4) {
+        if (HoodieSparkUtils.gteqSpark3_5) {
+          "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
+        } else if (HoodieSparkUtils.gteqSpark3_4) {
           "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
         } else if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
@@ -178,7 +191,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
     rules += (spark => HoodiePruneFileSourcePartitions(spark))
 
-    rules
+    rules.toSeq
   }
 
   /**

@@ -82,7 +82,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
       hoodieWriteMetadata.setWriteStatuses(HoodieJavaRDD.getJavaRDD(statuses));
       hoodieWriteMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(statuses));
       return hoodieWriteMetadata;
-    }).orElse(new HoodieWriteMetadata<>());
+    }).orElseGet(HoodieWriteMetadata::new);
   }
 
   public final HoodieWriteResult execute(Dataset<Row> records, boolean isTablePartitioned) {

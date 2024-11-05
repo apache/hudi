@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.bloom;
 
-import org.apache.hadoop.util.hash.Hash;
+import org.apache.hudi.common.util.hash.Hash;
+
+import java.nio.ByteBuffer;
 
 /**
  * A Factory class to generate different versions of {@link BloomFilter}.
@@ -56,6 +58,23 @@ public class BloomFilterFactory {
       return new SimpleBloomFilter(serString);
     } else if (bloomFilterTypeCode.equalsIgnoreCase(BloomFilterTypeCode.DYNAMIC_V0.name())) {
       return new HoodieDynamicBoundedBloomFilter(serString);
+    } else {
+      throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCode);
+    }
+  }
+
+  /**
+   * Generates {@link BloomFilter} from a {@link ByteBuffer}.
+   *
+   * @param byteBuffer          {@link ByteBuffer} containing the serialized bloom filter.
+   * @param bloomFilterTypeCode bloom filter type code as string.
+   * @return the {@link BloomFilter} thus generated from the passed in {@link ByteBuffer}.
+   */
+  public static BloomFilter fromByteBuffer(ByteBuffer byteBuffer, String bloomFilterTypeCode) {
+    if (bloomFilterTypeCode.equalsIgnoreCase(BloomFilterTypeCode.SIMPLE.name())) {
+      return new SimpleBloomFilter(byteBuffer);
+    } else if (bloomFilterTypeCode.equalsIgnoreCase(BloomFilterTypeCode.DYNAMIC_V0.name())) {
+      return new HoodieDynamicBoundedBloomFilter(byteBuffer);
     } else {
       throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCode);
     }

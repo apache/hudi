@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.Schema;
@@ -228,5 +229,29 @@ public class TestAvroSchemaUtils {
   @ValueSource(booleans = {false, true})
   public void testIsCompatiblePartitionDropCols(boolean shouldValidate) {
     AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.singleton("c"));
+  }
+
+  private static final Schema BROKEN_SCHEMA = new Schema.Parser().parse("{\n"
+      + "  \"type\" : \"record\",\n"
+      + "  \"name\" : \"broken\",\n"
+      + "  \"fields\" : [ {\n"
+      + "    \"name\" : \"a\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"b\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"c\",\n"
+      + "    \"type\" : [ \"null\", \"boolean\" ],\n"
+      + "    \"default\" : null\n"
+      + "  } ]\n"
+      + "}");
+
+  @Test
+  public void  testBrokenSchema() {
+    assertThrows(SchemaBackwardsCompatibilityException.class,
+        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, BROKEN_SCHEMA, true, false, Collections.emptySet()));
   }
 }

@@ -36,8 +36,8 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
@@ -69,7 +69,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initTestDataGenerator();
     initMetaClient();
   }
@@ -121,7 +121,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
 
       // verify that there is a commit
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(),
           "Expecting a single commit.");
       assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(), "Latest commit should be 001");
@@ -147,7 +147,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
 
       // verify that there are 2 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(2, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting two commits.");
       assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(), "Latest commit should be 002");
       Dataset<Row> dataSet = getRecords();
@@ -167,7 +167,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
 
       // verify that there are now 3 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(3, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting three commits.");
       assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(), "Latest commit should be 003");
       dataSet = getRecords();
@@ -197,7 +197,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       assertNoWriteErrors(statuses);
 
       // verify there are now 4 commits
-      timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(4, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting four commits.");
       assertEquals(timeline.lastInstant().get().getTimestamp(), newCommitTime, "Latest commit should be 004");
 
@@ -346,7 +346,8 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = Paths.get(basePath, dataGen.getPartitionPaths()[i], "*").toString();
     }
-    Dataset<Row> dataSet = HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths);
+    Dataset<Row> dataSet =
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths);
     return dataSet;
   }
 

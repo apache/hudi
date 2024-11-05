@@ -18,25 +18,28 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.adapter.AbstractStreamOperatorAdapter;
-import org.apache.hudi.adapter.AbstractStreamOperatorFactoryAdapter;
-import org.apache.hudi.adapter.MailboxExecutorAdapter;
-import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
+import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.JavaSerializer;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
+import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
+import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
+import org.apache.flink.streaming.api.operators.StreamSourceContexts;
+import org.apache.flink.streaming.api.operators.YieldingOperatorFactory;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
@@ -60,7 +63,7 @@ import java.util.concurrent.LinkedBlockingDeque;
  * This architecture allows the separation of split reading from processing the checkpoint barriers,
  * thus removing any potential back-pressure.
  */
-public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
+public class StreamReadOperator extends AbstractStreamOperator<RowData>
     implements OneInputStreamOperator<MergeOnReadInputSplit, RowData> {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamReadOperator.class);
@@ -70,7 +73,7 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   // It's the same thread that runs this operator and checkpoint actions. Use this executor to schedule only
   // splits for subsequent reading, so that a new checkpoint could be triggered without blocking a long time
   // for exhausting all scheduled split reading tasks.
-  private final MailboxExecutorAdapter executor;
+  private final MailboxExecutor executor;
 
   private MergeOnReadInputFormat format;
 
@@ -89,7 +92,7 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   private transient FlinkStreamReadMetrics readMetrics;
 
   private StreamReadOperator(MergeOnReadInputFormat format, ProcessingTimeService timeService,
-                             MailboxExecutorAdapter mailboxExecutor) {
+      MailboxExecutor mailboxExecutor) {
     this.format = Preconditions.checkNotNull(format, "The InputFormat should not be null.");
     this.processingTimeService = timeService;
     this.executor = Preconditions.checkNotNull(mailboxExecutor, "The mailboxExecutor should not be null.");
@@ -119,10 +122,9 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       }
     }
 
-    this.sourceContext = Utils.getSourceContext(
+    this.sourceContext = getSourceContext(
         getOperatorConfig().getTimeCharacteristic(),
         getProcessingTimeService(),
-        getContainingTask(),
         output,
         getRuntimeContext().getExecutionConfig().getAutoWatermarkInterval());
 
@@ -247,8 +249,8 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     IDLE, RUNNING
   }
 
-  private static class OperatorFactory extends AbstractStreamOperatorFactoryAdapter<RowData>
-      implements OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> {
+  private static class OperatorFactory extends AbstractStreamOperatorFactory<RowData>
+      implements OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData>, YieldingOperatorFactory<RowData> {
 
     private final MergeOnReadInputFormat format;
 
@@ -259,7 +261,7 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     @SuppressWarnings("unchecked")
     @Override
     public <O extends StreamOperator<RowData>> O createStreamOperator(StreamOperatorParameters<RowData> parameters) {
-      StreamReadOperator operator = new StreamReadOperator(format, processingTimeService, getMailboxExecutorAdapter());
+      StreamReadOperator operator = new StreamReadOperator(format, processingTimeService, getMailboxExecutor());
       operator.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());
       return (O) operator;
     }
@@ -268,5 +270,20 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     public Class<? extends StreamOperator> getStreamOperatorClass(ClassLoader classLoader) {
       return StreamReadOperator.class;
     }
+  }
+
+  private static <O> SourceFunction.SourceContext<O> getSourceContext(
+      TimeCharacteristic timeCharacteristic,
+      ProcessingTimeService processingTimeService,
+      Output<StreamRecord<O>> output,
+      long watermarkInterval) {
+    return StreamSourceContexts.getSourceContext(
+        timeCharacteristic,
+        processingTimeService,
+        new Object(), // no actual locking needed
+        output,
+        watermarkInterval,
+        -1,
+        true);
   }
 }

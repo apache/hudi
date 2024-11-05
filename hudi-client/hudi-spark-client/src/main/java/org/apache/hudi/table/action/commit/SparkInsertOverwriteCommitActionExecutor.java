@@ -71,7 +71,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   protected Partitioner getPartitioner(WorkloadProfile profile) {
     return table.getStorageLayout().layoutPartitionerClass()
         .map(c -> getLayoutPartitioner(profile, c))
-        .orElse(new SparkInsertOverwritePartitioner(profile, context, table, config));
+        .orElseGet(() -> new SparkInsertOverwritePartitioner(profile, context, table, config));
   }
 
   @Override

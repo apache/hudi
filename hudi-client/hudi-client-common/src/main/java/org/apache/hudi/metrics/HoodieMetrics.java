@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.HoodieStorage;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
@@ -54,6 +55,9 @@ public class HoodieMetrics {
   public static final String TOTAL_RECORDS_DELETED = "totalRecordsDeleted";
   public static final String TOTAL_CORRUPTED_LOG_BLOCKS_STR = "totalCorruptedLogBlocks";
   public static final String TOTAL_ROLLBACK_LOG_BLOCKS_STR = "totalRollbackLogBlocks";
+  public static final String TIMER_ACTION = "timer";
+  public static final String DURATION_STR = "duration";
+  public static final String SOURCE_READ_AND_INDEX_ACTION = "source_read_and_index";
 
   private Metrics metrics;
   // Some timers
@@ -66,6 +70,7 @@ public class HoodieMetrics {
   public String finalizeTimerName = null;
   public String compactionTimerName = null;
   public String indexTimerName = null;
+  public String sourceReadAndIndexTimerName = null;
   private String conflictResolutionTimerName = null;
   private String conflictResolutionSuccessCounterName = null;
   private String conflictResolutionFailureCounterName = null;
@@ -82,17 +87,18 @@ public class HoodieMetrics {
   private Timer logCompactionTimer = null;
   private Timer clusteringTimer = null;
   private Timer indexTimer = null;
+  private Timer sourceReadAndIndexTimer = null;
   private Timer conflictResolutionTimer = null;
   private Counter conflictResolutionSuccessCounter = null;
   private Counter conflictResolutionFailureCounter = null;
   private Counter compactionRequestedCounter = null;
   private Counter compactionCompletedCounter = null;
 
-  public HoodieMetrics(HoodieWriteConfig config) {
+  public HoodieMetrics(HoodieWriteConfig config, HoodieStorage storage) {
     this.config = config;
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
-      metrics = Metrics.getInstance(config);
+      metrics = Metrics.getInstance(config.getMetricsConfig(), storage);
       this.rollbackTimerName = getMetricsName("timer", HoodieTimeline.ROLLBACK_ACTION);
       this.cleanTimerName = getMetricsName("timer", HoodieTimeline.CLEAN_ACTION);
       this.commitTimerName = getMetricsName("timer", HoodieTimeline.COMMIT_ACTION);
@@ -102,6 +108,7 @@ public class HoodieMetrics {
       this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
       this.logCompactionTimerName = getMetricsName("timer", HoodieTimeline.LOG_COMPACTION_ACTION);
       this.indexTimerName = getMetricsName("timer", "index");
+      this.sourceReadAndIndexTimerName = getMetricsName(TIMER_ACTION, SOURCE_READ_AND_INDEX_ACTION);
       this.conflictResolutionTimerName = getMetricsName("timer", "conflict_resolution");
       this.conflictResolutionSuccessCounterName = getMetricsName("counter", "conflict_resolution.success");
       this.conflictResolutionFailureCounterName = getMetricsName("counter", "conflict_resolution.failure");
@@ -179,6 +186,13 @@ public class HoodieMetrics {
       indexTimer = createTimer(indexTimerName);
     }
     return indexTimer == null ? null : indexTimer.time();
+  }
+
+  public Timer.Context getSourceReadAndIndexTimerCtx() {
+    if (config.isMetricsOn() && sourceReadAndIndexTimer == null) {
+      sourceReadAndIndexTimer = createTimer(sourceReadAndIndexTimerName);
+    }
+    return sourceReadAndIndexTimer == null ? null : sourceReadAndIndexTimer.time();
   }
 
   public Timer.Context getConflictResolutionCtx() {
@@ -301,6 +315,13 @@ public class HoodieMetrics {
     }
   }
 
+  public void updateSourceReadAndIndexMetrics(final String action, final long durationInMs) {
+    if (config.isMetricsOn()) {
+      LOG.info(String.format("Sending %s metrics (%s.duration, %d)", SOURCE_READ_AND_INDEX_ACTION, action, durationInMs));
+      metrics.registerGauge(getMetricsName(SOURCE_READ_AND_INDEX_ACTION, String.format("%s.duration", action)), durationInMs);
+    }
+  }
+
   @VisibleForTesting
   public String getMetricsName(String action, String metric) {
     if (config == null) {
@@ -358,6 +379,22 @@ public class HoodieMetrics {
     if (config.isMetricsOn()) {
       compactionCompletedCounter = getCounter(compactionCompletedCounter, compactionCompletedCounterName);
       compactionCompletedCounter.inc();
+    }
+  }
+
+  public void emitMetadataEnablementMetrics(boolean isMetadataEnabled, boolean isMetadataColStatsEnabled, boolean isMetadataBloomFilterEnabled,
+                                            boolean isMetadataRliEnabled) {
+    if (config.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("metadata", "isEnabled"), isMetadataEnabled ? 1 : 0);
+      metrics.registerGauge(getMetricsName("metadata", "isColSatsEnabled"), isMetadataColStatsEnabled ? 1 : 0);
+      metrics.registerGauge(getMetricsName("metadata", "isBloomFilterEnabled"), isMetadataBloomFilterEnabled ? 1 : 0);
+      metrics.registerGauge(getMetricsName("metadata", "isRliEnabled"), isMetadataRliEnabled ? 1 : 0);
+    }
+  }
+
+  public void emitIndexTypeMetrics(int indexTypeOrdinal) {
+    if (config.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("index", "type"), indexTypeOrdinal);
     }
   }
 

@@ -156,11 +156,15 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
                                        conf: SQLConf): LogicalPlan = {
     val planUtils = sparkAdapter.getCatalystPlanUtils
     try {
-      planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = true, conf)
+      planUtils.resolveOutputColumns(
+        catalogTable.catalogTableName, sparkAdapter.getSchemaUtils.toAttributes(expectedSchema), query, byName = true, conf)
     } catch {
       // NOTE: In case matching by name didn't match the query output, we will attempt positional matching
-      case ae: AnalysisException if ae.getMessage().startsWith("Cannot write incompatible data to table") =>
-        planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = false, conf)
+      // SPARK-42309 Error message changed in Spark 3.5.0 so we need to match two strings here
+      case ae: AnalysisException if (ae.getMessage().startsWith("[INCOMPATIBLE_DATA_FOR_TABLE.CANNOT_FIND_DATA] Cannot write incompatible data for the table")
+        || ae.getMessage().startsWith("Cannot write incompatible data to table")) =>
+        planUtils.resolveOutputColumns(
+          catalogTable.catalogTableName, sparkAdapter.getSchemaUtils.toAttributes(expectedSchema), query, byName = false, conf)
     }
   }
 
@@ -208,5 +212,5 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
   }
 
   private def filterStaticPartitionValues(partitionsSpec: Map[String, Option[String]]): Map[String, String] =
-    partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get)
+    partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get).toMap
 }

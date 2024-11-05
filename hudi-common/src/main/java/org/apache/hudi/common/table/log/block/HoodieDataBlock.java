@@ -18,14 +18,15 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hudi.common.model.HoodieRecord;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -86,7 +87,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
   protected HoodieDataBlock(Option<byte[]> content,
-                            Supplier<FSDataInputStream> inputStreamSupplier,
+                            Supplier<SeekableDataInputStream> inputStreamSupplier,
                             boolean readBlockLazily,
                             Option<HoodieLogBlockContentLocation> blockContentLocation,
                             Option<Schema> readerSchema,
@@ -103,7 +104,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes() throws IOException {
+  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
     // In case this method is called before realizing records from content
     Option<byte[]> content = getContent();
 
@@ -113,7 +114,11 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
       return content.get();
     }
 
-    return serializeRecords(records.get());
+    return serializeRecords(records.get(), storage);
+  }
+
+  public String getKeyFieldName() {
+    return keyFieldName;
   }
 
   protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {
@@ -185,7 +190,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     );
   }
 
-  protected abstract byte[] serializeRecords(List<HoodieRecord> records) throws IOException;
+  protected abstract byte[] serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException;
 
   protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException;
 

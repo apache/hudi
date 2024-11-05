@@ -37,6 +37,7 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import com.google.protobuf.util.Timestamps;
 import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -44,7 +45,6 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import com.google.protobuf.util.Timestamps;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
@@ -57,7 +57,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -67,6 +66,8 @@ import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil.toUnsignedBigInteger;
 
 public class TestProtoConversionUtil {
@@ -205,7 +206,7 @@ public class TestProtoConversionUtil {
     long primitiveFixedSignedLong = RANDOM.nextLong();
     boolean primitiveBoolean = RANDOM.nextBoolean();
     String primitiveString = randomString(10);
-    byte[] primitiveBytes = randomString(10).getBytes();
+    byte[] primitiveBytes = getUTF8Bytes(randomString(10));
 
     double wrappedDouble = RANDOM.nextDouble();
     float wrappedFloat = RANDOM.nextFloat();
@@ -215,7 +216,7 @@ public class TestProtoConversionUtil {
     long wrappedUnsignedLong = primitiveUnsignedLongInUnsignedRange ? RANDOM.nextLong() : Long.parseUnsignedLong(MAX_UNSIGNED_LONG) - RANDOM.nextInt(1000);
     boolean wrappedBoolean = RANDOM.nextBoolean();
     String wrappedString = randomString(10);
-    byte[] wrappedBytes = randomString(10).getBytes();
+    byte[] wrappedBytes = getUTF8Bytes(randomString(10));
     SampleEnum enumValue = SampleEnum.forNumber(RANDOM.nextInt(1));
 
     List<Integer> primitiveList = Arrays.asList(RANDOM.nextInt(), RANDOM.nextInt(), RANDOM.nextInt());
@@ -358,7 +359,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_fixed_signed_long", 0L);
     expectedRecord.put("primitive_boolean", false);
     expectedRecord.put("primitive_string", "");
-    expectedRecord.put("primitive_bytes", ByteBuffer.wrap("".getBytes()));
+    expectedRecord.put("primitive_bytes", ByteBuffer.wrap(getUTF8Bytes("")));
     expectedRecord.put("repeated_primitive", Collections.emptyList());
     expectedRecord.put("map_primitive", Collections.emptyList());
     expectedRecord.put("nested_message", null);
@@ -577,6 +578,6 @@ public class TestProtoConversionUtil {
   private static String randomString(int size) {
     byte[] bytes = new byte[size];
     RANDOM.nextBytes(bytes);
-    return new String(bytes, StandardCharsets.UTF_8);
+    return fromUTF8Bytes(bytes);
   }
 }

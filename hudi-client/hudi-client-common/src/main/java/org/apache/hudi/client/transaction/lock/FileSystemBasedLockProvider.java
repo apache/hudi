@@ -22,8 +22,6 @@ package org.apache.hudi.client.transaction.lock;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -34,9 +32,11 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StorageSchemes;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -44,6 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -71,19 +72,19 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private LockInfo lockInfo;
   private String currentOwnerLockInfo;
 
-  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
+  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
     String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null);
     if (StringUtils.isNullOrEmpty(lockDirectory)) {
       lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key())
-          + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
+          + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
     }
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
-    this.lockFile = new Path(lockDirectory + Path.SEPARATOR + LOCK_FILE_NAME);
+    this.lockFile = new Path(lockDirectory + StoragePath.SEPARATOR + LOCK_FILE_NAME);
     this.lockInfo = new LockInfo();
     this.sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-    this.fs = FSUtils.getFs(this.lockFile.toString(), configuration);
+    this.fs = HadoopFSUtils.getFs(this.lockFile.toString(), configuration);
     List<String> customSupportedFSs = lockConfiguration.getConfig().getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
     if (!customSupportedFSs.contains(this.fs.getScheme()) && !StorageSchemes.isAtomicCreationSupported(this.fs.getScheme())) {
       throw new HoodieLockException("Unsupported scheme :" + this.fs.getScheme() + ", since this fs can not support atomic creation");
@@ -163,12 +164,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   private void acquireLock() {
-    try {
+    try (FSDataOutputStream fos = fs.create(this.lockFile, false)) {
       if (!fs.exists(this.lockFile)) {
-        FSDataOutputStream fos = fs.create(this.lockFile, false);
         initLockInfo();
         fos.writeBytes(lockInfo.toString());
-        fos.close();
       }
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
@@ -182,11 +181,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   public void reloadCurrentOwnerLockInfo() {
-    try {
+    try (InputStream is = fs.open(this.lockFile)) {
       if (fs.exists(this.lockFile)) {
-        FSDataInputStream fis = fs.open(this.lockFile);
-        this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(fis);
-        fis.close();
+        this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(is);
       } else {
         this.currentOwnerLockInfo = "";
       }
@@ -224,6 +221,6 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
    * <p>IMPORTANT: this path should be shared especially when there is engine cooperation.
    */
   private static String defaultLockPath(String tablePath) {
-    return tablePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
+    return tablePath + StoragePath.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 }

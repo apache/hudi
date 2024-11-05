@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -97,7 +96,7 @@ public class ClusteringTestUtils {
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .withRemoteServerPort(timelineServicePort)
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build())
+            .build())
         .withClusteringConfig(clusteringConfig)
         .withPreCommitValidatorConfig(HoodiePreCommitValidatorConfig.newBuilder()
             .withPreCommitValidator(SqlQueryEqualityPreCommitValidator.class.getName())

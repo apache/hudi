@@ -18,13 +18,19 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.exception.InvalidUnionTypeException;
+import org.apache.hudi.exception.MissingSchemaFieldException;
+import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
-import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -57,7 +63,7 @@ public class AvroSchemaUtils {
   /**
    * Establishes whether {@code newSchema} is compatible w/ {@code prevSchema}, as
    * defined by Avro's {@link AvroSchemaCompatibility}.
-   * From avro's compatability standpoint, prevSchema is writer schema and new schema is reader schema.
+   * From avro's compatibility standpoint, prevSchema is writer schema and new schema is reader schema.
    * {@code newSchema} is considered compatible to {@code prevSchema}, iff data written using {@code prevSchema}
    * could be read by {@code newSchema}
    *
@@ -90,20 +96,20 @@ public class AvroSchemaUtils {
    * @return true if prev schema is a projection of new schema.
    */
   public static boolean canProject(Schema prevSchema, Schema newSchema) {
-    return canProject(prevSchema, newSchema, Collections.emptySet());
+    return findMissingFields(prevSchema, newSchema, Collections.emptySet()).isEmpty();
   }
 
   /**
-   * Check that each field in the prevSchema can be populated in the newSchema except specified columns
+   * Check that each top level field in the prevSchema can be populated in the newSchema except specified columns
    * @param prevSchema prev schema.
    * @param newSchema new schema
-   * @return true if prev schema is a projection of new schema.
+   * @return List of fields that should be in the new schema
    */
-  public static boolean canProject(Schema prevSchema, Schema newSchema, Set<String> exceptCols) {
+  private static List<Schema.Field> findMissingFields(Schema prevSchema, Schema newSchema, Set<String> exceptCols) {
     return prevSchema.getFields().stream()
         .filter(f -> !exceptCols.contains(f.name()))
-        .map(oldSchemaField -> SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField))
-        .noneMatch(Objects::isNull);
+        .filter(oldSchemaField -> SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField) == null)
+        .collect(Collectors.toList());
   }
 
   /**
@@ -117,31 +123,6 @@ public class AvroSchemaUtils {
   public static String getAvroRecordQualifiedName(String tableName) {
     String sanitizedTableName = HoodieAvroUtils.sanitizeName(tableName);
     return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
-  }
-
-  /**
-   * Validate whether the {@code targetSchema} is a valid evolution of {@code sourceSchema}.
-   * Basically {@link #isCompatibleProjectionOf(Schema, Schema)} but type promotion in the
-   * opposite direction
-   */
-  public static boolean isValidEvolutionOf(Schema sourceSchema, Schema targetSchema) {
-    return (sourceSchema.getType() == Schema.Type.NULL) || isProjectionOfInternal(sourceSchema, targetSchema,
-        AvroSchemaUtils::isAtomicSchemasCompatibleEvolution);
-  }
-
-  /**
-   * Establishes whether {@code newReaderSchema} is compatible w/ {@code prevWriterSchema}, as
-   * defined by Avro's {@link AvroSchemaCompatibility}.
-   * {@code newReaderSchema} is considered compatible to {@code prevWriterSchema}, iff data written using {@code prevWriterSchema}
-   * could be read by {@code newReaderSchema}
-   * @param newReaderSchema new reader schema instance.
-   * @param prevWriterSchema prev writer schema instance.
-   * @return true if its compatible. else false.
-   */
-  private static boolean isAtomicSchemasCompatibleEvolution(Schema newReaderSchema, Schema prevWriterSchema) {
-    // NOTE: Checking for compatibility of atomic types, we should ignore their
-    //       corresponding fully-qualified names (as irrelevant)
-    return isSchemaCompatible(prevWriterSchema, newReaderSchema, false, true);
   }
 
   /**
@@ -261,7 +242,7 @@ public class AvroSchemaUtils {
             .orElse(null);
 
     if (nonNullType == null) {
-      throw new AvroRuntimeException(
+      throw new HoodieAvroSchemaException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
 
@@ -293,14 +274,14 @@ public class AvroSchemaUtils {
     List<Schema> innerTypes = schema.getTypes();
 
     if (innerTypes.size() != 2) {
-      throw new AvroRuntimeException(
+      throw new HoodieAvroSchemaException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
     Schema firstInnerType = innerTypes.get(0);
     Schema secondInnerType = innerTypes.get(1);
     if ((firstInnerType.getType() != Schema.Type.NULL && secondInnerType.getType() != Schema.Type.NULL)
         || (firstInnerType.getType() == Schema.Type.NULL && secondInnerType.getType() == Schema.Type.NULL)) {
-      throw new AvroRuntimeException(
+      throw new HoodieAvroSchemaException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
     return firstInnerType.getType() == Schema.Type.NULL ? secondInnerType : firstInnerType;
@@ -352,25 +333,118 @@ public class AvroSchemaUtils {
       boolean allowProjection,
       Set<String> dropPartitionColNames) throws SchemaCompatibilityException {
 
-    String errorMessage = null;
-
-    if (!allowProjection && !canProject(tableSchema, writerSchema, dropPartitionColNames)) {
-      errorMessage = "Column dropping is not allowed";
+    if (!allowProjection) {
+      List<Schema.Field> missingFields = findMissingFields(tableSchema, writerSchema, dropPartitionColNames);
+      if (!missingFields.isEmpty()) {
+        throw new MissingSchemaFieldException(missingFields.stream().map(Schema.Field::name).collect(Collectors.toList()), writerSchema, tableSchema);
+      }
     }
 
     // TODO(HUDI-4772) re-enable validations in case partition columns
     //                 being dropped from the data-file after fixing the write schema
-    if (dropPartitionColNames.isEmpty() && shouldValidate && !isSchemaCompatible(tableSchema, writerSchema)) {
-      errorMessage = "Failed schema compatibility check";
+    if (dropPartitionColNames.isEmpty() && shouldValidate) {
+      AvroSchemaCompatibility.SchemaPairCompatibility result =
+          AvroSchemaCompatibility.checkReaderWriterCompatibility(writerSchema, tableSchema, true);
+      if (result.getType() != AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE) {
+        throw new SchemaBackwardsCompatibilityException(result, writerSchema, tableSchema);
+      }
+    }
+  }
+
+  /**
+   * Validate whether the {@code incomingSchema} is a valid evolution of {@code tableSchema}.
+   *
+   * @param incomingSchema schema of the incoming dataset
+   * @param tableSchema latest table schema
+   */
+  public static void checkValidEvolution(Schema incomingSchema, Schema tableSchema) {
+    if (incomingSchema.getType() == Schema.Type.NULL) {
+      return;
     }
 
-    if (errorMessage != null) {
-      String errorDetails = String.format(
-          "%s\nwriterSchema: %s\ntableSchema: %s",
-          errorMessage,
-          writerSchema,
-          tableSchema);
-      throw new SchemaCompatibilityException(errorDetails);
+    //not really needed for `hoodie.write.set.null.for.missing.columns` but good to check anyway
+    List<String> missingFields = new ArrayList<>();
+    findAnyMissingFields(incomingSchema, tableSchema, new ArrayDeque<>(), missingFields);
+    if (!missingFields.isEmpty()) {
+      throw new MissingSchemaFieldException(missingFields, incomingSchema, tableSchema);
     }
+
+    //make sure that the table schema can be read using the incoming schema
+    AvroSchemaCompatibility.SchemaPairCompatibility result =
+        AvroSchemaCompatibility.checkReaderWriterCompatibility(incomingSchema, tableSchema, false);
+    if (result.getType() != AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE) {
+      throw new SchemaBackwardsCompatibilityException(result, incomingSchema, tableSchema);
+    }
+  }
+
+  /**
+   * Find all fields in the latest table schema that are not in
+   * the incoming schema.
+   */
+  private static void findAnyMissingFields(Schema incomingSchema,
+                                           Schema latestTableSchema,
+                                           Deque<String> visited,
+                                           List<String> missingFields) {
+    findAnyMissingFieldsRec(incomingSchema, latestTableSchema, visited,
+        missingFields, incomingSchema, latestTableSchema);
+  }
+
+  /**
+   * We want to pass the full schemas so that the error message has the entire schema to print from
+   */
+  private static void findAnyMissingFieldsRec(Schema incomingSchema,
+                                              Schema latestTableSchema,
+                                              Deque<String> visited,
+                                              List<String> missingFields,
+                                              Schema fullIncomingSchema,
+                                              Schema fullTableSchema) {
+    if (incomingSchema.getType() == latestTableSchema.getType()) {
+      if (incomingSchema.getType() == Schema.Type.RECORD) {
+        visited.addLast(latestTableSchema.getName());
+        for (Schema.Field targetField : latestTableSchema.getFields()) {
+          visited.addLast(targetField.name());
+          Schema.Field sourceField = incomingSchema.getField(targetField.name());
+          if (sourceField == null) {
+            missingFields.add(String.join(".", visited));
+          } else {
+            findAnyMissingFieldsRec(sourceField.schema(), targetField.schema(), visited,
+                missingFields, fullIncomingSchema, fullTableSchema);
+          }
+          visited.removeLast();
+        }
+        visited.removeLast();
+      } else if (incomingSchema.getType() == Schema.Type.ARRAY) {
+        visited.addLast("element");
+        findAnyMissingFieldsRec(incomingSchema.getElementType(), latestTableSchema.getElementType(),
+            visited, missingFields, fullIncomingSchema, fullTableSchema);
+        visited.removeLast();
+      } else if (incomingSchema.getType() == Schema.Type.MAP) {
+        visited.addLast("value");
+        findAnyMissingFieldsRec(incomingSchema.getValueType(), latestTableSchema.getValueType(),
+            visited, missingFields, fullIncomingSchema, fullTableSchema);
+        visited.removeLast();
+      } else if (incomingSchema.getType() == Schema.Type.UNION) {
+        List<Schema> incomingNestedSchemas = incomingSchema.getTypes();
+        List<Schema> latestTableNestedSchemas = latestTableSchema.getTypes();
+        if (incomingNestedSchemas.size() != latestTableNestedSchemas.size()) {
+          throw new InvalidUnionTypeException(createSchemaErrorString(
+              String.format("Incoming batch field '%s' has union with %d types, while the table schema has %d types",
+              String.join(".", visited), incomingNestedSchemas.size(), latestTableNestedSchemas.size()), fullIncomingSchema, fullTableSchema));
+        }
+        if (incomingNestedSchemas.size() > 2) {
+          throw new InvalidUnionTypeException(createSchemaErrorString(
+              String.format("Union for incoming batch field '%s' should not have more than 2 types but has %d",
+              String.join(".", visited), incomingNestedSchemas.size()), fullIncomingSchema, fullTableSchema));
+        }
+        for (int i = 0; i < incomingNestedSchemas.size(); ++i) {
+          findAnyMissingFieldsRec(incomingNestedSchemas.get(i), latestTableNestedSchemas.get(i), visited,
+              missingFields, fullIncomingSchema, fullTableSchema);
+        }
+      }
+    }
+  }
+
+  public static String createSchemaErrorString(String errorMessage, Schema writerSchema, Schema tableSchema) {
+    return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
   }
 }

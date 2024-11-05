@@ -36,6 +36,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,7 +115,8 @@ public class WriteProfile {
     this.basePath = new Path(config.getBasePath());
     this.smallFilesMap = new HashMap<>();
     this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
-    this.metaClient = StreamerUtil.createMetaClient(config.getBasePath(), context.getHadoopConf().get());
+    this.metaClient = StreamerUtil.createMetaClient(
+        config.getBasePath(), context.getStorageConf().unwrapAs(Configuration.class));
     this.metadataCache = new HashMap<>();
     this.fsView = getFileSystemView();
     // profile the record statistics on construction

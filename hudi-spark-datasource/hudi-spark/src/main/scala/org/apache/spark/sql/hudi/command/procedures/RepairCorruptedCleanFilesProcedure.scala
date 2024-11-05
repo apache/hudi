@@ -17,11 +17,11 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.avro.AvroRuntimeException
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.util.CleanerUtils
 import org.apache.hudi.exception.HoodieIOException
+
+import org.apache.avro.AvroRuntimeException
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -49,7 +49,7 @@ class RepairCorruptedCleanFilesProcedure extends BaseProcedure with ProcedureBui
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val tablePath = getBasePath(tableName)
 
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
+    val metaClient = createMetaClient(jsc, tablePath)
 
     val cleanerTimeline = metaClient.getActiveTimeline.getCleanerTimeline
     logInfo("Inspecting pending clean metadata in timeline for corrupted files")
@@ -60,11 +60,11 @@ class RepairCorruptedCleanFilesProcedure extends BaseProcedure with ProcedureBui
       } catch {
         case e: AvroRuntimeException =>
           logWarning("Corruption found. Trying to remove corrupted clean instant file: " + instant)
-          HoodieActiveTimeline.deleteInstantFile(metaClient.getFs, metaClient.getMetaPath, instant)
+          HoodieActiveTimeline.deleteInstantFile(metaClient.getStorage, metaClient.getMetaPath, instant)
         case ioe: IOException =>
           if (ioe.getMessage.contains("Not an Avro data file")) {
             logWarning("Corruption found. Trying to remove corrupted clean instant file: " + instant)
-            HoodieActiveTimeline.deleteInstantFile(metaClient.getFs, metaClient.getMetaPath, instant)
+            HoodieActiveTimeline.deleteInstantFile(metaClient.getStorage, metaClient.getMetaPath, instant)
           } else {
             result = false
             throw new HoodieIOException(ioe.getMessage, ioe)

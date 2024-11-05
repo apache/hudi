@@ -31,8 +31,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -47,15 +45,15 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapred.JobConf;
@@ -102,11 +100,11 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     initPath();
     initSparkContexts();
     initTestDataGenerator();
-    initFileSystem();
+    initHoodieStorage();
     Properties props = getPropertiesForKeyGen(true);
     props.putAll(options);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder().withProps(props)
         .withAutoCommit(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props)
@@ -190,13 +188,15 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     hoodieTimelineArchiver.archiveIfRequired(context);
     Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
       if (!isCommitFilePresent) {
-        Path metadataPath = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), p);
+        StoragePath metadataPath =
+            FSUtils.constructAbsolutePath(table.getMetaClient().getHashingMetadataPath(), p);
         try {
-          Arrays.stream(table.getMetaClient().getFs().listStatus(metadataPath)).forEach(fl -> {
-            if (fl.getPath().getName().contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX)) {
+          table.getStorage().listDirectEntries(metadataPath).forEach(fl -> {
+            if (fl.getPath().getName()
+                .contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX)) {
               try {
                 // delete commit marker to test recovery job
-                table.getMetaClient().getFs().delete(fl.getPath());
+                table.getStorage().deleteDirectory(fl.getPath());
               } catch (IOException e) {
                 throw new RuntimeException(e);
               }
@@ -244,7 +244,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     List<String> inputPaths = Arrays.stream(dataGen.getPartitionPaths()).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList());
 
     // Get record reader for file groups and check each file group independently
-    List<RecordReader> readers = HoodieMergeOnReadTestUtils.getRecordReadersUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
+    List<RecordReader> readers = HoodieMergeOnReadTestUtils.getRecordReadersUsingInputFormat(storageConf.unwrap(), inputPaths, basePath, new JobConf(storageConf.unwrap()), true, false);
     Schema rawSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     Schema.Field field = rawSchema.getField(sortColumn);
     Comparator comparator;
@@ -360,8 +360,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
-        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+        .withEmbeddedTimelineServerEnabled(true);
   }
 
   private static Stream<Arguments> configParams() {

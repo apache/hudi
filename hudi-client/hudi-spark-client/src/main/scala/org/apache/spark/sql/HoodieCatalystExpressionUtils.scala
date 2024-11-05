@@ -18,20 +18,22 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.codegen.{GenerateMutableProjection, GenerateUnsafeProjection}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeEq, AttributeReference, Cast, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, CreateStruct, Expression, GetStructField, Like, Literal, Projection, SubqueryExpression, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeEq, AttributeReference, AttributeSet, Cast, Expression, Like, Literal, SubqueryExpression, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
 
 trait HoodieCatalystExpressionUtils {
 
+  /**
+   * SPARK-44531 Encoder inference moved elsewhere in Spark 3.5.0
+   * Mainly used for unit tests
+   */
+  def getEncoder(schema: StructType): ExpressionEncoder[Row]
+  
   /**
    * Returns a filter that its reference is a subset of `outputSet` and it contains the maximum
    * constraints from `condition`. This is used for predicate push-down
@@ -269,7 +271,7 @@ object HoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   private def generateUnsafeProjectionInternal(from: StructType, to: StructType): UnsafeProjection = {
-    val attrs = from.toAttributes
+    val attrs = sparkAdapter.getSchemaUtils.toAttributes(from)
     val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
     val targetExprs = to.fields.map(f => attrsMap(f.name))
 

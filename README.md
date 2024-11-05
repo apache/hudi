@@ -66,8 +66,8 @@ git clone https://github.com/apache/hudi.git && cd hudi
 mvn clean package -DskipTests
 
 # Start command
-spark-3.2.3-bin-hadoop3.2/bin/spark-shell \
-  --jars `ls packaging/hudi-spark-bundle/target/hudi-spark3.2-bundle_2.12-*.*.*-SNAPSHOT.jar` \
+spark-3.5.0-bin-hadoop3/bin/spark-shell \
+  --jars `ls packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-*.*.*-SNAPSHOT.jar` \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
   --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
@@ -85,7 +85,9 @@ mvn clean javadoc:aggregate -Pjavadocs
 ### Build with different Spark versions
 
 The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version, corresponding to `spark3` profile is
-3.4.0. The default Scala version is 2.12. Refer to the table below for building with different Spark and Scala versions.
+3.5.0. The default Scala version is 2.12. Scala 2.13 is supported for Spark 3.5 and above.
+
+Refer to the table below for building with different Spark and Scala versions.
 
 | Maven build options       | Expected Spark bundle jar name               | Notes                                            |
 |:--------------------------|:---------------------------------------------|:-------------------------------------------------|
@@ -96,9 +98,20 @@ The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version,
 | `-Dspark3.2`              | hudi-spark3.2-bundle_2.12                    | For Spark 3.2.x and Scala 2.12 (same as default) |
 | `-Dspark3.3`              | hudi-spark3.3-bundle_2.12                    | For Spark 3.3.x and Scala 2.12                   |
 | `-Dspark3.4`              | hudi-spark3.4-bundle_2.12                    | For Spark 3.4.x and Scala 2.12                   |
+| `-Dspark3.5 -Dscala-2.12` | hudi-spark3.5-bundle_2.12                    | For Spark 3.5.x and Scala 2.12                   |
+| `-Dspark3.5 -Dscala-2.13` | hudi-spark3.5-bundle_2.13                    | For Spark 3.5.x and Scala 2.13                   |
 | `-Dspark2 -Dscala-2.11`   | hudi-spark-bundle_2.11 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.11                   |
 | `-Dspark2 -Dscala-2.12`   | hudi-spark-bundle_2.12 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.12                   |
-| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.4.x and Scala 2.12                   |
+| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.5.x and Scala 2.12                   |
+
+Please note that only Spark-related bundles, i.e., `hudi-spark-bundle`, `hudi-utilities-bundle`,
+`hudi-utilities-slim-bundle`, can be built using `scala-2.13` profile. Hudi Flink bundle cannot be built
+using `scala-2.13` profile. To build these bundles on Scala 2.13, use the following command:
+
+```
+# Build against Spark 3.5.x and Scala 2.13
+mvn clean package -DskipTests -Dspark3.5 -Dscala-2.13 -pl packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am
+```
 
 For example,
 ```
@@ -118,20 +131,19 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 1.17. The default Flink 1.17.x version, corresponding to `flink1.17` profile is 1.17.0.
+The default Flink version supported is 1.18. The default Flink 1.18.x version, corresponding to `flink1.18` profile is 1.18.0.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
 Refer to the table below for building with different Flink and Scala versions.
 
 | Maven build options        | Expected Flink bundle jar name | Notes                            |
 |:---------------------------|:-------------------------------|:---------------------------------|
-| (empty)                    | hudi-flink1.17-bundle          | For Flink 1.17 (default options) |
-| `-Dflink1.17`              | hudi-flink1.17-bundle          | For Flink 1.17 (same as default) |
+| (empty)                    | hudi-flink1.18-bundle          | For Flink 1.18 (default options) |
+| `-Dflink1.18`              | hudi-flink1.18-bundle          | For Flink 1.18 (same as default) |
+| `-Dflink1.17`              | hudi-flink1.17-bundle          | For Flink 1.17                   |
 | `-Dflink1.16`              | hudi-flink1.16-bundle          | For Flink 1.16                   |
 | `-Dflink1.15`              | hudi-flink1.15-bundle          | For Flink 1.15                   |
 | `-Dflink1.14`              | hudi-flink1.14-bundle          | For Flink 1.14 and Scala 2.12    |
 | `-Dflink1.14 -Dscala-2.11` | hudi-flink1.14-bundle          | For Flink 1.14 and Scala 2.11    |
-| `-Dflink1.13`              | hudi-flink1.13-bundle          | For Flink 1.13 and Scala 2.12    |
-| `-Dflink1.13 -Dscala-2.11` | hudi-flink1.13-bundle          | For Flink 1.13 and Scala 2.11    |
 
 For example,
 ```
@@ -140,9 +152,6 @@ mvn clean package -DskipTests -Dflink1.15
 
 # Build against Flink 1.14.x and Scala 2.11
 mvn clean package -DskipTests -Dflink1.14 -Dscala-2.11
-
-# Build against Flink 1.13.x and Scala 2.12
-mvn clean package -DskipTests -Dflink1.13
 ```
 
 ## Running Tests

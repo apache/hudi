@@ -42,13 +42,15 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.TableName;
@@ -57,7 +59,6 @@ import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -85,6 +86,7 @@ import scala.Tuple2;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_CLIENT_PORT;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -109,7 +111,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   private static HBaseTestingUtility utility;
   private static Configuration hbaseConfig;
 
-  private Configuration hadoopConf;
+  private StorageConfiguration<Configuration> storageConf;
   private HoodieTestDataGenerator dataGen;
   private HoodieTableMetaClient metaClient;
   private HoodieSparkEngineContext context;
@@ -125,7 +127,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     utility = new HBaseTestingUtility(hbaseConfig);
     utility.startMiniCluster();
     hbaseConfig = utility.getConnection().getConfiguration();
-    utility.createTable(TableName.valueOf(TABLE_NAME), Bytes.toBytes("_s"),2);
+    utility.createTable(TableName.valueOf(TABLE_NAME), getUTF8Bytes("_s"), 2);
   }
 
   @AfterAll
@@ -139,12 +141,12 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
 
   @BeforeEach
   public void setUp() throws Exception {
-    hadoopConf = jsc().hadoopConfiguration();
-    hadoopConf.addResource(utility.getConfiguration());
+    storageConf = HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration());
+    (storageConf.unwrap()).addResource(utility.getConfiguration());
     // reInit the context here to keep the hadoopConf the same with that in this class
     context = new HoodieSparkEngineContext(jsc());
     basePath = utility.getDataTestDirOnTestFS(TABLE_NAME).toString();
-    metaClient = getHoodieMetaClient(hadoopConf, basePath);
+    metaClient = getHoodieMetaClient(storageConf, basePath);
     dataGen = new HoodieTestDataGenerator();
   }
 
@@ -156,7 +158,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testSimpleTagLocationAndUpdate(HoodieTableType tableType) throws Exception {
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, tableType);
 
     final String newCommitTime = "001";
     final int numRecords = 10;
@@ -325,7 +327,8 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       // We are trying to approximately imitate the case when the RDD is recomputed. For RDD creating, driver code is not
       // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
       // upsert will not run into conflicts.
-      metaClient.getFs().delete(new Path(metaClient.getMetaPath(), "001.inflight"));
+      metaClient.getStorage().deleteDirectory(
+          new StoragePath(metaClient.getMetaPath(), "001.inflight"));
 
       writeClient.upsert(writeRecords, newCommitTime);
       assertNoWriteErrors(writeStatues.collect());

@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.config;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -33,7 +34,7 @@ import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
     groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the behavior of File-based SQL Source in Hudi Streamer.")
-public class SqlFileBasedSourceConfig {
+public class SqlFileBasedSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SOURCE_SQL_FILE = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.sql.file")

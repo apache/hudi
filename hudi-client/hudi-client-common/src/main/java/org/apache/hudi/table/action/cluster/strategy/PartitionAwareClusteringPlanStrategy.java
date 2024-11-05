@@ -135,7 +135,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     if (StringUtils.isNullOrEmpty(partitionSelected)) {
       // get matched partitions if set
-      partitionPaths = getRegexPatternMatchedPartitions(config, FSUtils.getAllPartitionPaths(getEngineContext(), config.getMetadataConfig(), metaClient.getBasePath()));
+      partitionPaths = getRegexPatternMatchedPartitions(config, FSUtils.getAllPartitionPaths(
+          getEngineContext(), metaClient.getStorage(), config.getMetadataConfig(), metaClient.getBasePath()));
       // filter the partition paths if needed to reduce list status
     } else {
       partitionPaths = Arrays.asList(partitionSelected.split(","));

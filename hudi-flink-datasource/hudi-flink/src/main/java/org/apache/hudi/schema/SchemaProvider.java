@@ -27,6 +27,8 @@ import java.io.Serializable;
  */
 public abstract class SchemaProvider implements Serializable {
 
+  private static final long serialVersionUID = 1L;
+
   public abstract Schema getSourceSchema();
 
   public Schema getTargetSchema() {

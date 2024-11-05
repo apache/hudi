@@ -58,7 +58,7 @@ public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBa
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 

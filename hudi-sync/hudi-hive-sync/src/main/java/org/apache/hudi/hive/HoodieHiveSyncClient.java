@@ -34,6 +34,7 @@ import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.hive.util.PartitionFilterGenerator;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -65,6 +66,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPU
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
@@ -216,8 +218,19 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public List<Partition> getPartitionsByFilter(String tableName, String filter) {
+  public List<Partition> getPartitionsFromList(String tableName, List<String> partitions) {
+    String filter = null;
     try {
+      List<String> partitionKeys = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).stream()
+          .map(String::toLowerCase)
+          .collect(Collectors.toList());
+
+      List<FieldSchema> partitionFields = this.getMetastoreFieldSchemas(tableName)
+          .stream()
+          .filter(f -> partitionKeys.contains(f.getName()))
+          .collect(Collectors.toList());
+      filter = this.generatePushDownFilter(partitions, partitionFields);
+
       return client.listPartitionsByFilter(databaseName, tableName, filter, (short)-1)
           .stream()
           .map(p -> new Partition(p.getValues(), p.getSd().getLocation()))
@@ -226,6 +239,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       throw new HoodieHiveSyncException("Failed to get partitions for table "
           + tableId(databaseName, tableName) + " with filter " + filter, e);
     }
+  }
+
+  @Override
+  public String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
+    return new PartitionFilterGenerator().generatePushDownFilter(writtenPartitions, partitionFields, config);
   }
 
   @Override

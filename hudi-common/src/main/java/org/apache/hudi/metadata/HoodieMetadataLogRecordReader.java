@@ -18,14 +18,15 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.storage.HoodieStorage;
+
+import org.apache.avro.Schema;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -138,12 +139,11 @@ public class HoodieMetadataLogRecordReader implements Closeable {
             // NOTE: Merging of Metadata Table's records is currently handled using {@code HoodiePreCombineAvroRecordMerger}
             //       for compatibility purposes; In the future it {@code HoodieMetadataPayload} semantic
             //       will be migrated to its own custom instance of {@code RecordMerger}
-            .withReadBlocksLazily(true)
             .withReverseReader(false)
             .withOperationField(false);
 
-    public Builder withFileSystem(FileSystem fs) {
-      scannerBuilder.withFileSystem(fs);
+    public Builder withStorage(HoodieStorage storage) {
+      scannerBuilder.withStorage(storage);
       return this;
     }
 
@@ -212,6 +212,11 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
     public Builder withEnableOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       scannerBuilder.withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan);
+      return this;
+    }
+
+    public Builder withTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
+      scannerBuilder.withTableMetaClient(hoodieTableMetaClient);
       return this;
     }
 

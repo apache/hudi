@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -81,11 +82,31 @@ public class HoodieMetadataWriteUtils {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
 
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
+    // Borrow the cleaner policy from the main table and adjust the cleaner policy based on the main table's cleaner policy
+    HoodieCleaningPolicy dataTableCleaningPolicy = writeConfig.getCleanerPolicy();
+    HoodieCleanConfig.Builder cleanConfigBuilder = HoodieCleanConfig.newBuilder()
+        .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
+        .withAutoClean(false)
+        .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
+        .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
+        .withCleanerPolicy(dataTableCleaningPolicy);
+
+    if (HoodieCleaningPolicy.KEEP_LATEST_COMMITS.equals(dataTableCleaningPolicy)) {
+      int retainCommits = (int) Math.max(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED, writeConfig.getCleanerCommitsRetained() * 1.2);
+      cleanConfigBuilder.retainCommits(retainCommits);
+    } else if (HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.equals(dataTableCleaningPolicy)) {
+      int retainFileVersions = (int) Math.ceil(writeConfig.getCleanerFileVersionsRetained() * 1.2);
+      cleanConfigBuilder.retainFileVersions(retainFileVersions);
+    } else if (HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.equals(dataTableCleaningPolicy)) {
+      int numHoursRetained = (int) Math.ceil(writeConfig.getCleanerHoursRetained() * 1.2);
+      cleanConfigBuilder.cleanerNumHoursRetained(numHoursRetained);
+    }
 
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withEngineType(writeConfig.getEngineType())
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
+        .withMergeAllowDuplicateOnInserts(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
             .withConsistencyCheckEnabled(writeConfig.getConsistencyGuardConfig().isConsistencyCheckEnabled())
             .withInitialConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getInitialConsistencyCheckIntervalMs())
@@ -103,14 +124,7 @@ public class HoodieMetadataWriteUtils {
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
         // we will trigger cleaning manually, to control the instant times
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
-            .withAutoClean(false)
-            .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
-            .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
-            .build())
+        .withCleanConfig(cleanConfigBuilder.build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(
@@ -173,14 +187,23 @@ public class HoodieMetadataWriteUtils {
               .build());
           break;
         case PROMETHEUS_PUSHGATEWAY:
-          HoodieMetricsPrometheusConfig prometheusConfig = HoodieMetricsPrometheusConfig.newBuilder()
+          HoodieMetricsPrometheusConfig pushGatewayConfig = HoodieMetricsPrometheusConfig.newBuilder()
               .withPushgatewayJobname(writeConfig.getPushGatewayJobName())
               .withPushgatewayRandomJobnameSuffix(writeConfig.getPushGatewayRandomJobNameSuffix())
               .withPushgatewayLabels(writeConfig.getPushGatewayLabels())
               .withPushgatewayReportPeriodInSeconds(String.valueOf(writeConfig.getPushGatewayReportPeriodSeconds()))
               .withPushgatewayHostName(writeConfig.getPushGatewayHost())
               .withPushgatewayPortNum(writeConfig.getPushGatewayPort()).build();
-          builder.withProperties(prometheusConfig.getProps());
+          builder.withProperties(pushGatewayConfig.getProps());
+          break;
+        case M3:
+          HoodieMetricsM3Config m3Config = HoodieMetricsM3Config.newBuilder()
+              .onM3Port(writeConfig.getM3ServerPort())
+              .toM3Host(writeConfig.getM3ServerHost())
+              .useM3Tags(writeConfig.getM3Tags())
+              .useM3Service(writeConfig.getM3Service())
+              .useM3Env(writeConfig.getM3Env()).build();
+          builder.withProperties(m3Config.getProps());
           break;
         case DATADOG:
           HoodieMetricsDatadogConfig.Builder datadogConfig = HoodieMetricsDatadogConfig.newBuilder()
@@ -200,6 +223,11 @@ public class HoodieMetadataWriteUtils {
           builder.withProperties(datadogConfig.build().getProps());
           break;
         case PROMETHEUS:
+          HoodieMetricsPrometheusConfig prometheusConfig = HoodieMetricsPrometheusConfig.newBuilder()
+              .withPushgatewayLabels(writeConfig.getPushGatewayLabels())
+              .withPrometheusPortNum(writeConfig.getPrometheusPort()).build();
+          builder.withProperties(prometheusConfig.getProps());
+          break;
         case CONSOLE:
         case INMEMORY:
         case CLOUDWATCH:

@@ -23,7 +23,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -64,7 +66,7 @@ public class HoodieMergeOnReadTestUtils {
 
   public static List<RecordReader> getRecordReadersUsingInputFormat(Configuration conf, List<String> inputPaths, String basePath, JobConf jobConf, boolean realtime, Schema rawSchema,
                                                                     String rawHiveColumnTypes, boolean projectCols, List<String> projectedColumns, boolean populateMetaFields) {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HadoopFSUtils.getStorageConf(conf), basePath);
     FileInputFormat inputFormat = HoodieInputFormatUtils.getInputFormat(metaClient.getTableConfig().getBaseFileFormat(), realtime, jobConf);
     Schema schema;
     String hiveColumnTypes;
@@ -94,32 +96,32 @@ public class HoodieMergeOnReadTestUtils {
     return null;
   }
 
-  public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths,
+  public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<Configuration> conf, List<String> inputPaths,
                                                                String basePath) {
-    return getRecordsUsingInputFormat(conf, inputPaths, basePath, new JobConf(conf), true);
+    return getRecordsUsingInputFormat(conf, inputPaths, basePath, new JobConf(conf.unwrap()), true);
   }
 
-  public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths,
+  public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths,
                                                                String basePath, JobConf jobConf, boolean realtime) {
     return getRecordsUsingInputFormat(conf, inputPaths, basePath, jobConf, realtime, true);
   }
 
-  public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths,
+  public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths,
                                                                String basePath, JobConf jobConf, boolean realtime, boolean populateMetaFields) {
     Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     return getRecordsUsingInputFormat(conf, inputPaths, basePath, jobConf, realtime, schema,
         HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>(), populateMetaFields);
   }
 
-  public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths, String basePath, JobConf jobConf, boolean realtime, Schema rawSchema,
+  public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths, String basePath, JobConf jobConf, boolean realtime, Schema rawSchema,
                                                                String rawHiveColumnTypes, boolean projectCols, List<String> projectedColumns) {
     return getRecordsUsingInputFormat(conf, inputPaths, basePath, jobConf, realtime, rawSchema, rawHiveColumnTypes, projectCols, projectedColumns, true);
   }
 
-  public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths, String basePath, JobConf jobConf, boolean realtime, Schema rawSchema,
+  public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths, String basePath, JobConf jobConf, boolean realtime, Schema rawSchema,
                                                                String rawHiveColumnTypes, boolean projectCols, List<String> projectedColumns, boolean populateMetaFields) {
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(conf, basePath);
     FileInputFormat inputFormat = HoodieInputFormatUtils.getInputFormat(metaClient.getTableConfig().getBaseFileFormat(), realtime, jobConf);
 
     Schema schema;
@@ -199,7 +201,7 @@ public class HoodieMergeOnReadTestUtils {
         .map(Field::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",datestr";
 
-    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
+    Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
     String hiveColumnTypesWithDatestr = hiveColumnTypes + ",string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, hiveColumnTypesWithDatestr);

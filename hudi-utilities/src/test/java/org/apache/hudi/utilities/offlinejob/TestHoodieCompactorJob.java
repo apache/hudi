@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
@@ -77,7 +78,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
         .fromProperties(props)
         .build();
 
-    metaClient =  HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), tableBasePath, metaClientProps);
+    metaClient =  HoodieTableMetaClient.initTableAndGetMetaClient(
+        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
     writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
@@ -87,8 +89,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     HoodieCompactor hoodieCompactorSchedule =
         init(tableBasePath, true, "SCHEDULE", false);
     hoodieCompactorSchedule.compact(0);
-    TestHelpers.assertNCompletedCommits(2, tableBasePath, fs);
-    TestHelpers.assertNCleanCommits(0, tableBasePath, fs);
+    TestHelpers.assertNCompletedCommits(2, tableBasePath);
+    TestHelpers.assertNCleanCommits(0, tableBasePath);
 
     writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
     writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
@@ -97,8 +99,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     HoodieCompactor hoodieCompactorExecute =
         init(tableBasePath, false, "EXECUTE", true);
     hoodieCompactorExecute.compact(0);
-    TestHelpers.assertNCompletedCommits(5, tableBasePath, fs);
-    TestHelpers.assertNCleanCommits(1, tableBasePath, fs);
+    TestHelpers.assertNCompletedCommits(5, tableBasePath);
+    TestHelpers.assertNCleanCommits(1, tableBasePath);
   }
 
   // -------------------------------------------------------------------------

@@ -36,6 +36,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
+import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -50,8 +51,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import scala.collection.JavaConverters;
 
 /**
  * Spark validator utils to verify and run any pre-commit validators configured.
@@ -155,7 +154,7 @@ public class SparkValidatorUtils {
    * Get records from specified list of data files.
    */
   public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths) {
-    return sqlContext.read().parquet(JavaConverters.asScalaBufferConverter(baseFilePaths).asScala());
+    return sqlContext.read().parquet(JavaScalaConverters.<String>convertJavaListToScalaSeq(baseFilePaths));
   }
 
   /**

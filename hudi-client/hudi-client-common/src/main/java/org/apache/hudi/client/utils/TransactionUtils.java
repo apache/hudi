@@ -79,7 +79,7 @@ public class TransactionUtils {
           table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
               completedInstantsDuringCurrentWriteOperation);
 
-      final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
+      final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElseGet(HoodieCommitMetadata::new));
       instantStream.forEach(instant -> {
         try {
           ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());

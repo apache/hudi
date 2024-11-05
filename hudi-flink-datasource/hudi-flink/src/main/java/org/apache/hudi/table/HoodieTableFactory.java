@@ -22,12 +22,12 @@ import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -172,11 +172,22 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
     checkTableType(conf);
+    checkIndexType(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
     }
     StreamerUtil.checkPreCombineKey(conf, schema.getColumnNames());
+  }
+
+  /**
+   * Validate the index type.
+   */
+  private void checkIndexType(Configuration conf) {
+    String indexType = conf.get(FlinkOptions.INDEX_TYPE);
+    if (!StringUtils.isNullOrEmpty(indexType)) {
+      HoodieIndexConfig.INDEX_TYPE.checkValues(indexType);
+    }
   }
 
   /**
@@ -302,11 +313,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       }
     }
     boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
-    if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
-          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
-    }
+    StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
   }
 
   /**

@@ -20,7 +20,6 @@ package org.apache.hudi.table.format;
 
 import java.util.stream.Collectors;
 import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -38,7 +37,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -50,7 +52,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.RowKind;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -151,15 +152,15 @@ public class FormatUtils {
       org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf) {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
-    FileSystem fs = FSUtils.getFs(split.getTablePath(), hadoopConf);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf));
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withBasePath(split.getTablePath())
         .withLogFilePaths(split.getLogPaths().get())
         .withReaderSchema(logSchema)
         .withInternalSchema(internalSchema)
         .withLatestInstantTime(split.getLatestCommit())
-        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(split.getMaxCompactionMemoryInBytes())
@@ -194,17 +195,15 @@ public class FormatUtils {
           .collect(Collectors.toList());
       HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
           split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
-      HoodieUnMergedLogRecordScanner.Builder scannerBuilder = HoodieUnMergedLogRecordScanner.newBuilder()
-          .withFileSystem(FSUtils.getFs(split.getTablePath(), hadoopConf))
+      HoodieUnMergedLogRecordScanner.Builder scannerBuilder =
+          HoodieUnMergedLogRecordScanner.newBuilder()
+              .withStorage(HoodieStorageUtils.getStorage(
+                  split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf)))
           .withBasePath(split.getTablePath())
           .withLogFilePaths(split.getLogPaths().get())
           .withReaderSchema(logSchema)
           .withInternalSchema(internalSchema)
           .withLatestInstantTime(split.getLatestCommit())
-          .withReadBlocksLazily(
-              string2Boolean(
-                  flinkConf.getString(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
-                      HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
           .withReverseReader(false)
           .withBufferSize(
               flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
@@ -260,12 +259,12 @@ public class FormatUtils {
       Configuration hadoopConf) {
     String basePath = writeConfig.getBasePath();
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(FSUtils.getFs(basePath, hadoopConf))
+        .withStorage(HoodieStorageUtils.getStorage(
+            basePath, HadoopFSUtils.getStorageConf(hadoopConf)))
         .withBasePath(basePath)
         .withLogFilePaths(logPaths)
         .withReaderSchema(logSchema)
         .withLatestInstantTime(latestInstantTime)
-        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
         .withReverseReader(false)
         .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(writeConfig.getMaxMemoryPerPartitionMerge())

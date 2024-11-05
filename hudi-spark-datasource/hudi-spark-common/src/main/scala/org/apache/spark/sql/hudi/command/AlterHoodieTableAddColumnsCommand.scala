@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
+import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils, SparkAdapterSupport}
@@ -33,7 +34,6 @@ import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
-import java.nio.charset.StandardCharsets
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
@@ -114,7 +114,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
     val requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
-    timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
+    timeLine.transitionRequestedToInflight(requested, Option.of(getUTF8Bytes(metadata.toJsonString)))
 
     client.commit(instantTime, jsc.emptyRDD)
   }

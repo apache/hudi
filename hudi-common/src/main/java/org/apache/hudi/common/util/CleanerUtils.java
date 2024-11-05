@@ -64,7 +64,8 @@ public class CleanerUtils {
 
   public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
                                                          Option<Long> durationInMs,
-                                                         List<HoodieCleanStat> cleanStats) {
+                                                         List<HoodieCleanStat> cleanStats,
+                                                         Map<String, String> extraMetadatafromCleanPlan) {
     Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = new HashMap<>();
     Map<String, HoodieCleanPartitionMetadata> partitionBootstrapMetadataMap = new HashMap<>();
 
@@ -92,7 +93,7 @@ public class CleanerUtils {
     }
 
     return new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
-        lastCompletedCommitTimestamp, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap);
+        lastCompletedCommitTimestamp, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap, extraMetadatafromCleanPlan);
   }
 
   /**

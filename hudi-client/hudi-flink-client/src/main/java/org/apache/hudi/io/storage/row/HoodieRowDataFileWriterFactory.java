@@ -23,14 +23,18 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Factory to assist in instantiating a new {@link HoodieRowDataFileWriter}.
@@ -66,15 +70,15 @@ public class HoodieRowDataFileWriterFactory {
         writeConfig.getDynamicBloomFilterMaxNumEntries(),
         writeConfig.getBloomFilterType());
     HoodieRowDataParquetWriteSupport writeSupport =
-        new HoodieRowDataParquetWriteSupport(table.getHadoopConf(), rowType, filter);
+        new HoodieRowDataParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), rowType, filter);
     return new HoodieRowDataParquetWriter(
-        path, new HoodieParquetConfig<>(
+        convertToStoragePath(path), new HoodieParquetConfig<>(
         writeSupport,
-        writeConfig.getParquetCompressionCodec(),
+        getCompressionCodecName(writeConfig.getParquetCompressionCodec()),
         writeConfig.getParquetBlockSize(),
         writeConfig.getParquetPageSize(),
         writeConfig.getParquetMaxFileSize(),
-        writeSupport.getHadoopConf(),
+        new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
         writeConfig.getParquetCompressionRatio(),
         writeConfig.parquetDictionaryEnabled()));
   }

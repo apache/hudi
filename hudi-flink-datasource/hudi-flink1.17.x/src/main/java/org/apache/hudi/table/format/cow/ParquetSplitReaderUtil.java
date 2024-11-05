@@ -81,7 +81,6 @@ import org.apache.parquet.schema.Type;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -92,6 +91,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.utils.DateTimeUtils.toInternal;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.parquet.Preconditions.checkArgument;
 
 /**
@@ -119,6 +119,10 @@ public class ParquetSplitReaderUtil {
       long splitLength,
       FilterPredicate filterPredicate,
       UnboundRecordFilter recordFilter) throws IOException {
+
+    ValidationUtils.checkState(Arrays.stream(selectedFields).noneMatch(x -> x == -1),
+            "One or more specified columns does not exist in the hudi table.");
+
     List<String> selNonPartNames = Arrays.stream(selectedFields)
         .mapToObj(i -> fullFieldNames[i])
         .filter(n -> !partitionSpec.containsKey(n))
@@ -189,7 +193,7 @@ public class ParquetSplitReaderUtil {
         } else {
           bsv.fill(value instanceof byte[]
               ? (byte[]) value
-              : value.toString().getBytes(StandardCharsets.UTF_8));
+              : getUTF8Bytes(value.toString()));
         }
         return bsv;
       case BOOLEAN:
@@ -459,60 +463,52 @@ public class ParquetSplitReaderUtil {
     switch (fieldType.getTypeRoot()) {
       case BOOLEAN:
         checkArgument(
-            typeName == PrimitiveType.PrimitiveTypeName.BOOLEAN,
-            "Unexpected type: %s", typeName);
+            typeName == PrimitiveType.PrimitiveTypeName.BOOLEAN, getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapBooleanVector(batchSize);
       case TINYINT:
         checkArgument(
-            typeName == PrimitiveType.PrimitiveTypeName.INT32,
-            "Unexpected type: %s", typeName);
+            typeName == PrimitiveType.PrimitiveTypeName.INT32, getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapByteVector(batchSize);
       case DOUBLE:
         checkArgument(
-            typeName == PrimitiveType.PrimitiveTypeName.DOUBLE,
-            "Unexpected type: %s", typeName);
+            typeName == PrimitiveType.PrimitiveTypeName.DOUBLE, getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapDoubleVector(batchSize);
       case FLOAT:
         checkArgument(
-            typeName == PrimitiveType.PrimitiveTypeName.FLOAT,
-            "Unexpected type: %s", typeName);
+            typeName == PrimitiveType.PrimitiveTypeName.FLOAT, getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapFloatVector(batchSize);
       case INTEGER:
       case DATE:
       case TIME_WITHOUT_TIME_ZONE:
         checkArgument(
-            typeName == PrimitiveType.PrimitiveTypeName.INT32,
-            "Unexpected type: %s", typeName);
+            typeName == PrimitiveType.PrimitiveTypeName.INT32, getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapIntVector(batchSize);
       case BIGINT:
         checkArgument(
-            typeName == PrimitiveType.PrimitiveTypeName.INT64,
-            "Unexpected type: %s", typeName);
+            typeName == PrimitiveType.PrimitiveTypeName.INT64, getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapLongVector(batchSize);
       case SMALLINT:
         checkArgument(
-            typeName == PrimitiveType.PrimitiveTypeName.INT32,
-            "Unexpected type: %s", typeName);
+            typeName == PrimitiveType.PrimitiveTypeName.INT32, getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapShortVector(batchSize);
       case CHAR:
       case VARCHAR:
       case BINARY:
       case VARBINARY:
         checkArgument(
-            typeName == PrimitiveType.PrimitiveTypeName.BINARY,
-            "Unexpected type: %s", typeName);
+            typeName == PrimitiveType.PrimitiveTypeName.BINARY, getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapBytesVector(batchSize);
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         checkArgument(primitiveType.getOriginalType() != OriginalType.TIME_MICROS,
-            "TIME_MICROS original type is not ");
+                getOriginalTypeCheckFailureMessage(primitiveType.getOriginalType(), fieldType));
         return new HeapTimestampVector(batchSize);
       case DECIMAL:
         checkArgument(
             (typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
                 || typeName == PrimitiveType.PrimitiveTypeName.BINARY)
                 && primitiveType.getOriginalType() == OriginalType.DECIMAL,
-            "Unexpected type: %s", typeName);
+                getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
         return new HeapDecimalVector(batchSize);
       case ARRAY:
         ArrayType arrayType = (ArrayType) fieldType;
@@ -575,5 +571,25 @@ public class ParquetSplitReaderUtil {
   private static int getFieldIndexInPhysicalType(String fieldName, GroupType groupType) {
     // get index from fileSchema type, else, return -1
     return groupType.containsField(fieldName) ? groupType.getFieldIndex(fieldName) : -1;
+  }
+
+  /**
+   * Construct the error message when primitive type mismatches.
+   * @param primitiveType Primitive type
+   * @param fieldType Logical field type
+   * @return The error message
+   */
+  private static String getPrimitiveTypeCheckFailureMessage(PrimitiveType.PrimitiveTypeName primitiveType, LogicalType fieldType) {
+    return String.format("Unexpected type exception. Primitive type: %s. Field type: %s.", primitiveType, fieldType.getTypeRoot().name());
+  }
+
+  /**
+   * Construct the error message when original type mismatches.
+   * @param originalType Original type
+   * @param fieldType Logical field type
+   * @return The error message
+   */
+  private static String getOriginalTypeCheckFailureMessage(OriginalType originalType, LogicalType fieldType) {
+    return String.format("Unexpected type exception. Original type: %s. Field type: %s.", originalType, fieldType.getTypeRoot().name());
   }
 }

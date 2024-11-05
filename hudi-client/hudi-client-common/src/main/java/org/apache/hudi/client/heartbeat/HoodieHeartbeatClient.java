@@ -22,9 +22,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieHeartbeatException;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +50,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieHeartbeatClient.class);
 
-  private final transient FileSystem fs;
+  private final transient HoodieStorage storage;
   private final String basePath;
   // path to the heartbeat folder where all writers are updating their heartbeats
   private final String heartbeatFolderPath;
@@ -59,10 +59,10 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   private final Long maxAllowableHeartbeatIntervalInMs;
   private final Map<String, Heartbeat> instantToHeartbeatMap;
 
-  public HoodieHeartbeatClient(FileSystem fs, String basePath, Long heartbeatIntervalInMs,
+  public HoodieHeartbeatClient(HoodieStorage storage, String basePath, Long heartbeatIntervalInMs,
                                Integer numTolerableHeartbeatMisses) {
     ValidationUtils.checkArgument(heartbeatIntervalInMs >= 1000, "Cannot set heartbeat lower than 1 second");
-    this.fs = fs;
+    this.storage = storage;
     this.basePath = basePath;
     this.heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
     this.heartbeatIntervalInMs = heartbeatIntervalInMs;
@@ -188,7 +188,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
     if (isHeartbeatStarted(heartbeat)) {
       stopHeartbeatTimer(heartbeat);
-      HeartbeatUtils.deleteHeartbeatFile(fs, basePath, instantTime);
+      HeartbeatUtils.deleteHeartbeatFile(storage, basePath, instantTime);
       LOG.info("Deleted heartbeat file for instant " + instantTime);
     }
   }
@@ -225,9 +225,10 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     LOG.info("Stopped heartbeat for instant " + heartbeat.getInstantTime());
   }
 
-  public static Boolean heartbeatExists(FileSystem fs, String basePath, String instantTime) throws IOException {
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
-    return fs.exists(heartbeatFilePath);
+  public static Boolean heartbeatExists(HoodieStorage storage, String basePath, String instantTime) throws IOException {
+    StoragePath heartbeatFilePath = new StoragePath(
+        HoodieTableMetaClient.getHeartbeatFolderPath(basePath), instantTime);
+    return storage.exists(heartbeatFilePath);
   }
 
   public boolean isHeartbeatExpired(String instantTime) throws IOException {
@@ -235,7 +236,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     Heartbeat lastHeartbeatForWriter = instantToHeartbeatMap.get(instantTime);
     if (lastHeartbeatForWriter == null) {
       LOG.info("Heartbeat not found in internal map, falling back to reading from DFS");
-      long lastHeartbeatForWriterTime = getLastHeartbeatTime(this.fs, basePath, instantTime);
+      long lastHeartbeatForWriterTime = getLastHeartbeatTime(this.storage, basePath, instantTime);
       lastHeartbeatForWriter = new Heartbeat();
       lastHeartbeatForWriter.setLastHeartbeatTime(lastHeartbeatForWriterTime);
       lastHeartbeatForWriter.setInstantTime(instantTime);
@@ -253,7 +254,8 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     try {
       Long newHeartbeatTime = System.currentTimeMillis();
       OutputStream outputStream =
-          this.fs.create(new Path(heartbeatFolderPath + Path.SEPARATOR + instantTime), true);
+          this.storage.create(
+              new StoragePath(heartbeatFolderPath, instantTime), true);
       outputStream.close();
       Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {

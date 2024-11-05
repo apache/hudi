@@ -68,7 +68,13 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
    */
   public final Semaphore rateLimiter = new Semaphore(1);
 
-  /** Used for sampling records with "RECORD_SAMPLING_RATE" frequency. **/
+  /** Sampling rate used to determine avg record size in bytes, Default is {@link #RECORD_SAMPLING_RATE} **/
+  private final int recordSamplingRate;
+
+  /** Maximum records can be cached, default is {@link #RECORD_CACHING_LIMIT} **/
+  private final int recordCacheLimit;
+
+  /** Used for sampling records with "recordSamplingRate" frequency. **/
   public final AtomicLong samplingRecordCounter = new AtomicLong(-1);
 
   /** Internal queue for records. **/
@@ -120,19 +126,31 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
     this(memoryLimit, transformFunction, new DefaultSizeEstimator() {});
   }
 
+  public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction,
+                              final SizeEstimator<O> payloadSizeEstimator) {
+    this(memoryLimit, transformFunction, payloadSizeEstimator, RECORD_SAMPLING_RATE, RECORD_CACHING_LIMIT);
+  }
+
   /**
    * Construct BoundedInMemoryQueue with passed in size estimator.
    *
    * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
    * @param payloadSizeEstimator Payload Size Estimator
+   * @param recordSamplingRate record sampling rate
+   * @param recordCacheLimit record cache limit
    */
   public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction,
-                              final SizeEstimator<O> payloadSizeEstimator) {
+                              final SizeEstimator<O> payloadSizeEstimator,
+                              final int recordSamplingRate,
+                              final int recordCacheLimit) {
     this.memoryLimit = memoryLimit;
     this.transformFunction = transformFunction;
     this.payloadSizeEstimator = payloadSizeEstimator;
     this.iterator = new QueueIterator();
+    this.recordSamplingRate = recordSamplingRate;
+    this.recordCacheLimit = recordCacheLimit;
+    LOG.info("recordSamplingRate: {}, recordCacheLimit: {}", recordSamplingRate, recordCacheLimit);
   }
 
   @Override
@@ -148,7 +166,7 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
    * @param payload Payload to size
    */
   private void adjustBufferSizeIfNeeded(final O payload) throws InterruptedException {
-    if (this.samplingRecordCounter.incrementAndGet() % RECORD_SAMPLING_RATE != 0) {
+    if (this.samplingRecordCounter.incrementAndGet() % recordSamplingRate != 0) {
       return;
     }
 
@@ -156,7 +174,7 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
     final long newAvgRecordSizeInBytes =
         Math.max(1, (avgRecordSizeInBytes * numSamples + recordSizeInBytes) / (numSamples + 1));
     final int newRateLimit =
-        (int) Math.min(RECORD_CACHING_LIMIT, Math.max(1, this.memoryLimit / newAvgRecordSizeInBytes));
+        (int) Math.min(recordCacheLimit, Math.max(1, this.memoryLimit / newAvgRecordSizeInBytes));
 
     // If there is any change in number of records to cache then we will either release (if it increased) or acquire
     // (if it decreased) to adjust rate limiting to newly computed value.
@@ -267,7 +285,7 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
     this.hasFailed.set(e);
     // release the permits so that if the queueing thread is waiting for permits then it will
     // get it.
-    this.rateLimiter.release(RECORD_CACHING_LIMIT + 1);
+    this.rateLimiter.release(recordCacheLimit + 1);
   }
 
   @Override

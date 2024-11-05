@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkTables;
@@ -113,6 +114,16 @@ public class TestClusteringUtil {
     List<String> actualInstants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient())
         .stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     assertThat(actualInstants, is(oriInstants));
+  }
+  
+  @Test
+  void validateClusteringScheduling() throws Exception {
+    beforeEach();
+    ClusteringUtil.validateClusteringScheduling(this.conf);
+    
+    // validate bucket index
+    this.conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    ClusteringUtil.validateClusteringScheduling(this.conf);
   }
 
   /**

@@ -246,5 +246,11 @@ public interface TableFileSystemView {
   /**
    * Load all partition and file slices into view
    */
-  Void loadAllPartitions();
+  void loadAllPartitions();
+
+  /**
+   * Load all partition and file slices into view for the provided partition paths
+   * @param partitionPaths List of partition paths to load
+   */
+  void loadPartitions(List<String> partitionPaths);
 }

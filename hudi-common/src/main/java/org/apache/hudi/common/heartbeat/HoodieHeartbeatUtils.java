@@ -20,9 +20,9 @@
 package org.apache.hudi.common.heartbeat;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,16 +37,18 @@ public class HoodieHeartbeatUtils {
   /**
    * Use modification time as last heart beat time.
    *
-   * @param fs          {@link FileSystem} instance.
+   * @param storage     {@link HoodieStorage} instance.
    * @param basePath    Base path of the table.
    * @param instantTime Instant time.
    * @return Last heartbeat timestamp.
    * @throws IOException
    */
-  public static Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
-    if (fs.exists(heartbeatFilePath)) {
-      return fs.getFileStatus(heartbeatFilePath).getModificationTime();
+  public static Long getLastHeartbeatTime(HoodieStorage storage, String basePath,
+                                          String instantTime) throws IOException {
+    StoragePath heartbeatFilePath = new StoragePath(
+        HoodieTableMetaClient.getHeartbeatFolderPath(basePath), instantTime);
+    if (storage.exists(heartbeatFilePath)) {
+      return storage.getPathInfo(heartbeatFilePath).getModificationTime();
     } else {
       // NOTE : This can happen when a writer is upgraded to use lazy cleaning and the last write had failed
       return 0L;
@@ -58,14 +60,17 @@ public class HoodieHeartbeatUtils {
    *
    * @param instantTime                       Instant time.
    * @param maxAllowableHeartbeatIntervalInMs Heartbeat timeout in milliseconds.
-   * @param fs                                {@link FileSystem} instance.
+   * @param storage                           {@link HoodieStorage} instance.
    * @param basePath                          Base path of the table.
    * @return {@code true} if expired; {@code false} otherwise.
    * @throws IOException upon errors.
    */
-  public static boolean isHeartbeatExpired(String instantTime, long maxAllowableHeartbeatIntervalInMs, FileSystem fs, String basePath) throws IOException {
+  public static boolean isHeartbeatExpired(String instantTime,
+                                           long maxAllowableHeartbeatIntervalInMs,
+                                           HoodieStorage storage, String basePath)
+      throws IOException {
     Long currentTime = System.currentTimeMillis();
-    Long lastHeartbeatTime = getLastHeartbeatTime(fs, basePath, instantTime);
+    Long lastHeartbeatTime = getLastHeartbeatTime(storage, basePath, instantTime);
     if (currentTime - lastHeartbeatTime > maxAllowableHeartbeatIntervalInMs) {
       LOG.warn("Heartbeat expired, for instant: " + instantTime);
       return true;

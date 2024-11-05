@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
-import org.apache.hudi.hive.util.PartitionFilterGenerator;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.model.FieldSchema;
@@ -383,17 +382,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       return syncClient.getAllPartitions(tableName);
     }
 
-    List<String> partitionKeys = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).stream()
-        .map(String::toLowerCase)
-        .collect(Collectors.toList());
-
-    List<FieldSchema> partitionFields = syncClient.getMetastoreFieldSchemas(tableName)
-        .stream()
-        .filter(f -> partitionKeys.contains(f.getName()))
-        .collect(Collectors.toList());
-
-    return syncClient.getPartitionsByFilter(tableName,
-        PartitionFilterGenerator.generatePushDownFilter(writtenPartitions, partitionFields, config));
+    return syncClient.getPartitionsFromList(tableName, writtenPartitions);
   }
 
   /**

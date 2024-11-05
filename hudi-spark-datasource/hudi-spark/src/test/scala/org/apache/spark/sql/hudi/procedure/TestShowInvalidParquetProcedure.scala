@@ -17,8 +17,10 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
+import org.apache.hadoop.fs.Path
 
 class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_invalid_parquet Procedure") {
@@ -49,7 +51,7 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(s"""call show_invalid_parquet(limit => 10)""")(
         s"Argument: path is required")
 
-      val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+      val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
       val invalidPath1 = new Path(basePath, "ts=1000/1.parquet")
       val out1 = fs.create(invalidPath1)
       out1.write(1)

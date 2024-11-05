@@ -22,13 +22,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.memory.MemoryManager;
-import org.apache.flink.streaming.api.TimeCharacteristic;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.streaming.api.operators.Output;
-import org.apache.flink.streaming.api.operators.StreamSourceContexts;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
-import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
@@ -46,22 +39,6 @@ import java.util.Collections;
  * Adapter utils.
  */
 public class Utils {
-  public static <O> SourceFunction.SourceContext<O> getSourceContext(
-      TimeCharacteristic timeCharacteristic,
-      ProcessingTimeService processingTimeService,
-      StreamTask<?, ?> streamTask,
-      Output<StreamRecord<O>> output,
-      long watermarkInterval) {
-    return StreamSourceContexts.getSourceContext(
-        timeCharacteristic,
-        processingTimeService,
-        new Object(), // no actual locking needed
-        output,
-        watermarkInterval,
-        -1,
-        true);
-  }
-
   public static FactoryUtil.DefaultDynamicTableContext getTableContext(
       ObjectIdentifier tablePath,
       ResolvedCatalogTable catalogTable,

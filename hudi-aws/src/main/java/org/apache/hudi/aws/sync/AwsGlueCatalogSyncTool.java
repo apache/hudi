@@ -19,7 +19,7 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 
@@ -62,7 +62,7 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
     }
     // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
     TypedProperties props = params.toProps();
-    Configuration hadoopConf = FSUtils.getFs(props.getString(META_SYNC_BASE_PATH.key()), new Configuration()).getConf();
+    Configuration hadoopConf = HadoopFSUtils.getFs(props.getString(META_SYNC_BASE_PATH.key()), new Configuration()).getConf();
     try (AwsGlueCatalogSyncTool tool = new AwsGlueCatalogSyncTool(props, hadoopConf)) {
       tool.syncHoodieTable();
     }

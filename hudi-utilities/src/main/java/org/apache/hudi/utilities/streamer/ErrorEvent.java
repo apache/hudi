@@ -19,6 +19,8 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import java.util.Objects;
+
 /**
  * Error event is an event triggered during write or processing failure of a record.
  */
@@ -40,6 +42,23 @@ public class ErrorEvent<T> {
     return reason;
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    ErrorEvent<?> that = (ErrorEvent<?>) o;
+    return reason == that.reason && Objects.equals(payload, that.payload);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(reason, payload);
+  }
+
   /**
    * The reason behind write or processing failure of a record
    */
@@ -53,6 +72,10 @@ public class ErrorEvent<T> {
     // Failure during hudi writes
     HUDI_WRITE_FAILURES,
     // Failure during transformation of source to target RDD
-    CUSTOM_TRANSFORMER_FAILURE
+    CUSTOM_TRANSFORMER_FAILURE,
+    // record schema is not valid for the table
+    INVALID_RECORD_SCHEMA,
+    // exception when attempting to create HoodieRecord
+    RECORD_CREATION
   }
 }
