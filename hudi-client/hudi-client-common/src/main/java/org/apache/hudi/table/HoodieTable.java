@@ -741,7 +741,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath();
-      Set<String> invalidDataPaths = getInvalidDataFilePaths(instantTs, stats, false);
+      Set<String> invalidDataPaths = getInvalidDataFilePaths(instantTs, stats, false, "MarkerReconciliation");
 
       if (!invalidDataPaths.isEmpty()) {
         if (shouldFailOnDuplicateDataFileDetection) {
@@ -793,7 +793,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       final Timer.Context commitMetadataConsistencyValidationTimerCtx = metrics.getCommitMetadataConsistencyValidationTimerCtx();
       try {
         String basePath = getMetaClient().getBasePath();
-        Set<String> invalidDataFilePaths = getInvalidDataFilePaths(commitTime, stats, true);
+        Set<String> invalidDataFilePaths = getInvalidDataFilePaths(commitTime, stats, true, "CommitMetadataValidation");
 
         if (invalidDataFilePaths.isEmpty()) {
           return;
@@ -825,13 +825,16 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   @VisibleForTesting
-  public Set<String> getInvalidDataFilePaths(String instantTs, List<HoodieWriteStat> stats, boolean includeLogFiles) throws IOException {
+  public Set<String> getInvalidDataFilePaths(String instantTs, List<HoodieWriteStat> stats, boolean includeLogFiles, String loggingContext) throws IOException {
     WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
     if (!markers.doesMarkerDirExist()) {
       // can happen if it was an empty write say.
       return Collections.emptySet();
     }
     Set<String> invalidDataPaths = getBaseFilePathsBasedOnMarkers(markers);
+    LOG.info("Total size of data files returned from marker lookup " + invalidDataPaths.size() + " during " + loggingContext);
+    int numFilesToLog = config.getNumFileEntriesToPrintForMarkers();
+    LOG.info("Printing few files from markers => " + invalidDataPaths.stream().limit(numFilesToLog).collect(Collectors.toList()).toString());
     if (includeLogFiles) {
       invalidDataPaths.addAll(getLogFilePathsBasedOnMarkers(markers));
     }

@@ -132,7 +132,7 @@ public class TestMarkerBasedReconciliation extends HoodieClientTestBase {
     });
 
     // there should not be any additional data files found.
-    assertTrue(hoodieTable.getInvalidDataFilePaths("001", finalStats, true).isEmpty());
+    assertTrue(hoodieTable.getInvalidDataFilePaths("001", finalStats, true, "").isEmpty());
 
     // lets do reconcile and again check for invalid files.
     hoodieTable.finalizeWrite(context, "001", finalStats); // no op since there are no additional files
@@ -169,7 +169,7 @@ public class TestMarkerBasedReconciliation extends HoodieClientTestBase {
       }
     });
 
-    Set<String> invalidDataFilePaths = hoodieTable.getInvalidDataFilePaths("001", finalStats1, true);
+    Set<String> invalidDataFilePaths = hoodieTable.getInvalidDataFilePaths("001", finalStats1, true, "");
     assertEquals(invalidDataFilePaths.size(), 1);
     assertEquals(invalidDataFilePaths.stream().findFirst().get(), duplicateDataFile);
 
@@ -249,7 +249,7 @@ public class TestMarkerBasedReconciliation extends HoodieClientTestBase {
       stats.add(stat);
     });
 
-    Set<String> invalidFilePaths = hoodieTable.getInvalidDataFilePaths("001", stats, true);
+    Set<String> invalidFilePaths = hoodieTable.getInvalidDataFilePaths("001", stats, true, "");
     assertFalse(invalidFilePaths.isEmpty());
     assertEquals(invalidFilePaths.size(), 1);
     assertEquals(invalidFilePaths.stream().findFirst().get(), duplicateDataFile);

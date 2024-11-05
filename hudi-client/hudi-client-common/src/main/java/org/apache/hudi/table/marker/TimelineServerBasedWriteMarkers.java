@@ -26,8 +26,10 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.timeline.TimelineServiceClient;
@@ -154,7 +156,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     if (success) {
       return Option.of(new Path(FSUtils.getPartitionPath(markerDirPath, partitionPath), markerFileName));
     } else {
-      return Option.empty();
+      throw new HoodieIOException("[timeline-server-based] Failed to create marker for partition " + partitionPath + ", fileName " + fileName + " with IOType " + type);
     }
   }
 
@@ -186,7 +188,8 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
    * @param markerFileName Marker file name.
    * @return {@code true} if successful; {@code false} otherwise.
    */
-  private boolean executeCreateMarkerRequest(Map<String, String> paramsMap, String partitionPath, String markerFileName) {
+  @VisibleForTesting
+  boolean executeCreateMarkerRequest(Map<String, String> paramsMap, String partitionPath, String markerFileName) {
     boolean success;
     try {
       success = executeRequestToTimelineServer(

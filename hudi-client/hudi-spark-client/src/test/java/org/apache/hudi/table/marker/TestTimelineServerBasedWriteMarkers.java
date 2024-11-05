@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -31,7 +32,9 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.TimelineServiceTestHarness;
@@ -52,12 +55,14 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
 
@@ -152,6 +157,53 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
       this.writeMarkers = initWriteMarkers(metaClient.getBasePath(), markerFolderPath.toString(), timelineService.getServerPort(), false);
     } catch (Exception ex) {
       throw new RuntimeException(ex);
+    }
+  }
+
+  @Test
+  public void testMarkerCreationFailure() throws IOException {
+    FileSystemViewStorageConfig.Builder builder = FileSystemViewStorageConfig.newBuilder().withRemoteServerHost("localhost")
+        .withRemoteServerPort(timelineService.getServerPort())
+        .withRemoteTimelineClientTimeoutSecs(DEFAULT_READ_TIMEOUT_SECS);
+    MockTimelineServerBasedWriteMarkers timelineServerBasedWriteMarkers = new MockTimelineServerBasedWriteMarkers(basePath, markerFolderPath.toString(), "000", builder.build());
+    // this should succeed.
+    timelineServerBasedWriteMarkers.create("2020/06/01", "file1", IOType.MERGE);
+
+    assertTrue(fs.exists(markerFolderPath));
+    assertTrue(writeMarkers.doesMarkerDirExist());
+
+    // lets fail the marker creation
+    timelineServerBasedWriteMarkers.failMarkerCreation = true;
+    try {
+      timelineServerBasedWriteMarkers.create("2020/06/01", "file2", IOType.MERGE);
+      fail("Shold not have reached here");
+    } catch (HoodieIOException ioe) {
+      assertTrue(ioe.getMessage().contains("[timeline-server-based] Failed to create marker for partition"));
+    } finally {
+      if (timelineService != null) {
+        timelineService.close();
+      }
+    }
+  }
+
+  static class MockTimelineServerBasedWriteMarkers extends TimelineServerBasedWriteMarkers {
+
+    boolean failMarkerCreation = false;
+    public MockTimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
+      super(table, instantTime);
+    }
+
+    MockTimelineServerBasedWriteMarkers(String basePath, String markerFolderPath, String instantTime, FileSystemViewStorageConfig fileSystemViewStorageConfig) {
+      super(basePath, markerFolderPath, instantTime, fileSystemViewStorageConfig);
+    }
+
+    @Override
+    boolean executeCreateMarkerRequest(Map<String, String> paramsMap, String partitionPath, String markerFileName) {
+      if (!failMarkerCreation) {
+        return super.executeCreateMarkerRequest(paramsMap, partitionPath, markerFileName);
+      } else {
+        return false;
+      }
     }
   }
 

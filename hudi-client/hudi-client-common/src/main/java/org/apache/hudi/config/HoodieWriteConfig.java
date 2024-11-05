@@ -57,6 +57,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.queue.DisruptorWaitStrategyType;
 import org.apache.hudi.common.util.queue.ExecutorType;
+import org.apache.hudi.config.internal.OnehouseInternalConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
@@ -2678,6 +2679,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(WRITE_COMPACTION_PLAN_TO_AUX_FOLDER);
   }
 
+  /**
+   * Onehouse internal configs
+   */
+  public Integer getNumFileEntriesToPrintForMarkers() {
+    return props.getInteger(OnehouseInternalConfig.MARKER_NUM_FILE_ENTRIES_TO_PRINT.key(), OnehouseInternalConfig.MARKER_NUM_FILE_ENTRIES_TO_PRINT.defaultValue());
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -2702,6 +2710,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isMetricsJmxConfigSet = false;
     private boolean isMetricsGraphiteConfigSet = false;
     private boolean isLayoutConfigSet = false;
+    private boolean isOnehouseInternalConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -3010,6 +3019,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withOnehouseInternalConfig(OnehouseInternalConfig onehouseInternalConfig) {
+      writeConfig.getProps().putAll(onehouseInternalConfig.getProps());
+      isOnehouseInternalConfigSet = true;
+      return this;
+    }
+
     public Builder withFinalizeWriteParallelism(int parallelism) {
       writeConfig.setValue(FINALIZE_WRITE_PARALLELISM_VALUE, String.valueOf(parallelism));
       return this;
@@ -3245,6 +3260,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
           HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isLayoutConfigSet,
+          HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+      writeConfig.setDefaultOnCondition(!isOnehouseInternalConfigSet,
           HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
 
