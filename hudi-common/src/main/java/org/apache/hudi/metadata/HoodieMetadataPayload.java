@@ -65,6 +65,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
@@ -155,7 +156,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * HoodieMetadata secondary index payload field ids
    */
-  public static final String SECONDARY_INDEX_FIELD_RECORD_KEY = "recordKey";
+  public static final String SECONDARY_INDEX_RECORD_KEY_SEPARATOR = "$";
   public static final String SECONDARY_INDEX_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   /**
@@ -221,7 +222,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this(key, MetadataPartitionType.RECORD_INDEX.getRecordType(), null, null, null, recordIndexMetadata, null, false);
   }
 
-  private HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
+  protected HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
     this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata, secondaryIndexMetadata.getIsDeleted());
   }
 
@@ -344,7 +345,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       HoodieRecord<HoodieMetadataPayload> oldRecord,
       HoodieRecord<HoodieMetadataPayload> newRecord) {
     // If the new record is tombstone, we can discard it
-    if (newRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
+    if (newRecord.getData().isDeleted() || newRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
       return Option.empty();
     }
 
@@ -620,15 +621,25 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param secondaryKey Secondary key of the record
    * @param isDeleted    true if this record is deleted
    */
-  public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndex(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
-
-    HoodieKey key = new HoodieKey(secondaryKey, partitionPath);
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(secondaryKey, new HoodieSecondaryIndexInfo(recordKey, isDeleted));
+  public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndexRecord(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
+    // the payload key is in the format of "secondaryKey_primaryKey"
+    HoodieKey key = new HoodieKey(String.format("%s%s%s",secondaryKey, SECONDARY_INDEX_RECORD_KEY_SEPARATOR, recordKey), partitionPath);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), new HoodieSecondaryIndexInfo(isDeleted));
     return new HoodieAvroRecord<>(key, payload);
   }
 
-  public String getRecordKeyFromSecondaryIndex() {
-    return secondaryIndexMetadata.getRecordKey();
+  public static String getRecordKeyFromSecondaryIndex(String key) {
+    // the payload key is in the format of "secondaryKey$primaryKey"
+    // we need to extract the primary key from the payload key
+    checkState(nonEmpty(key) && key.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR), "Invalid key format for secondary index payload: " + key);
+    return key.substring(key.lastIndexOf(SECONDARY_INDEX_RECORD_KEY_SEPARATOR) + 1);
+  }
+
+  public static String getSecondaryKeyFromSecondaryIndex(String key) {
+    // the payload key is in the format of "secondaryKey$primaryKey"
+    // we need to extract the secondary key from the payload key
+    checkState(nonEmpty(key) && key.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR), "Invalid key format for secondary index payload: " + key);
+    return key.substring(0, key.lastIndexOf(SECONDARY_INDEX_RECORD_KEY_SEPARATOR));
   }
 
   public boolean isSecondaryIndexDeleted() {

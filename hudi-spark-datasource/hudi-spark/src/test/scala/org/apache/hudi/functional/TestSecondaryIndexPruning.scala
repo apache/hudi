@@ -32,6 +32,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieMetadataIndexException, HoodieWriteConflictException}
 import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
+import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, MetadataPartitionType, SparkHoodieBackedTableMetadataWriter}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -161,10 +162,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .build()
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
       // validate data skipping with filters on secondary key column
       spark.sql("set hoodie.metadata.enable=true")
@@ -183,13 +184,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // validate data skipping
       verifyQueryPredicate(hudiOpts, "ts")
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("1", "row1"),
-        Seq("2", "row2"),
-        Seq("3", "row3"),
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(s"1${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"2${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"3${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3"),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
     }
   }
@@ -238,10 +239,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .build()
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
       // drop secondary index
       spark.sql(s"drop index secondary_index_idx_not_record_key_col on $tableName")
@@ -301,10 +302,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .build()
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
       // validate data skipping with filters on secondary key column
       spark.sql("set hoodie.metadata.enable=true")
@@ -318,10 +319,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // update the secondary key column
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq("cde", "row2", false),
-        Seq("def", "row3", false),
-        Seq("xyz", "row1", false)
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false),
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
       )
       // validate data and data skipping
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
@@ -385,10 +386,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .build()
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_secondary_key_col"))
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
       // validate data skipping with filters on secondary key column
       spark.sql("set hoodie.metadata.enable=true")
@@ -407,13 +408,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // validate data skipping
       verifyQueryPredicate(hudiOpts, "ts")
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("1", "row1"),
-        Seq("2", "row2"),
-        Seq("3", "row3"),
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(s"1${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"2${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"3${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3"),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
     }
   }
@@ -511,12 +512,12 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // Query the secondary index metadata
       checkAnswer(
         s"""
-           |SELECT key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted
+           |SELECT key, SecondaryIndexMetadata.isDeleted
            |FROM hudi_metadata('$basePath')
            |WHERE type=7
        """.stripMargin)(
-        Seq("value1_1", "row1", false),
-        Seq("value2_2", "row2", false)
+        Seq(s"value1_1${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+        Seq(s"value2_2${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false)
       )
     }
   }
@@ -584,10 +585,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .build()
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
       // validate data skipping with filters on secondary key column
       spark.sql("set hoodie.metadata.enable=true")
@@ -601,10 +602,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // update the secondary key column
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq("cde", "row2", false),
-        Seq("def", "row3", false),
-        Seq("xyz", "row1", false)
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false),
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
       )
       // validate data and data skipping
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
@@ -682,10 +683,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       }
 
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
       // validate data skipping with filters on secondary key column
       spark.sql("set hoodie.metadata.enable=true")
@@ -693,6 +694,474 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'abc'")(
         Seq(1, "row1", "abc", "p1")
+      )
+    }
+  }
+
+  @Test
+  def testSecondaryIndexWithMDTCompactionInvestigation(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts ++ Map(
+        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "20")
+      val tableName = "test_secondary_index_with_mdt_compaction1"
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  record_key_col string,
+           |  not_record_key_col string,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  type = 'mor',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'abc', 'p2')")
+      spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p2')")
+      // create secondary index
+      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      // validate index created successfully
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // validate the secondary index records themselves
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"hjk${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3",false)
+      )
+
+      // do another insert and validate compaction in metadata table
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz1' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row3'")
+      // spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row3'")
+      val metadataTableFSView = HoodieSparkTable.create(getWriteConfig(hudiOpts), context()).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
+      try {
+        val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
+        /*val lastCompactionInstant = compactionTimeline
+          .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
+            HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+              .getOperationType == WriteOperationType.COMPACT))
+          .lastInstant()*/
+        //val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")
+        //.filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+        //.findAny()
+        //assertTrue(compactionBaseFile.isPresent)
+      } finally {
+        metadataTableFSView.close()
+      }
+
+      // validate the secondary index records themselves
+      /*checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        // Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", true),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+      )*/
+      // validate data skipping with filters on secondary key column
+      spark.sql("set hoodie.metadata.enable=true")
+      spark.sql("set hoodie.enable.data.skipping=true")
+      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz1')")(
+
+      )
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz2')")(
+        Seq(3, "row3", "xyz2", "p2")
+      )
+    }
+  }
+
+  @Test
+  def testSecondaryIndexWithMDTCompactionInvestigation2(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts ++ Map(
+        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "20")
+      val tableName = "test_secondary_index_with_mdt_compaction2"
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  record_key_col string,
+           |  not_record_key_col string,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  type = 'mor',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'def', 'p1')")
+      spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p1')")
+      // create secondary index
+      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      // validate index created successfully
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // validate the secondary index records themselves
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"hjk${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3",false)
+      )
+
+      // do another insert and validate compaction in metadata table
+      //spark.sql(s"insert into $tableName values(2, 'row2', 'def1', 'p1'), (4, 'row4', def', 'p1')")
+
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (2, 'row2', 'def1', "p1"),
+           | (4, 'row4', 'def', "p1")
+           """.stripMargin)
+
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz1' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row3'")
+      val metadataTableFSView = HoodieSparkTable.create(getWriteConfig(hudiOpts), context()).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
+      try {
+        val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
+        /*val lastCompactionInstant = compactionTimeline
+          .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
+            HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+              .getOperationType == WriteOperationType.COMPACT))
+          .lastInstant()*/
+        //val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")
+        //.filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+        //.findAny()
+        //assertTrue(compactionBaseFile.isPresent)
+      } finally {
+        metadataTableFSView.close()
+      }
+
+      // validate the secondary index records themselves
+      /*checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        // Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", true),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+      )*/
+      // validate data skipping with filters on secondary key column
+      spark.sql("set hoodie.metadata.enable=true")
+      spark.sql("set hoodie.enable.data.skipping=true")
+      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz1')")(
+
+      )
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz2')")(
+        Seq(3, "row3", "xyz2", "p1")
+      )
+    }
+  }
+
+
+  @Test
+  def testSecondaryIndexWithMDTCompactionInvestigation3(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts ++ Map(
+        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "20")
+      val tableName = "test_secondary_index_with_mdt_compaction3"
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  record_key_col string,
+           |  not_record_key_col string,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  type = 'mor',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p1')")
+      // create secondary index
+      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      // validate index created successfully
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // validate the secondary index records themselves
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"hjk${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3",false)
+      )
+
+      // do another insert and validate compaction in metadata table
+
+      spark.sql(s"delete from $tableName where record_key_col = 'row2'")
+      //spark.sql(s"update $tableName set not_record_key_col = 'xyz1' where record_key_col = 'row3'")
+      //spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row3'")
+      //spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row3'")*/
+      // spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row3'")
+      val metadataTableFSView = HoodieSparkTable.create(getWriteConfig(hudiOpts), context()).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
+      try {
+        val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
+        /*val lastCompactionInstant = compactionTimeline
+          .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
+            HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+              .getOperationType == WriteOperationType.COMPACT))
+          .lastInstant()*/
+        //val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")
+        //.filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+        //.findAny()
+        //assertTrue(compactionBaseFile.isPresent)
+      } finally {
+        metadataTableFSView.close()
+      }
+
+      // validate the secondary index records themselves
+      /*checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        // Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", true),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+      )*/
+      // validate data skipping with filters on secondary key column
+      spark.sql("set hoodie.metadata.enable=true")
+      spark.sql("set hoodie.enable.data.skipping=true")
+      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('abc')")(
+        Seq(1, "row1", "abc", "p1")
+      )
+    }
+  }
+
+  @Test
+  def testSecondaryIndexWithMDTCompactionInvestigation4(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts ++ Map(
+        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "20")
+      val tableName = "test_secondary_index_with_mdt_compaction4"
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  record_key_col string,
+           |  not_record_key_col string,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  type = 'mor',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'def', 'p1')")
+      spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p1')")
+      // create secondary index
+      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      // validate index created successfully
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // validate the secondary index records themselves
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"hjk${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false)
+      )
+
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz1' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row2'")
+
+      spark.sql(s"delete from $tableName where record_key_col = 'row2'")
+
+      val metadataTableFSView = HoodieSparkTable.create(getWriteConfig(hudiOpts), context()).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
+      try {
+        val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
+        /*val lastCompactionInstant = compactionTimeline
+          .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
+            HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+              .getOperationType == WriteOperationType.COMPACT))
+          .lastInstant()*/
+        //val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")
+        //.filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+        //.findAny()
+        //assertTrue(compactionBaseFile.isPresent)
+      } finally {
+        metadataTableFSView.close()
+      }
+
+      // validate the secondary index records themselves
+      /*checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        // Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", true),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+      )*/
+      // validate data skipping with filters on secondary key column
+      spark.sql("set hoodie.metadata.enable=true")
+      spark.sql("set hoodie.enable.data.skipping=true")
+      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('xyz','xyz1')")(
+        Seq(3, "row3", "xyz1", "p1")
+      )
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('abc')")(
+        Seq(1, "row1", "abc", "p1")
+      )
+    }
+  }
+
+  @Test
+  def testSecondaryIndexWithMDTCompactionInvestigation6(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts ++ Map(
+        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "20")
+      val tableName = "test_secondary_index_with_mdt_compaction6"
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  record_key_col string,
+           |  not_record_key_col string,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  type = 'mor',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'abc', 'p2')")
+      spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p2')")
+      // create secondary index
+      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      // validate index created successfully
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // validate the secondary index records themselves
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"hjk${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false)
+      )
+
+      // do another insert and validate compaction in metadata table
+      spark.sql(s"update $tableName set not_record_key_col = 'def' where record_key_col = 'row1'")
+      spark.sql(s"update $tableName set not_record_key_col = 'abc' where record_key_col = 'row3'")
+      spark.sql(s"update $tableName set not_record_key_col = 'poc' where record_key_col = 'row2'")
+      // spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row3'")
+      val metadataTableFSView = HoodieSparkTable.create(getWriteConfig(hudiOpts), context()).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
+      try {
+        val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
+        /*val lastCompactionInstant = compactionTimeline
+          .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
+            HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+              .getOperationType == WriteOperationType.COMPACT))
+          .lastInstant()*/
+        //val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")
+        //.filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+        //.findAny()
+        //assertTrue(compactionBaseFile.isPresent)
+      } finally {
+        metadataTableFSView.close()
+      }
+
+      // validate the secondary index records themselves
+      /*checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        // Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", true),
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+      )*/
+      // validate data skipping with filters on secondary key column
+      spark.sql("set hoodie.metadata.enable=true")
+      spark.sql("set hoodie.enable.data.skipping=true")
+      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('abc')")(
+        Seq(3, "row3", "abc", "p2")
       )
     }
   }
@@ -748,8 +1217,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val secondaryIndexPartition = "secondary_index_idx_not_record_key_col"
       assert(metaClient.getTableConfig.getMetadataPartitions.contains(secondaryIndexPartition))
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1")
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1")
       )
       // Do a savepoint
       val firstCompletedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
@@ -770,8 +1239,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // update the secondary key column
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq("xyz", "row1", false)
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
       )
     }
   }

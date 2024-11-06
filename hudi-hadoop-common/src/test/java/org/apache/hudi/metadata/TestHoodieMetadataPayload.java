@@ -292,4 +292,32 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
         firstPartitionStatsRecord.getData().preCombine(deletedPartitionStatsRecord.getData());
     assertEquals(firstPartitionStatsRecord.getData(), overwrittenCombinedPartitionStatsRecordPayload);
   }
+
+  @Test
+  public void testSecondaryIndexPayloadMerging() {
+    // test delete and combine
+    String secondaryIndexPartition = MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "secondaryCol";
+    String recordKey = "rk1";
+    String initialSecondaryKey = "sk1";
+    String updatedSecondaryKey = "sk2";
+    // test creation
+    String expectedPayloadKey = initialSecondaryKey + "_" + recordKey;
+    HoodieRecord<HoodieMetadataPayload> oldSecondaryIndexRecord =
+        HoodieMetadataPayload.createSecondaryIndexRecord(recordKey, initialSecondaryKey, secondaryIndexPartition, false);
+    assertEquals(expectedPayloadKey, oldSecondaryIndexRecord.getRecordKey());
+    // test delete and combine
+    HoodieRecord<HoodieMetadataPayload> oldSecondaryIndexRecordDeleted =
+        HoodieMetadataPayload.createSecondaryIndexRecord(recordKey, initialSecondaryKey, secondaryIndexPartition, true);
+    Option<HoodieRecord<HoodieMetadataPayload>> combinedSecondaryIndexRecord =
+        HoodieMetadataPayload.combineSecondaryIndexRecord(oldSecondaryIndexRecord, oldSecondaryIndexRecordDeleted);
+    assertFalse(combinedSecondaryIndexRecord.isPresent());
+    // test update and combine
+    HoodieRecord<HoodieMetadataPayload> newSecondaryIndexRecord =
+        HoodieMetadataPayload.createSecondaryIndexRecord(recordKey, updatedSecondaryKey, secondaryIndexPartition, false);
+    expectedPayloadKey = updatedSecondaryKey + "_" + recordKey;
+    assertEquals(expectedPayloadKey, newSecondaryIndexRecord.getRecordKey());
+    combinedSecondaryIndexRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldSecondaryIndexRecord, newSecondaryIndexRecord);
+    assertTrue(combinedSecondaryIndexRecord.isPresent());
+    assertEquals(newSecondaryIndexRecord.getData(), combinedSecondaryIndexRecord.get().getData());
+  }
 }

@@ -78,24 +78,27 @@ public class HoodieMetadataMergedLogRecordScanner extends BaseHoodieMergedLogRec
 
   @Override
   public <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
-    // Merge the new record with the existing record in the map
-    HoodieRecord<T> oldRecord = (HoodieRecord<T>) records.get(newRecord.getRecordKey());
-    if (oldRecord != null) {
-      LOG.debug("Merging new record with existing record in the map. Key: {}", newRecord.getRecordKey());
-      recordMerger.fullOuterMerge(oldRecord, readerSchema, newRecord, readerSchema, this.getPayloadProps()).forEach(
-          mergedRecord -> {
-            HoodieRecord<T> combinedRecord = mergedRecord.getLeft();
-            if (combinedRecord.getData() != oldRecord.getData()) {
-              HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, newRecord.getRecordKey());
-              records.put(newRecord.getRecordKey(), latestHoodieRecord.copy());
-            }
-          });
+    String key = newRecord.getRecordKey();
+    HoodieRecord<T> prevRecord = records.get(key);
+    if (prevRecord != null) {
+      // Merge and store the combined record
+      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
+          newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
+      // If pre-combine returns existing record, no need to update it
+      if (combinedRecord.getData() != prevRecord.getData()) {
+        HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
+
+        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+        //       it since these records will be put into records(Map).
+        records.put(key, latestHoodieRecord.copy());
+      }
     } else {
       // Put the record as is
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
-      records.put(newRecord.getRecordKey(), newRecord.copy());
+      records.put(key, newRecord.copy());
     }
   }
 
