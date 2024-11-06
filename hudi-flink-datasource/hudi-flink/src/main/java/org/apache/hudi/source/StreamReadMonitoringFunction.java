@@ -218,7 +218,7 @@ public class StreamReadMonitoringFunction
 
     if (result.isEmpty() && StringUtils.isNullOrEmpty(result.getEndInstant())) {
       // no new instants, returns early
-      LOG.info("result is empty, do not update issuedInstant.");
+      LOG.warn("Result is empty, do not update issuedInstant.");
       return;
     }
 

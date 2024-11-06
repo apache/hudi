@@ -53,11 +53,11 @@ import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -186,7 +186,7 @@ public class TestStreamReadMonitoringFunction {
       // Step3: assert current IssuedOffset couldn't be null.
       // Base on "IncrementalInputSplits#inputSplits => .startCompletionTime(issuedOffset != null ? issuedOffset : this.conf.getString(FlinkOptions.READ_START_COMMIT))"
       // If IssuedOffset still was null, hudi would take FlinkOptions.READ_START_COMMIT again, which means streaming read is blocked.
-      assertTrue(function.getIssuedOffset() != null);
+      assertNotNull(function.getIssuedOffset());
       // Stop the stream task.
       function.close();
     }
@@ -485,20 +485,6 @@ public class TestStreamReadMonitoringFunction {
       }
     });
     task.start();
-  }
-
-  private Integer intervalBetween2Instants(HoodieTimeline timeline, String instant1, String instant2) {
-    Integer idxInstant1 = getInstantIdxInTimeline(timeline, instant1);
-    Integer idxInstant2 = getInstantIdxInTimeline(timeline, instant2);
-    return (idxInstant1 != -1 && idxInstant2 != -1) ? Math.abs(idxInstant1 - idxInstant2) : -1;
-  }
-
-  private Integer getInstantIdxInTimeline(HoodieTimeline timeline, String instant) {
-    List<HoodieInstant> instants = timeline.getInstants();
-    return IntStream.range(0, instants.size())
-        .filter(i -> instants.get(i).getTimestamp().equals(instant))
-        .findFirst()
-        .orElse(-1);
   }
 
   /**
