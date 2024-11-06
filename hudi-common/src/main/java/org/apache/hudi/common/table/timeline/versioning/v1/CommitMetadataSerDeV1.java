@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.timeline.versioning.v1;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -29,6 +30,11 @@ import java.io.IOException;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
+
+  @Override
+  public TimelineLayoutVersion getLayoutVersion() {
+    return TimelineLayoutVersion.LAYOUT_VERSION_1;
+  }
 
   @Override
   public <T> T deserialize(HoodieInstant instant, byte[] bytes, Class<T> clazz) throws IOException {

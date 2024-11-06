@@ -52,11 +52,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.UNDERSCORE;
+import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
+import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -85,27 +86,20 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       CommitMetadataSerDeV2 commitMetadataSerDeV2 = new CommitMetadataSerDeV2();
       CommitMetadataSerDeV1 commitMetadataSerDeV1 = new CommitMetadataSerDeV1();
       ActiveTimelineV1 activeTimelineV1 = new ActiveTimelineV1(metaClient);
-      String tmpFilePrefix = "temp_commit_file_for_eight_to_seven_downgrade_";
       context.map(instants, instant -> {
         String fileName = instantFileNameGenerator.getFileName(instant);
         if (fileName.contains(UNDERSCORE)) {
           try {
             // Rename the metadata file name from the ${instant_time}_${completion_time}.action[.state] format in version 1.x to the ${instant_time}.action[.state] format in version 0.x.
-            StoragePath fromPath = new StoragePath(metaClient.getMetaPath(), fileName);
-            StoragePath toPath = new StoragePath(metaClient.getMetaPath(), fileName.replaceAll(UNDERSCORE + "\\d+", ""));
+            StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePath(metaClient.getBasePath()), fileName);
+            StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePath(metaClient.getBasePath()), fileName.replaceAll(UNDERSCORE + "\\d+", ""));
             boolean success = true;
             if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
               HoodieCommitMetadata commitMetadata =
                   commitMetadataSerDeV2.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
               Option<byte[]> data = commitMetadataSerDeV1.serialize(commitMetadata);
-              // Create a temporary file to store the json metadata.
-              String tmpFileName = tmpFilePrefix + UUID.randomUUID() + ".json";
-              StoragePath tmpPath = new StoragePath(metaClient.getTempFolderPath(), tmpFileName);
-              String tmpPathStr = tmpPath.toUri().toString();
-              activeTimelineV1.createFileInMetaPath(tmpPathStr, data, true);
-              // Note. this is a 2 step. First we create the V1 commit file and then delete file. If it fails in the middle, rerunning downgrade will be idempotent.
-              metaClient.getStorage().deleteFile(toPath); // First delete if it was created by previous failed downgrade.
-              success = metaClient.getStorage().rename(tmpPath, toPath);
+              String toPathStr = toPath.toUri().toString();
+              activeTimelineV1.createFileInMetaPath(toPathStr, data, true);
               metaClient.getStorage().deleteFile(fromPath);
             } else {
               success = metaClient.getStorage().rename(fromPath, toPath);

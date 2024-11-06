@@ -21,12 +21,18 @@ package org.apache.hudi.common.table.timeline.versioning.v1;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.StringUtils;
 
 /**
  *
  */
 public class InstantFileNameGeneratorV1 implements InstantFileNameGenerator {
+
+  @Override
+  public TimelineLayoutVersion getLayoutVersion() {
+    return TimelineLayoutVersion.LAYOUT_VERSION_1;
+  }
 
   @Override
   public String makeCommitFileName(String instantTime) {

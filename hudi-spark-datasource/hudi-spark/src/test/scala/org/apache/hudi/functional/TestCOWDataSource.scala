@@ -1892,7 +1892,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         if (firstClusteringState == HoodieInstant.State.INFLIGHT
           || firstClusteringState == HoodieInstant.State.REQUESTED) {
           // Move the clustering to inflight for testing
-          storage.deleteFile(new StoragePath(metaClient.getMetaPath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant)))
+          storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant)))
           val inflightClustering = metaClient.reloadActiveTimeline.lastInstant.get
           assertTrue(inflightClustering.isInflight)
           assertEquals(

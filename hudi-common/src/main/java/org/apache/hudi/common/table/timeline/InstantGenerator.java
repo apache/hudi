@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.Serializable;
@@ -28,7 +29,9 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State;
  * Factory for generating Instants.
  **/
 public interface InstantGenerator extends Serializable {
-  
+
+  TimelineLayoutVersion getLayoutVersion();
+
   HoodieInstant createNewInstant(State state, String action, String timestamp);
 
   HoodieInstant createNewInstant(State state, String action, String timestamp, String completionTime);

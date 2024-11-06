@@ -86,7 +86,7 @@ public class UpgradeDowngradeUtils {
       try {
         if (!metaClient.getStorage().exists(new StoragePath(metaClient.getMetaAuxiliaryPath(), fileName))) {
           FileIOUtils.copy(metaClient.getStorage(),
-              new StoragePath(metaClient.getMetaPath(), fileName),
+              new StoragePath(metaClient.getTimelinePath(), fileName),
               new StoragePath(metaClient.getMetaAuxiliaryPath(), fileName));
         }
       } catch (IOException e) {

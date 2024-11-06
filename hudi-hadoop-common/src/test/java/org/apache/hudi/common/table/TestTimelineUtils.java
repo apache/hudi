@@ -45,6 +45,7 @@ import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -384,7 +385,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   ) throws IOException {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     HoodieArchivedTimeline mockArchivedTimeline = mock(HoodieArchivedTimeline.class);
-    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), eq(true)))
+    when(mockMetaClient.getBasePath()).thenReturn(new StoragePath("file://dummy/path"));
+    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), any(), eq(true)))
         .thenReturn(activeInstants);
     HoodieActiveTimeline activeTimeline = new ActiveTimelineV2(mockMetaClient);
     when(mockMetaClient.getActiveTimeline())
@@ -491,7 +493,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   private HoodieActiveTimeline prepareActiveTimeline(
       List<HoodieInstant> activeInstants) throws IOException {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
-    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), eq(true)))
+    when(mockMetaClient.getBasePath()).thenReturn(new StoragePath("file://dummy/path"));
+    when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), any(), eq(true)))
         .thenReturn(activeInstants);
     return new ActiveTimelineV2(mockMetaClient);
   }

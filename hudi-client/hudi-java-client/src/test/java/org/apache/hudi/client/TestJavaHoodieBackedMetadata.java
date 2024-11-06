@@ -644,7 +644,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     // for future upserts. so, renaming the file here to some temp name and later renaming it back to same name.
     java.nio.file.Path metaFilePath =
         Paths.get(HoodieTestUtils.getCompleteInstantPath(metaClient.getStorage(),
-                new StoragePath(metadataTableBasePath, METAFOLDER_NAME),
+                new StoragePath(new StoragePath(metadataTableBasePath, METAFOLDER_NAME), HoodieTableMetaClient.TIMELINEFOLDER_NAME),
                 metadataCompactionInstant.get(),
                 HoodieTimeline.COMMIT_ACTION)
             .toUri());
@@ -681,7 +681,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Fetch compaction Commit file and rename to some other file. completed compaction meta file should have some serialized info that table interprets
       // for future upserts. so, renaming the file here to some temp name and later renaming it back to same name.
       metaFilePath = Paths.get(HoodieTestUtils.getCompleteInstantPath(metaClient.getStorage(),
-          new StoragePath(metadataTableBasePath, METAFOLDER_NAME),
+          new StoragePath(new StoragePath(metadataTableBasePath, METAFOLDER_NAME), HoodieTableMetaClient.TIMELINEFOLDER_NAME),
           metadataCompactionInstant.get(),
           HoodieTimeline.COMMIT_ACTION).toUri());
       FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant.get());
@@ -738,7 +738,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // mimicing crash or making an inflight in metadata table.
       StoragePath toDelete = HoodieTestUtils.getCompleteInstantPath(
           metaClient.getStorage(),
-          new StoragePath(metaClient.getMetaPath() + "/metadata" + "/" + ".hoodie/"),
+          new StoragePath(metaClient.getMetaPath() + "/metadata" + "/" + ".hoodie/timeline/"),
           newCommitTime2,
           HoodieTimeline.DELTA_COMMIT_ACTION);
       metaClient.getStorage().deleteDirectory(toDelete);
@@ -1536,7 +1536,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     // remove latest completed delta commit from MDT.
     StoragePath toDelete = HoodieTestUtils.getCompleteInstantPath(
         metaClient.getStorage(),
-        new StoragePath(metaClient.getMetaPath() + "/metadata" + "/" + ".hoodie/"),
+        new StoragePath(metaClient.getMetaPath() + "/metadata" + "/" + ".hoodie/timeline/"),
         commit2, HoodieTimeline.DELTA_COMMIT_ACTION);
     metaClient.getStorage().deleteDirectory(toDelete);
 
@@ -1557,7 +1557,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // collect all commit meta files from metadata table.
     List<StoragePathInfo> metaFiles = metaClient.getStorage().listDirectEntries(
-        new StoragePath(metaClient.getMetaPath() + "/metadata/.hoodie"));
+        new StoragePath(metaClient.getMetaPath() + "/metadata/.hoodie/timeline"));
     List<StoragePathInfo> commit3Files = metaFiles.stream()
         .filter(pathInfo ->
             pathInfo.getPath().getName().contains(commit3)
@@ -2222,7 +2222,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       String commitInstantFileName =
           INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get());
       assertTrue(storage.deleteFile(
-          new StoragePath(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME, commitInstantFileName)));
+          new StoragePath(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME + StoragePath.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME,
+              commitInstantFileName)));
     }
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext,
@@ -2325,7 +2326,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       String commitInstantFileName =
           INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get());
       assertTrue(storage.deleteFile(
-          new StoragePath(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME, commitInstantFileName)));
+          new StoragePath(basePath + StoragePath.SEPARATOR + METAFOLDER_NAME + StoragePath.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME,
+              commitInstantFileName)));
     }
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext,
@@ -2472,7 +2474,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
           INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants()
               .getReverseOrderedInstants().findFirst().get());
       assertTrue(storage.deleteFile(new StoragePath(
-          basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME, cleanInstantFileName)));
+          basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME
+              + StoragePath.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME, cleanInstantFileName)));
       assertEquals(
           metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflights().countInstants(),
           1);

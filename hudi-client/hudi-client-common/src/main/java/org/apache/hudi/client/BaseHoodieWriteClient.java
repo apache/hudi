@@ -942,13 +942,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Starts a new commit time for a write operation (insert/update/delete) with specified action.
    */
   private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
+    HoodieTableMetaClient updatedMetaClient = metaClient;
     if (needsUpgradeOrDowngrade(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
+      updatedMetaClient = createMetaClient(true);
     }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
-    startCommit(instantTime, actionType, metaClient);
+    startCommit(instantTime, actionType, updatedMetaClient);
   }
 
   private void startCommit(String instantTime, String actionType, HoodieTableMetaClient metaClient) {

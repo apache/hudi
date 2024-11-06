@@ -68,6 +68,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
@@ -158,38 +159,42 @@ public class FileCreateUtils {
   }
 
   private static void createMetaFile(String basePath, String instantTime, Supplier<String> completionTimeSupplier, String suffix, byte[] content) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    Files.createDirectories(parentPath);
-    if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
-      Path metaFilePath = parentPath.resolve(instantTime + suffix);
-      if (Files.notExists(metaFilePath)) {
-        if (content.length == 0) {
-          Files.createFile(metaFilePath);
-        } else {
-          Files.write(metaFilePath, content);
-        }
-      }
-    } else {
-      try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(parentPath, instantTime + "*" + suffix)) {
-        // The instant file is not exist
-        if (!dirStream.iterator().hasNext()) {
-          // doesn't contains completion time
-          String instantTimeAndCompletionTime = instantTime + "_" + completionTimeSupplier.get();
-          Path metaFilePath = parentPath.resolve(instantTimeAndCompletionTime + suffix);
+    try {
+      Path parentPath = Paths.get(TIMELINE_LAYOUT_V2.getTimelinePath(new StoragePath(basePath)).makeQualified(new URI("file:///")).toUri());
+
+      Files.createDirectories(parentPath);
+      if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
+        Path metaFilePath = parentPath.resolve(instantTime + suffix);
+        if (Files.notExists(metaFilePath)) {
           if (content.length == 0) {
             Files.createFile(metaFilePath);
           } else {
             Files.write(metaFilePath, content);
           }
         }
+      } else {
+        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(parentPath, instantTime + "*" + suffix)) {
+          // The instant file is not exist
+          if (!dirStream.iterator().hasNext()) {
+            // doesn't contains completion time
+            String instantTimeAndCompletionTime = instantTime + "_" + completionTimeSupplier.get();
+            Path metaFilePath = parentPath.resolve(instantTimeAndCompletionTime + suffix);
+            if (content.length == 0) {
+              Files.createFile(metaFilePath);
+            } else {
+              Files.write(metaFilePath, content);
+            }
+          }
+        }
       }
+    } catch (URISyntaxException ex) {
+      throw new HoodieException(ex);
     }
   }
 
   private static void deleteMetaFile(String basePath, String instantTime, String suffix,
                                      HoodieStorage storage) throws IOException {
-    StoragePath parentPath =
-        new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    StoragePath parentPath = TIMELINE_LAYOUT_V2.getTimelinePath(new StoragePath(basePath));
 
     if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION)
         || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
@@ -507,23 +512,28 @@ public class FileCreateUtils {
   }
 
   private static void removeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
-      Path metaFilePath = parentPath.resolve(instantTime + suffix);
-      if (Files.exists(metaFilePath)) {
-        Files.delete(metaFilePath);
-      }
-    } else {
-      if (Files.exists(parentPath)) {
-        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(parentPath, instantTime + "*" + suffix)) {
-          Iterator<Path> iterator = dirStream.iterator();
-          // The instant file exists
-          if (iterator.hasNext()) {
-            // doesn't contains completion time
-            Files.delete(iterator.next());
+    try {
+      Path parentPath = Paths.get(TIMELINE_LAYOUT_V2.getTimelinePath(new StoragePath(basePath)).makeQualified(new URI("file:///")).toUri());
+
+      if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
+        Path metaFilePath = parentPath.resolve(instantTime + suffix);
+        if (Files.exists(metaFilePath)) {
+          Files.delete(metaFilePath);
+        }
+      } else {
+        if (Files.exists(parentPath)) {
+          try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(parentPath, instantTime + "*" + suffix)) {
+            Iterator<Path> iterator = dirStream.iterator();
+            // The instant file exists
+            if (iterator.hasNext()) {
+              // doesn't contains completion time
+              Files.delete(iterator.next());
+            }
           }
         }
       }
+    } catch (Exception ex) {
+      throw new HoodieException(ex);
     }
   }
 

@@ -18,12 +18,16 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+
 import java.io.Serializable;
 
 /**
  * Factory for generating instants filenames.
  */
 public interface InstantFileNameGenerator extends Serializable {
+
+  TimelineLayoutVersion getLayoutVersion();
 
   String makeCommitFileName(String instantTime);
 

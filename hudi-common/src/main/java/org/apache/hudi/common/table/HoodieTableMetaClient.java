@@ -108,6 +108,7 @@ public class HoodieTableMetaClient implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableMetaClient.class);
   public static final String METAFOLDER_NAME = ".hoodie";
+  public static final String TIMELINEFOLDER_NAME = "timeline";
   public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".temp";
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".aux";
   public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".bootstrap";
@@ -143,6 +144,7 @@ public class HoodieTableMetaClient implements Serializable {
   private HoodieTableType tableType;
   private TimelineLayoutVersion timelineLayoutVersion;
   private TimelineLayout timelineLayout;
+  private StoragePath timelinePath;
   protected HoodieTableConfig tableConfig;
   protected HoodieActiveTimeline activeTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
@@ -179,6 +181,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
     this.timelineLayoutVersion = layoutVersion.orElseGet(() -> tableConfig.getTimelineLayoutVersion().get());
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
+    this.timelinePath = timelineLayout.getTimelinePath(this.basePath);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
     LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
@@ -326,6 +329,10 @@ public class HoodieTableMetaClient implements Serializable {
     return metaPath;
   }
 
+  public StoragePath getTimelinePath() {
+    return timelinePath;
+  }
+
   /**
    * @return schema folder path
    */
@@ -414,9 +421,13 @@ public class HoodieTableMetaClient implements Serializable {
 
   public HoodieStorage getStorage() {
     if (storage == null) {
-      storage = getStorage(metaPath, getStorageConf(), consistencyGuardConfig, fileSystemRetryConfig);
+      storage = getStorage(metaPath);
     }
     return storage;
+  }
+
+  public HoodieStorage getStorage(StoragePath storagePath) {
+    return getStorage(metaPath, getStorageConf(), consistencyGuardConfig, fileSystemRetryConfig);
   }
 
   private static HoodieStorage getStorage(StoragePath path,
@@ -579,6 +590,11 @@ public class HoodieTableMetaClient implements Serializable {
     if (!storage.exists(metaPathDir)) {
       storage.createDirectory(metaPathDir);
     }
+    //Create Timeline Folder
+    StoragePath timelinePathDir = new StoragePath(metaPathDir, TIMELINEFOLDER_NAME);
+    if (!storage.exists(timelinePathDir)) {
+      storage.createDirectory(timelinePathDir);
+    }
     // create schema folder
     StoragePath schemaPathDir = new StoragePath(metaPathDir, SCHEMA_FOLDER_NAME);
     if (!storage.exists(schemaPathDir)) {
@@ -702,20 +718,6 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getCommitActionType() {
     return CommitUtils.getCommitActionType(this.getTableType());
-  }
-
-  /**
-   * Helper method to scan all hoodie-instant metafiles and construct HoodieInstant objects.
-   *
-   * @param includedExtensions        Included hoodie extensions
-   * @param applyLayoutVersionFilters Depending on Timeline layout version, if there are multiple states for the same
-   *                                  action instant, only include the highest state
-   * @return List of Hoodie Instants generated
-   * @throws IOException in case of failure
-   */
-  public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
-                                                              boolean applyLayoutVersionFilters) throws IOException {
-    return scanHoodieInstantsFromFileSystem(metaPath, includedExtensions, applyLayoutVersionFilters);
   }
 
   /**

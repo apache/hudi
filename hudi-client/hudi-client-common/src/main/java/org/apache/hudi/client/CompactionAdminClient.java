@@ -113,7 +113,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
     if (!dryRun) {
       // Overwrite compaction request with empty compaction operations
       HoodieInstant inflight = metaClient.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
-      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), metaClient.getInstantFileNameGenerator().getFileName(inflight));
+      StoragePath inflightPath = new StoragePath(metaClient.getTimelinePath(), metaClient.getInstantFileNameGenerator().getFileName(inflight));
       if (metaClient.getStorage().exists(inflightPath)) {
         // We need to rollback data-files because of this inflight compaction before unscheduling
         throw new IllegalStateException("Please rollback the inflight compaction before unscheduling");
@@ -122,7 +122,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       // TODO: Add a rollback instant but for compaction
       HoodieInstant instant = metaClient.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
       boolean deleted = metaClient.getStorage().deleteFile(
-          new StoragePath(metaClient.getMetaPath(), instantFileNameGenerator.getFileName(instant)));
+          new StoragePath(metaClient.getTimelinePath(), instantFileNameGenerator.getFileName(instant)));
       ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
     }
     return new ArrayList<>();
@@ -159,7 +159,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           HoodieCompactionPlan.newBuilder().setOperations(newOps).setExtraMetadata(plan.getExtraMetadata()).build();
       HoodieInstant inflight =
           metaClient.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
-      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), instantFileNameGenerator.getFileName(inflight));
+      StoragePath inflightPath = new StoragePath(metaClient.getTimelinePath(), instantFileNameGenerator.getFileName(inflight));
       if (metaClient.getStorage().exists(inflightPath)) {
         // revert if in inflight state
         metaClient.getActiveTimeline().revertInstantFromInflightToRequested(inflight);

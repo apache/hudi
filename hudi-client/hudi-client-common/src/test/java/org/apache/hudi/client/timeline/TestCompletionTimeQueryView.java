@@ -153,7 +153,7 @@ public class TestCompletionTimeQueryView {
     // reconcile the active timeline
     instants.subList(0, 3 * 6).forEach(
         instant -> TimelineUtils.deleteInstantFile(metaClient.getStorage(),
-            metaClient.getMetaPath(), instant, INSTANT_FILE_NAME_GENERATOR));
+            metaClient.getTimelinePath(), instant, INSTANT_FILE_NAME_GENERATOR));
     ValidationUtils.checkState(
         metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4,
         "should archive 6 instants with 4 as active");

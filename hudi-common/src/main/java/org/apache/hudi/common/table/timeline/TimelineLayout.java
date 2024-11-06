@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameGenera
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameParserV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.TimelineV2Factory;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -46,10 +48,14 @@ public abstract class TimelineLayout implements Serializable {
 
   private static final Map<TimelineLayoutVersion, TimelineLayout> LAYOUT_MAP = new HashMap<>();
 
+  public static final TimelineLayout TIMELINE_LAYOUT_V0 = new TimelineLayoutV0();
+  public static final TimelineLayout TIMELINE_LAYOUT_V1 = new TimelineLayoutV1();
+  public static final TimelineLayout TIMELINE_LAYOUT_V2 = new TimelineLayoutV2();
+
   static {
-    LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_0), new TimelineLayoutV0());
-    LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_1), new TimelineLayoutV1());
-    LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_2), new TimelineLayoutV2());
+    LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_0), TIMELINE_LAYOUT_V0);
+    LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_1), TIMELINE_LAYOUT_V1);
+    LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_2), TIMELINE_LAYOUT_V2);
   }
 
   public static TimelineLayout fromVersion(TimelineLayoutVersion version) {
@@ -69,6 +75,8 @@ public abstract class TimelineLayout implements Serializable {
   public abstract InstantFileNameParser getInstantFileNameParser();
 
   public abstract CommitMetadataSerDe getCommitMetadataSerDe();
+
+  public abstract StoragePath getTimelinePath(StoragePath basePath);
 
   /**
    * Table Layout where state transitions are managed by renaming files.
@@ -114,6 +122,11 @@ public abstract class TimelineLayout implements Serializable {
     @Override
     public CommitMetadataSerDe getCommitMetadataSerDe() {
       return new CommitMetadataSerDeV1();
+    }
+
+    @Override
+    public StoragePath getTimelinePath(StoragePath basePath) {
+      return new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     }
   }
 
@@ -185,6 +198,11 @@ public abstract class TimelineLayout implements Serializable {
     @Override
     public CommitMetadataSerDe getCommitMetadataSerDe() {
       return new CommitMetadataSerDeV2();
+    }
+
+    @Override
+    public StoragePath getTimelinePath(StoragePath basePath) {
+      return new StoragePath(new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableMetaClient.TIMELINEFOLDER_NAME);
     }
   }
 }

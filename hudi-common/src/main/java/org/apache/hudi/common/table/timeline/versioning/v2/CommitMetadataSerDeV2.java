@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -38,6 +39,11 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
+
+  @Override
+  public TimelineLayoutVersion getLayoutVersion() {
+    return TimelineLayoutVersion.LAYOUT_VERSION_2;
+  }
 
   @Override
   public <T> T deserialize(HoodieInstant instant, byte[] bytes, Class<T> clazz) throws IOException {
