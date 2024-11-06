@@ -18,7 +18,6 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -63,7 +62,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
@@ -119,20 +117,6 @@ public class HoodieTestSuiteJob {
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
     this.keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-
-    if (!fs.exists(new Path(cfg.targetBasePath))) {
-      metaClient = HoodieTableMetaClient.newTableBuilder()
-          .setTableType(cfg.tableType)
-          .setTableName(cfg.targetTableName)
-          .setRecordKeyFields(this.props.getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
-          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.targetBasePath);
-    } else {
-      metaClient = HoodieTableMetaClient.builder()
-          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
-          .setBasePath(cfg.targetBasePath).build();
-    }
-
     if (cfg.cleanInput) {
       Path inputPath = new Path(cfg.inputBasePath);
       if (fs.exists(inputPath)) {
@@ -151,6 +135,11 @@ public class HoodieTestSuiteJob {
   int getSchemaVersionFromCommit(int nthCommit) throws Exception {
     int version = 0;
     try {
+      if (metaClient == null) {
+        metaClient = HoodieTableMetaClient.builder()
+            .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+            .setBasePath(cfg.targetBasePath).build();
+      }
       HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitsTimeline();
       // Pickup the schema version from nth commit from last (most recent insert/upsert will be rolled back).
       HoodieInstant prevInstant = timeline.nthFromLastInstant(nthCommit).get();
