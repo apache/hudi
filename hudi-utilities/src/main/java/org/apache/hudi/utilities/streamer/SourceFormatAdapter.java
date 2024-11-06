@@ -51,6 +51,8 @@ import org.apache.spark.sql.types.StructType;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import scala.util.Either;
@@ -208,6 +210,15 @@ public class SourceFormatAdapter implements Closeable {
    * Fetch new data in row format. If the source provides data in different format, they are translated to Row format
    */
   public InputBatch<Dataset<Row>> fetchNewDataInRowFormat(Option<String> lastCkptStr, long sourceLimit) {
+    return fetchNewDataInRowFormat(lastCkptStr, sourceLimit, Collections.emptyMap());
+  }
+
+  /**
+   * Fetch new data in row format with the given reader options. If the source provides data in different format,
+   * they are translated to Row format.
+   */
+  public InputBatch<Dataset<Row>> fetchNewDataInRowFormat(
+      Option<String> lastCkptStr, long sourceLimit, Map<String, String> dataframeReaderOptions) {
     switch (source.getSourceType()) {
       case ROW:
         //we do the sanitizing here if enabled
@@ -250,7 +261,7 @@ public class SourceFormatAdapter implements Closeable {
           StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
           return new InputBatch<>(
               Option.ofNullable(
-                  r.getBatch().map(rdd -> HoodieSparkUtils.maybeWrapDataFrameWithException(source.getSparkSession().read().schema(dataType).json(rdd),
+                  r.getBatch().map(rdd -> HoodieSparkUtils.maybeWrapDataFrameWithException(source.getSparkSession().read().options(dataframeReaderOptions).schema(dataType).json(rdd),
                       SchemaCompatibilityException.class.getName(), "Schema does not match json data", wrapWithException)).orElse(null)),
               r.getCheckpointForNextBatch(), r.getSchemaProvider());
         }
