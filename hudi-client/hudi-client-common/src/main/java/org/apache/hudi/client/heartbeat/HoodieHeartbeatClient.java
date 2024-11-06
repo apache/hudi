@@ -184,13 +184,14 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
    * @param instantTime The instant time for the heartbeat.
    * @throws HoodieException
    */
-  public void stop(String instantTime) throws HoodieException {
-    Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
+  public Heartbeat stop(String instantTime) throws HoodieException {
+    Heartbeat heartbeat = instantToHeartbeatMap.remove(instantTime);
     if (isHeartbeatStarted(heartbeat)) {
       stopHeartbeatTimer(heartbeat);
       HeartbeatUtils.deleteHeartbeatFile(storage, basePath, instantTime);
       LOG.info("Deleted heartbeat file for instant " + instantTime);
     }
+    return heartbeat;
   }
 
   /**
