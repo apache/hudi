@@ -439,6 +439,10 @@ public class TimelineUtils {
     }
   }
 
+  public static HoodieTimeline getVisibleTimelineForFsView(HoodieTableMetaClient metaClient) {
+    return metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+  }
+
   public enum HollowCommitHandling {
     FAIL, BLOCK, USE_TRANSITION_TIME;
   }

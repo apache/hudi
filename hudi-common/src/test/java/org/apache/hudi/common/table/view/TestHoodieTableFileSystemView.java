@@ -1433,7 +1433,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(fileIdsInCompaction.contains(fileId));
   }
 
-  private static void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
+  protected static void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
       timeline.transitionCompactionInflightToComplete(inflight, data);
     } else {

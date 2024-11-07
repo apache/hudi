@@ -22,8 +22,10 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.conf.Configuration;
@@ -31,8 +33,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
+
+import static org.apache.hudi.common.table.view.FileSystemViewStorageType.REMOTE_FIRST;
+import static org.apache.hudi.common.table.view.FileSystemViewStorageType.REMOTE_ONLY;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestFileSystemViewManager extends HoodieCommonTestHarness {
 
@@ -55,17 +63,44 @@ class TestFileSystemViewManager extends HoodieCommonTestHarness {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
     try (HoodieTableMetadata metadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePathV2().toString(), true)) {
       FileSystemViewManager.SecondaryViewCreator inMemorySupplier = new FileSystemViewManager.SecondaryViewCreator(getViewConfig(FileSystemViewStorageType.MEMORY),
-          metaClient, config, true, unused -> metadata);
+          metaClient, config, TimelineUtils.getVisibleTimelineForFsView(metaClient), true, unused -> metadata);
       Assertions.assertTrue(inMemorySupplier.apply(engineContext) instanceof HoodieTableFileSystemView);
       FileSystemViewManager.SecondaryViewCreator spillableSupplier = new FileSystemViewManager.SecondaryViewCreator(getViewConfig(FileSystemViewStorageType.SPILLABLE_DISK),
-          metaClient, config, true, unused -> metadata);
+          metaClient, config, TimelineUtils.getVisibleTimelineForFsView(metaClient), true, unused -> metadata);
       Assertions.assertTrue(spillableSupplier.apply(engineContext) instanceof SpillableMapBasedFileSystemView);
       FileSystemViewManager.SecondaryViewCreator embeddedSupplier = new FileSystemViewManager.SecondaryViewCreator(getViewConfig(FileSystemViewStorageType.EMBEDDED_KV_STORE),
-          metaClient, config, true, unused -> metadata);
+          metaClient, config, TimelineUtils.getVisibleTimelineForFsView(metaClient), true, unused -> metadata);
       Assertions.assertTrue(embeddedSupplier.apply(engineContext) instanceof RocksDbBasedFileSystemView);
-      Assertions.assertThrows(IllegalArgumentException.class, () -> new FileSystemViewManager.SecondaryViewCreator(getViewConfig(FileSystemViewStorageType.REMOTE_FIRST),
-          metaClient, config, true, unused -> metadata).apply(engineContext));
+      assertThrows(IllegalArgumentException.class, () -> new FileSystemViewManager.SecondaryViewCreator(getViewConfig(REMOTE_FIRST),
+          metaClient, config, TimelineUtils.getVisibleTimelineForFsView(metaClient), true, unused -> metadata).apply(engineContext));
     }
+  }
+
+  @ParameterizedTest
+  @EnumSource(FileSystemViewStorageType.class)
+  void testCreateViewManager(FileSystemViewStorageType storageType) throws Exception {
+    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new Configuration());
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
+    FileSystemViewStorageConfig fileSystemViewStorageConfig = FileSystemViewStorageConfig.newBuilder()
+        .withStorageType(storageType)
+        .withRemoteInitTimeline(true)
+        .build();
+    FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(engineContext, metadataConfig, fileSystemViewStorageConfig, commonConfig);
+    FileSystemViewManager viewManagerWithMetadata = FileSystemViewManager.createViewManagerWithTableMetadata(engineContext, metadataConfig, fileSystemViewStorageConfig, commonConfig);
+    if (storageType == REMOTE_ONLY || storageType == REMOTE_FIRST) {
+      assertThrows(HoodieRemoteException.class, () -> viewManager.getFileSystemView(metaClient));
+      assertThrows(HoodieRemoteException.class, () -> viewManagerWithMetadata.getFileSystemView(metaClient));
+      assertThrows(HoodieRemoteException.class, () -> viewManager.getFileSystemView(metaClient, metaClient.getActiveTimeline()));
+      assertThrows(HoodieRemoteException.class, () -> viewManagerWithMetadata.getFileSystemView(metaClient, metaClient.getActiveTimeline()));
+    } else {
+      viewManager.getFileSystemView(metaClient);
+      viewManagerWithMetadata.getFileSystemView(metaClient);
+      viewManager.getFileSystemView(metaClient, metaClient.getActiveTimeline());
+      viewManagerWithMetadata.getFileSystemView(metaClient, metaClient.getActiveTimeline());
+    }
+    viewManager.close();
+    viewManagerWithMetadata.close();
   }
 
   private FileSystemViewStorageConfig getViewConfig(FileSystemViewStorageType type) {

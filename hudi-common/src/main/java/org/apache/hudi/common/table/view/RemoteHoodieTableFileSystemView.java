@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.timeline.TimelineServiceClient;
@@ -52,6 +54,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -121,9 +124,11 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LAST_INSTANTS = String.format("%s/%s", BASE_URL, "timeline/instants/last");
 
   public static final String TIMELINE = String.format("%s/%s", BASE_URL, "timeline/instants/all");
+  public static final String GET_TIMELINE_HASH = String.format("%s/%s", BASE_URL, "timeline/hash");
 
   // POST Requests
   public static final String REFRESH_TABLE = String.format("%s/%s", BASE_URL, "refresh/");
+  public static final String INIT_TIMELINE = String.format("%s/%s", BASE_URL, "inittimeline");
   public static final String LOAD_ALL_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadallpartitions/");
   public static final String LOAD_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadpartitions/");
 
@@ -145,6 +150,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private static final TypeReference<List<FileSliceDTO>> FILE_SLICE_DTOS_REFERENCE = new TypeReference<List<FileSliceDTO>>() {};
   private static final TypeReference<List<FileGroupDTO>> FILE_GROUP_DTOS_REFERENCE = new TypeReference<List<FileGroupDTO>>() {};
   private static final TypeReference<Boolean> BOOLEAN_TYPE_REFERENCE = new TypeReference<Boolean>() {};
+  private static final TypeReference<String> STRING_TYPE_REFERENCE = new TypeReference<String>() {};
   private static final TypeReference<List<CompactionOpDTO>> COMPACTION_OP_DTOS_REFERENCE = new TypeReference<List<CompactionOpDTO>>() {};
   private static final TypeReference<List<ClusteringOpDTO>> CLUSTERING_OP_DTOS_REFERENCE = new TypeReference<List<ClusteringOpDTO>>() {};
   private static final TypeReference<List<InstantDTO>> INSTANT_DTOS_REFERENCE = new TypeReference<List<InstantDTO>>() {};
@@ -165,22 +171,53 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   public RemoteHoodieTableFileSystemView(HoodieTableMetaClient metaClient, FileSystemViewStorageConfig viewConf) {
+    this(metaClient, TimelineUtils.getVisibleTimelineForFsView(metaClient), viewConf);
+  }
+
+  public RemoteHoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline, FileSystemViewStorageConfig viewConf) {
+    this(metaClient, timeline, new TimelineServiceClient(viewConf), viewConf);
+  }
+
+  @VisibleForTesting
+  RemoteHoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline, TimelineServiceClient timelineServiceClient, FileSystemViewStorageConfig viewConf) {
     this.basePath = metaClient.getBasePath();
     this.metaClient = metaClient;
-    this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    this.timelineServiceClient = new TimelineServiceClient(viewConf);
+    this.timeline = timeline;
+    this.timelineServiceClient = timelineServiceClient;
+    if (viewConf.isRemoteInitEnabled()) {
+      initialiseTimelineInRemoteView(timeline);
+    }
+  }
+
+  public void initialiseTimelineInRemoteView(HoodieTimeline timeline) {
+    try {
+      this.timeline = timeline;
+      Map<String, String> queryParams = new HashMap<>();
+      queryParams.put(BASEPATH_PARAM, basePath);
+      String timelineHashFromServer = executeRequest(GET_TIMELINE_HASH, queryParams,STRING_TYPE_REFERENCE, RequestMethod.GET);
+      if (!Objects.equals(timelineHashFromServer, timeline.getTimelineHash())) {
+        String body = OBJECT_MAPPER.writeValueAsString(TimelineDTO.fromTimeline(timeline));
+        executeRequest(INIT_TIMELINE, queryParams, body, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
+      }
+    } catch (IOException e) {
+      throw new HoodieRemoteException("Failed to initialise timeline remotely in server", e);
+    }
   }
 
   private <T> T executeRequest(String requestPath, Map<String, String> queryParameters, TypeReference<T> reference,
                                RequestMethod method) throws IOException {
-    ValidationUtils.checkArgument(!closed, "View already closed");
+    return executeRequest(requestPath, queryParameters, StringUtils.EMPTY_STRING, reference, method);
+  }
 
+  private <T> T executeRequest(String requestPath, Map<String, String> queryParameters, String body, TypeReference<T> reference,
+                               RequestMethod method) throws IOException {
+    ValidationUtils.checkArgument(!closed, "View already closed");
     // Adding mandatory parameters - Last instants affecting file-slice
     timeline.lastInstant().ifPresent(instant -> queryParameters.put(LAST_INSTANT_TS, instant.getTimestamp()));
     queryParameters.put(TIMELINE_HASH, timeline.getTimelineHash());
 
     return timelineServiceClient.makeRequest(
-            TimelineServiceClient.Request.newBuilder(method, requestPath).addQueryParams(queryParameters).build())
+            TimelineServiceClient.Request.newBuilder(method, requestPath).addQueryParams(queryParameters).setBody(body).build())
         .getDecodedContent(reference);
   }
 

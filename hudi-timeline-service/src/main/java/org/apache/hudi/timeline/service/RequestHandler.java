@@ -429,10 +429,29 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.GET_TIMELINE_HASH, new ViewHandler(ctx -> {
+      metricsRegistry.add("GET_TIMELINE_HASH", 1);
+      String basePath = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class)
+          .getOrThrow(e -> new HoodieException("Basepath is invalid"));
+      String timelineHash = instantHandler.getTimelineHash(basePath);
+      writeValueAsString(ctx, timelineHash);
+    }, false));
+
     app.post(RemoteHoodieTableFileSystemView.REFRESH_TABLE, new ViewHandler(ctx -> {
       metricsRegistry.add("REFRESH_TABLE", 1);
-      boolean success = sliceHandler
-          .refreshTable(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
+      String basePath = ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class)
+          .getOrThrow(e -> new HoodieException("Basepath is invalid"));
+      LOG.info("Refreshing timeline for base path {}", basePath);
+      boolean success = sliceHandler.refreshTable(basePath);
+      writeValueAsString(ctx, success);
+    }, false));
+
+    app.post(RemoteHoodieTableFileSystemView.INIT_TIMELINE, new ViewHandler(ctx -> {
+      metricsRegistry.add("INIT_TIMELINE", 1);
+      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+      LOG.info("Initializing timeline for base path {}", basePath);
+      TimelineDTO timelineDTO = OBJECT_MAPPER.readValue(ctx.body(), TimelineDTO.class);
+      boolean success = instantHandler.initializeTimeline(basePath, timelineDTO);
       writeValueAsString(ctx, success);
     }, false));
 

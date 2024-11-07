@@ -23,6 +23,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.http.NoHttpResponseException;
 import org.apache.http.ParseException;
@@ -104,6 +105,7 @@ public class TestTimelineServiceClient {
     TimelineServiceClientBase.Request request = TimelineServiceClientBase.Request.newBuilder(TimelineServiceClientBase.RequestMethod.POST, TEST_ENDPOINT)
         .addQueryParam("key1", "val1")
         .addQueryParams(Collections.singletonMap("key2", "val2"))
+        .setBody(StringUtils.EMPTY_STRING)
         .build();
     TimelineServiceClientBase.Response response = client.makeRequest(request);
     assertEquals(DEFAULT_HTTP_RESPONSE, response.getDecodedContent(new TypeReference<Boolean>() {}));
