@@ -190,6 +190,8 @@ public class HoodieStreamer implements Serializable {
       hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
     } else {
       hoodieConfig.setAll(readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
+    } else {
+      hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
     }
 
     // set any configs that Deltastreamer has to override explicitly
