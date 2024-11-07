@@ -38,6 +38,7 @@ import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -126,7 +127,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     expectedDeleteFileList.add("file1.parquet");
     expectedDeleteFileList.add("file3.parquet");
     expectedDeleteFileList.add("file4.parquet");
-    
+
     assertEquals(
         HoodieMetadataPayload.createPartitionFilesRecord(PARTITION_NAME,
             Collections.emptyMap(),
@@ -320,5 +321,58 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     combinedSecondaryIndexRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldSecondaryIndexRecord, newSecondaryIndexRecord);
     assertTrue(combinedSecondaryIndexRecord.isPresent());
     assertEquals(newSecondaryIndexRecord.getData(), combinedSecondaryIndexRecord.get().getData());
+  }
+
+  @Test
+  public void testConstructSecondaryIndexKey() {
+    // Simple case
+    String secondaryKey = "part1";
+    String recordKey = "key1";
+    String constructedKey = HoodieMetadataPayload.constructSecondaryIndexKey(secondaryKey, recordKey);
+    assertEquals("part1$key1", constructedKey);
+    assertEquals(secondaryKey, HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(constructedKey));
+    assertEquals(recordKey, HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(constructedKey));
+
+    // Case with escape characters
+    secondaryKey = "part\\one";
+    recordKey = "key$two";
+    constructedKey = HoodieMetadataPayload.constructSecondaryIndexKey(secondaryKey, recordKey);
+    assertEquals("part\\\\one$key\\$two", constructedKey);
+    assertEquals(secondaryKey, HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(constructedKey));
+    assertEquals(recordKey, HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(constructedKey));
+
+    // Complex case with multiple `$` and `\` characters
+    secondaryKey = "comp\\lex$sec";
+    recordKey = "prim\\ary$k\\ey";
+    constructedKey = HoodieMetadataPayload.constructSecondaryIndexKey(secondaryKey, recordKey);
+    assertEquals("comp\\\\lex\\$sec$prim\\\\ary\\$k\\\\ey", constructedKey);
+
+    // Verify correct extraction
+    String extractedSecondaryKey = HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(constructedKey);
+    String extractedPrimaryKey = HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(constructedKey);
+    assertEquals(secondaryKey, extractedSecondaryKey);
+    assertEquals(recordKey, extractedPrimaryKey);
+
+    // Edge case: only secondary key with no primary key
+    String key = "secondaryOnly$";
+    recordKey = HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(key);
+    assertEquals("", recordKey);
+
+    // Edge case: only primary key with no secondary key
+    key = "$primaryOnly";
+    secondaryKey = HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(key);
+    assertEquals("", secondaryKey);
+
+    // Edge case: empty string, invalid key format
+    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(""));
+    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(""));
+
+    // Case with no separator
+    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey("invalidKey"));
+    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey("invalidKey"));
+
+    // Case with only escape characters but no actual separator
+    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey("part\\one"));
+    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey("part\\one"));
   }
 }

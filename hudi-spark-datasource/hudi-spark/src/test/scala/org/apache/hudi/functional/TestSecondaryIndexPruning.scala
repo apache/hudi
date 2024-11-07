@@ -997,7 +997,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         )
       }
       val sqlTableType = if (tableType == HoodieTableType.COPY_ON_WRITE) "cow" else "mor"
-      tableName += "test_secondary_index_pruning_compact_clean_" + sqlTableType
+      tableName += "test_secondary_index_pruning_cluster_clean_" + sqlTableType
 
       spark.sql(
         s"""
