@@ -974,7 +974,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
-      HoodieData<HoodieRecord> updatesFromWriteStatuses = getRecordIndexUpserts(writeStatus);
+      HoodieData<HoodieRecord> updatesFromWriteStatuses = getRecordIndexUpserts(writeStatus, commitMetadata);
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(updatesFromWriteStatuses, commitMetadata);
       partitionToRecordMap.put(MetadataPartitionType.RECORD_INDEX, updatesFromWriteStatuses.union(additionalUpdates));
       return partitionToRecordMap;
@@ -1474,7 +1474,17 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    *
    * @param writeStatuses {@code WriteStatus} from the write operation
    */
-  private HoodieData<HoodieRecord> getRecordIndexUpserts(HoodieData<WriteStatus> writeStatuses) {
+  protected HoodieData<HoodieRecord> getRecordIndexUpserts(HoodieData<WriteStatus> writeStatuses, HoodieCommitMetadata commitMetadata) {
+    boolean validatedForFileIds = dataWriteConfig.getRecordIndexValidateAgainstFilesPartition();
+    HashMap<String, HashSet<String>> commitMetadataFileIds = new HashMap<>();
+    if (validatedForFileIds) {
+      // collect all fileIDs from commit metadata and validate the RLI updates only references fileIds from the current commit metadata.
+      commitMetadata.getWriteStats().forEach(writeStat -> {
+        commitMetadataFileIds.putIfAbsent(writeStat.getPartitionPath(), new HashSet<>());
+        commitMetadataFileIds.get(writeStat.getPartitionPath()).add(writeStat.getFileId());
+      });
+    }
+
     return writeStatuses.flatMap(writeStatus -> {
       List<HoodieRecord> recordList = new LinkedList<>();
       for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
@@ -1498,6 +1508,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               }
               // for updates, we can skip updating RLI partition in MDT
             } else {
+              if (validatedForFileIds && (!commitMetadataFileIds.containsKey(recordDelegate.getPartitionPath())
+                  || !commitMetadataFileIds.get(recordDelegate.getPartitionPath()).contains(newLocation.get().getFileId()))) {
+                throw new HoodieException("RLI index has a reference to a spurious file Id not present in the commit metadata");
+              }
               // Insert new record case
               hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
                   recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
@@ -1505,6 +1519,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               recordList.add(hoodieRecord);
             }
           } else {
+            if (recordDelegate.getCurrentLocation().isPresent() && validatedForFileIds && (!commitMetadataFileIds.containsKey(recordDelegate.getPartitionPath())
+                || !commitMetadataFileIds.get(recordDelegate.getPartitionPath()).contains(recordDelegate.getCurrentLocation().get().getFileId()))) {
+              throw new HoodieException("RLI index has a reference to a spurious file Id not present in the commit metadata");
+            }
             // Delete existing index for a deleted record
             hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());
             recordList.add(hoodieRecord);

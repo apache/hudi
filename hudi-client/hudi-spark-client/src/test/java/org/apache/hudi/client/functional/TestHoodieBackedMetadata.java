@@ -46,7 +46,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -70,6 +72,7 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -84,6 +87,8 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.internal.OnehouseInternalConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
@@ -3354,6 +3359,73 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertEquals(allRecords.size(), result.size(), "RI should have mappings for re-inserted records");
       for (String reInsertedKey : keysToDelete) {
         assertEquals(reinsertTime, result.get(reInsertedKey).getInstantTime(), "RI mapping for re-inserted keys should have new commit time");
+      }
+    }
+  }
+
+  @Test
+  public void testRLIOutOfSyncWithCommitMetadata() throws Exception {
+    initPath();
+    HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(true).withRecordIndexFileGroupCount(1,1).build())
+        .withAutoCommit(false)
+        .withOnehouseInternalConfig(OnehouseInternalConfig.newBuilder().withRecordIndexValidateAgainstFilesPartitions(true).build())
+        .build();
+    init(COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    List<HoodieRecord> records = new ArrayList<>();
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfg)) {
+      // Insert
+      String commitTime = HoodieActiveTimeline.createNewInstantTime();
+      records = dataGen.generateInserts(commitTime, 20);
+      client.startCommitWithTime(commitTime);
+      JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime);
+      client.commitStats(commitTime, HoodieJavaRDD.of(writeStatuses), writeStatuses.map(writeStat -> writeStat.getStat()).collect(), Option.empty(), HoodieTimeline.COMMIT_ACTION);
+    }
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfg)) {
+      // Upsert
+      String commitTime = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(commitTime);
+      records = dataGen.generateUniqueUpdates(commitTime, 10);
+      JavaRDD<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime);
+      List<WriteStatus> writeStatusesList = writeStatuses.collect();
+
+      HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeStatusesList.stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList()), Collections.emptyMap(),
+          Option.empty(), INSERT, cfg.getWriteSchema(), HoodieTimeline.COMMIT_ACTION);
+
+      String partitionPathFileName = writeStatusesList.get(0).getStat().getPath();
+      String fileName = partitionPathFileName.substring(partitionPathFileName.lastIndexOf("/") + 1);
+      String partitionPath = partitionPathFileName.substring(0, partitionPathFileName.lastIndexOf("/"));
+      String[] fileNameSlices = fileName.split("_");
+      String dupFileID = fileNameSlices[0].substring(0, fileNameSlices[0].lastIndexOf("-") + 1) + "1";
+      String dupFilePath = dupFileID + "_" + fileNameSlices[1] + "-123" + "_" + fileNameSlices[2];
+      fs.copyToLocalFile(new Path(basePath, partitionPathFileName), new Path(basePath, partitionPath + "/" + dupFilePath));
+
+      SparkMetadataWriterTest metadataWriter = new SparkMetadataWriterTest(jsc.hadoopConfiguration(),cfg, cfg.getFailedWritesCleanPolicy(),
+          context, Option.of(commitTime));
+      // create a new WriteStatus and replace the orginal one
+      WriteStatus writeStatus = new WriteStatus(true, 1.0);
+      HoodieWriteStat writeStat = writeStatusesList.get(0).getStat();
+      writeStat.setPath(partitionPath + "/" + dupFilePath);
+      writeStatus.setStat(writeStat);
+      String finalCommitTime = commitTime;
+      HoodieRecordDelegate recordDelegateCloned = HoodieRecordDelegate.create(new HoodieKey("abc", partitionPath),  null,
+          new HoodieRecordLocation(finalCommitTime, dupFileID));
+
+      writeStatus.markSuccess(recordDelegateCloned, Option.empty());
+      List<WriteStatus> writeStatusesCloned = new ArrayList<>();
+      writeStatusesCloned.add(writeStatus);
+
+      try {
+        metadataWriter.getRecordIndexUpserts(HoodieJavaRDD.of(writeStatusesCloned, context, 1), commitMetadata).collectAsList();
+        fail("Should not have reached here");
+      } catch (Exception e) {
+        assertTrue(e.getCause() instanceof HoodieException);
+        assertTrue(e.getCause().getMessage().toString().contains("RLI index has a reference to a spurious file Id not present"));
       }
     }
   }

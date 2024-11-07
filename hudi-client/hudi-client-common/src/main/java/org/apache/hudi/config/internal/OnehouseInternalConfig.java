@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +54,13 @@ public class OnehouseInternalConfig extends HoodieConfig {
       .sinceVersion("0.14.1")
       .withDocumentation("Controls the number of marker entries to print when we fetch all markers during reconciliation or commit metadata validation");
 
+  public static final ConfigProperty<String> RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION = ConfigProperty
+      .key(ONEHOUSE_INTERNAL_CONFIG_PREFIX + "hoodie.record.index.validate.against.files.partition")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("0.14.1")
+      .withDocumentation("Validates that all fileIds returned from RLI lookup is part of files partition in MDT");
+
   public static OnehouseInternalConfig.Builder newBuilder() {
     return new OnehouseInternalConfig.Builder();
   }
@@ -76,6 +84,16 @@ public class OnehouseInternalConfig extends HoodieConfig {
     public OnehouseInternalConfig.Builder withNumFileEntriesToPrintForMarkers(int numFileEntriesToPrintForMarkers) {
       this.onehouseInternalConfig.setValue(MARKER_NUM_FILE_ENTRIES_TO_PRINT, String.valueOf(numFileEntriesToPrintForMarkers));
       return this;
+    }
+
+    public OnehouseInternalConfig.Builder withRecordIndexValidateAgainstFilesPartitions(boolean validateAgainstFilesPartitions) {
+      this.onehouseInternalConfig.setValue(RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION, String.valueOf(validateAgainstFilesPartitions));
+      return this;
+    }
+
+    public OnehouseInternalConfig build() {
+      onehouseInternalConfig.setDefaults(HoodieIndexConfig.class.getName());
+      return onehouseInternalConfig;
     }
   }
 }

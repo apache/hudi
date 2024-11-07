@@ -23,9 +23,14 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -36,6 +41,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
@@ -43,13 +49,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
 import static org.apache.hudi.index.HoodieIndexUtils.tagGlobalLocationBackToRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 
 /**
  * Hoodie Index implementation backed by the record index present in the Metadata Table.
@@ -105,9 +114,11 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations =
         HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new RecordIndexFileGroupLookupFunction(hoodieTable)));
 
+    HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocationsProcessed = mayBeValidateAgainstFilesPartition(keyAndExistingLocations, hoodieTable);
+
     // Tag the incoming records, as inserts or updates, by joining with existing record keys
     boolean shouldUpdatePartitionPath = config.getRecordIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
-    HoodieData<HoodieRecord<R>> taggedRecords = tagGlobalLocationBackToRecords(records, keyAndExistingLocations,
+    HoodieData<HoodieRecord<R>> taggedRecords = tagGlobalLocationBackToRecords(records, keyAndExistingLocationsProcessed,
         false, shouldUpdatePartitionPath, config, hoodieTable);
 
     // The number of partitions in the taggedRecords is expected to the maximum of the partitions in
@@ -118,6 +129,29 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     }
 
     return taggedRecords;
+  }
+
+  @VisibleForTesting
+  protected HoodiePairData<String, HoodieRecordGlobalLocation> mayBeValidateAgainstFilesPartition(HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations,
+                                                                                                HoodieTable hoodieTable) {
+    if (config.getRecordIndexValidateAgainstFilesPartition()) {
+
+      List<List<String>> outOfSyncFileIdListOfLists =
+          keyAndExistingLocations.mapValues((SerializableFunction<HoodieRecordGlobalLocation, Pair<String, String>>) v1 -> Pair.of(v1.getPartitionPath(), v1.getFileId()))
+              .values().distinct()
+              .mapToPair((SerializablePairFunction<Pair<String, String>, String, String>) t -> t).groupByKey().map(new ValidateRliLocationsWithFiles(hoodieTable)).collectAsList();
+      List<String> outOfSyncFileIds = new ArrayList<>();
+      outOfSyncFileIdListOfLists.forEach(fileIdList -> {
+            if (!fileIdList.isEmpty()) {
+              outOfSyncFileIds.addAll(fileIdList);
+            }
+          }
+      );
+      if (!outOfSyncFileIds.isEmpty()) {
+        throw new HoodieIndexException("There are few FileIDs found in RLI which are not referenced in FILES partition in MDT " + Arrays.toString(outOfSyncFileIds.toArray()));
+      }
+    }
+    return keyAndExistingLocations;
   }
 
   @Override
@@ -149,6 +183,33 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
   @Override
   public boolean isImplicitWithStorage() {
     return false;
+  }
+
+  /**
+   * Assist with validating that all fileIds referenced in RLI is present in FILES partition from MDT.
+   */
+  private static class ValidateRliLocationsWithFiles implements SerializableFunction<Pair<String, Iterable<String>>, List<String>> {
+
+    private final HoodieTable hoodieTable;
+
+    public ValidateRliLocationsWithFiles(HoodieTable hoodieTable) {
+      this.hoodieTable = hoodieTable;
+    }
+
+    @Override
+    public List<String> apply(Pair<String, Iterable<String>> v1) throws Exception {
+      String partitionPath = v1.getKey();
+      String absolutePartitionPath = partitionPath.equals(EMPTY_PARTITION_NAME) ? hoodieTable.getMetaClient().getBasePath() : hoodieTable.getMetaClient().getBasePath() + "/" + partitionPath;
+      List<String> uniqueFileIdsFromFiles = Arrays.stream(hoodieTable.getMetadataTable().getAllFilesInPartition(new Path(absolutePartitionPath))).map(fileStatus ->
+          FSUtils.getFileId(fileStatus.getPath().getName())).distinct().collect(Collectors.toList());
+      List<String> outOfSyncFileIds = new ArrayList<>();
+      v1.getRight().forEach(rliFileId -> {
+        if (!uniqueFileIdsFromFiles.contains(rliFileId)) {
+          outOfSyncFileIds.add(rliFileId);
+        }
+      });
+      return outOfSyncFileIds;
+    }
   }
 
   /**

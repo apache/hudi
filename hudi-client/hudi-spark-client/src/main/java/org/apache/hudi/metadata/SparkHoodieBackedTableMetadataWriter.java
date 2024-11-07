@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -90,7 +91,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     return create(conf, writeConfig, context, Option.empty());
   }
 
-  SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+  @VisibleForTesting
+  protected SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,

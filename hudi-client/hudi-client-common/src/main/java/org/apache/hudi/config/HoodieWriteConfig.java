@@ -2104,6 +2104,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
+  public boolean getRecordIndexValidateAgainstFilesPartition() {
+    return getBoolean(OnehouseInternalConfig.RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION);
+  }
+
   /**
    * storage properties.
    */
