@@ -1165,7 +1165,8 @@ public class HoodieMetadataTableValidator implements Serializable {
     // Fetch latest mdt functional index records using FunctionalIndexSupport API
     // Generate functional index records using functional index initialization API and compare them
     FunctionalIndexSupport functionalIndexSupport = new FunctionalIndexSupport(engineContext.getSqlContext().sparkSession(), metadataContext.getMetadataConfig(), metaClient);
-    Dataset<Row> mdtIndexDf = functionalIndexSupport.loadFunctionalIndexDataFrame(indexPartition, false).cache();
+    Dataset<Row> mdtIndexDf = functionalIndexSupport.loadFunctionalIndexDataFrame(indexPartition, false)
+        .cache();
     Dataset<Row> fsFunctionalIndexDf = getFSFunctionalIndexRecords(engineContext, metaClient.getBasePath(), indexDefinition, metadataContext)
         .select(Arrays.stream(FunctionalIndexSupport.getTargetColumnStatsIndexColumns()).map(functions::col).toArray(Column[]::new))
         .cache();
@@ -1177,9 +1178,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       String fileName = row.getAs(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME);
       return diffRecordsFilenames.contains(fileName);
     });
-    if (diffRecordsFilenames.isEmpty()) {
-      throw new HoodieValidationException(String.format("Functional Index does not match : \nFS functional index diff records: %s \nCorresponding MDT functional index diff records: %s",
-          Arrays.toString(fsFunctionalIndexDf.collectAsList().toArray()), Arrays.toString(mdtFunctionalIndexDiffRecords.collectAsList().toArray())));
+    if (!diffRecordsFilenames.isEmpty()) {
+      throw new HoodieValidationException(String.format("Functional Index does not match : \nFS functional index diff records: %s \nCorresponding MDT functional index records: %s",
+          Arrays.toString(fsFunctionalIndexDiff.collectAsList().toArray()), Arrays.toString(mdtFunctionalIndexDiffRecords.collectAsList().toArray())));
     }
     fsFunctionalIndexDf.unpersist();
     mdtIndexDf.unpersist();
