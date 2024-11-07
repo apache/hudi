@@ -77,8 +77,8 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
   def invalidateCaches(): Unit
 
-  protected def getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
-                                                includeLogFiles: Boolean = false): (Set[String], Set[String]) = {
+  def getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                      includeLogFiles: Boolean = false): (Set[String], Set[String]) = {
     val (prunedPartitions, prunedFiles) = prunedPartitionsAndFileSlices.foldLeft((Set.empty[String], Set.empty[String])) {
       case ((partitionSet, fileSet), (partitionPathOpt, fileSlices)) =>
         val updatedPartitionSet = partitionPathOpt.map(_.path).map(partitionSet + _).getOrElse(partitionSet)
