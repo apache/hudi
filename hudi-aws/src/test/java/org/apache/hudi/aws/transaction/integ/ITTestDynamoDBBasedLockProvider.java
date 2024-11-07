@@ -188,7 +188,7 @@ public class ITTestDynamoDBBasedLockProvider {
       String basePath = (String) lockConfig.getConfig().get(HoodieCommonConfig.BASE_PATH.key());
       // Base path is constructed with prefix s3a, verify that for partition key calculation, s3a is replaced with s3
       Assertions.assertEquals(
-          tableName + '-' + HashID.generateXXHashAsString(SCHEME_S3 + URI_NO_CLOUD_PROVIDER_PREFIX, HashID.Size.BITS_64),
+          HashID.generateXXHashAsString(SCHEME_S3 + URI_NO_CLOUD_PROVIDER_PREFIX, HashID.Size.BITS_64),
           dynamoDbBasedLockProvider.getPartitionKey());
       Assertions.assertTrue(basePath.startsWith(SCHEME_S3A));
     }
