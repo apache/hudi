@@ -129,6 +129,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   // POST Requests
   public static final String REFRESH_TABLE = String.format("%s/%s", BASE_URL, "refresh/");
   public static final String INIT_TIMELINE = String.format("%s/%s", BASE_URL, "inittimeline");
+  public static final String CLOSE_TABLE = String.format("%s/%s", BASE_URL, "close/");
   public static final String LOAD_ALL_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadallpartitions/");
   public static final String LOAD_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadpartitions/");
 
@@ -596,7 +597,17 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public void close() {
-    closed = true;
+    if (!closed) {
+      LOG.info("Closing view for base path: {}", basePath);
+      try {
+        executeRequest(CLOSE_TABLE, getParams(), BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
+      } catch (IOException ex) {
+        LOG.warn("Failed to close table", ex);
+      }
+      closed = true;
+    } else {
+      LOG.info("Calling close on a closed view for base path: {}", basePath);
+    }
   }
 
   @Override

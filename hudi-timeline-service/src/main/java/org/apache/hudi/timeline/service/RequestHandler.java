@@ -455,6 +455,12 @@ public class RequestHandler {
       writeValueAsString(ctx, success);
     }, false));
 
+    app.post(RemoteHoodieTableFileSystemView.CLOSE_TABLE, new ViewHandler(ctx -> {
+      metricsRegistry.add("CLOSE_TABLE", 1);
+      viewManager.clearFileSystemView(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")));
+      writeValueAsString(ctx, true);
+    }, false));
+
     app.post(RemoteHoodieTableFileSystemView.LOAD_ALL_PARTITIONS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LOAD_ALL_PARTITIONS", 1);
       boolean success = sliceHandler

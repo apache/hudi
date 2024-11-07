@@ -30,6 +30,7 @@ import org.apache.hudi.timeline.TimelineServiceClientBase;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -40,6 +41,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.UUID;
 
+import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.CLOSE_TABLE;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.GET_TIMELINE_HASH;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.INIT_TIMELINE;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -90,5 +92,17 @@ class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSystemView 
 
     when(timelineServiceClient.makeRequest(any())).thenThrow(new IOException("Failed to connect to server"));
     assertThrows(HoodieRemoteException.class, () -> view.initialiseTimelineInRemoteView(metaClient.getActiveTimeline()));
+  }
+
+  @Test
+  void closeRemoteView() throws Exception {
+    FileSystemViewStorageConfig config = FileSystemViewStorageConfig.newBuilder().build();
+    RemoteHoodieTableFileSystemView view = new RemoteHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), timelineServiceClient, config);
+    when(timelineServiceClient.makeRequest(any())).thenReturn(new TimelineServiceClientBase.Response(OBJECT_MAPPER.writeValueAsString("true")));
+    view.close();
+    // calling a second time should not make a second request
+    view.close();
+    // verify request parameters
+    verify(timelineServiceClient).makeRequest(argThat(request -> request.getMethod().equals(TimelineServiceClientBase.RequestMethod.POST) && request.getPath().equals(CLOSE_TABLE)));
   }
 }

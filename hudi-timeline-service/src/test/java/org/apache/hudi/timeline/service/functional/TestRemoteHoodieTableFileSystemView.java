@@ -61,6 +61,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -72,9 +73,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSystemView {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestRemoteHoodieTableFileSystemView.class);
-  private static int DEFAULT_READ_TIMEOUT_SECS = 60;
+  private static final int DEFAULT_READ_TIMEOUT_SECS = 60;
 
   private TimelineService server = null;
+  private FileSystemViewManager viewManager;
   private RemoteHoodieTableFileSystemView view;
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
@@ -94,9 +96,9 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
       }
       TimelineServiceTestHarness.Builder builder = TimelineServiceTestHarness.newBuilder();
       builder.withNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
+      viewManager = FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig);
       server = builder.build(localEngineContext, new Configuration(),
-          TimelineService.Config.builder().serverPort(0).build(), FileSystem.get(new Configuration()),
-          FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
+          TimelineService.Config.builder().serverPort(0).build(), FileSystem.get(new Configuration()), viewManager);
       server.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);
@@ -181,6 +183,15 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     List<HoodieBaseFile> baseFiles = view.getAllBaseFiles("partition1").collect(Collectors.toList());
     assertEquals(1, baseFiles.size());
     assertEquals(instant1.getTimestamp(), view.getTimeline().getInstants().get(0).getTimestamp());
+  }
+
+  @Test
+  void testCloseView() {
+    // make sure view is loaded
+    view.getLatestBaseFiles();
+    assertTrue(viewManager.doesFileSystemViewExists(basePath));
+    view.close();
+    assertFalse(viewManager.doesFileSystemViewExists(basePath));
   }
 
   private Stream<HoodieFileGroup> readFileGroupStream(String result, ObjectMapper mapper) throws IOException {

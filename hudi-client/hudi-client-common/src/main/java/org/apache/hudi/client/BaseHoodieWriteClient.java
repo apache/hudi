@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -1403,12 +1404,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   @Override
   public void close() {
+    FileSystemViewStorageType viewStorageType = config.getViewStorageConfig().getStorageType();
     // Stop timeline-server if running
     super.close();
     // Calling this here releases any resources used by your index, so make sure to finish any related operations
     // before this point
     this.index.close();
     this.tableServiceClient.close();
+    // If there is a remote file system view used and the server is shared, the view on the server needs to be closed to free up memory
+    if (!shouldStopTimelineServer && (viewStorageType == FileSystemViewStorageType.REMOTE_ONLY || viewStorageType == FileSystemViewStorageType.REMOTE_FIRST)) {
+      createTable(config, hadoopConf).getHoodieView().close();
+    }
   }
 
   public void setWriteTimer(String commitType) {
