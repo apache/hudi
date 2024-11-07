@@ -255,18 +255,20 @@ public class EmbeddedTimelineService {
   }
 
   private static TimelineServiceIdentifier getTimelineServiceIdentifier(String hostAddr, HoodieWriteConfig writeConfig) {
-    return new TimelineServiceIdentifier(hostAddr, writeConfig.getMarkersType(), writeConfig.isMetadataTableEnabled(),
+    return new TimelineServiceIdentifier(hostAddr, writeConfig.getEmbeddedTimelineServerPort(), writeConfig.getMarkersType(), writeConfig.isMetadataTableEnabled(),
         writeConfig.isEarlyConflictDetectionEnable());
   }
 
   static class TimelineServiceIdentifier {
     private final String hostAddr;
+    private final int port;
     private final MarkerType markerType;
     private final boolean isMetadataEnabled;
     private final boolean isEarlyConflictDetectionEnable;
 
-    public TimelineServiceIdentifier(String hostAddr, MarkerType markerType, boolean isMetadataEnabled, boolean isEarlyConflictDetectionEnable) {
+    public TimelineServiceIdentifier(String hostAddr, int port, MarkerType markerType, boolean isMetadataEnabled, boolean isEarlyConflictDetectionEnable) {
       this.hostAddr = hostAddr;
+      this.port = port;
       this.markerType = markerType;
       this.isMetadataEnabled = isMetadataEnabled;
       this.isEarlyConflictDetectionEnable = isEarlyConflictDetectionEnable;
@@ -282,7 +284,7 @@ public class EmbeddedTimelineService {
       }
       TimelineServiceIdentifier that = (TimelineServiceIdentifier) o;
       if (this.hostAddr != null && that.hostAddr != null) {
-        return isMetadataEnabled == that.isMetadataEnabled && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
+        return port == that.port && isMetadataEnabled == that.isMetadataEnabled && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
             && hostAddr.equals(that.hostAddr) && markerType == that.markerType;
       } else {
         return (hostAddr == null && that.hostAddr == null);
@@ -291,7 +293,7 @@ public class EmbeddedTimelineService {
 
     @Override
     public int hashCode() {
-      return Objects.hash(hostAddr, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable);
+      return Objects.hash(hostAddr, port, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable);
     }
   }
 }
