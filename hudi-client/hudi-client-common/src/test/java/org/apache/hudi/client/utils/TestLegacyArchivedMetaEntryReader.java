@@ -56,7 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -120,7 +120,7 @@ public class TestLegacyArchivedMetaEntryReader {
         try {
           records.add(convertToAvroRecord(hoodieInstant, metaClient));
         } catch (Exception e) {
-          LOG.error("Failed to archive commits, .commit file: " + INSTANT_FILE_NAME_FACTORY.getFileName(hoodieInstant), e);
+          LOG.error("Failed to archive commits, .commit file: " + INSTANT_FILE_NAME_GENERATOR.getFileName(hoodieInstant), e);
           throw e;
         }
       }

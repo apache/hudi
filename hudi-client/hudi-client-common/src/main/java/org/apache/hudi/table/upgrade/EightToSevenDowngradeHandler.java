@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
@@ -81,7 +81,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
     List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
     if (!instants.isEmpty()) {
-      InstantFileNameFactory instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameFactory();
+      InstantFileNameGenerator instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
       CommitMetadataSerDeV2 commitMetadataSerDeV2 = new CommitMetadataSerDeV2();
       CommitMetadataSerDeV1 commitMetadataSerDeV1 = new CommitMetadataSerDeV1();
       ActiveTimelineV1 activeTimelineV1 = new ActiveTimelineV1(metaClient);

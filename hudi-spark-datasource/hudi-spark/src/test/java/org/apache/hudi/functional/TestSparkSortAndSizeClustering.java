@@ -57,7 +57,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness {
@@ -118,7 +118,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
-        metaClient, INSTANT_FACTORY.getClusteringCommitRequestedInstant(clusteringTime)).map(Pair::getRight).get();
+        metaClient, INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringTime)).map(Pair::getRight).get();
 
     List<HoodieClusteringGroup> inputGroups = plan.getInputGroups();
     assertEquals(1, inputGroups.size(), "Clustering plan will contain 1 input group");

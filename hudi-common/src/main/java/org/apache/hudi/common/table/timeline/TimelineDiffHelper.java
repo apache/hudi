@@ -31,8 +31,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * A helper class used to diff timeline.
@@ -55,8 +55,8 @@ public class TimelineDiffHelper {
     Option<HoodieInstant> firstInstantInNewTimeline = newT.firstInstant();
 
     if (lastSeenInstant.isPresent() && firstInstantInNewTimeline.isPresent()) {
-      if (compareTimestamps(lastSeenInstant.get().getRequestTime(),
-          LESSER_THAN, firstInstantInNewTimeline.get().getRequestTime())) {
+      if (compareTimestamps(lastSeenInstant.get().requestedTime(),
+          LESSER_THAN, firstInstantInNewTimeline.get().requestedTime())) {
         // The last seen instant is no longer in the timeline. Do not incrementally Sync.
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
@@ -101,19 +101,19 @@ public class TimelineDiffHelper {
                                                                                       HoodieTimeline newTimeline,
                                                                                       String completedAction, String pendingAction) {
     Set<HoodieInstant> newTimelineInstants = newTimeline.getInstantsAsStream().collect(Collectors.toSet());
-    InstantFactory factory = metaClient.getTimelineLayout().getInstantFactory();
+    InstantGenerator factory = metaClient.getTimelineLayout().getInstantGenerator();
 
     return pendingActionTimelineFromOld.getInstantsAsStream().map(instant -> {
       if (newTimelineInstants.contains(instant)) {
         return Pair.of(instant, instant);
       } else {
         HoodieInstant completedInstant =
-            factory.createNewInstant(State.COMPLETED, completedAction, instant.getRequestTime());
+            factory.createNewInstant(State.COMPLETED, completedAction, instant.requestedTime());
         if (newTimelineInstants.contains(completedInstant)) {
           return Pair.of(instant, completedInstant);
         }
         HoodieInstant inflightInstant =
-            factory.createNewInstant(State.INFLIGHT, pendingAction, instant.getRequestTime());
+            factory.createNewInstant(State.INFLIGHT, pendingAction, instant.requestedTime());
         if (newTimelineInstants.contains(inflightInstant)) {
           return Pair.of(instant, inflightInstant);
         }

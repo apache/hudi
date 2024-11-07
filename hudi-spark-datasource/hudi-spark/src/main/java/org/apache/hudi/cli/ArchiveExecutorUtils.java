@@ -21,7 +21,7 @@ package org.apache.hudi.cli;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
-import org.apache.hudi.client.timeline.TimelineArchiverFactory;
+import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -65,9 +65,8 @@ public final class ArchiveExecutorUtils {
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
     try {
-      HoodieTimelineArchiver archiver =
-          new TimelineArchiverFactory<HoodieAvroPayload, HoodieData<HoodieRecord<HoodieAvroPayload>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>().getTimelineArchiver(
-              table.getMetaClient().getTimelineLayoutVersion(), config, table);
+      HoodieTimelineArchiver<HoodieAvroPayload, HoodieData<HoodieRecord<HoodieAvroPayload>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> archiver =
+          TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
       archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
       LOG.error("Failed to archive with IOException: {}", ioe.getMessage());

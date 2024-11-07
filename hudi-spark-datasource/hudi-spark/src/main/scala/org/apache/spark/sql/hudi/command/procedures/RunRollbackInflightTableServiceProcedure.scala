@@ -72,13 +72,13 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder
       .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration)).setBasePath(basePath).build
-    val instantFactory = metaClient.getTimelineLayout.getInstantFactory
+    val instantFactory = metaClient.getTimelineLayout.getInstantGenerator
     // determine whether the current instant exists and whether it is clustering or compaction
     var isClustering: Boolean = true
     var instant: HoodieInstant = null
     val pendingCompactionInstant = instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, pendingInstant)
     val pendingClusteringInstant = ClusteringUtils.getInflightClusteringInstant(pendingInstant,
-      metaClient.getActiveTimeline, metaClient.getTimelineLayout.getInstantFactory)
+      metaClient.getActiveTimeline, metaClient.getTimelineLayout.getInstantGenerator)
     val timeline = metaClient.getActiveTimeline.getWriteTimeline
     if (!timeline.containsInstant(pendingCompactionInstant) && !pendingClusteringInstant.isPresent) {
       throw new RuntimeException(s"there is no pending instant : [$pendingClusteringInstant | $pendingCompactionInstant]")
@@ -100,14 +100,14 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
       val startTs = System.currentTimeMillis()
       doRollbackOnInflightInstant(client, instant, isClustering)
       if (deleteRequestInstantFile) {
-        val requestInstant = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction, instant.getRequestTime)
+        val requestInstant = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction, instant.requestedTime)
         metaClient.getActiveTimeline.deleteInstantFileIfExists(requestInstant)
       }
       val timeCost = System.currentTimeMillis() - startTs
       logInfo(s"Finish rollback pending instant: $pendingInstant," +
         s" time cost: $timeCost ms.")
 
-      Seq(Row(instant.getRequestTime, timeCost.toString))
+      Seq(Row(instant.requestedTime, timeCost.toString))
     } finally {
       if (client != null) {
         client.close()

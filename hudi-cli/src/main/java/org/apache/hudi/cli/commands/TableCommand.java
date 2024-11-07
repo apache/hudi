@@ -321,7 +321,7 @@ public class TableCommand {
         for (int i = 0; i < pendingCompactionInstants.size(); i++) {
           HoodieInstant compactionInstant = pendingCompactionInstants.get(i);
           LOG.info("compact {} instant {}", i + 1, compactionInstant);
-          String result = new CompactionCommand().compact(parallelism, "", master, sparkMemory, retry, compactionInstant.getRequestTime(), propsFilePath, configs);
+          String result = new CompactionCommand().compact(parallelism, "", master, sparkMemory, retry, compactionInstant.requestedTime(), propsFilePath, configs);
           LOG.info("compact instant {} result: {}", compactionInstant, result);
           if (!result.startsWith(CompactionCommand.COMPACTION_EXE_SUCCESSFUL)) {
             throw new HoodieException(String.format("Compact %s failed", compactionInstant));

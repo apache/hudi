@@ -29,12 +29,12 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
@@ -84,8 +84,8 @@ import java.util.stream.Stream;
 import static org.apache.hadoop.fs.FileUtil.copy;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
@@ -356,7 +356,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       // There is one to one mapping between record key and secondary key
       String recKey = "row" + i++;
       Set<String> recKeys = validator.getFSSecondaryKeyToRecordKeys(new HoodieSparkEngineContext(jsc, sqlContext), basePath,
-              metaClient.getActiveTimeline().lastInstant().get().getRequestTime(), "not_record_key_col", Collections.singletonList(secKey))
+              metaClient.getActiveTimeline().lastInstant().get().requestedTime(), "not_record_key_col", Collections.singletonList(secKey))
           .get(secKey);
       assertEquals(Collections.singleton(recKey), recKeys);
     }
@@ -522,11 +522,11 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     if (testFailureCase) {
       // 3rd partition which is additional in MDT should have creation time before last instant in timeline.
 
-      String partition3CreationTime = ActiveTimelineUtils.createNewInstantTime(true, timeGenerator);
+      String partition3CreationTime = TimelineUtils.generateInstantTime(true, timeGenerator);
       Thread.sleep(100);
-      String lastIntantCreationTime = ActiveTimelineUtils.createNewInstantTime(true, timeGenerator);
+      String lastIntantCreationTime = TimelineUtils.generateInstantTime(true, timeGenerator);
 
-      HoodieInstant lastInstant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, lastIntantCreationTime);
+      HoodieInstant lastInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, lastIntantCreationTime);
       when(completedTimeline.lastInstant()).thenReturn(Option.of(lastInstant));
       validator.setPartitionCreationTime(Option.of(partition3CreationTime));
       // validate that exception is thrown since MDT has one additional partition.
@@ -535,11 +535,11 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       });
     } else {
       // 3rd partition creation time is > last completed instant
-      HoodieInstant lastInstant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
-          ActiveTimelineUtils.createNewInstantTime(true, timeGenerator));
+      HoodieInstant lastInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+          TimelineUtils.generateInstantTime(true, timeGenerator));
       when(completedTimeline.lastInstant()).thenReturn(Option.of(lastInstant));
       Thread.sleep(100);
-      validator.setPartitionCreationTime(Option.of(ActiveTimelineUtils.createNewInstantTime(true, timeGenerator)));
+      validator.setPartitionCreationTime(Option.of(TimelineUtils.generateInstantTime(true, timeGenerator)));
 
       // validate that all 3 partitions are returned
       assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));
@@ -581,8 +581,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     FileSystem fs = HadoopFSUtils.getFs(newLogFilePath, new Configuration(false));
     fs.copyFromLocalFile(new Path(basePath, writeStatToCopy.getPath()), new Path(basePath, newLogFilePath));
     // remove the existing instant and rewrite with the new metadata
-    assertTrue(fs.delete(new Path(basePath, String.format(".hoodie/%s", INSTANT_FILE_NAME_FACTORY.getFileName(instantToOverwrite)))));
-    timeline.saveAsComplete(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, instantToOverwrite.getAction(), instantToOverwrite.getRequestTime(),
+    assertTrue(fs.delete(new Path(basePath, String.format(".hoodie/%s", INSTANT_FILE_NAME_GENERATOR.getFileName(instantToOverwrite)))));
+    timeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instantToOverwrite.getAction(), instantToOverwrite.requestedTime(),
             instantToOverwrite.getCompletionTime()), serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata));
 
     for (int i = 0; i < 5; i++) {
@@ -705,9 +705,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())).build();
     // moving out the completed commit meta file to a temp location
     HoodieInstant lastInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get();
-    String latestCompletedCommitMetaFile = basePath + "/.hoodie/" + INSTANT_FILE_NAME_FACTORY.getFileName(lastInstant);
+    String latestCompletedCommitMetaFile = basePath + "/.hoodie/" + INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant);
     String tempDir = getTempLocation();
-    String destFilePath = tempDir + "/" + INSTANT_FILE_NAME_FACTORY.getFileName(lastInstant);
+    String destFilePath = tempDir + "/" + INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant);
     FileUtil.move(latestCompletedCommitMetaFile, destFilePath);
 
     MockHoodieMetadataTableValidatorForRli validator = new MockHoodieMetadataTableValidatorForRli(jsc, config);

@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparator;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
@@ -181,7 +181,7 @@ public class TimelineCommand {
 
     final InstantFileNameParser instantFileNameParser = metaClient.getTimelineLayout().getInstantFileNameParser();
     final InstantComparator instantComparator = metaClient.getTimelineLayout().getInstantComparator();
-    final InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+    final InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
 
     Stream<HoodieInstantWithModTime> instantStream =
         HoodieTableMetaClient.scanFiles(storage, metaPath, path -> {
@@ -190,7 +190,7 @@ public class TimelineCommand {
           return metaClient.getActiveTimeline().getValidExtensionsInActiveTimeline().contains(extension);
         }).stream().map(storagePathInfo -> new HoodieInstantWithModTime(storagePathInfo, instantFactory, instantComparator));
     instantStream.forEach(instant -> {
-      instantMap.computeIfAbsent(instant.getRequestTime(), t -> new HashMap<>())
+      instantMap.computeIfAbsent(instant.requestedTime(), t -> new HashMap<>())
           .put(instant.getState(), instant);
     });
     return instantMap;
@@ -217,7 +217,7 @@ public class TimelineCommand {
     Map<String, List<String>> rollbackInfoMap = getRolledBackInstantInfo(timeline);
     final List<Comparable[]> rows = timeline.getInstantsAsStream().map(instant -> {
       Comparable[] row = new Comparable[6];
-      String instantTimestamp = instant.getRequestTime();
+      String instantTimestamp = instant.requestedTime();
       String rollbackInfoString = showRollbackInfo
           ? getRollbackInfoString(Option.of(instant), timeline, rollbackInfoMap) : "";
 
@@ -301,15 +301,15 @@ public class TimelineCommand {
   }
 
   private Option<HoodieInstant> getInstant(HoodieTimeline timeline, String instantTimestamp) {
-    return timeline.filter(instant -> instant.getRequestTime().equals(instantTimestamp)).firstInstant();
+    return timeline.filter(instant -> instant.requestedTime().equals(instantTimestamp)).firstInstant();
   }
 
   private String getInstantToRollback(HoodieTimeline timeline, HoodieInstant instant) {
     try {
       if (instant.isInflight()) {
-        InstantFactory instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantFactory();
+        InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
         HoodieInstant instantToUse = instantFactory.createNewInstant(
-            HoodieInstant.State.REQUESTED, instant.getAction(), instant.getRequestTime());
+            HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime());
         HoodieRollbackPlan metadata = TimelineMetadataUtils
             .deserializeAvroMetadata(timeline.getInstantDetails(instantToUse).get(), HoodieRollbackPlan.class);
         return metadata.getInstantToRollback().getCommitTime();
@@ -333,19 +333,19 @@ public class TimelineCommand {
     rollbackInstants.forEach(rollbackInstant -> {
       try {
         if (rollbackInstant.isInflight()) {
-          InstantFactory instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantFactory();
+          InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
           HoodieInstant instantToUse = instantFactory.createNewInstant(
-              HoodieInstant.State.REQUESTED, rollbackInstant.getAction(), rollbackInstant.getRequestTime());
+              HoodieInstant.State.REQUESTED, rollbackInstant.getAction(), rollbackInstant.requestedTime());
           HoodieRollbackPlan metadata = TimelineMetadataUtils
               .deserializeAvroMetadata(timeline.getInstantDetails(instantToUse).get(), HoodieRollbackPlan.class);
           rollbackInfoMap.computeIfAbsent(metadata.getInstantToRollback().getCommitTime(), k -> new ArrayList<>())
-              .add(rollbackInstant.getRequestTime());
+              .add(rollbackInstant.requestedTime());
         } else {
           HoodieRollbackMetadata metadata = TimelineMetadataUtils
               .deserializeAvroMetadata(timeline.getInstantDetails(rollbackInstant).get(), HoodieRollbackMetadata.class);
           metadata.getCommitsRollback().forEach(instant -> {
             rollbackInfoMap.computeIfAbsent(instant, k -> new ArrayList<>())
-                .add(rollbackInstant.getRequestTime());
+                .add(rollbackInstant.requestedTime());
           });
         }
       } catch (IOException e) {
@@ -364,7 +364,7 @@ public class TimelineCommand {
       if (HoodieTimeline.ROLLBACK_ACTION.equalsIgnoreCase(instant.get().getAction())) {
         rollbackInfoString = "\nRolls back\n" + getInstantToRollback(timeline, instant.get());
       } else {
-        String instantTimestamp = instant.get().getRequestTime();
+        String instantTimestamp = instant.get().requestedTime();
         if (rollbackInfoMap.containsKey(instantTimestamp)) {
           rollbackInfoString = "\nRolled back by\n" + String.join(",\n", rollbackInfoMap.get(instantTimestamp));
         }
@@ -377,12 +377,12 @@ public class TimelineCommand {
 
     private final long modificationTimeMs;
 
-    public HoodieInstantWithModTime(StoragePathInfo pathInfo, InstantFactory instantFactory, InstantComparator instantComparator) {
-      this(instantFactory.createNewInstant(pathInfo), pathInfo, instantComparator.getRequestTimePrimaryOrderingComparator());
+    public HoodieInstantWithModTime(StoragePathInfo pathInfo, InstantGenerator instantFactory, InstantComparator instantComparator) {
+      this(instantFactory.createNewInstant(pathInfo), pathInfo, instantComparator.requestedTimeOrderedComparator());
     }
 
     public HoodieInstantWithModTime(HoodieInstant instant, StoragePathInfo pathInfo, Comparator<HoodieInstant> comparator) {
-      super(instant.getState(), instant.getAction(), instant.getRequestTime(), instant.getCompletionTime(), comparator);
+      super(instant.getState(), instant.getAction(), instant.requestedTime(), instant.getCompletionTime(), comparator);
       this.modificationTimeMs = pathInfo.getModificationTime();
     }
 

@@ -85,7 +85,7 @@ public final class RepairUtils {
       HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     if (!instant.isCompleted()) {
       throw new HoodieException("Cannot get base and log file paths from "
-          + "instant not completed: " + instant.getRequestTime());
+          + "instant not completed: " + instant.requestedTime());
     }
 
     switch (instant.getAction()) {
@@ -122,7 +122,7 @@ public final class RepairUtils {
       String instantToRepair, List<String> baseAndLogFilesFromFs,
       HoodieActiveTimeline activeTimeline, HoodieArchivedTimeline archivedTimeline) {
     // Skips the instant if it is requested or inflight in active timeline
-    if (!activeTimeline.filter(instant -> instant.getRequestTime().equals(instantToRepair)
+    if (!activeTimeline.filter(instant -> instant.requestedTime().equals(instantToRepair)
         && !instant.isCompleted()).empty()) {
       return Collections.emptyList();
     }
@@ -131,7 +131,7 @@ public final class RepairUtils {
       boolean doesInstantExist = false;
       Option<Set<String>> filesFromTimeline = Option.empty();
       Option<HoodieInstant> instantOption = activeTimeline.filterCompletedInstants().filter(
-          instant -> instant.getRequestTime().equals(instantToRepair)).firstInstant();
+          instant -> instant.requestedTime().equals(instantToRepair)).firstInstant();
       if (instantOption.isPresent()) {
         // Completed instant in active timeline
         doesInstantExist = true;
@@ -139,7 +139,7 @@ public final class RepairUtils {
             activeTimeline, instantOption.get());
       } else {
         instantOption = archivedTimeline.filterCompletedInstants().filter(
-            instant -> instant.getRequestTime().equals(instantToRepair)).firstInstant();
+            instant -> instant.requestedTime().equals(instantToRepair)).firstInstant();
         if (instantOption.isPresent()) {
           // Completed instant in archived timeline
           doesInstantExist = true;

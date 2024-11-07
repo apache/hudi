@@ -223,7 +223,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
       table.getMetaClient().reloadActiveTimeline();
       HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
-          inflightInstant.getRequestTime(),
+          inflightInstant.requestedTime(),
           Option.of(timer.endTimer()),
           cleanStats,
           cleanerPlan.getExtraMetadata()
@@ -231,10 +231,10 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       if (!skipLocking) {
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
-      writeTableMetadata(metadata, inflightInstant.getRequestTime());
+      writeTableMetadata(metadata, inflightInstant.requestedTime());
       table.getActiveTimeline().transitionCleanInflightToComplete(false,
           inflightInstant, TimelineMetadataUtils.serializeCleanMetadata(metadata));
-      LOG.info("Marked clean started on " + inflightInstant.getRequestTime() + " as complete");
+      LOG.info("Marked clean started on " + inflightInstant.requestedTime() + " as complete");
       return metadata;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to clean up after commit", e);
@@ -255,7 +255,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       // try to clean old history schema.
       try {
         FileBasedInternalSchemaStorageManager fss = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
-        fss.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.getRequestTime()).collect(Collectors.toList()));
+        fss.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.requestedTime()).collect(Collectors.toList()));
       } catch (Exception e) {
         // we should not affect original clean logic. Swallow exception and log warn.
         LOG.warn("failed to clean old history schema");
@@ -290,7 +290,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   private void checkIfOtherWriterCommitted(HoodieInstant hoodieInstant, HoodieIOException e) {
     table.getMetaClient().reloadActiveTimeline();
-    if (table.getCleanTimeline().filterCompletedInstants().containsInstant(hoodieInstant.getRequestTime())) {
+    if (table.getCleanTimeline().filterCompletedInstants().containsInstant(hoodieInstant.requestedTime())) {
       LOG.warn("Clean operation was completed by another writer for instant: " + hoodieInstant);
     } else {
       LOG.error("Failed to perform previous clean operation, instant: " + hoodieInstant, e);

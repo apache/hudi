@@ -48,9 +48,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * A file-system view implementation on top of embedded Rocks DB store. For each table : 3 column Family is added for
@@ -549,7 +549,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   protected void removeReplacedFileIdsAtInstants(Set<String> instants) {
     //TODO can we make this more efficient by storing reverse mapping (Instant -> FileGroupId) as well?
     Stream<String> keysToDelete = rocksDB.<HoodieInstant>prefixSearch(schemaHelper.getColFamilyForReplacedFileGroups(), "")
-        .filter(entry -> instants.contains(entry.getValue().getRequestTime()))
+        .filter(entry -> instants.contains(entry.getValue().requestedTime()))
         .map(Pair::getKey);
 
     rocksDB.writeBatch(batch ->

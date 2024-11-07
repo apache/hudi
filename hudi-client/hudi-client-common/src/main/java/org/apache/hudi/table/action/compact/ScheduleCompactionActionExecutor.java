@@ -22,10 +22,10 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -133,7 +133,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     if (deltaCommitsInfo.isPresent()) {
       return Option.of(Pair.of(
           deltaCommitsInfo.get().getLeft().countInstants(),
-          deltaCommitsInfo.get().getRight().getRequestTime()));
+          deltaCommitsInfo.get().getRight().requestedTime()));
     }
     return Option.empty();
   }
@@ -144,7 +144,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     if (deltaCommitsInfo.isPresent()) {
       return Option.of(Pair.of(
             deltaCommitsInfo.get().getLeft().countInstants(),
-            deltaCommitsInfo.get().getRight().getRequestTime()));
+            deltaCommitsInfo.get().getRight().requestedTime()));
     }
     return Option.empty();
   }
@@ -210,7 +210,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
   }
 
   private Long parsedToSeconds(String time) {
-    return ActiveTimelineUtils.parseDateFromInstantTimeSafely(time).orElseThrow(() -> new HoodieCompactionException("Failed to parse timestamp " + time))
+    return TimelineUtils.parseDateFromInstantTimeSafely(time).orElseThrow(() -> new HoodieCompactionException("Failed to parse timestamp " + time))
             .getTime() / 1000;
   }
 }

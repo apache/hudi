@@ -61,7 +61,7 @@ public class TestSnapshotQuerySplitterImpl extends SnapshotLoadQuerySplitter {
     int maxRowsPerBatch = properties.getInteger(MAX_ROWS_PER_BATCH, 1);
     List<String> instantTimeList = queryContext.getInstantTimeList();
     Map<String, String> instantToCompletionTimeMap = queryContext.getInstants().stream()
-        .collect(Collectors.toMap(HoodieInstant::getRequestTime, HoodieInstant::getCompletionTime));
+        .collect(Collectors.toMap(HoodieInstant::requestedTime, HoodieInstant::getCompletionTime));
     Map<String, Triple<Long, String, String>> completionTimeToStats =
         df.select(col(COMMIT_TIME_METADATA_FIELD), col(PARTITION_PATH_METADATA_FIELD))
             .filter(col(COMMIT_TIME_METADATA_FIELD).isin(instantTimeList.toArray()))

@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
@@ -182,7 +182,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     queryParameters.forEach(builder::addParameter);
 
     // Adding mandatory parameters - Last instants affecting file-slice
-    timeline.lastInstant().ifPresent(instant -> builder.addParameter(LAST_INSTANT_TS, instant.getRequestTime()));
+    timeline.lastInstant().ifPresent(instant -> builder.addParameter(LAST_INSTANT_TS, instant.requestedTime()));
     builder.addParameter(TIMELINE_HASH, timeline.getTimelineHash());
 
     String url = builder.toString();
@@ -501,7 +501,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<ClusteringOpDTO> dtos = executeRequest(PENDING_CLUSTERING_FILEGROUPS_URL, paramsMap,
           CLUSTERING_OP_DTOS_REFERENCE, RequestMethod.GET);
-      InstantFactory factory = metaClient.getTimelineLayout().getInstantFactory();
+      InstantGenerator factory = metaClient.getTimelineLayout().getInstantGenerator();
       return dtos.stream().map(dto -> ClusteringOpDTO.toClusteringOperation(dto, factory));
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
@@ -514,7 +514,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<InstantDTO> instants = executeRequest(LAST_INSTANT_URL, paramsMap, INSTANT_DTOS_REFERENCE, RequestMethod.GET);
       return Option.fromJavaOptional(instants.stream()
-          .map(dto -> InstantDTO.toInstant(dto, metaClient.getTimelineLayout().getInstantFactory())).findFirst());
+          .map(dto -> InstantDTO.toInstant(dto, metaClient.getTimelineLayout().getInstantGenerator())).findFirst());
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

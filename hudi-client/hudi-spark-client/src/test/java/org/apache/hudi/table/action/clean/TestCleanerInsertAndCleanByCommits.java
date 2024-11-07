@@ -59,8 +59,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_COMMITS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.table.TestCleaner.insertFirstBigBatchForClientCleanerTest;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -189,7 +189,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
     HoodieInstant lastInstant = commitsTimeline.lastInstant().get();
 
     if (isAsyncClean) {
-      commitsTimeline = commitsTimeline.findInstantsBefore(lastInstant.getRequestTime());
+      commitsTimeline = commitsTimeline.findInstantsBefore(lastInstant.requestedTime());
     }
     // This corresponds to the `earliestCommitToRetain` in {@code CleanPlanner::getFilesToCleanKeepingLatestCommits}
     Option<HoodieInstant> earliestRetainedCommit = commitsTimeline.nthFromLastInstant(maxCommitsToRetain - 1);
@@ -212,9 +212,9 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
     // The timeline of commits is traversed in reverse order to achieve this.
     for (HoodieInstant instant : commitsTimeline.getReverseOrderedInstants().collect(Collectors.toList())) {
       TimelineLayout layout = TimelineLayout.getLayout(commitsTimeline.getTimelineLayoutVersion());
-      List<HoodieWriteStat> hoodieWriteStatList = commitWriteStatsMap.computeIfAbsent(instant.getRequestTime(), newInstant -> {
+      List<HoodieWriteStat> hoodieWriteStatList = commitWriteStatsMap.computeIfAbsent(instant.requestedTime(), newInstant -> {
         try {
-          HoodieInstant instant1 = timeline.filter(inst -> inst.getRequestTime().equals(newInstant))
+          HoodieInstant instant1 = timeline.filter(inst -> inst.requestedTime().equals(newInstant))
               .firstInstant().get();
           return layout.getCommitMetadataSerDe().deserialize(instant1, timeline.getInstantDetails(instant1).get(), HoodieCommitMetadata.class)
               .getWriteStats();
@@ -227,11 +227,11 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
         if (remainingFileGroupSet.contains(partitionFileIdPair)) {
           if (earliestRetainedCommit.isPresent()
               && compareTimestamps(
-              instant.getRequestTime(), LESSER_THAN, earliestRetainedCommit.get().getRequestTime())) {
+              instant.requestedTime(), LESSER_THAN, earliestRetainedCommit.get().requestedTime())) {
             remainingFileGroupSet.remove(partitionFileIdPair);
           }
           expectedInstantTimeMap.computeIfAbsent(partitionFileIdPair, k -> new HashSet<>())
-              .add(instant.getRequestTime());
+              .add(instant.requestedTime());
         }
       });
       if (remainingFileGroupSet.isEmpty()) {
@@ -249,7 +249,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
           commitTimes.add(value.getCommitTime());
         });
         if (isAsyncClean) {
-          commitTimes.remove(lastInstant.getRequestTime());
+          commitTimes.remove(lastInstant.requestedTime());
         }
 
         assertEquals(

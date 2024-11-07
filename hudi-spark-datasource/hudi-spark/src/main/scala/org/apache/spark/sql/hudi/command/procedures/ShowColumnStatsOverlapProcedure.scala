@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
-import org.apache.hudi.common.table.timeline.{AbstractHoodieBaseTimeline, HoodieInstant}
+import org.apache.hudi.common.table.timeline.{BaseHoodieTimeline, HoodieInstant}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{Option => HOption}
@@ -264,7 +264,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
 
     val maxInstant = metaClient.createNewInstantTime()
-    val instants = timeline.getInstants.iterator().asScala.filter(_.getRequestTime < maxInstant)
+    val instants = timeline.getInstants.iterator().asScala.filter(_.requestedTime < maxInstant)
 
     val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
       with java.io.Serializable {

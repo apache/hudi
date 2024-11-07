@@ -23,9 +23,9 @@ import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantComparatorUtils;
-import org.apache.hudi.common.table.timeline.InstantFactory;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantFactoryV1;
+import org.apache.hudi.common.table.timeline.InstantComparison;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -47,7 +47,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 
 public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchivedTimeline {
   private static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
@@ -67,7 +67,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    */
   private String cursorInstant;
   private final ArchivedTimelineLoader timelineLoader = new ArchivedTimelineLoaderV2();
-  private final InstantFactory instantFactory = new InstantFactoryV1();
+  private final InstantGenerator instantFactory = new InstantGeneratorV1();
 
   /**
    * Loads all the archived instants.
@@ -77,7 +77,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   public ArchivedTimelineV2(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
     setInstants(this.loadInstants());
-    this.cursorInstant = firstInstant().map(HoodieInstant::getRequestTime).orElse(null);
+    this.cursorInstant = firstInstant().map(HoodieInstant::requestedTime).orElse(null);
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
@@ -141,12 +141,12 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   @Override
   public void clearInstantDetailsFromMemory(String startTs, String endTs) {
     this.findInstantsInRange(startTs, endTs).getInstants().forEach(instant ->
-        this.readCommits.remove(instant.getRequestTime()));
+        this.readCommits.remove(instant.requestedTime()));
   }
 
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    return Option.ofNullable(readCommits.get(instant.getRequestTime()));
+    return Option.ofNullable(readCommits.get(instant.requestedTime()));
   }
 
   @Override
@@ -157,7 +157,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   @Override
   public HoodieArchivedTimeline reload(String startTs) {
     if (this.cursorInstant != null) {
-      if (InstantComparatorUtils.compareTimestamps(startTs, LESSER_THAN, this.cursorInstant)) {
+      if (InstantComparison.compareTimestamps(startTs, LESSER_THAN, this.cursorInstant)) {
         appendInstants(loadInstants(new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTs, this.cursorInstant), HoodieArchivedTimeline.LoadMode.METADATA));
         this.cursorInstant = startTs;
       }
@@ -236,7 +236,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION,
         LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION);
     return new BaseTimelineV2(getInstantsAsStream().filter(i ->
-            readCommits.containsKey(i.getRequestTime()))
+            readCommits.containsKey(i.requestedTime()))
         .filter(s -> validActions.contains(s.getAction())), details);
   }
 }

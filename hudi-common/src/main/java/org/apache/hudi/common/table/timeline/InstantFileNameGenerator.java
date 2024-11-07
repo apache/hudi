@@ -23,7 +23,7 @@ import java.io.Serializable;
 /**
  * Factory for generating instants filenames.
  */
-public interface InstantFileNameFactory extends Serializable {
+public interface InstantFileNameGenerator extends Serializable {
 
   String makeCommitFileName(String instantTime);
 

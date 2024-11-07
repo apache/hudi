@@ -41,7 +41,7 @@ public class RestoreUtils {
    */
   public static HoodieRestorePlan getRestorePlan(HoodieTableMetaClient metaClient, HoodieInstant restoreInstant)
       throws IOException {
-    final HoodieInstant requested = metaClient.getTimelineLayout().getInstantFactory().getRollbackRequestedInstant(restoreInstant);
+    final HoodieInstant requested = metaClient.getTimelineLayout().getInstantGenerator().getRollbackRequestedInstant(restoreInstant);
     return TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().readRestoreInfoAsBytes(requested).get(), HoodieRestorePlan.class);
   }
@@ -51,7 +51,7 @@ public class RestoreUtils {
     String firstRollback = plan.getInstantsToRollback().get(plan.getInstantsToRollback().size() - 1).getCommitTime();
     //find last instant before first rollback
     Option<HoodieInstant> savepointInstance = table.getActiveTimeline().getSavePointTimeline().findInstantsBefore(firstRollback).lastInstant();
-    return savepointInstance.isPresent() ? savepointInstance.get().getRequestTime() : null;
+    return savepointInstance.isPresent() ? savepointInstance.get().requestedTime() : null;
   }
 
   /**

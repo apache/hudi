@@ -37,7 +37,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -100,7 +100,7 @@ public class TestDeletePartitionUtils {
 
   private static Stream<Pair<HoodieFileGroupId, HoodieInstant>> createFileGroupsInPendingClustering(boolean hasFileGroupsInPendingClustering) {
     HoodieFileGroupId hoodieFileGroupId = new HoodieFileGroupId(getPartitionName(hasFileGroupsInPendingClustering), "fileId");
-    HoodieInstant hoodieInstant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, "replacecommit", HARDCODED_INSTANT_TIME);
+    HoodieInstant hoodieInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, "replacecommit", HARDCODED_INSTANT_TIME);
     return Stream.of(Pair.of(hoodieFileGroupId, hoodieInstant));
   }
 

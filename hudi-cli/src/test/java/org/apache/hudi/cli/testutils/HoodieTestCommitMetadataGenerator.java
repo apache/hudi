@@ -41,7 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
@@ -89,9 +89,9 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
   public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
       String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
     List<String> commitFileNames = Arrays.asList(
-        INSTANT_FILE_NAME_FACTORY.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        INSTANT_FILE_NAME_FACTORY.makeInflightCommitFileName(commitTime),
-        INSTANT_FILE_NAME_FACTORY.makeRequestedCommitFileName(commitTime));
+        INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeInflightCommitFileName(commitTime),
+        INSTANT_FILE_NAME_GENERATOR.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
               generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, true);
@@ -104,9 +104,9 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
                                                   Option<Integer> updates, Map<String, String> extraMetadata,
                                                   boolean setDefaultFileId) throws Exception {
     List<String> commitFileNames = Arrays.asList(
-        INSTANT_FILE_NAME_FACTORY.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        INSTANT_FILE_NAME_FACTORY.makeInflightCommitFileName(commitTime),
-        INSTANT_FILE_NAME_FACTORY.makeRequestedCommitFileName(commitTime));
+        INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeInflightCommitFileName(commitTime),
+        INSTANT_FILE_NAME_GENERATOR.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
           generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, setDefaultFileId);

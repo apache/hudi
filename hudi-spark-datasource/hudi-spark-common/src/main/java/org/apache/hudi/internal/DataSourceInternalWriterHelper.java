@@ -100,7 +100,7 @@ public class DataSourceInternalWriterHelper {
 
   public void createInflightCommit() {
     metaClient.getActiveTimeline().transitionRequestedToInflight(
-        metaClient.getTimelineLayout().getInstantFactory().createNewInstant(State.REQUESTED,
+        metaClient.getTimelineLayout().getInstantGenerator().createNewInstant(State.REQUESTED,
                           CommitUtils.getCommitActionType(operationType, metaClient.getTableType()),
                           instantTime), Option.empty());
   }

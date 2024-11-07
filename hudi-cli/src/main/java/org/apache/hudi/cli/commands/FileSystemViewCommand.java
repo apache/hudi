@@ -51,8 +51,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 
 /**
  * CLI command to display file system options.
@@ -153,7 +153,7 @@ public class FileSystemViewCommand {
     } else {
       if (maxInstant.isEmpty()) {
         maxInstant = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
-            .get().getRequestTime();
+            .get().requestedTime();
       }
       fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, maxInstant);
     }
@@ -270,7 +270,7 @@ public class FileSystemViewCommand {
       } else {
         predicate = GREATER_THAN;
       }
-      instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.getRequestTime()));
+      instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.requestedTime()));
     }
     TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
     HoodieTimeline filteredTimeline = timelineFactory.createDefaultTimeline(instantsStream,

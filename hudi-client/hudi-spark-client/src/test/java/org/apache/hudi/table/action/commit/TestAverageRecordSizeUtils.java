@@ -45,7 +45,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -102,7 +102,7 @@ public class TestAverageRecordSizeUtils {
         .build(false);
     BaseTimelineV2 commitsTimeline = new BaseTimelineV2();
     List<HoodieInstant> instants = Collections.singletonList(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1"));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1"));
 
     when(mockTimeline.getInstants()).thenReturn(instants);
     when(mockTimeline.getReverseOrderedInstants()).then(i -> instants.stream());
@@ -130,62 +130,62 @@ public class TestAverageRecordSizeUtils {
     // COW
     // straight forward. just 1 instant.
     arguments.add(Arguments.of(
-        Arrays.asList(Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
+        Arrays.asList(Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant)), 10000000L, 100L)))), 100L));
 
     // two instants. latest instant should be honored
     arguments.add(Arguments.of(
-        Arrays.asList(Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
+        Arrays.asList(Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant)), 10000000L, 100L))),
-            Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant + 100)),
+            Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant + 100)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant + 100)), 10000000L, 200L)))), 200L));
 
     // two instants, while 2nd one is smaller in size so as to not meet the threshold. So, 1st one should be honored
     arguments.add(Arguments.of(
-        Arrays.asList(Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
+        Arrays.asList(Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant)), 10000000L, 100L))),
-            Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
+            Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant + 100)), 10000L, 200L)))), 100L));
 
     // 2nd instance is replace commit and should be honored.
     arguments.add(Arguments.of(
-        Arrays.asList(Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
+        Arrays.asList(Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant)), 10000000L, 100L))),
-            Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, Long.toString(baseInstant + 100)),
+            Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, Long.toString(baseInstant + 100)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant + 100)), 10000000L, 200L)))), 200L));
 
     // MOR
     // for delta commits, only parquet files should be accounted for.
     arguments.add(Arguments.of(
-        Arrays.asList(Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
+        Arrays.asList(Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant)), 10000000L, 100L))),
-            Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
+            Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant + 100)), 10000000L, 200L)))), 200L));
 
     // delta commit has a mix of parquet and log files. only parquet files should be accounted for.
     arguments.add(Arguments.of(
-        Arrays.asList(Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant)),
+        Arrays.asList(Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant)), 1000000L, 100L))),
-            Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
+            Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
                 Arrays.asList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant + 100)), 10000000L, 200L),
                     new HWriteStat(getLogFileName(String.valueOf(baseInstant + 100)), 10000000L, 300L)))), 200L));
 
     // 2nd delta commit only has log files. and so we honor 1st delta commit size.
     arguments.add(Arguments.of(
-        Arrays.asList(Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant)),
+        Arrays.asList(Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant)), 10000000L, 100L))),
-            Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
+            Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
                 Arrays.asList(new HWriteStat(getLogFileName(String.valueOf(baseInstant + 100)), 1000000L, 200L),
                     new HWriteStat(getLogFileName(String.valueOf(baseInstant + 100)), 10000000L, 300L)))), 100L));
 
     // replace commit should be honored.
     arguments.add(Arguments.of(
-        Arrays.asList(Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant)),
+        Arrays.asList(Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant)), 1000000L, 100L))),
-            Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
+            Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
                 Arrays.asList(new HWriteStat(getLogFileName(String.valueOf(baseInstant + 100)), 1000000L, 200L),
                     new HWriteStat(getLogFileName(String.valueOf(baseInstant + 100)), 1000000L, 300L))),
-            Pair.of(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, Long.toString(baseInstant)),
+            Pair.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, Long.toString(baseInstant)),
                 Collections.singletonList(new HWriteStat(getBaseFileName(String.valueOf(baseInstant + 200)), 1000000L, 400L)))), 400L));
     return arguments.stream();
   }

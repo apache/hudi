@@ -282,7 +282,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Option<HoodieInstant> deltaCommit =
         reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getRequestTime(),
+    assertEquals(commitTime, deltaCommit.get().requestedTime(),
         "Delta commit should be specified value");
 
     Option<HoodieInstant> commit =
@@ -330,7 +330,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Option<HoodieInstant> deltaCommit =
         reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getRequestTime(),
+    assertEquals(commitTime, deltaCommit.get().requestedTime(),
         "Latest Delta commit should match specified time");
 
     Option<HoodieInstant> commit =

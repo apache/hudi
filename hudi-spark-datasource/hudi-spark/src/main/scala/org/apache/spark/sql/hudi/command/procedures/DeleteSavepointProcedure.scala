@@ -56,7 +56,7 @@ class DeleteSavepointProcedure extends BaseProcedure with ProcedureBuilder with 
     val completedInstants = metaClient.getActiveTimeline.getSavePointTimeline.filterCompletedInstants
     if (completedInstants.empty) throw new HoodieException("There are no completed savepoint to run delete")
     if (StringUtils.isNullOrEmpty(instantTime)) {
-      instantTime = completedInstants.lastInstant.get.getRequestTime
+      instantTime = completedInstants.lastInstant.get.requestedTime
     }
     val instantTimes = instantTime.split(",")
     val client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty,
@@ -64,7 +64,7 @@ class DeleteSavepointProcedure extends BaseProcedure with ProcedureBuilder with 
     var result = true
     var currentInstant = ""
     for (it <- instantTimes) {
-      val instantFactory = metaClient.getTimelineLayout.getInstantFactory
+      val instantFactory = metaClient.getTimelineLayout.getInstantGenerator
       val savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, it)
       currentInstant = it
       if (!completedInstants.containsInstant(savePoint)) {

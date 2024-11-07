@@ -140,7 +140,7 @@ class ShowFileStatusProcedure extends BaseProcedure
       FileStatusInfo(
         FileStatus.DELETED.toString,
         HoodieTimeline.RESTORE_ACTION,
-        restoreInstant.getRequestTime,
+        restoreInstant.requestedTime,
         TimelineType.ACTIVE.toString,
         DEFAULT_VALUE
       )
@@ -172,7 +172,7 @@ class ShowFileStatusProcedure extends BaseProcedure
         p => Option.apply(partitionRollbackMetadata.get(p)).flatMap(
           _.getSuccessDeleteFiles.asScala.find(_.contains(fileName)))).isDefined ||
         partitionRollbackMetadata.values.iterator.asScala.exists(_.getSuccessDeleteFiles.asScala.exists(_.contains(fileName)))
-    }.map(instant => getResult(timeline, HoodieTimeline.ROLLBACK_ACTION, instant.getRequestTime).get)
+    }.map(instant => getResult(timeline, HoodieTimeline.ROLLBACK_ACTION, instant.requestedTime).get)
   }
 
 
@@ -194,7 +194,7 @@ class ShowFileStatusProcedure extends BaseProcedure
       val partitionCleanMetadata = cleanMetadata.getPartitionMetadata
       partition.flatMap(p => Option.apply(partitionCleanMetadata.get(p)).flatMap(_.getSuccessDeleteFiles.asScala.find(_.contains(fileName)))).isDefined ||
         partitionCleanMetadata.values.iterator.asScala.exists(_.getSuccessDeleteFiles.asScala.exists(_.contains(fileName)))
-    }.map(instant => getResult(timeline, HoodieTimeline.CLEAN_ACTION, instant.getRequestTime).get)
+    }.map(instant => getResult(timeline, HoodieTimeline.CLEAN_ACTION, instant.requestedTime).get)
   }
 
   private def getResult(timeline: HoodieTimeline, action: String, timestamp: String): Option[FileStatusInfo] = {

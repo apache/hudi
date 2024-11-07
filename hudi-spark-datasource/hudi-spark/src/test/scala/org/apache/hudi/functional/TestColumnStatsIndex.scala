@@ -32,7 +32,7 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, Hoodie
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
-import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -175,7 +175,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     }
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getRequestTime
+    val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     // lets validate that we have log files generated in case of MOR table
     if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -281,7 +281,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     }
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getRequestTime
+    val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     // updates a subset which are not deleted and enable col stats and validate bootstrap
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
@@ -319,25 +319,25 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       } else {
         metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath,  "9"))
       }
-      val baseFileFileStatus = dataFiles.stream().filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.getRequestTime)).findFirst().get()
+      val baseFileFileStatus = dataFiles.stream().filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.requestedTime)).findFirst().get()
       baseFileName = baseFileFileStatus.getPath.getName
     }
 
-    val latestCompletedFileName = INSTANT_FILE_NAME_FACTORY.getFileName(lastCompletedCommit)
+    val latestCompletedFileName = INSTANT_FILE_NAME_GENERATOR.getFileName(lastCompletedCommit)
     metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/" + latestCompletedFileName))
 
     // re-create marker for the deleted file.
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.getRequestTime + "/" + logFileName + ".marker.APPEND"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/" + logFileName + ".marker.APPEND"))
       } else {
-        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.getRequestTime + "/9/" + logFileName + ".marker.APPEND"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/9/" + logFileName + ".marker.APPEND"))
       }
     } else {
       if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.getRequestTime + "/" + baseFileName + ".marker.MERGE"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/" + baseFileName + ".marker.MERGE"))
       } else {
-        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.getRequestTime + "/9/" + baseFileName + ".marker.MERGE"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/9/" + baseFileName + ".marker.MERGE"))
       }
     }
   }

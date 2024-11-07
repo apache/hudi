@@ -55,7 +55,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -125,9 +125,9 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       HoodieTimeline timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(),
           "Expecting a single commit.");
-      assertEquals(newCommitTime, timeline.lastInstant().get().getRequestTime(), "Latest commit should be 001");
+      assertEquals(newCommitTime, timeline.lastInstant().get().requestedTime(), "Latest commit should be 001");
       assertEquals(records.size(),
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime, true, INSTANT_FACTORY).count(),
+          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime, true, INSTANT_GENERATOR).count(),
           "Must contain 44 records");
 
       /**
@@ -150,7 +150,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(2, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting two commits.");
-      assertEquals(newCommitTime, timeline.lastInstant().get().getRequestTime(), "Latest commit should be 002");
+      assertEquals(newCommitTime, timeline.lastInstant().get().requestedTime(), "Latest commit should be 002");
       Dataset<Row> dataSet = getRecords();
       assertEquals(45, dataSet.count(), "Must contain 45 records");
 
@@ -170,7 +170,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(3, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting three commits.");
-      assertEquals(newCommitTime, timeline.lastInstant().get().getRequestTime(), "Latest commit should be 003");
+      assertEquals(newCommitTime, timeline.lastInstant().get().requestedTime(), "Latest commit should be 003");
       dataSet = getRecords();
       assertEquals(47, dataSet.count(), "Must contain 47 records");
 
@@ -200,7 +200,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       // verify there are now 4 commits
       timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(4, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting four commits.");
-      assertEquals(timeline.lastInstant().get().getRequestTime(), newCommitTime, "Latest commit should be 004");
+      assertEquals(timeline.lastInstant().get().requestedTime(), newCommitTime, "Latest commit should be 004");
 
       // Check the entire dataset has 47 records still
       dataSet = getRecords();

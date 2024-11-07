@@ -698,7 +698,7 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testGetLastInstant() {
     Option<HoodieInstant> actual;
-    Option<HoodieInstant> expected = Option.of(HoodieTestUtils.INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, "", ""));
+    Option<HoodieInstant> expected = Option.of(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, "", ""));
 
     when(primary.getLastInstant()).thenReturn(expected);
     actual = fsView.getLastInstant();

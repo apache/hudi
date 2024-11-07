@@ -223,10 +223,10 @@ public class HoodieInputFormatUtils {
         .filterPendingCompactionTimeline().firstInstant();
     if (pendingCompactionInstant.isPresent()) {
       HoodieTimeline instantsTimeline = (HoodieTimeline)(commitsAndCompactionTimeline
-          .findInstantsBefore(pendingCompactionInstant.get().getRequestTime()));
+          .findInstantsBefore(pendingCompactionInstant.get().requestedTime()));
       int numCommitsFilteredByCompaction = commitsAndCompactionTimeline.getCommitsTimeline().countInstants()
           - instantsTimeline.getCommitsTimeline().countInstants();
-      LOG.info("Earliest pending compaction instant is: " + pendingCompactionInstant.get().getRequestTime()
+      LOG.info("Earliest pending compaction instant is: " + pendingCompactionInstant.get().requestedTime()
           + " skipping " + numCommitsFilteredByCompaction + " commits");
 
       return instantsTimeline;
@@ -424,7 +424,7 @@ public class HoodieInputFormatUtils {
         Arrays.stream(fileStatuses)
             .map(HadoopFSUtils::convertToStoragePathInfo)
             .collect(Collectors.toList()));
-    List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getRequestTime).collect(Collectors.toList());
+    List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
     for (HoodieBaseFile filteredFile : filteredFiles) {

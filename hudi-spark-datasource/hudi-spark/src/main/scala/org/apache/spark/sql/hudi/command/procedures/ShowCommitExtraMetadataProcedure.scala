@@ -80,7 +80,7 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
     }
 
     val meta = commitMetadataOptional.get
-    val timestamp: String = hoodieInstantOption.get.getRequestTime
+    val timestamp: String = hoodieInstantOption.get.requestedTime
     val action: String = hoodieInstantOption.get.getAction
     val metadatas: util.Map[String, String] = if (metadataKey.isEmpty) {
       meta.getExtraMetadata
@@ -106,7 +106,7 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
   }
 
   private def getCommitForInstant(metaClient: HoodieTableMetaClient, timeline: HoodieTimeline, instantTime: String): Option[HoodieInstant] = {
-    val instantFactory = metaClient.getTimelineLayout.getInstantFactory
+    val instantFactory = metaClient.getTimelineLayout.getInstantGenerator
     val instants: util.List[HoodieInstant] = util.Arrays.asList(
       instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime),
       instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),

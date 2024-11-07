@@ -28,7 +28,7 @@ import java.io.IOException;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -72,14 +72,14 @@ public class TestHoodieInstant extends HoodieCommonTestHarness {
     try {
       initMetaClient();
       HoodieInstant instantRequested =
-          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "001");
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "001");
       HoodieInstant instantCommitted =
-          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001");
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001");
       HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
       timeline.createNewInstant(instantRequested);
       timeline.transitionRequestedToInflight(instantRequested, Option.empty());
       timeline.saveAsComplete(
-          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, instantRequested.getAction(), instantRequested.getRequestTime()),
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instantRequested.getAction(), instantRequested.requestedTime()),
           Option.empty());
       metaClient.reloadActiveTimeline();
       timeline = metaClient.getActiveTimeline();

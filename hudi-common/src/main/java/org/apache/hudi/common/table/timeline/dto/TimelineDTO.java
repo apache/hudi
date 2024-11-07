@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 
 import java.util.List;
@@ -45,7 +45,7 @@ public class TimelineDTO {
   }
 
   public static HoodieTimeline toTimeline(TimelineDTO dto, HoodieTableMetaClient metaClient) {
-    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
     TimelineFactory factory = metaClient.getTimelineLayout().getTimelineFactory();
     // TODO: For Now, we will assume, only active-timeline will be transferred.
     return factory.createDefaultTimeline(dto.instants.stream().map(d -> InstantDTO.toInstant(d, instantFactory)),

@@ -258,11 +258,11 @@ public class HoodieCommonTestHarness {
     Set<String> completedInstants = completedTimeline
         .getInstants()
         .stream()
-        .map(HoodieInstant::getRequestTime).collect(Collectors.toSet());
+        .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
     List<String> pendingInstants = timeline
         .getInstants()
         .stream()
-        .map(HoodieInstant::getRequestTime)
+        .map(HoodieInstant::requestedTime)
         .filter(t -> !completedInstants.contains(t))
         .collect(Collectors.toList());
     return !pendingInstants.isEmpty();

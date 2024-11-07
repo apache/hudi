@@ -24,7 +24,7 @@ import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -46,7 +46,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
     this.filePath = partitionPath + "/" + fileId;
   }
 
-  public void beginTransaction(String newTxnOwnerInstantTime, InstantFactory instantFactory) {
+  public void beginTransaction(String newTxnOwnerInstantTime, InstantGenerator instantFactory) {
     if (isLockRequired) {
       LOG.info("Transaction starting for " + newTxnOwnerInstantTime + " and " + filePath);
       lockManager.lock();
@@ -56,7 +56,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
     }
   }
 
-  public void endTransaction(String currentTxnOwnerInstantTime, InstantFactory instantFactory) {
+  public void endTransaction(String currentTxnOwnerInstantTime, InstantGenerator instantFactory) {
     if (isLockRequired) {
       LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstantTime
           + " for " + filePath);
@@ -86,7 +86,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
     return props;
   }
 
-  private HoodieInstant getInstant(String instantTime, InstantFactory instantFactory) {
+  private HoodieInstant getInstant(String instantTime, InstantGenerator instantFactory) {
     return instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, EMPTY_STRING, instantTime);
   }
 }

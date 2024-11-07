@@ -115,7 +115,7 @@ public class DiffCommand {
     List<Comparable[]> rows = new ArrayList<>();
     InstantComparator instantComparator = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantComparator();
     List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstantsAsStream().sorted(instantComparator.getRequestTimePrimaryOrderingComparator().reversed()).collect(Collectors.toList());
+        .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
       Option<byte[]> instantDetails = timeline.getInstantDetails(commit);
@@ -144,7 +144,7 @@ public class DiffCommand {
     if (checker.apply(hoodieWriteStat, value)) {
       rows.add(new Comparable[] {
           commit.getAction(),
-          commit.getRequestTime(),
+          commit.requestedTime(),
           hoodieWriteStat.getPartitionPath(),
           hoodieWriteStat.getFileId(),
           hoodieWriteStat.getPrevCommit(),

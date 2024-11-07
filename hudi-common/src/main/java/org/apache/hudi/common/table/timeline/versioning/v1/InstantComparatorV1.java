@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.timeline.versioning.v1;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantComparator;
-import org.apache.hudi.common.table.timeline.versioning.common.InstantComparatorHelper;
+import org.apache.hudi.common.table.timeline.versioning.common.InstantComparators;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -41,13 +41,13 @@ public class InstantComparatorV1 implements Serializable, InstantComparator {
   private static final Map<String, String> COMPARABLE_ACTIONS = createComparableActionsMap();
 
   public static final Comparator<HoodieInstant> ACTION_COMPARATOR =
-      new InstantComparatorHelper.ActionComparator(COMPARABLE_ACTIONS);
+      new InstantComparators.ActionComparator(COMPARABLE_ACTIONS);
 
-  public static final Comparator<HoodieInstant> COMPARATOR =
-      new InstantComparatorHelper.TimestampBasedComparator(COMPARABLE_ACTIONS);
+  public static final Comparator<HoodieInstant> REQUESTED_TIME_BASED_COMPARATOR =
+      new InstantComparators.TimestampBasedComparator(COMPARABLE_ACTIONS);
 
-  public static final Comparator<HoodieInstant> COMPLETION_TIME_COMPARATOR =
-      new InstantComparatorHelper.CompletionTimeBasedComparator(COMPARABLE_ACTIONS);
+  public static final Comparator<HoodieInstant> COMPLETION_TIME_BASED_COMPARATOR =
+      new InstantComparators.CompletionTimeBasedComparator(COMPARABLE_ACTIONS);
 
   public static String getComparableAction(String action) {
     return COMPARABLE_ACTIONS.getOrDefault(action, action);
@@ -61,17 +61,17 @@ public class InstantComparatorV1 implements Serializable, InstantComparator {
   }
 
   @Override
-  public Comparator<HoodieInstant> getActionOnlyComparator() {
+  public Comparator<HoodieInstant> actionOnlyComparator() {
     return ACTION_COMPARATOR;
   }
 
   @Override
-  public Comparator<HoodieInstant> getRequestTimePrimaryOrderingComparator() {
-    return COMPARATOR;
+  public Comparator<HoodieInstant> requestedTimeOrderedComparator() {
+    return REQUESTED_TIME_BASED_COMPARATOR;
   }
 
   @Override
-  public Comparator<HoodieInstant> getCompletionTimePrimaryOrderingComparator() {
-    return COMPLETION_TIME_COMPARATOR;
+  public Comparator<HoodieInstant> completionTimeOrderedComparator() {
+    return COMPLETION_TIME_BASED_COMPARATOR;
   }
 }

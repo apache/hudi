@@ -64,14 +64,14 @@ public class HoodieDataSourceHelpers {
                                               String instantTimestamp) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
     return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE).getInstantsAsStream()
-        .map(HoodieInstant::getRequestTime).collect(Collectors.toList());
+        .map(HoodieInstant::requestedTime).collect(Collectors.toList());
   }
 
   public static List<String> listCommitsSince(HoodieStorage storage, String basePath,
                                               String instantTimestamp) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(storage, basePath);
     return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE).getInstantsAsStream()
-        .map(HoodieInstant::getRequestTime).collect(Collectors.toList());
+        .map(HoodieInstant::requestedTime).collect(Collectors.toList());
   }
 
   // this is used in the integration test script: docker/demo/sparksql-incremental.commands
@@ -90,12 +90,12 @@ public class HoodieDataSourceHelpers {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public static String latestCommit(FileSystem fs, String basePath) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
-    return timeline.lastInstant().get().getRequestTime();
+    return timeline.lastInstant().get().requestedTime();
   }
 
   public static String latestCommit(HoodieStorage storage, String basePath) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(storage, basePath);
-    return timeline.lastInstant().get().getRequestTime();
+    return timeline.lastInstant().get().requestedTime();
   }
 
   /**
@@ -140,7 +140,7 @@ public class HoodieDataSourceHelpers {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
         .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().filter(instant -> instant.getRequestTime().equals(instantTime)
+    Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().filter(instant -> instant.requestedTime().equals(instantTime)
             && ClusteringUtils.isClusteringOrReplaceCommitAction(instant.getAction()))
         .firstInstant();
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlan =

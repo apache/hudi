@@ -71,12 +71,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Common thread-safe implementation for multiple TableFileSystemView Implementations.
@@ -278,7 +278,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
     // Duplicate key error when insert_overwrite same partition in multi writer, keep the instant with greater timestamp when the file group id conflicts
     Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups = resultStream.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
-        (instance1, instance2) -> compareTimestamps(instance1.getRequestTime(), LESSER_THAN, instance2.getRequestTime()) ? instance2 : instance1));
+        (instance1, instance2) -> compareTimestamps(instance1.requestedTime(), LESSER_THAN, instance2.requestedTime()) ? instance2 : instance1));
     resetReplacedFileGroups(replacedFileGroups);
     LOG.info("Took " + hoodieTimer.endTimer() + " ms to read  " + replacedTimeline.countInstants() + " instants, "
         + replacedFileGroups.size() + " replaced file groups");
@@ -1589,7 +1589,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return false;
     }
 
-    return compareTimestamps(instant, GREATER_THAN, hoodieInstantOption.get().getRequestTime());
+    return compareTimestamps(instant, GREATER_THAN, hoodieInstantOption.get().requestedTime());
   }
 
   private boolean isFileGroupReplacedBeforeOrOn(HoodieFileGroupId fileGroupId, String instant) {
@@ -1598,7 +1598,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return false;
     }
 
-    return compareTimestamps(instant, GREATER_THAN_OR_EQUALS, hoodieInstantOption.get().getRequestTime());
+    return compareTimestamps(instant, GREATER_THAN_OR_EQUALS, hoodieInstantOption.get().requestedTime());
   }
 
   private boolean isFileGroupReplacedAfterOrOn(HoodieFileGroupId fileGroupId, String instant) {
@@ -1607,7 +1607,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       return false;
     }
 
-    return compareTimestamps(instant, LESSER_THAN_OR_EQUALS, hoodieInstantOption.get().getRequestTime());
+    return compareTimestamps(instant, LESSER_THAN_OR_EQUALS, hoodieInstantOption.get().requestedTime());
   }
 
   @Override

@@ -75,8 +75,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
@@ -179,7 +179,7 @@ public class HoodieSnapshotExporter {
   private Option<String> getLatestCommitTimestamp(HoodieTableMetaClient tableMetadata) {
     Option<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline().getWriteTimeline()
         .filterCompletedInstants().lastInstant();
-    return latestCommit.isPresent() ? Option.of(latestCommit.get().getRequestTime()) : Option.empty();
+    return latestCommit.isPresent() ? Option.of(latestCommit.get().requestedTime()) : Option.empty();
   }
 
   private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg,

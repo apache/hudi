@@ -52,7 +52,7 @@ public class LogCompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O
   @Override
   protected void transitionRequestedToInflight(HoodieTable table, String logCompactionInstantTime) {
     HoodieActiveTimeline timeline = table.getActiveTimeline();
-    HoodieInstant instant = table.getMetaClient().getTimelineLayout().getInstantFactory().getLogCompactionRequestedInstant(logCompactionInstantTime);
+    HoodieInstant instant = table.getMetaClient().getTimelineLayout().getInstantGenerator().getLogCompactionRequestedInstant(logCompactionInstantTime);
     // Mark instant as compaction inflight
     timeline.transitionLogCompactionRequestedToInflight(instant);
   }

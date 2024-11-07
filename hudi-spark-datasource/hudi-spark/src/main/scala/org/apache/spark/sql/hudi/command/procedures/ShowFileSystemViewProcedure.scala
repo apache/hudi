@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparatorUtils}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
 import org.apache.hudi.exception.HoodieException
@@ -107,11 +107,11 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     var instants = timeline.getInstants.iterator().asScala
     if (maxInstant.nonEmpty) {
       val predicate = if (includeMaxInstant) {
-        InstantComparatorUtils.GREATER_THAN_OR_EQUALS
+        InstantComparison.GREATER_THAN_OR_EQUALS
       } else {
-        InstantComparatorUtils.GREATER_THAN
+        InstantComparison.GREATER_THAN
       }
-      instants = instants.filter(instant => predicate.test(maxInstant, instant.getRequestTime))
+      instants = instants.filter(instant => predicate.test(maxInstant, instant.requestedTime))
     }
 
     val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
@@ -248,7 +248,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       val maxInstantForMerge = if (merge && maxInstant.isEmpty) {
         val lastInstant = metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant()
         if (lastInstant.isPresent) {
-          lastInstant.get().getRequestTime
+          lastInstant.get().requestedTime
         } else {
           // scalastyle:off return
           return Seq.empty

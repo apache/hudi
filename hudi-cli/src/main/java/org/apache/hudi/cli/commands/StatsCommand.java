@@ -82,7 +82,7 @@ public class StatsCommand {
       if (commit.fetchTotalUpdateRecordsWritten() > 0) {
         waf = df.format((float) commit.fetchTotalRecordsWritten() / commit.fetchTotalUpdateRecordsWritten());
       }
-      rows.add(new Comparable[] {instantTime.getRequestTime(), commit.fetchTotalUpdateRecordsWritten(),
+      rows.add(new Comparable[] {instantTime.requestedTime(), commit.fetchTotalUpdateRecordsWritten(),
           commit.fetchTotalRecordsWritten(), waf});
       totalRecordsUpserted += commit.fetchTotalUpdateRecordsWritten();
       totalRecordsWritten += commit.fetchTotalRecordsWritten();

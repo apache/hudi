@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 
@@ -80,7 +80,7 @@ public class CleansCommand {
     for (HoodieInstant clean : cleans) {
       HoodieCleanMetadata cleanMetadata =
           TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
-      rows.add(new Comparable[] {clean.getRequestTime(), cleanMetadata.getEarliestCommitToRetain(),
+      rows.add(new Comparable[] {clean.requestedTime(), cleanMetadata.getEarliestCommitToRetain(),
           cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
 
@@ -104,7 +104,7 @@ public class CleansCommand {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
-    InstantFactory instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
     HoodieInstant cleanInstant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, instantTime);
 
     if (!timeline.containsInstant(cleanInstant)) {

@@ -52,7 +52,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -137,7 +137,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       FileSystem fs = HadoopFSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultStorageConf());
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HadoopFSUtils.getStorageConf(fs.getConf()), dfsBasePath);
       HoodieTimeline timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
-      Dataset<Row> readRecords = HoodieClientTestUtils.readCommit(dfsBasePath, sqlContext, timeline, readCommitTime, true, INSTANT_FACTORY);
+      Dataset<Row> readRecords = HoodieClientTestUtils.readCommit(dfsBasePath, sqlContext, timeline, readCommitTime, true, INSTANT_GENERATOR);
       assertEquals(readRecords.count(), records.size());
 
       // Write to local
@@ -159,7 +159,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(fs.getConf()), tablePath);
       timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       Dataset<Row> localReadRecords =
-          HoodieClientTestUtils.readCommit(tablePath, sqlContext, timeline, writeCommitTime, true, INSTANT_FACTORY);
+          HoodieClientTestUtils.readCommit(tablePath, sqlContext, timeline, writeCommitTime, true, INSTANT_GENERATOR);
       assertEquals(localReadRecords.count(), localRecords.size());
     }
   }

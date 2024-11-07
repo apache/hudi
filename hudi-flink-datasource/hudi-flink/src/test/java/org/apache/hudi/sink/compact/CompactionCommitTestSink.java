@@ -41,7 +41,7 @@ public class CompactionCommitTestSink extends CompactionCommitSink {
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
     super.invoke(event, context);
     List<HoodieInstant> instants = writeClient.getHoodieTable().getMetaClient().getActiveTimeline().getInstants();
-    boolean compactCommitted = instants.stream().anyMatch(i -> i.getRequestTime().equals(event.getInstant()) && i.isCompleted());
+    boolean compactCommitted = instants.stream().anyMatch(i -> i.requestedTime().equals(event.getInstant()) && i.isCompleted());
     if (compactCommitted && getRuntimeContext().getAttemptNumber() == 0) {
       // archive compact instant
       this.writeClient.getConfig().setValue(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP, "1");

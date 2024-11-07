@@ -71,7 +71,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -147,9 +147,9 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_CO
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
 import static org.apache.hudi.common.fs.FSUtils.getFileNameFromPath;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -761,7 +761,7 @@ public class HoodieTableMetadataUtil {
 
   private static void reAddLogFilesFromRollbackPlan(HoodieTableMetaClient dataTableMetaClient, String instantTime,
                                                     Map<String, Map<String, Long>> partitionToFilesMap) {
-    InstantFactory factory = dataTableMetaClient.getTimelineLayout().getInstantFactory();
+    InstantGenerator factory = dataTableMetaClient.getTimelineLayout().getInstantGenerator();
     HoodieInstant rollbackInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, instantTime);
     HoodieInstant requested = factory.getRollbackRequestedInstant(rollbackInstant);
     try {
@@ -1072,7 +1072,7 @@ public class HoodieTableMetadataUtil {
     HoodieTimeline timeline = metaClient.getActiveTimeline();
     TimelineFactory factory = metaClient.getTimelineLayout().getTimelineFactory();
     if (timeline.empty()) {
-      final HoodieInstant instant = metaClient.getTimelineLayout().getInstantFactory().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
+      final HoodieInstant instant = metaClient.getTimelineLayout().getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
           metaClient.createNewInstantTime(false));
       timeline = factory.createDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline()::getInstantDetails);
     }
@@ -1103,7 +1103,7 @@ public class HoodieTableMetadataUtil {
           fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
               // including pending compaction instant as the last instant so that the finished delta commits
               // that start earlier than the compaction can be queried.
-              partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().getRequestTime());
+              partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().requestedTime());
         } else {
           return Collections.emptyList();
         }
@@ -1295,7 +1295,7 @@ public class HoodieTableMetadataUtil {
           .withBasePath(datasetMetaClient.getBasePath())
           .withLogFilePaths(Collections.singletonList(filePath))
           .withBufferSize(maxBufferSize)
-          .withLatestInstantTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().getRequestTime())
+          .withLatestInstantTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
           .withReaderSchema(writerSchemaOpt.get())
           .withTableMetaClient(datasetMetaClient)
           .withLogRecordScannerCallback(records::add)
@@ -1447,8 +1447,8 @@ public class HoodieTableMetadataUtil {
     // Only those log files which have a corresponding completed instant on the dataset should be read
     // This is because the metadata table is updated before the dataset instants are committed.
     HoodieActiveTimeline datasetTimeline = dataMetaClient.getActiveTimeline();
-    Set<String> datasetPendingInstants = datasetTimeline.filterInflightsAndRequested().getInstantsAsStream().map(HoodieInstant::getRequestTime).collect(Collectors.toSet());
-    Set<String> validInstantTimestamps = datasetTimeline.filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getRequestTime).collect(Collectors.toSet());
+    Set<String> datasetPendingInstants = datasetTimeline.filterInflightsAndRequested().getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toSet());
+    Set<String> validInstantTimestamps = datasetTimeline.filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toSet());
 
     // We should also add completed indexing delta commits in the metadata table, as they do not
     // have corresponding completed instant in the data table
@@ -1456,7 +1456,7 @@ public class HoodieTableMetadataUtil {
         metadataMetaClient.getActiveTimeline()
             .filter(instant -> instant.isCompleted() && isValidInstant(datasetPendingInstants, instant))
             .getInstantsAsStream()
-            .map(HoodieInstant::getRequestTime)
+            .map(HoodieInstant::requestedTime)
             .collect(Collectors.toList()));
 
     // For any rollbacks and restores, we cannot neglect the instants that they are rolling back.
@@ -1464,17 +1464,17 @@ public class HoodieTableMetadataUtil {
     // instant which we have a log block for.
     final String earliestInstantTime = validInstantTimestamps.isEmpty() ? SOLO_COMMIT_TIMESTAMP : Collections.min(validInstantTimestamps);
     datasetTimeline.getRollbackAndRestoreTimeline().filterCompletedInstants().getInstantsAsStream()
-            .filter(instant -> compareTimestamps(instant.getRequestTime(), GREATER_THAN, earliestInstantTime))
-            .forEach(instant -> validInstantTimestamps.addAll(getRollbackedCommits(instant, datasetTimeline, dataMetaClient.getTimelineLayout().getInstantFactory())));
+            .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN, earliestInstantTime))
+            .forEach(instant -> validInstantTimestamps.addAll(getRollbackedCommits(instant, datasetTimeline, dataMetaClient.getTimelineLayout().getInstantGenerator())));
 
     // add restore and rollback instants from MDT.
     metadataMetaClient.getActiveTimeline().getRollbackAndRestoreTimeline().filterCompletedInstants()
         .filter(instant -> instant.getAction().equals(HoodieTimeline.RESTORE_ACTION) || instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION))
-        .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getRequestTime()));
+        .getInstants().forEach(instant -> validInstantTimestamps.add(instant.requestedTime()));
 
     metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
-        .filter(instant ->  instant.getRequestTime().startsWith(SOLO_COMMIT_TIMESTAMP))
-        .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getRequestTime()));
+        .filter(instant ->  instant.requestedTime().startsWith(SOLO_COMMIT_TIMESTAMP))
+        .getInstants().forEach(instant -> validInstantTimestamps.add(instant.requestedTime()));
     return validInstantTimestamps;
   }
 
@@ -1489,7 +1489,7 @@ public class HoodieTableMetadataUtil {
     // only includes a deltacommit,
     // filter out any MDT instant that has pending corespondent dataset instant,
     // this comes from a case that one instant fails to commit after MDT had been committed.
-    return instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION) && !datasetPendingInstants.contains(instant.getRequestTime());
+    return instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION) && !datasetPendingInstants.contains(instant.requestedTime());
   }
 
   /**
@@ -1519,7 +1519,7 @@ public class HoodieTableMetadataUtil {
    * @param instant  The Rollback operation to read
    * @param timeline instant of timeline from dataset.
    */
-  private static List<String> getRollbackedCommits(HoodieInstant instant, HoodieActiveTimeline timeline, InstantFactory factory) {
+  private static List<String> getRollbackedCommits(HoodieInstant instant, HoodieActiveTimeline timeline, InstantGenerator factory) {
     try {
       List<String> commitsToRollback;
       if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
@@ -1531,7 +1531,7 @@ public class HoodieTableMetadataUtil {
           // if file is empty, fetch the commits to rollback from rollback.requested file
           HoodieRollbackPlan rollbackPlan = TimelineMetadataUtils.deserializeAvroMetadata(
               timeline.readRollbackInfoAsBytes(factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION,
-                  instant.getRequestTime())).get(), HoodieRollbackPlan.class);
+                  instant.requestedTime())).get(), HoodieRollbackPlan.class);
           commitsToRollback = Collections.singletonList(rollbackPlan.getInstantToRollback().getCommitTime());
           LOG.warn("Had to fetch rollback info from requested instant since completed file is empty {}", instant);
         }
@@ -1886,7 +1886,7 @@ public class HoodieTableMetadataUtil {
             .withBasePath(basePath)
             .withLogFilePaths(logFilePaths)
             .withReaderSchema(HoodieAvroUtils.getRecordKeySchema())
-            .withLatestInstantTime(metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getRequestTime).orElse(""))
+            .withLatestInstantTime(metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""))
             .withReverseReader(false)
             .withMaxMemorySizeInBytes(storageConf.getLong(
                 MAX_MEMORY_FOR_COMPACTION.key(), DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES))
@@ -1966,7 +1966,7 @@ public class HoodieTableMetadataUtil {
         readerSchema = tableSchema;
       }
       return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition,
-          metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().map(HoodieInstant::getRequestTime).orElse(""));
+          metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(""));
     });
   }
 
@@ -2002,7 +2002,7 @@ public class HoodieTableMetadataUtil {
         readerSchema = tableSchema;
       }
       return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition,
-          metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getRequestTime).orElse(""));
+          metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""));
     });
   }
 

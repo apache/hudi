@@ -77,7 +77,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -580,9 +580,9 @@ public class TestInputFormat {
     List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(instants.size(), is(2));
 
-    String c2 = oriInstants.get(1).getRequestTime();
-    String c3 = oriInstants.get(2).getRequestTime();
-    String c4 = oriInstants.get(3).getRequestTime();
+    String c2 = oriInstants.get(1).requestedTime();
+    String c3 = oriInstants.get(2).requestedTime();
+    String c4 = oriInstants.get(3).requestedTime();
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
@@ -1205,8 +1205,8 @@ public class TestInputFormat {
     assertTrue(firstCommit.isPresent());
     assertThat(firstCommit.get().getAction(), is(HoodieTimeline.DELTA_COMMIT_ACTION));
 
-    java.nio.file.Path metaFilePath = Paths.get(metaClient.getMetaPath().toString(), INSTANT_FILE_NAME_FACTORY.getFileName(firstCommit.get()));
-    String newCompletionTime = TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().getRequestTime());
+    java.nio.file.Path metaFilePath = Paths.get(metaClient.getMetaPath().toString(), INSTANT_FILE_NAME_GENERATOR.getFileName(firstCommit.get()));
+    String newCompletionTime = TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().requestedTime());
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));

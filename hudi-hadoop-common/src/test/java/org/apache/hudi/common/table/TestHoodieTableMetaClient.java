@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -79,13 +79,13 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
     assertNotNull(deserializedMetaClient);
     HoodieActiveTimeline commitTimeline = deserializedMetaClient.getActiveTimeline();
-    HoodieInstant instant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
     commitTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = commitTimeline.getInstantsAsStream().findFirst().get();
     assertTrue(completedInstant.isCompleted());
-    assertEquals(completedInstant.getRequestTime(), instant.getRequestTime());
+    assertEquals(completedInstant.requestedTime(), instant.requestedTime());
     assertArrayEquals(getUTF8Bytes("test-detail"), commitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");
   }
@@ -96,7 +96,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
-    HoodieInstant instant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "1");
     activeTimeline.createNewInstant(instant);
     activeTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
 
@@ -110,7 +110,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
     assertTrue(completedInstant.isCompleted());
-    assertTrue(completedInstant.getRequestTime().equals(instant.getRequestTime()));
+    assertTrue(completedInstant.requestedTime().equals(instant.requestedTime()));
     assertArrayEquals(getUTF8Bytes("test-detail"), activeCommitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");
   }

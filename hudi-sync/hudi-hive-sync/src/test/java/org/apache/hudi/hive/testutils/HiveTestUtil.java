@@ -104,7 +104,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
@@ -366,15 +366,15 @@ public class HiveTestUtil {
 
     createMetaFile(
         basePath,
-        INSTANT_FILE_NAME_FACTORY.makeRequestedRollbackFileName(instantTime),
+        INSTANT_FILE_NAME_GENERATOR.makeRequestedRollbackFileName(instantTime),
         getUTF8Bytes(""));
     createMetaFile(
         basePath,
-        INSTANT_FILE_NAME_FACTORY.makeInflightRollbackFileName(instantTime),
+        INSTANT_FILE_NAME_GENERATOR.makeInflightRollbackFileName(instantTime),
         getUTF8Bytes(""));
     createMetaFile(
         basePath,
-        INSTANT_FILE_NAME_FACTORY.makeRollbackFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeRollbackFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeRollbackMetadata(rollbackMetadata).get());
   }
 
@@ -773,14 +773,14 @@ public class HiveTestUtil {
   public static void createCommitFile(HoodieCommitMetadata commitMetadata, String instantTime, String basePath) throws IOException {
     createMetaFile(
         basePath,
-        INSTANT_FILE_NAME_FACTORY.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
   }
 
   public static void createReplaceCommitFile(HoodieReplaceCommitMetadata commitMetadata, String instantTime) throws IOException {
     createMetaFile(
         basePath,
-        INSTANT_FILE_NAME_FACTORY.makeReplaceFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeReplaceFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
   }
 
@@ -793,7 +793,7 @@ public class HiveTestUtil {
       throws IOException {
     createMetaFile(
         basePath,
-        INSTANT_FILE_NAME_FACTORY.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
   }
 
@@ -801,7 +801,7 @@ public class HiveTestUtil {
       throws IOException {
     createMetaFile(
         basePath,
-        INSTANT_FILE_NAME_FACTORY.makeDeltaFileName(deltaCommitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeDeltaFileName(deltaCommitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeCommitMetadata(COMMIT_METADATA_SER_DE, deltaCommitMetadata).get());
   }
 

@@ -177,7 +177,7 @@ public class CompactionUtil {
       HoodieInstant instant = earliestInflight.get();
       String currentTime = table.getMetaClient().createNewInstantTime();
       int timeout = conf.getInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
-      if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.getRequestTime()) >= timeout) {
+      if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.requestedTime()) >= timeout) {
         LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
         table.rollbackInflightCompaction(instant);
         table.getMetaClient().reloadActiveTimeline();

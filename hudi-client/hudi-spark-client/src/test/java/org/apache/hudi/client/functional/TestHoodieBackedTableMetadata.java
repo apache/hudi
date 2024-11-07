@@ -86,7 +86,7 @@ import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -355,7 +355,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
     metaClient.reloadActiveTimeline();
     HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(
-        metaClient, INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, CLEAN_ACTION, cleanInstant));
+        metaClient, INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, CLEAN_ACTION, cleanInstant));
     testTable.repeatClean(metaClient.createNewInstantTime(), cleanerPlan, cleanMetadata);
 
     // Compaction should not happen after the first compaction in this test case

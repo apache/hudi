@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.timeline.versioning.v2;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.timeline.AbstractHoodieBaseTimeline;
+import org.apache.hudi.common.table.timeline.BaseHoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -33,14 +33,14 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class BaseTimelineV2 extends AbstractHoodieBaseTimeline {
+public class BaseTimelineV2 extends BaseHoodieTimeline {
 
   public BaseTimelineV2(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
     this(instants, details, TimelineLayout.getLayout(TimelineLayoutVersion.LAYOUT_VERSION_2));
   }
 
   public BaseTimelineV2(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details, TimelineLayout layout) {
-    super(instants, details, layout.getTimelineFactory(), layout.getInstantComparator(), layout.getInstantFactory());
+    super(instants, details, layout.getTimelineFactory(), layout.getInstantComparator(), layout.getInstantGenerator());
   }
 
   /**
@@ -137,7 +137,7 @@ public class BaseTimelineV2 extends AbstractHoodieBaseTimeline {
         if (this.pendingClusteringInstants == null) {
           List<HoodieInstant> pendingClusterInstants = getCommitsTimeline().filterPendingReplaceOrClusteringTimeline().getInstants();
           // Validate that there are no instants with same timestamp
-          pendingClusterInstants.stream().collect(Collectors.groupingBy(HoodieInstant::getRequestTime)).forEach((timestamp, instants) -> {
+          pendingClusterInstants.stream().collect(Collectors.groupingBy(HoodieInstant::requestedTime)).forEach((timestamp, instants) -> {
             if (instants.size() > 1) {
               throw new IllegalStateException("Multiple instants with same timestamp: " + timestamp + " instants: " + instants);
             }
@@ -145,7 +145,7 @@ public class BaseTimelineV2 extends AbstractHoodieBaseTimeline {
           // Filter replace commits down to those that are due to clustering
           this.pendingClusteringInstants = pendingClusterInstants.stream()
               .filter(instant -> ClusteringUtils.isClusteringInstant(this, instant, instantFactory))
-              .map(HoodieInstant::getRequestTime).collect(Collectors.toSet());
+              .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
         }
       }
     }

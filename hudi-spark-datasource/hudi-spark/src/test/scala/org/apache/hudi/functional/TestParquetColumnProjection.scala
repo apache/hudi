@@ -275,8 +275,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
      */
     val hoodieMetaClient = createMetaClient(spark, tablePath)
     val completedCommits = hoodieMetaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
-    val startUnarchivedCommitTs = completedCommits.nthInstant(1).get().getRequestTime //deltacommit2
-    val endUnarchivedCommitTs = completedCommits.nthInstant(5).get().getRequestTime //deltacommit6
+    val startUnarchivedCommitTs = completedCommits.nthInstant(1).get().requestedTime //deltacommit2
+    val endUnarchivedCommitTs = completedCommits.nthInstant(5).get().requestedTime //deltacommit6
 
     val readOpts = defaultWriteOpts ++ Map(
       "path" -> tablePath,
@@ -301,8 +301,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
     val hoodieMetaClient = createMetaClient(spark, tablePath)
     val completedCommits = hoodieMetaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
-    val startUnarchivedCommitTs = (completedCommits.nthInstant(1).get().getRequestTime.toLong - 1L).toString
-    val endUnarchivedCommitTs = completedCommits.nthInstant(3).get().getRequestTime //commit
+    val startUnarchivedCommitTs = (completedCommits.nthInstant(1).get().requestedTime.toLong - 1L).toString
+    val endUnarchivedCommitTs = completedCommits.nthInstant(3).get().requestedTime //commit
 
     val readOpts = defaultWriteOpts ++ Map(
       "path" -> tablePath,

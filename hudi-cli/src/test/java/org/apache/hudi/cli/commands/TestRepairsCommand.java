@@ -285,7 +285,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       HoodieTestCommitMetadataGenerator.createCommitFile(tablePath, timestamp, conf);
     }
 
-    metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getRequestTime()) % 4 == 0).forEach(hoodieInstant -> {
+    metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.requestedTime()) % 4 == 0).forEach(hoodieInstant -> {
       metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
       if (hoodieInstant.isCompleted()) {
         metaClient.getActiveTimeline().createCompleteInstant(hoodieInstant);

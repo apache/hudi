@@ -28,7 +28,7 @@ import java.util.Map;
  * Comparators for HoodieInstant that are also serializable.
  * java.util.Comparators are not serializable.
  */
-public class InstantComparatorHelper {
+public class InstantComparators {
 
   public static class ActionComparator implements Serializable, Comparator<HoodieInstant> {
     private final Map<String, String> comparableActions;
@@ -59,7 +59,7 @@ public class InstantComparatorHelper {
 
     @Override
     public int compare(HoodieInstant instant1, HoodieInstant instant2) {
-      int res = instant1.getRequestTime().compareTo(instant2.getRequestTime());
+      int res = instant1.requestedTime().compareTo(instant2.requestedTime());
       if (res == 0) {
         res = actionComparator.compare(instant1, instant2);
         if (res == 0) {

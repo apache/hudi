@@ -20,11 +20,11 @@ package org.apache.hudi.common.table.timeline.versioning.v2;
 
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
-public class InstantFileNameFactoryV2 implements InstantFileNameFactory {
+public class InstantFileNameGeneratorV2 implements InstantFileNameGenerator {
 
   @Override
   public String makeCommitFileName(String instantTime) {
@@ -203,7 +203,7 @@ public class InstantFileNameFactoryV2 implements InstantFileNameFactory {
 
   private String getPendingFileName(HoodieInstant instant) {
     String action = instant.getAction();
-    String timestamp = instant.getRequestTime();
+    String timestamp = instant.requestedTime();
     if (HoodieTimeline.COMMIT_ACTION.equals(action)) {
       if (instant.isInflight()) {
         return makeInflightCommitFileName(timestamp);
@@ -278,7 +278,7 @@ public class InstantFileNameFactoryV2 implements InstantFileNameFactory {
 
   private String getCompleteFileName(HoodieInstant instant, String completionTime) {
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(completionTime), "Completion time should not be empty");
-    String timestampWithCompletionTime = instant.isLegacy() ? instant.getRequestTime() : instant.getRequestTime() + "_" + completionTime;
+    String timestampWithCompletionTime = instant.isLegacy() ? instant.requestedTime() : instant.requestedTime() + "_" + completionTime;
     switch (instant.getAction()) {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:

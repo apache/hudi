@@ -20,9 +20,9 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparatorUtils}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison}
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis
-import org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps
+import InstantComparison.compareTimestamps
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieIOException
@@ -117,8 +117,8 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     val startOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
     val endOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
 
-    assertTrue(compareTimestamps(startOutOfRangeCommitTs, InstantComparatorUtils.GREATER_THAN, completedCommits.lastInstant().get().getRequestTime))
-    assertTrue(compareTimestamps(endOutOfRangeCommitTs, InstantComparatorUtils.GREATER_THAN, completedCommits.lastInstant().get().getRequestTime))
+    assertTrue(compareTimestamps(startOutOfRangeCommitTs, InstantComparison.GREATER_THAN, completedCommits.lastInstant().get().requestedTime))
+    assertTrue(compareTimestamps(endOutOfRangeCommitTs, InstantComparison.GREATER_THAN, completedCommits.lastInstant().get().requestedTime))
 
     // Test both start and end commits are archived
     runIncrementalQueryAndCompare(startArchivedCompletionTs, endArchivedCompletionTs, 1, true)

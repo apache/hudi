@@ -48,7 +48,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -107,7 +107,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
     prepareFiles(rootBaseMarkerDir, currentInstantTime, currentMarkers, storage);
 
     HashSet<HoodieInstant> oldInstants = new HashSet<>();
-    oldInstants.add(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, "commit", oldInstant));
+    oldInstants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", oldInstant));
     when(markerHandler.getAllMarkers(currentMarkerDir)).thenReturn(currentMarkers);
 
     ScheduledExecutorService detectorExecutor = Executors.newSingleThreadScheduledExecutor();

@@ -36,7 +36,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   private final State state;
   private final String action;
-  private final String requestTime;
+  private final String requestedTime;
   private final String completionTime;
   // Marker for older formats, we need the state transition time (pre table version 7)
   private boolean isLegacy = false;
@@ -50,10 +50,10 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     this(state, action, requestTime, completionTime, false, comparator);
   }
 
-  public HoodieInstant(State state, String action, String requestTime, String completionTime, boolean isLegacy, Comparator<HoodieInstant> comparator) {
+  public HoodieInstant(State state, String action, String requestedTime, String completionTime, boolean isLegacy, Comparator<HoodieInstant> comparator) {
     this.state = state;
     this.action = action;
-    this.requestTime = requestTime;
+    this.requestedTime = requestedTime;
     this.completionTime = completionTime;
     this.isLegacy = isLegacy;
     this.comparator = comparator;
@@ -75,8 +75,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     return action;
   }
 
-  public String getRequestTime() {
-    return requestTime;
+  public String requestedTime() {
+    return requestedTime;
   }
 
   public boolean isLegacy() {
@@ -92,7 +92,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       return false;
     }
     HoodieInstant that = (HoodieInstant) o;
-    return state == that.state && Objects.equals(action, that.action) && Objects.equals(requestTime, that.requestTime);
+    return state == that.state && Objects.equals(action, that.action) && Objects.equals(requestedTime, that.requestedTime);
   }
 
   public State getState() {
@@ -105,7 +105,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(state, action, requestTime);
+    return Objects.hash(state, action, requestedTime);
   }
 
   @Override
@@ -116,7 +116,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   @Override
   public String toString() {
     return "[" + ((isInflight() || isRequested()) ? "==>" : "")
-        + requestTime
+        + requestedTime
         + (StringUtils.isNullOrEmpty(completionTime) ? "" : ("__" + completionTime))
         + "__" + action + "__" + state + "]";
   }

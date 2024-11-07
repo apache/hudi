@@ -49,7 +49,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T>
         : table.getInstantFactory().getLogCompactionRequestedInstant(instantTime);
     if (!pendingCompactionTimeline.containsInstant(requestedCompactionInstantTime)) {
       throw new IllegalStateException(
-          "No Compaction request available at " + requestedCompactionInstantTime.getRequestTime() + " to run compaction");
+          "No Compaction request available at " + requestedCompactionInstantTime.requestedTime() + " to run compaction");
     }
   }
 

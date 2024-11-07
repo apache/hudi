@@ -125,7 +125,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       return;
     }
 
-    String compactionInstantTime = firstRequested.get().getRequestTime();
+    String compactionInstantTime = firstRequested.get().requestedTime();
 
     // generate compaction plan
     // should support configurable commit metadata

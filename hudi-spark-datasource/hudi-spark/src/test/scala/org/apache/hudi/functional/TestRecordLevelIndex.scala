@@ -312,8 +312,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant().get().getRequestTime
-      .compareTo(lastCleanInstant.get().getRequestTime) > 0)
+    assertTrue(getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant().get().requestedTime
+      .compareTo(lastCleanInstant.get().requestedTime) > 0)
 
     var rollbackedInstant: Option[HoodieInstant] = Option.empty
     while (rollbackedInstant.isEmpty || rollbackedInstant.get.getAction != ActionType.clean.name()) {
@@ -348,11 +348,11 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(getLatestCompactionInstant().get().getRequestTime.compareTo(lastCompactionInstant.get().getRequestTime) > 0)
+    assertTrue(getLatestCompactionInstant().get().requestedTime.compareTo(lastCompactionInstant.get().requestedTime) > 0)
     lastCompactionInstant = getLatestCompactionInstant()
 
     var rollbackedInstant: Option[HoodieInstant] = Option.empty
-    while (rollbackedInstant.isEmpty || rollbackedInstant.get.getRequestTime != lastCompactionInstant.get().getRequestTime) {
+    while (rollbackedInstant.isEmpty || rollbackedInstant.get.requestedTime != lastCompactionInstant.get().requestedTime) {
       // rollback compaction instant
       rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
     }
@@ -385,7 +385,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
 
-    assertTrue(getLatestClusteringInstant().get().getRequestTime.compareTo(lastClusteringInstant.get().getRequestTime) > 0)
+    assertTrue(getLatestClusteringInstant().get().requestedTime.compareTo(lastClusteringInstant.get().requestedTime) > 0)
     assertEquals(getLatestClusteringInstant(), metaClient.getActiveTimeline.lastInstant())
     // We are validating rollback of a DT clustering instant here
     rollbackLastInstant(hudiOpts)
@@ -486,7 +486,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
           .getOperationType == WriteOperationType.COMPACT))
       .lastInstant()
     val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
-      .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getRequestTime)))
+      .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().requestedTime)))
       .findAny()
     assertTrue(compactionBaseFile.isPresent)
   }

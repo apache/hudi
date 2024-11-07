@@ -35,7 +35,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -101,10 +101,10 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
     if (timeline == null) {
       timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
     }
-    HoodieInstant instant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, commitTime);
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, commitTime);
     timeline.createNewInstant(instant);
     timeline.transitionRequestedToInflight(instant, Option.empty());
-    timeline.saveAsComplete(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.getRequestTime()),
+    timeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
         Option.empty());
   }
 

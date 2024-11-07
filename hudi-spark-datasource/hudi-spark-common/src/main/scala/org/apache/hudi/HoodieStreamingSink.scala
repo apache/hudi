@@ -25,7 +25,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteConcurrencyMode}
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.timeline.versioning.v2.InstantFactoryV2
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
@@ -157,14 +156,14 @@ class HoodieStreamingSink(sqlContext: SQLContext,
               .build())
           }
           val instantFactory = metaClient match {
-            case Some(meta) => meta.getTimelineLayout.getInstantFactory
+            case Some(meta) => meta.getTimelineLayout.getInstantGenerator
             case None => {
               // Could be the first micro-batch. As the batch is already done when ctrl reaches here, create a metaclient
               var meta = HoodieTableMetaClient.builder()
                 .setConf(HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration))
                 .setBasePath(tablePath.get)
                 .build()
-              meta.getTimelineLayout.getInstantFactory
+              meta.getTimelineLayout.getInstantGenerator
             }
           }
           if (compactionInstantOps.isPresent) {

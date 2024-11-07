@@ -19,14 +19,14 @@
 package org.apache.hudi.common.table.timeline.versioning.v1;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 
 /**
  *
  */
-public class InstantFileNameFactoryV1 implements InstantFileNameFactory {
+public class InstantFileNameGeneratorV1 implements InstantFileNameGenerator {
 
   @Override
   public String makeCommitFileName(String instantTime) {
@@ -208,7 +208,7 @@ public class InstantFileNameFactoryV1 implements InstantFileNameFactory {
   @Override
   public String getFileName(HoodieInstant instant) {
     String action = instant.getAction();
-    String timestamp = instant.getRequestTime();
+    String timestamp = instant.requestedTime();
     if (HoodieTimeline.COMMIT_ACTION.equals(action)) {
       return instant.isInflight() ? makeInflightCommitFileName(timestamp)
           : instant.isRequested() ? makeRequestedCommitFileName(timestamp)

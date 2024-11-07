@@ -34,15 +34,18 @@ import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
+import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameParser;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -468,7 +471,7 @@ public class HoodieTableMetaClient implements Serializable {
   public String createNewInstantTime(boolean shouldLock) {
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(timeGeneratorConfig, storageConf);
-    return ActiveTimelineUtils.createNewInstantTime(shouldLock, timeGenerator);
+    return TimelineUtils.generateInstantTime(shouldLock, timeGenerator);
   }
 
   public HoodieTimeGeneratorConfig getTimeGeneratorConfig() {
@@ -704,7 +707,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(StoragePath timelinePath, Set<String> includedExtensions,
                                                               boolean applyLayoutVersionFilters) throws IOException {
-    final InstantFactory instantFactory = timelineLayout.getInstantFactory();
+    final InstantGenerator instantFactory = timelineLayout.getInstantGenerator();
     Stream<HoodieInstant> instantStream =
         HoodieTableMetaClient
             .scanFiles(getStorage(), timelinePath, path -> {
@@ -874,6 +877,26 @@ public class HoodieTableMetaClient implements Serializable {
           loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, recordMergeMode, payloadClassName,
           recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig, metaserverConfig);
     }
+  }
+
+  public InstantGenerator getInstantGenerator() {
+    return getTimelineLayout().getInstantGenerator();
+  }
+
+  public InstantFileNameGenerator getInstantFileNameGenerator() {
+    return getTimelineLayout().getInstantFileNameGenerator();
+  }
+
+  public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp) {
+    return getTimelineLayout().getInstantGenerator().createNewInstant(state, action, timestamp);
+  }
+
+  public InstantFileNameParser getInstantFileNameParser() {
+    return getTimelineLayout().getInstantFileNameParser();
+  }
+
+  public CommitMetadataSerDe getCommitMetadataSerDe() {
+    return getTimelineLayout().getCommitMetadataSerDe();
   }
 
   public static TableBuilder newTableBuilder() {

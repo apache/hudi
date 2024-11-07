@@ -268,7 +268,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 
     try (HoodieTableFileSystemView fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles)) {
-      Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getRequestTime));
+      Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::requestedTime));
       validate(activeTimeline, queryInstant);
 
       // NOTE: For MOR table, when the compaction is inflight, we need to not only fetch the

@@ -79,7 +79,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -530,13 +530,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   public static void createRequestedCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) throws IOException {
     Path pendingRequestedFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + INSTANT_FILE_NAME_FACTORY.makeRequestedCommitFileName(instantTime));
+        + INSTANT_FILE_NAME_GENERATOR.makeRequestedCommitFileName(instantTime));
     createEmptyFile(basePath, pendingRequestedFile, configuration);
   }
 
   public static void createPendingCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) throws IOException {
     Path pendingCommitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + INSTANT_FILE_NAME_FACTORY.makeInflightCommitFileName(instantTime));
+        + INSTANT_FILE_NAME_GENERATOR.makeInflightCommitFileName(instantTime));
     createEmptyFile(basePath, pendingCommitFile, configuration);
   }
 
@@ -546,8 +546,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private static void createCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    Arrays.asList(INSTANT_FILE_NAME_FACTORY.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()), INSTANT_FILE_NAME_FACTORY.makeInflightCommitFileName(instantTime),
-            INSTANT_FILE_NAME_FACTORY.makeRequestedCommitFileName(instantTime))
+    Arrays.asList(INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+            INSTANT_FILE_NAME_GENERATOR.makeInflightCommitFileName(instantTime),
+            INSTANT_FILE_NAME_GENERATOR.makeRequestedCommitFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
@@ -557,7 +558,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public static void createOnlyCompletedCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    createMetadataFile(INSTANT_FILE_NAME_FACTORY.makeCommitFileName(instantTime), basePath, configuration, commitMetadata);
+    createMetadataFile(INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime), basePath, configuration, commitMetadata);
   }
 
   public static void createDeltaCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
@@ -566,9 +567,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private static void createDeltaCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    Arrays.asList(INSTANT_FILE_NAME_FACTORY.makeDeltaFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-            INSTANT_FILE_NAME_FACTORY.makeInflightDeltaFileName(instantTime),
-            INSTANT_FILE_NAME_FACTORY.makeRequestedDeltaFileName(instantTime))
+    Arrays.asList(INSTANT_FILE_NAME_GENERATOR.makeDeltaFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+            INSTANT_FILE_NAME_GENERATOR.makeInflightDeltaFileName(instantTime),
+            INSTANT_FILE_NAME_GENERATOR.makeRequestedDeltaFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
@@ -605,20 +606,20 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static void createReplaceCommitRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + INSTANT_FILE_NAME_FACTORY.makeRequestedReplaceFileName(instantTime));
+        + INSTANT_FILE_NAME_GENERATOR.makeRequestedReplaceFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
   public static void createReplaceCommitInflightFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + INSTANT_FILE_NAME_FACTORY.makeInflightReplaceFileName(instantTime));
+        + INSTANT_FILE_NAME_GENERATOR.makeInflightReplaceFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
   private static void createPendingClusterFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    Arrays.asList(INSTANT_FILE_NAME_FACTORY.makeInflightClusteringFileName(instantTime),
-            INSTANT_FILE_NAME_FACTORY.makeRequestedClusteringFileName(instantTime))
+    Arrays.asList(INSTANT_FILE_NAME_GENERATOR.makeInflightClusteringFileName(instantTime),
+            INSTANT_FILE_NAME_GENERATOR.makeRequestedClusteringFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
@@ -630,7 +631,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static void createEmptyCleanRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + INSTANT_FILE_NAME_FACTORY.makeRequestedCleanerFileName(instantTime));
+        + INSTANT_FILE_NAME_GENERATOR.makeRequestedCleanerFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
@@ -643,14 +644,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static void createCompactionRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + INSTANT_FILE_NAME_FACTORY.makeRequestedCompactionFileName(instantTime));
+        + INSTANT_FILE_NAME_GENERATOR.makeRequestedCompactionFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
   public static void createCompactionAuxiliaryMetadata(String basePath, HoodieInstant instant,
                                                        StorageConfiguration<?> configuration) throws IOException {
     Path commitFile =
-        new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + INSTANT_FILE_NAME_FACTORY.getFileName(instant));
+        new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + INSTANT_FILE_NAME_GENERATOR.getFileName(instant));
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
     try (OutputStream os = storage.create(new StoragePath(commitFile.toUri()), true)) {
       HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
@@ -662,7 +663,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static void createSavepointFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + INSTANT_FILE_NAME_FACTORY.makeSavePointFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
+        + INSTANT_FILE_NAME_GENERATOR.makeSavePointFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
     try (OutputStream os = storage.create(new StoragePath(commitFile.toUri()), true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();

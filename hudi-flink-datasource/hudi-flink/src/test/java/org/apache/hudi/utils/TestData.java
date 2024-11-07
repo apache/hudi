@@ -887,7 +887,7 @@ public class TestData {
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
 
     String latestInstant = metaClient.getActiveTimeline().filterCompletedInstants()
-        .lastInstant().map(HoodieInstant::getRequestTime).orElse(null);
+        .lastInstant().map(HoodieInstant::requestedTime).orElse(null);
     assertNotNull(latestInstant, "No completed commit under table path" + basePath);
 
     File[] partitionDirs = baseFile.listFiles(file -> !file.getName().startsWith(".") && file.isDirectory());

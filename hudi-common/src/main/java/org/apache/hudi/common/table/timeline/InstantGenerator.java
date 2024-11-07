@@ -27,7 +27,7 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State;
 /**
  * Factory for generating Instants.
  **/
-public interface InstantFactory extends Serializable {
+public interface InstantGenerator extends Serializable {
   
   HoodieInstant createNewInstant(State state, String action, String timestamp);
 

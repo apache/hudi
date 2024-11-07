@@ -40,7 +40,7 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommitMetadata;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createInflightCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingCompaction;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 
 public class TestSimpleConcurrentFileWritesConflictResolutionStrategyWithMORTable extends HoodieCommonTestHarness {
   @Override
@@ -70,7 +70,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategyWithMORTabl
 
     // Writer 1 tries to commit.
     Option<HoodieInstant> currentInstant = Option.of(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, currentWriterInstant));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, currentWriterInstant));
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
 

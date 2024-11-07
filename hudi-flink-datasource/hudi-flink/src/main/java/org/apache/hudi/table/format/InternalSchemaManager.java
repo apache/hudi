@@ -21,7 +21,7 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -79,7 +79,7 @@ public class InternalSchemaManager implements Serializable {
       return DISABLED;
     }
 
-    InstantFileNameFactory factory = metaClient.getTimelineLayout().getInstantFileNameFactory();
+    InstantFileNameGenerator factory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
     String validCommits = metaClient
         .getCommitsAndCompactionTimeline()
         .filterCompletedInstants()

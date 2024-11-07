@@ -105,7 +105,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
       for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet.asScala) {
         for (hoodieWriteStat <- partitionWriteStat.getValue.asScala) {
           rows.add(Row(
-            commit.getRequestTime, commit.getCompletionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
+            commit.requestedTime, commit.getCompletionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
             hoodieWriteStat.getFileId, hoodieWriteStat.getPrevCommit, hoodieWriteStat.getNumWrites,
             hoodieWriteStat.getNumInserts, hoodieWriteStat.getNumDeletes, hoodieWriteStat.getNumUpdateWrites,
             hoodieWriteStat.getTotalWriteErrors, hoodieWriteStat.getTotalLogBlocks, hoodieWriteStat.getTotalCorruptLogBlock,
@@ -125,7 +125,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
       .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
     val newCommits = new util.ArrayList[HoodieInstant](commits)
     val layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion)
-    Collections.sort(newCommits, layout.getInstantComparator.getRequestTimePrimaryOrderingComparator.reversed)
+    Collections.sort(newCommits, layout.getInstantComparator.requestedTimeOrderedComparator.reversed)
     (rows, newCommits)
   }
 
@@ -136,7 +136,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = layout.getCommitMetadataSerDe.deserialize(commit, timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      rows.add(Row(commit.getRequestTime, commit.getCompletionTime, commit.getAction, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
+      rows.add(Row(commit.requestedTime, commit.getCompletionTime, commit.getAction, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
         commitMetadata.fetchTotalFilesUpdated, commitMetadata.fetchTotalPartitionsWritten,
         commitMetadata.fetchTotalRecordsWritten, commitMetadata.fetchTotalUpdateRecordsWritten,
         commitMetadata.fetchTotalWriteErrors))

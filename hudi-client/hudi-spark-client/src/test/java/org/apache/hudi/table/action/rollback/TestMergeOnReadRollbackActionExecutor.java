@@ -68,7 +68,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -111,7 +111,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
 
     //2. rollback
-    HoodieInstant rollBackInstant = INSTANT_FACTORY.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
+    HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
         HoodieTimeline.DELTA_COMMIT_ACTION, "002");
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false,
@@ -199,7 +199,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     //3. rollback log compact
     metaClient.reloadActiveTimeline();
-    HoodieInstant rollBackInstant = INSTANT_FACTORY.createNewInstant(!isComplete ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
+    HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(!isComplete ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
         action, "003");
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
@@ -285,7 +285,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
 
     //3. rollback the update to partition1 and partition2
-    HoodieInstant rollBackInstant = INSTANT_FACTORY.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
+    HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
         HoodieTimeline.DELTA_COMMIT_ACTION, "002");
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false,
@@ -305,7 +305,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "002").doesMarkerDirExist());
 
     // rollback 001 as well. this time since its part of the restore, entire file slice should be deleted and not just log files (for partition1 and partition2)
-    HoodieInstant rollBackInstant1 = INSTANT_FACTORY.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
+    HoodieInstant rollBackInstant1 = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
         HoodieTimeline.DELTA_COMMIT_ACTION, "001");
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor1 =
         new BaseRollbackPlanActionExecutor(context, cfg, table, "004", rollBackInstant1, false,
@@ -371,7 +371,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     String generatedFileID = firstPartitionCommit2FileGroups.get(0).getFileGroupId().getFileId();
 
     // check hoodieCommitMeta
-    HoodieInstant instant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001");
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001");
     HoodieCommitMetadata commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(instant,
         table.getMetaClient().getCommitTimeline()
             .getInstantDetails(instant)
@@ -399,7 +399,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     statuses = client.upsert(writeRecords, newCommitTime);
     client.commit(newCommitTime, statuses);
     table = this.getHoodieTable(metaClient, cfg);
-    HoodieInstant instant1 = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime);
+    HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime);
     commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(instant1,
         table.getMetaClient().getCommitTimeline()
             .getInstantDetails(instant1)
@@ -422,7 +422,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertEquals(2, hoodieWriteStatOptionList.get(0).getNumInserts());
 
     // Rollback
-    HoodieInstant rollBackInstant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
+    HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false,
             cfg.shouldRollbackUsingMarkers(), false);

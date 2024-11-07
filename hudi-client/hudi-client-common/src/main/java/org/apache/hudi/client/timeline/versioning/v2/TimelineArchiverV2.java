@@ -41,7 +41,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -61,8 +60,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.ArchivalUtils.getMinAndMaxInstantsToKeep;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
@@ -79,7 +78,6 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
   private final TransactionManager txnManager;
 
   private final LSMTimelineWriter timelineWriter;
-  private final HoodieMetrics metrics;
 
   public TimelineArchiverV2(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -90,7 +88,6 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
-    this.metrics = new HoodieMetrics(config, metaClient.getStorage());
   }
 
   @Override
@@ -148,7 +145,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     //  CleanAndRollbackInstantsToArchive: clean1, clean2, rollback1
 
     return cleanAndRollbackTimeline.getInstantsAsStream()
-        .filter(s -> compareTimestamps(s.getRequestTime(), LESSER_THAN, latestCommitInstantToArchive.getRequestTime()))
+        .filter(s -> compareTimestamps(s.requestedTime(), LESSER_THAN, latestCommitInstantToArchive.requestedTime()))
         .collect(Collectors.toList());
   }
 
@@ -173,7 +170,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     Option<HoodieInstant> earliestCommitToRetain;
     if (earliestPendingInstant.isPresent()) {
       Option<HoodieInstant> completedCommitBeforeEarliestPendingInstant = Option.fromJavaOptional(completedCommitsTimeline
-          .filter(instant -> compareTimestamps(instant.getRequestTime(), LESSER_THAN, earliestPendingInstant.get().getRequestTime()))
+          .filter(instant -> compareTimestamps(instant.requestedTime(), LESSER_THAN, earliestPendingInstant.get().requestedTime()))
           .getReverseOrderedInstants().findFirst());
       // Check if the completed instant is higher than the earliest inflight instant
       // in that case update the earliestCommitToRetain to earliestInflight commit time.
@@ -261,7 +258,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         .stream()
         .filter(Option::isPresent)
         .map(Option::get)
-        .min(InstantComparatorV2.COMPARATOR);
+        .min(InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
 
     // Step2: We cannot archive any commits which are made after the first savepoint present,
     // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
@@ -272,14 +269,14 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         .filter(s -> {
           if (config.shouldArchiveBeyondSavepoint()) {
             // skip savepoint commits and proceed further
-            return !savepointTimestamps.contains(s.getRequestTime());
+            return !savepointTimestamps.contains(s.requestedTime());
           } else {
             // if no savepoint present, then don't filter
             // stop at first savepoint commit
-            return !firstSavepoint.isPresent() || compareTimestamps(s.getRequestTime(), LESSER_THAN, firstSavepoint.get().getRequestTime());
+            return !firstSavepoint.isPresent() || compareTimestamps(s.requestedTime(), LESSER_THAN, firstSavepoint.get().requestedTime());
           }
         }).filter(s -> earliestInstantToRetain
-            .map(instant -> compareTimestamps(s.getRequestTime(), LESSER_THAN, instant.getRequestTime()))
+            .map(instant -> compareTimestamps(s.requestedTime(), LESSER_THAN, instant.requestedTime()))
             .orElse(true));
     return instantToArchiveStream.limit(completedCommitsTimeline.countInstants() - minInstantsToKeep)
         .collect(Collectors.toList());
@@ -298,7 +295,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       List<HoodieInstant> cleanAndRollbackInstantsToArchive =
           getCleanAndRollbackInstantsToArchive(latestCommitInstantToArchive);
       instantsToArchive.addAll(cleanAndRollbackInstantsToArchive);
-      instantsToArchive.sort(InstantComparatorV2.COMPARATOR);
+      instantsToArchive.sort(InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     }
 
     // For archive, we need to include instant's all states.
@@ -308,11 +305,11 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     //TODO: HARDCODED TIMELINE OBJECT
     HoodieActiveTimeline rawActiveTimeline = new ActiveTimelineV2(metaClient, false);
     Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
-        .collect(Collectors.groupingBy(i -> Pair.of(i.getRequestTime(),
+        .collect(Collectors.groupingBy(i -> Pair.of(i.requestedTime(),
             InstantComparatorV2.getComparableAction(i.getAction()))));
 
     return instantsToArchive.stream().flatMap(hoodieInstant -> {
-      List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getRequestTime(),
+      List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.requestedTime(),
           InstantComparatorV2.getComparableAction(hoodieInstant.getAction())));
       if (instantsToStream != null) {
         return Stream.of(ActiveAction.fromInstants(instantsToStream));

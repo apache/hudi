@@ -27,11 +27,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
-public class TimelineArchiverFactory<T extends HoodieAvroPayload, I, K, O>  {
+public class TimelineArchivers<T extends HoodieAvroPayload, I, K, O>  {
 
-  public HoodieTimelineArchiver<T, I, K, O> getTimelineArchiver(TimelineLayoutVersion layoutVersion,
-                                                                HoodieWriteConfig config,
-                                                                HoodieTable<T, I, K, O> table) {
+  public static <T extends HoodieAvroPayload, I, K, O>  HoodieTimelineArchiver<T, I, K, O> getInstance(TimelineLayoutVersion layoutVersion,
+                                                                                                       HoodieWriteConfig config,
+                                                                                                       HoodieTable<T, I, K, O> table) {
     if (layoutVersion.equals(TimelineLayoutVersion.LAYOUT_VERSION_0) || layoutVersion.equals(TimelineLayoutVersion.LAYOUT_VERSION_1)) {
       return new TimelineArchiverV1<>(config, table);
     } else if (layoutVersion.equals(TimelineLayoutVersion.LAYOUT_VERSION_2)) {

@@ -26,7 +26,7 @@ import java.util.function.BiPredicate;
 /**
  * Helper methods to compare instants.
  **/
-public class InstantComparatorUtils {
+public class InstantComparison {
 
   public static final BiPredicate<String, String> EQUALS = (commit1, commit2) -> commit1.compareTo(commit2) == 0;
   public static final BiPredicate<String, String> GREATER_THAN_OR_EQUALS = (commit1, commit2) -> commit1.compareTo(commit2) >= 0;
@@ -55,8 +55,8 @@ public class InstantComparatorUtils {
    * Returns the non null argument if one of the argument is null.
    */
   public static HoodieInstant minTimestampInstant(HoodieInstant instant1, HoodieInstant instant2) {
-    String commit1 = instant1 != null ? instant1.getRequestTime() : null;
-    String commit2 = instant2 != null ? instant2.getRequestTime() : null;
+    String commit1 = instant1 != null ? instant1.requestedTime() : null;
+    String commit2 = instant2 != null ? instant2.requestedTime() : null;
     String minTimestamp = minTimestamp(commit1, commit2);
     return Objects.equals(minTimestamp, commit1) ? instant1 : instant2;
   }

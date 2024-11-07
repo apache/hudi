@@ -281,7 +281,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
           // The latest clustering should contain 2 file groups
           val clusteringInstant = clusteringInstants.last
-          val clusteringPlan = HoodieDataSourceHelpers.getClusteringPlan(fs, basePath, clusteringInstant.getRequestTime)
+          val clusteringPlan = HoodieDataSourceHelpers.getClusteringPlan(fs, basePath, clusteringInstant.requestedTime)
           assertResult(true)(clusteringPlan.isPresent)
           assertResult(2)(clusteringPlan.get().getInputGroups.size())
           assertResult(resultA(0)(1))(clusteringPlan.get().getInputGroups.size())
@@ -327,7 +327,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
           // The latest clustering should contain 4 file groups(1002,1003,1004,1005)
           val clusteringInstant = clusteringInstants.last
-          val clusteringPlan = HoodieDataSourceHelpers.getClusteringPlan(fs, basePath, clusteringInstant.getRequestTime)
+          val clusteringPlan = HoodieDataSourceHelpers.getClusteringPlan(fs, basePath, clusteringInstant.requestedTime)
           assertResult(true)(clusteringPlan.isPresent)
           assertResult(4)(clusteringPlan.get().getInputGroups.size())
 
@@ -377,7 +377,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
           // The latest clustering should contain 3 file groups(1006,1007,1009)
           val clusteringInstant = clusteringInstants.last
-          val clusteringPlan = HoodieDataSourceHelpers.getClusteringPlan(fs, basePath, clusteringInstant.getRequestTime)
+          val clusteringPlan = HoodieDataSourceHelpers.getClusteringPlan(fs, basePath, clusteringInstant.requestedTime)
           assertResult(true)(clusteringPlan.isPresent)
           assertResult(3)(clusteringPlan.get().getInputGroups.size())
 
@@ -444,7 +444,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       val conf = new Configuration
       val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
-      val instants = metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.iterator().asScala.map(_.getRequestTime).toSeq
+      val instants = metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.iterator().asScala.map(_.requestedTime).toSeq
       assert(2 == instants.size)
 
       checkExceptionContain(
@@ -474,7 +474,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       // test with operator execute
       spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
       metaClient.reloadActiveTimeline()
-      val instants2 = metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.iterator().asScala.map(_.getRequestTime).toSeq
+      val instants2 = metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.iterator().asScala.map(_.requestedTime).toSeq
       spark.sql(s"call run_clustering(table => '$tableName', instants => '${instants2.mkString(",")}', op => 'execute')")
       metaClient.reloadActiveTimeline()
       assert(3 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())

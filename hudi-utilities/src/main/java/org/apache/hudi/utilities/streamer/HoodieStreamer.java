@@ -42,7 +42,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -797,7 +797,7 @@ public class HoodieStreamer implements Serializable {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
           .setConf(this.storage.getConf().newInstance())
           .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
-      final InstantFactory instantFactory = meta.getTimelineLayout().getInstantFactory();
+      final InstantGenerator instantFactory = meta.getTimelineLayout().getInstantGenerator();
       return Pair.of(CompletableFuture.supplyAsync(() -> {
         boolean error = false;
         if (cfg.isAsyncCompactionEnabled()) {

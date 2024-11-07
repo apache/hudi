@@ -38,8 +38,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy}.
@@ -61,14 +61,14 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     Stream<HoodieInstant> completedCommitsInstantStream = activeTimeline
         .getCommitsTimeline()
         .filterCompletedInstants()
-        .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().getRequestTime() : HoodieTimeline.INIT_INSTANT_TS)
+        .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().requestedTime() : HoodieTimeline.INIT_INSTANT_TS)
         .getInstantsAsStream();
 
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
         .filterPendingReplaceClusteringAndCompactionTimeline()
-        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getTimelineLayout().getInstantFactory())
+        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getTimelineLayout().getInstantGenerator())
             || HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction()))
-        .findInstantsAfter(currentInstant.getRequestTime())
+        .findInstantsAfter(currentInstant.requestedTime())
         .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }

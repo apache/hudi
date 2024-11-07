@@ -21,7 +21,6 @@ package org.apache.hudi.utils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -45,7 +44,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -70,7 +69,7 @@ public class TestUtils {
     return metaClient.getCommitsTimeline().filterCompletedInstants()
         .filter(instant -> commitAction.equals(instant.getAction()))
         .lastInstant()
-        .map(HoodieInstant::getRequestTime)
+        .map(HoodieInstant::requestedTime)
         .orElse(null);
   }
 
@@ -80,7 +79,7 @@ public class TestUtils {
     return metaClient.getCommitsTimeline().filterCompletedInstants()
         .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
         .lastInstant()
-        .map(HoodieInstant::getRequestTime)
+        .map(HoodieInstant::requestedTime)
         .orElse(null);
   }
 
@@ -88,7 +87,7 @@ public class TestUtils {
     final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
         new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().firstInstant()
-        .map(HoodieInstant::getRequestTime).orElse(null);
+        .map(HoodieInstant::requestedTime).orElse(null);
   }
 
   @Nullable
@@ -98,7 +97,7 @@ public class TestUtils {
     return metaClient.getActiveTimeline()
         .filterCompletedInstants()
         .filter(instant -> action.equals(instant.getAction()))
-        .nthInstant(n).map(HoodieInstant::getRequestTime)
+        .nthInstant(n).map(HoodieInstant::requestedTime)
         .orElse(null);
   }
 
@@ -107,7 +106,7 @@ public class TestUtils {
     final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
         new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getArchivedTimeline().getCommitsTimeline().filterCompletedInstants()
-        .nthInstant(n).map(HoodieInstant::getRequestTime).orElse(null);
+        .nthInstant(n).map(HoodieInstant::requestedTime).orElse(null);
   }
 
   public static String getSplitPartitionPath(MergeOnReadInputSplit split) {
@@ -138,13 +137,13 @@ public class TestUtils {
   public static HoodieCommitMetadata deleteInstantFile(HoodieTableMetaClient metaClient, HoodieInstant instant) throws Exception {
     ValidationUtils.checkArgument(instant.isCompleted());
     HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
-    ActiveTimelineUtils.deleteInstantFile(metaClient.getStorage(), metaClient.getMetaPath(),
-        instant, metaClient.getTimelineLayout().getInstantFileNameFactory());
+    TimelineUtils.deleteInstantFile(metaClient.getStorage(), metaClient.getMetaPath(),
+        instant, metaClient.getTimelineLayout().getInstantFileNameGenerator());
     return metadata;
   }
 
   public static void saveInstantAsComplete(HoodieTableMetaClient metaClient, HoodieInstant instant, HoodieCommitMetadata metadata) throws Exception {
-    metaClient.getActiveTimeline().saveAsComplete(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.getRequestTime()),
+    metaClient.getActiveTimeline().saveAsComplete(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
         serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), metadata));
   }
 

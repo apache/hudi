@@ -101,7 +101,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     val iSchema : InternalSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
       InternalSchema.getEmptyInternalSchema
     } else if (useEndInstantSchema && !commitsToReturn.isEmpty) {
-      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getRequestTime.toLong, metaClient)
+      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.requestedTime.toLong, metaClient)
     } else {
       schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
     }
@@ -153,10 +153,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
       }.toMap
 
       for (commit <- commitsToReturn) {
-        val metadata: HoodieCommitMetadata = metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(commit,
+        val metadata: HoodieCommitMetadata = metaClient.getCommitMetadataSerDe.deserialize(commit,
           commitTimeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
 
-        if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getRequestTime) {
+        if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.requestedTime) {
           metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
             replacedFile.contains(k) && v.startsWith(replacedFile(k))
           }
@@ -186,7 +186,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         }
       }
       // pass internalSchema to hadoopConf, so it can be used in executors.
-      val instantFileNameFactory = metaClient.getTimelineLayout.getInstantFileNameFactory;
+      val instantFileNameFactory = metaClient.getTimelineLayout.getInstantFileNameGenerator;
       val validCommits = metaClient
         .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(a => instantFileNameFactory.getFileName(a.asInstanceOf[HoodieInstant])).mkString(",")
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
@@ -257,7 +257,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
             if (regularFileIdToFullPath.nonEmpty) {
               try {
-                val commitTimesToReturn = commitsToReturn.map(_.getRequestTime)
+                val commitTimesToReturn = commitsToReturn.map(_.requestedTime)
                 df = df.union(sqlContext.read.options(sOpts)
                   .schema(usedSchema).format(formatClassName)
                   // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
@@ -283,7 +283,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
   }
 
   private def fullTableScanDataFrame(commitsToFilter: List[HoodieInstant]): DataFrame = {
-    val commitTimesToFilter = commitsToFilter.map(_.getRequestTime)
+    val commitTimesToFilter = commitsToFilter.map(_.requestedTime)
     val hudiDF = sqlContext.read
       .format("hudi_v1")
       .schema(usedSchema)

@@ -52,11 +52,11 @@ class RollbackToSavepointProcedure extends BaseProcedure with ProcedureBuilder w
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
-    val instantFactory = metaClient.getTimelineLayout.getInstantFactory
+    val instantFactory = metaClient.getTimelineLayout.getInstantGenerator
     val completedInstants = metaClient.getActiveTimeline.getSavePointTimeline.filterCompletedInstants
     if (completedInstants.empty) throw new HoodieException("There are no completed savepoint to run delete")
     if (StringUtils.isNullOrEmpty(instantTime)) {
-      instantTime = completedInstants.lastInstant.get.getRequestTime
+      instantTime = completedInstants.lastInstant.get.requestedTime
     }
     val savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, instantTime)
 

@@ -179,7 +179,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void removePendingCompactionInstant(HoodieInstant instant) throws IOException {
     LOG.info("Removing completed compaction instant (" + instant + ")");
-    HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, instant.getRequestTime());
+    HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, instant.requestedTime());
     removePendingCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
         .map(instantPair -> Pair.of(instantPair.getValue().getKey(),
             CompactionOperation.convertFromAvroRecordInstance(instantPair.getValue().getValue()))));
@@ -193,7 +193,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void removePendingLogCompactionInstant(HoodieInstant instant) throws IOException {
     LOG.info("Removing completed log compaction instant (" + instant + ")");
-    HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, instant.getRequestTime());
+    HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, instant.requestedTime());
     removePendingLogCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
         .map(instantPair -> Pair.of(instantPair.getValue().getKey(),
             CompactionOperation.convertFromAvroRecordInstance(instantPair.getValue().getValue()))));
@@ -207,7 +207,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addPendingCompactionInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing pending compaction instant (" + instant + ")");
-    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(metaClient, instant.getRequestTime());
+    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(metaClient, instant.requestedTime());
     List<Pair<String, CompactionOperation>> pendingOps =
         CompactionUtils.getPendingCompactionOperations(instant, compactionPlan)
             .map(p -> Pair.of(p.getValue().getKey(),
@@ -237,7 +237,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addPendingLogCompactionInstant(HoodieInstant instant) throws IOException {
     LOG.info("Syncing pending log compaction instant (" + instant + ")");
-    HoodieCompactionPlan compactionPlan = CompactionUtils.getLogCompactionPlan(metaClient, instant.getRequestTime());
+    HoodieCompactionPlan compactionPlan = CompactionUtils.getLogCompactionPlan(metaClient, instant.requestedTime());
     List<Pair<String, CompactionOperation>> pendingOps =
         CompactionUtils.getPendingCompactionOperations(instant, compactionPlan)
             .map(p -> Pair.of(p.getValue().getKey(),

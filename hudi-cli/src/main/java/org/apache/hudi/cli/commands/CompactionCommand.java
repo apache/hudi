@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -124,7 +124,7 @@ public class CompactionCommand {
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
-    InstantFactory instantFactory = client.getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = client.getTimelineLayout().getInstantGenerator();
     HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
         activeTimeline.readCompactionPlanAsBytes(
             instantFactory.getCompactionRequestedInstant(compactionInstantTime)).get());
@@ -175,7 +175,7 @@ public class CompactionCommand {
       @ShellOption(value = {"--partition"}, help = "Partition value", defaultValue = ShellOption.NULL) final String partition)
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
-    InstantFactory instantFactory = client.getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = client.getTimelineLayout().getInstantGenerator();
     HoodieArchivedTimeline archivedTimeline = client.getArchivedTimeline();
     HoodieInstant instant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED,
         HoodieTimeline.COMPACTION_ACTION, compactionInstantTime);
@@ -248,7 +248,7 @@ public class CompactionCommand {
       Option<String> firstPendingInstant =
           client.reloadActiveTimeline().filterCompletedAndCompactionInstants()
               .filter(instant -> instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)).firstInstant()
-              .map(HoodieInstant::getRequestTime);
+              .map(HoodieInstant::requestedTime);
       if (!firstPendingInstant.isPresent()) {
         return "NO PENDING COMPACTION TO RUN";
       }
@@ -323,25 +323,25 @@ public class CompactionCommand {
         .collect(Collectors.toList());
 
     Set<String> committedInstants = timeline.getCommitAndReplaceTimeline().filterCompletedInstants()
-        .getInstantsAsStream().map(HoodieInstant::getRequestTime).collect(Collectors.toSet());
+        .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toSet());
 
     List<Comparable[]> rows = new ArrayList<>();
     for (Pair<HoodieInstant, HoodieCompactionPlan> compactionPlan : compactionPlans) {
       HoodieCompactionPlan plan = compactionPlan.getRight();
       HoodieInstant instant = compactionPlan.getLeft();
       final HoodieInstant.State state;
-      if (committedInstants.contains(instant.getRequestTime())) {
+      if (committedInstants.contains(instant.requestedTime())) {
         state = HoodieInstant.State.COMPLETED;
       } else {
         state = instant.getState();
       }
 
       if (includeExtraMetadata) {
-        rows.add(new Comparable[] {instant.getRequestTime(), state.toString(),
+        rows.add(new Comparable[] {instant.requestedTime(), state.toString(),
             plan.getOperations() == null ? 0 : plan.getOperations().size(),
             plan.getExtraMetadata().toString()});
       } else {
-        rows.add(new Comparable[] {instant.getRequestTime(), state.toString(),
+        rows.add(new Comparable[] {instant.requestedTime(), state.toString(),
             plan.getOperations() == null ? 0 : plan.getOperations().size()});
       }
     }
@@ -383,21 +383,21 @@ public class CompactionCommand {
    */
   private HoodieCompactionPlan readCompactionPlanForActiveTimeline(HoodieActiveTimeline activeTimeline,
                                                                    HoodieInstant instant) {
-    InstantFactory instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
     try {
       if (!HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
           return TimelineMetadataUtils.deserializeCompactionPlan(
               activeTimeline.readCompactionPlanAsBytes(
-                  instantFactory.getCompactionRequestedInstant(instant.getRequestTime())).get());
+                  instantFactory.getCompactionRequestedInstant(instant.requestedTime())).get());
         } catch (HoodieIOException ioe) {
           // SKIP
           return null;
         }
       } else {
         return TimelineMetadataUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
-            instantFactory.getCompactionRequestedInstant(instant.getRequestTime())).get());
+            instantFactory.getCompactionRequestedInstant(instant.requestedTime())).get());
       }
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);

@@ -294,15 +294,15 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     if (bulkInsertFirst) {
       assertEquals(3, instants.size());
       // check that bulk insert finished before the upsert started
-      assertTrue(Long.parseLong(instants.get(0).getCompletionTime()) < Long.parseLong(instants.get(1).getRequestTime()));
+      assertTrue(Long.parseLong(instants.get(0).getCompletionTime()) < Long.parseLong(instants.get(1).requestedTime()));
       // check that the upserts overlapped in time
-      assertTrue(Long.parseLong(instants.get(1).getCompletionTime()) > Long.parseLong(instants.get(2).getRequestTime()));
-      assertTrue(Long.parseLong(instants.get(2).getCompletionTime()) > Long.parseLong(instants.get(1).getRequestTime()));
+      assertTrue(Long.parseLong(instants.get(1).getCompletionTime()) > Long.parseLong(instants.get(2).requestedTime()));
+      assertTrue(Long.parseLong(instants.get(2).getCompletionTime()) > Long.parseLong(instants.get(1).requestedTime()));
     } else {
       assertEquals(2, instants.size());
       // check that the upserts overlapped in time
-      assertTrue(Long.parseLong(instants.get(0).getCompletionTime()) > Long.parseLong(instants.get(1).getRequestTime()));
-      assertTrue(Long.parseLong(instants.get(1).getCompletionTime()) > Long.parseLong(instants.get(0).getRequestTime()));
+      assertTrue(Long.parseLong(instants.get(0).getCompletionTime()) > Long.parseLong(instants.get(1).requestedTime()));
+      assertTrue(Long.parseLong(instants.get(1).getCompletionTime()) > Long.parseLong(instants.get(0).requestedTime()));
     }
   }
 

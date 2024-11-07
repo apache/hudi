@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -117,7 +117,7 @@ public class InternalSchemaCache {
   private static Option<InternalSchema> getSchemaByReadingCommitFile(long versionID, HoodieTableMetaClient metaClient) {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(f -> f.getRequestTime().equals(String.valueOf(versionID))).collect(Collectors.toList());
+      List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(f -> f.requestedTime().equals(String.valueOf(versionID))).collect(Collectors.toList());
       if (instants.isEmpty()) {
         return Option.empty();
       }
@@ -199,9 +199,8 @@ public class InternalSchemaCache {
         } catch (IOException e) {
           throw e;
         }
-        short repl = 0;
-        HoodieCommitMetadata metadata = layout.getCommitMetadataSerDe().deserialize(layout.getInstantFactory().createNewInstant(
-            new StoragePathInfo(candidateCommitFile, -1, false, repl, 0L, 0L)),
+        HoodieCommitMetadata metadata = layout.getCommitMetadataSerDe().deserialize(layout.getInstantGenerator().createNewInstant(
+            new StoragePathInfo(candidateCommitFile, -1, false, (short)0, 0L, 0L)),
             data, HoodieCommitMetadata.class);
         String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
         avroSchema = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
@@ -232,7 +231,7 @@ public class InternalSchemaCache {
   }
 
   public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {
-    InstantFileNameFactory factory = metaClient.getTimelineLayout().getInstantFileNameFactory();
+    InstantFileNameGenerator factory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
     String validCommitLists = metaClient
         .getCommitsAndCompactionTimeline().filterCompletedInstants().getInstantsAsStream().map(factory::getFileName).collect(Collectors.joining(","));
     return getInternalSchemaByVersionId(versionId, metaClient.getBasePath().toString(), metaClient.getStorage(),

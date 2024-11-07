@@ -28,9 +28,9 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -61,7 +61,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -241,9 +241,9 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     HoodieCommitMetadata commitMetadata = generateCommitMetadata("00000000000011", Collections.singletonMap(p0,
         CollectionUtils.createImmutableList(file3P0C2)));
     metaClient.getActiveTimeline().createNewInstant(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"));
     metaClient.getActiveTimeline().transitionRequestedToInflight(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"),
         serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
     List<HoodieCleanStat> hoodieCleanStatsFive2 =
         runCleaner(config, simulateFailureRetry, simulateMetadataFailure, 12, true);
@@ -589,9 +589,9 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
         .build();
 
     long now = System.currentTimeMillis();
-    String commitInstant = ActiveTimelineUtils.formatDate(new Date(now - 49 * 3600 * 1000));
-    String deleteInstant1 = ActiveTimelineUtils.formatDate(new Date(now - 48 * 3600 * 1000));
-    String deleteInstant2 = ActiveTimelineUtils.formatDate(new Date(now - 24 * 3600 * 1000));
+    String commitInstant = TimelineUtils.formatDate(new Date(now - 49 * 3600 * 1000));
+    String deleteInstant1 = TimelineUtils.formatDate(new Date(now - 48 * 3600 * 1000));
+    String deleteInstant2 = TimelineUtils.formatDate(new Date(now - 24 * 3600 * 1000));
 
     String p1 = "part_1";
     String file1P1 = UUID.randomUUID().toString();
@@ -666,7 +666,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       Instant instant = Instant.now();
       ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
       int minutesForFirstCommit = 180;
-      String firstCommitTs = ActiveTimelineUtils.formatDate(Date.from(commitDateTime.minusMinutes(minutesForFirstCommit).toInstant()));
+      String firstCommitTs = TimelineUtils.formatDate(Date.from(commitDateTime.minusMinutes(minutesForFirstCommit).toInstant()));
       Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
         {
           put(p0, CollectionUtils.createImmutableList(file1P0C0));
@@ -685,7 +685,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
 
       // make next commit, with 1 insert & 1 update per partition
       int minutesForSecondCommit = 150;
-      String secondCommitTs = ActiveTimelineUtils.formatDate(Date.from(commitDateTime.minusMinutes(minutesForSecondCommit).toInstant()));
+      String secondCommitTs = TimelineUtils.formatDate(Date.from(commitDateTime.minusMinutes(minutesForSecondCommit).toInstant()));
       Map<String, String> partitionAndFileId002 = testTable.addInflightCommit(secondCommitTs).getFileIdsWithBaseFilesInPartitions(p0, p1);
       String file2P0C1 = partitionAndFileId002.get(p0);
       String file2P1C1 = partitionAndFileId002.get(p1);
@@ -701,7 +701,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
 
       // make next commit, with 1 insert per partition
       int minutesForThirdCommit = 90;
-      String thirdCommitTs = ActiveTimelineUtils.formatDate(Date.from(commitDateTime.minusMinutes(minutesForThirdCommit).toInstant()));
+      String thirdCommitTs = TimelineUtils.formatDate(Date.from(commitDateTime.minusMinutes(minutesForThirdCommit).toInstant()));
       Map<String, String> partitionAndFileId003 = testTable.addInflightCommit(thirdCommitTs).getFileIdsWithBaseFilesInPartitions(p0, p1);
       String file3P0C1 = partitionAndFileId003.get(p0);
       String file3P1C1 = partitionAndFileId003.get(p1);

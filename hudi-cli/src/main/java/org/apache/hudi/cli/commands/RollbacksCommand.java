@@ -28,7 +28,7 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -98,7 +98,7 @@ public class RollbacksCommand {
       throws IOException {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
-    InstantFactory instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
     HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(instantFactory.createNewInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
         HoodieRollbackMetadata.class);
@@ -135,7 +135,7 @@ public class RollbacksCommand {
           help = "Enabling marker based rollback") final String rollbackUsingMarkers)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline filteredTimeline = activeTimeline.filter(instant -> instant.getRequestTime().equals(instantTime));
+    HoodieTimeline filteredTimeline = activeTimeline.filter(instant -> instant.requestedTime().equals(instantTime));
     if (filteredTimeline.empty()) {
       return "Commit " + instantTime + " not found in Commits " + activeTimeline;
     }

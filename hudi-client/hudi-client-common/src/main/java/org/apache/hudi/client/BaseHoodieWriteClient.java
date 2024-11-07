@@ -48,12 +48,12 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
@@ -114,7 +114,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
@@ -235,7 +235,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable table = createTable(config);
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
-    InstantFactory instantFactory = table.getInstantFactory();
+    InstantGenerator instantFactory = table.getInstantFactory();
     HoodieInstant inflightInstant = instantFactory.createNewInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
@@ -296,7 +296,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     // update Metadata table
     writeTableMetadata(table, instantTime, metadata, writeStatuses);
-    InstantFactory instantFactory = table.getInstantFactory();
+    InstantGenerator instantFactory = table.getInstantFactory();
     activeTimeline.saveAsComplete(false, instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime),
         serializeCommitMetadata(table.getMetaClient().getTimelineLayout().getCommitMetadataSerDe(), metadata));
   }
@@ -362,7 +362,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       long durationInMs = metrics.getDurationInMs(writeTimer.stop());
       // instantTime could be a non-standard value, so use `parseDateFromInstantTimeSafely`
       // e.g. INIT_INSTANT_TS, METADATA_BOOTSTRAP_INSTANT_TS and FULL_BOOTSTRAP_INSTANT_TS in HoodieTimeline
-      ActiveTimelineUtils.parseDateFromInstantTimeSafely(instantTime).ifPresent(parsedInstant ->
+      TimelineUtils.parseDateFromInstantTimeSafely(instantTime).ifPresent(parsedInstant ->
           metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, actionType)
       );
       writeTimer = null;
@@ -648,7 +648,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       throw new HoodieSavepointException("Could not savepoint. Commit timeline is empty");
     }
 
-    String latestCommit = table.getCompletedCommitsTimeline().lastInstant().get().getRequestTime();
+    String latestCommit = table.getCompletedCommitsTimeline().lastInstant().get().requestedTime();
     LOG.info("Savepointing latest commit " + latestCommit);
     savepoint(latestCommit, user, comment);
   }
@@ -681,7 +681,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       throw new HoodieSavepointException("Could not delete savepoint. Savepoint timeline is empty");
     }
 
-    String savepointTime = savePointTimeline.lastInstant().get().getRequestTime();
+    String savepointTime = savePointTimeline.lastInstant().get().requestedTime();
     LOG.info("Deleting latest savepoint time " + savepointTime);
     deleteSavepoint(savepointTime);
   }
@@ -707,7 +707,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       throw new HoodieSavepointException("Could not restore to savepoint. Savepoint timeline is empty");
     }
 
-    String savepointTime = savePointTimeline.lastInstant().get().getRequestTime();
+    String savepointTime = savePointTimeline.lastInstant().get().requestedTime();
     LOG.info("Restoring to latest savepoint time " + savepointTime);
     restoreToSavepoint(savepointTime);
   }
@@ -734,9 +734,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         Option<HoodieInstant> oldestMdtCompaction = mdtMetaClient.getCommitTimeline().filterCompletedInstants().firstInstant();
         boolean deleteMDT = false;
         if (oldestMdtCompaction.isPresent()) {
-          if (LESSER_THAN_OR_EQUALS.test(savepointTime, oldestMdtCompaction.get().getRequestTime())) {
+          if (LESSER_THAN_OR_EQUALS.test(savepointTime, oldestMdtCompaction.get().requestedTime())) {
             LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than oldest compaction %s on MDT",
-                savepointTime, oldestMdtCompaction.get().getRequestTime()));
+                savepointTime, oldestMdtCompaction.get().requestedTime()));
             deleteMDT = true;
           }
         }
@@ -744,11 +744,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
         // So that we need to delete the whole MDT here.
         if (!deleteMDT) {
-          InstantFactory instantFactory = mdtMetaClient.getTimelineLayout().getInstantFactory();
+          InstantGenerator instantFactory = mdtMetaClient.getTimelineLayout().getInstantGenerator();
           HoodieInstant syncedInstant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
-          if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.getRequestTime())) {
+          if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.requestedTime())) {
             LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than the MDT timeline %s",
-                savepointTime, mdtMetaClient.getCommitsTimeline().firstInstant().get().getRequestTime()));
+                savepointTime, mdtMetaClient.getCommitsTimeline().firstInstant().get().requestedTime()));
             deleteMDT = true;
           }
         }
@@ -827,7 +827,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   private Pair<String, Option<HoodieRestorePlan>> scheduleAndGetRestorePlan(final String savepointToRestoreTimestamp, HoodieTable<T, I, K, O> table) throws IOException {
     Option<HoodieInstant> failedRestore = table.getRestoreTimeline().filterInflightsAndRequested().lastInstant();
     if (failedRestore.isPresent() && savepointToRestoreTimestamp.equals(RestoreUtils.getSavepointToRestoreTimestamp(table, failedRestore.get()))) {
-      return Pair.of(failedRestore.get().getRequestTime(), Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get())));
+      return Pair.of(failedRestore.get().requestedTime(), Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get())));
     }
     final String restoreInstantTimestamp = createNewInstantTime();
     return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
@@ -964,7 +964,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     ValidationUtils.checkArgument(inflightRestoreTimeline.countInstants() == 0,
         "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
             + "table could be in an inconsistent state. Pending restores: " + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream()
-            .map(HoodieInstant::getRequestTime).collect(Collectors.toList()).toArray()));
+            .map(HoodieInstant::requestedTime).collect(Collectors.toList()).toArray()));
 
     if (config.getFailedWritesCleanPolicy().isLazy()) {
       this.heartbeatClient.start(instantTime);
@@ -973,7 +973,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (ClusteringUtils.isClusteringOrReplaceCommitAction(actionType)) {
       metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
     } else {
-      InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+      InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
       metaClient.getActiveTimeline().createNewInstant(instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, actionType,
           instantTime));
     }
@@ -1028,7 +1028,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void dropIndex(List<String> metadataPartitions) {
     HoodieTable table = createTable(config);
     String dropInstant = createNewInstantTime();
-    InstantFactory instantFactory = table.getInstantFactory();
+    InstantGenerator instantFactory = table.getInstantFactory();
     HoodieInstant ownerInstant = instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, dropInstant);
     this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
     try {
@@ -1266,7 +1266,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected void doInitTable(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
     Option<HoodieInstant> ownerInstant = Option.empty();
     if (instantTime.isPresent()) {
-      InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+      InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
       ownerInstant = Option.of(instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
     }
     executeUsingTxnManager(ownerInstant, () -> {
@@ -1604,7 +1604,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     startCommitWithTime(instantTime, commitActionType, metaClient);
     config.setSchema(schema.toString());
     HoodieActiveTimeline timeLine = metaClient.getActiveTimeline();
-    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
     HoodieInstant requested = instantFactory.createNewInstant(State.REQUESTED, commitActionType, instantTime);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA);

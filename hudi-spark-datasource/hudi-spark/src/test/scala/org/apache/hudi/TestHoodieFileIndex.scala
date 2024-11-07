@@ -306,7 +306,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
     val listFilesAfterFirstWrite = fileIndexFirstWrite.listFiles(Nil, Nil)
     val distinctListOfCommitTimesAfterFirstWrite = getDistinctCommitTimeFromAllFilesInIndex(listFilesAfterFirstWrite)
-    val firstWriteCommitTime = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getRequestTime
+    val firstWriteCommitTime = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
     assertEquals(1, distinctListOfCommitTimesAfterFirstWrite.size, "Should have only one commit")
     assertEquals(firstWriteCommitTime, distinctListOfCommitTimesAfterFirstWrite.head, "All files should belong to the first existing commit")
 
@@ -326,7 +326,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val fileSlicesAfterSecondWrite = fileIndexFirstWrite.listFiles(Nil, Nil)
     val distinctListOfCommitTimesAfterSecondWrite = getDistinctCommitTimeFromAllFilesInIndex(fileSlicesAfterSecondWrite)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val lastCommitTime = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getRequestTime
+    val lastCommitTime = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     assertEquals(1, distinctListOfCommitTimesAfterSecondWrite.size, "All basefiles affected so all have same commit time")
     assertEquals(lastCommitTime, distinctListOfCommitTimesAfterSecondWrite.head, "All files should be of second commit after index refresh")

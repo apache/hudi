@@ -58,7 +58,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -101,7 +101,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     }).collect();
 
     final Path commitFile = new Path(config.getBasePath() + "/.hoodie/"
-        + INSTANT_FILE_NAME_FACTORY.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
+        + INSTANT_FILE_NAME_GENERATOR.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
     HadoopFSUtils.getFs(basePath, HoodieTestUtils.getDefaultStorageConf()).create(commitFile);
     return statuses.get(0);
   }

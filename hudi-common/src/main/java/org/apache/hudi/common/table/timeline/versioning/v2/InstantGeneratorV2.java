@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.timeline.versioning.v2;
 
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -30,7 +30,7 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class InstantFactoryV2 implements InstantFactory {
+public class InstantGeneratorV2 implements InstantGenerator {
   // Instant like 20230104152218702.commit.request, 20230104152218702.inflight and 20230104152218702_20230104152630238.commit
   private static final Pattern NAME_FORMAT =
       Pattern.compile("^(\\d+(_\\d+)?)(\\.\\w+)(\\.\\D+)?$");
@@ -39,17 +39,17 @@ public class InstantFactoryV2 implements InstantFactory {
 
   @Override
   public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp) {
-    return new HoodieInstant(state, action, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(state, action, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp, String completionTime) {
-    return new HoodieInstant(state, action, timestamp, completionTime, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(state, action, timestamp, completionTime, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp, String completionTime, boolean isLegacy) {
-    return new HoodieInstant(state, action, timestamp, completionTime, isLegacy, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(state, action, timestamp, completionTime, isLegacy, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
@@ -94,7 +94,7 @@ public class InstantFactoryV2 implements InstantFactory {
       throw new IllegalArgumentException("Failed to construct HoodieInstant: "
           + String.format(HoodieInstant.FILE_NAME_FORMAT_ERROR, fileName));
     }
-    return new HoodieInstant(state, action, timestamp, completionTime, isLegacy, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(state, action, timestamp, completionTime, isLegacy, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   public String extractTimestamp(String fileName) throws IllegalArgumentException {
@@ -120,59 +120,59 @@ public class InstantFactoryV2 implements InstantFactory {
 
   @Override
   public HoodieInstant getRequestedInstant(final HoodieInstant instant) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.getRequestTime(), InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime(), InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getCleanRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getCleanInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getCompactionRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getCompactionInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   // Returns Log compaction requested instant
   @Override
   public HoodieInstant getLogCompactionRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.LOG_COMPACTION_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.LOG_COMPACTION_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   // Returns Log compaction inflight instant
   @Override
   public HoodieInstant getLogCompactionInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getReplaceCommitRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getReplaceCommitInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getClusteringCommitRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getClusteringCommitInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
@@ -187,11 +187,11 @@ public class InstantFactoryV2 implements InstantFactory {
 
   @Override
   public HoodieInstant getIndexRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.INDEXING_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.INDEXING_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getIndexInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, timestamp, InstantComparatorV2.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, timestamp, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
   }
 }

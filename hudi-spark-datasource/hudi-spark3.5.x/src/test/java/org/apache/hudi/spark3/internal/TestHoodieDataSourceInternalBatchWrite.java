@@ -194,7 +194,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
       dataSourceInternalBatchWrite.commit(commitMessages.toArray(new HoodieWriterCommitMessage[0]));
       metaClient.reloadActiveTimeline();
 
-      Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime, populateMetaFields, HoodieTestUtils.INSTANT_FACTORY);
+      Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime, populateMetaFields, HoodieTestUtils.INSTANT_GENERATOR);
 
       // verify output
       assertOutput(totalInputRows, result, instantTime, Option.empty(), populateMetaFields);
@@ -242,7 +242,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
       metaClient.reloadActiveTimeline();
 
       Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime,
-          populateMetaFields, HoodieTestUtils.INSTANT_FACTORY);
+          populateMetaFields, HoodieTestUtils.INSTANT_GENERATOR);
 
       // verify output
       assertOutput(totalInputRows, result, instantTime, Option.empty(), populateMetaFields);

@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -46,7 +46,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   @Override
   public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
-    InstantFactory instantFactory = table.getInstantFactory();
+    InstantGenerator instantFactory = table.getInstantFactory();
     HoodieInstant inflightInstant = WriteOperationType.COMPACT.equals(operationType)
         ? instantFactory.getCompactionInflightInstant(instantTime)
         : instantFactory.getLogCompactionInflightInstant(instantTime);

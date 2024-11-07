@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
@@ -55,7 +55,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   private HoodieTableMetaClient metaClient;
   private final Map<String, byte[]> readCommits = new HashMap<>();
   private final ArchivedTimelineLoader timelineLoader = new ArchivedTimelineLoaderV1();
-  private final InstantFactory instantFactory = new InstantFactoryV1();
+  private final InstantGenerator instantFactory = new InstantGeneratorV1();
 
   private static final Logger LOG = LoggerFactory.getLogger(org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.class);
 
@@ -104,7 +104,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
 
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    return Option.ofNullable(readCommits.get(instant.getRequestTime()));
+    return Option.ofNullable(readCommits.get(instant.requestedTime()));
   }
 
   public static StoragePath getArchiveLogPath(String archiveFolder) {
@@ -151,7 +151,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   @Override
   public void clearInstantDetailsFromMemory(String startTs, String endTs) {
     this.findInstantsInRange(startTs, endTs).getInstants().forEach(instant ->
-        this.readCommits.remove(instant.getRequestTime()));
+        this.readCommits.remove(instant.requestedTime()));
   }
 
   private List<HoodieInstant> loadInstants(boolean loadInstantDetails) {
@@ -188,7 +188,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
     @Override
     public void accept(String instantTime, GenericRecord record) {
       HoodieInstant instant = readCommit(instantTime, record, loadInstantDetails);
-      instantsInRange.putIfAbsent(instant.getRequestTime(), instant);
+      instantsInRange.putIfAbsent(instant.requestedTime(), instant);
     }
 
     public Map<String, HoodieInstant> getInstantsInRangeCollected() {

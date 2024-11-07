@@ -411,7 +411,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected void removeReplacedFileIdsAtInstants(Set<String> instants) {
-    fgIdToReplaceInstants.entrySet().removeIf(entry -> instants.contains(entry.getValue().getRequestTime()));
+    fgIdToReplaceInstants.entrySet().removeIf(entry -> instants.contains(entry.getValue().requestedTime()));
   }
 
   @Override

@@ -58,8 +58,8 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * TODO: [HUDI-8294]
@@ -308,7 +308,7 @@ public class HoodieDataTableValidator implements Serializable {
           HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
       // verify that no data files present with commit time < earliest commit in active timeline.
       if (metaClient.getActiveTimeline().firstInstant().isPresent()) {
-        String earliestInstant = metaClient.getActiveTimeline().firstInstant().get().getRequestTime();
+        String earliestInstant = metaClient.getActiveTimeline().firstInstant().get().requestedTime();
         List<StoragePath> danglingFilePaths = allDataFilePaths.stream().filter(path -> {
           String instantTime = FSUtils.getCommitTime(path.getName());
           return compareTimestamps(instantTime, LESSER_THAN,
@@ -336,7 +336,7 @@ public class HoodieDataTableValidator implements Serializable {
         List<String> danglingFiles = engineContext.flatMap(hoodieInstants, instant -> {
           Option<Set<String>> filesFromTimeline = RepairUtils.getBaseAndLogFilePathsFromTimeline(
               activeTimeline, instant);
-          List<String> baseAndLogFilesFromFs = instantToFilesMap.containsKey(instant.getRequestTime()) ? instantToFilesMap.get(instant.getRequestTime())
+          List<String> baseAndLogFilesFromFs = instantToFilesMap.containsKey(instant.requestedTime()) ? instantToFilesMap.get(instant.requestedTime())
               : Collections.emptyList();
           if (!baseAndLogFilesFromFs.isEmpty()) {
             Set<String> danglingInstantFiles = new HashSet<>(baseAndLogFilesFromFs);

@@ -87,7 +87,7 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
                         instantTime: String,
                         limit: Int): Seq[Row] = {
     val rows = new util.ArrayList[Row]
-    val instantFactory = metaClient.getTimelineLayout.getInstantFactory
+    val instantFactory = metaClient.getTimelineLayout.getInstantGenerator
     val metadata = TimelineMetadataUtils.deserializeAvroMetadata(activeTimeline.getInstantDetails(
       instantFactory.createNewInstant(State.COMPLETED, ROLLBACK_ACTION, instantTime)).get, classOf[HoodieRollbackMetadata])
 
@@ -118,7 +118,7 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
         })
       } catch {
         case e: IOException =>
-          throw new HoodieException(s"Failed to get rollback's info from instant ${instant.getRequestTime}.")
+          throw new HoodieException(s"Failed to get rollback's info from instant ${instant.requestedTime}.")
       }
     })
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList

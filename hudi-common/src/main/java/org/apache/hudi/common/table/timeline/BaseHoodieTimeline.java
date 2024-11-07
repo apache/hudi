@@ -41,11 +41,11 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -54,9 +54,9 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  *
  * @see HoodieTimeline
  */
-public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
+public abstract class BaseHoodieTimeline implements HoodieTimeline {
 
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieBaseTimeline.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieTimeline.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -76,16 +76,16 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
 
   protected TimelineFactory factory;
   protected InstantComparator instantComparator;
-  protected InstantFactory instantFactory;
+  protected InstantGenerator instantFactory;
 
-  public AbstractHoodieBaseTimeline(TimelineLayout layout) {
+  public BaseHoodieTimeline(TimelineLayout layout) {
     this.factory = layout.getTimelineFactory();
     this.instantComparator = layout.getInstantComparator();
-    this.instantFactory = layout.getInstantFactory();
+    this.instantFactory = layout.getInstantGenerator();
   }
 
-  public AbstractHoodieBaseTimeline(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details,
-                                    TimelineFactory factory, InstantComparator instantComparator, InstantFactory instantFactory) {
+  public BaseHoodieTimeline(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details,
+                            TimelineFactory factory, InstantComparator instantComparator, InstantGenerator instantFactory) {
     this.details = details;
     this.factory = factory;
     this.instantComparator = instantComparator;
@@ -120,7 +120,7 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
    *
    * @deprecated
    */
-  public AbstractHoodieBaseTimeline() {
+  public BaseHoodieTimeline() {
   }
 
   @Override
@@ -188,7 +188,7 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
     Option<HoodieInstant> earliestPending = getWriteTimeline().filterInflightsAndRequested().firstInstant();
     if (earliestPending.isPresent()) {
       return getWriteTimeline().filterCompletedInstants()
-          .filter(instant -> compareTimestamps(instant.getRequestTime(), LESSER_THAN, earliestPending.get().getRequestTime()));
+          .filter(instant -> compareTimestamps(instant.requestedTime(), LESSER_THAN, earliestPending.get().requestedTime()));
     }
     return getWriteTimeline().filterCompletedInstants();
   }
@@ -252,19 +252,19 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline findInstantsInRange(String startTs, String endTs) {
     return factory.createDefaultTimeline(
-        getInstantsAsStream().filter(s -> InstantComparatorUtils.isInRange(s.getRequestTime(), startTs, endTs)), details);
+        getInstantsAsStream().filter(s -> InstantComparison.isInRange(s.requestedTime(), startTs, endTs)), details);
   }
 
   @Override
   public HoodieTimeline findInstantsInClosedRange(String startTs, String endTs) {
     return factory.createDefaultTimeline(
-        instants.stream().filter(instant -> InstantComparatorUtils.isInClosedRange(instant.getRequestTime(), startTs, endTs)), details);
+        instants.stream().filter(instant -> InstantComparison.isInClosedRange(instant.requestedTime(), startTs, endTs)), details);
   }
 
   @Override
   public HoodieTimeline findInstantsInRangeByCompletionTime(String startTs, String endTs) {
     return factory.createDefaultTimeline(
-        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && InstantComparatorUtils.isInClosedRange(s.getCompletionTime(), startTs, endTs)),
+        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && InstantComparison.isInClosedRange(s.getCompletionTime(), startTs, endTs)),
         details);
   }
 
@@ -272,55 +272,55 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
   public HoodieTimeline findInstantsModifiedAfterByCompletionTime(String instantTime) {
     return factory.createDefaultTimeline(instants.stream()
         // either pending or completionTime greater than instantTime
-        .filter(s -> (s.getCompletionTime() == null && compareTimestamps(s.getRequestTime(), GREATER_THAN, instantTime))
-            || (s.getCompletionTime() != null && compareTimestamps(s.getCompletionTime(), GREATER_THAN, instantTime) && !s.getRequestTime().equals(instantTime))),
+        .filter(s -> (s.getCompletionTime() == null && compareTimestamps(s.requestedTime(), GREATER_THAN, instantTime))
+            || (s.getCompletionTime() != null && compareTimestamps(s.getCompletionTime(), GREATER_THAN, instantTime) && !s.requestedTime().equals(instantTime))),
         details);
   }
 
   @Override
   public HoodieTimeline findInstantsAfter(String instantTime, int numCommits) {
     return factory.createDefaultTimeline(getInstantsAsStream()
-        .filter(s -> compareTimestamps(s.getRequestTime(), GREATER_THAN, instantTime)).limit(numCommits),
+        .filter(s -> compareTimestamps(s.requestedTime(), GREATER_THAN, instantTime)).limit(numCommits),
         details);
   }
 
   @Override
   public HoodieTimeline findInstantsAfter(String instantTime) {
     return factory.createDefaultTimeline(getInstantsAsStream()
-        .filter(s -> compareTimestamps(s.getRequestTime(), GREATER_THAN, instantTime)), details);
+        .filter(s -> compareTimestamps(s.requestedTime(), GREATER_THAN, instantTime)), details);
   }
 
   @Override
   public HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits) {
     return factory.createDefaultTimeline(getInstantsAsStream()
-        .filter(s -> compareTimestamps(s.getRequestTime(), GREATER_THAN_OR_EQUALS, commitTime))
+        .filter(s -> compareTimestamps(s.requestedTime(), GREATER_THAN_OR_EQUALS, commitTime))
         .limit(numCommits), details);
   }
 
   @Override
   public HoodieTimeline findInstantsAfterOrEquals(String commitTime) {
     return factory.createDefaultTimeline(getInstantsAsStream()
-        .filter(s -> compareTimestamps(s.getRequestTime(), GREATER_THAN_OR_EQUALS, commitTime)), details);
+        .filter(s -> compareTimestamps(s.requestedTime(), GREATER_THAN_OR_EQUALS, commitTime)), details);
   }
 
   @Override
   public HoodieTimeline findInstantsBefore(String instantTime) {
     return factory.createDefaultTimeline(getInstantsAsStream()
-        .filter(s -> compareTimestamps(s.getRequestTime(), LESSER_THAN, instantTime)),
+        .filter(s -> compareTimestamps(s.requestedTime(), LESSER_THAN, instantTime)),
         details);
   }
 
   @Override
   public Option<HoodieInstant> findInstantBefore(String instantTime) {
     return Option.fromJavaOptional(instants.stream()
-        .filter(instant -> compareTimestamps(instant.getRequestTime(), LESSER_THAN, instantTime))
-        .max(Comparator.comparing(HoodieInstant::getRequestTime)));
+        .filter(instant -> compareTimestamps(instant.requestedTime(), LESSER_THAN, instantTime))
+        .max(Comparator.comparing(HoodieInstant::requestedTime)));
   }
 
   @Override
   public HoodieTimeline findInstantsBeforeOrEquals(String instantTime) {
     return factory.createDefaultTimeline(getInstantsAsStream()
-        .filter(s -> compareTimestamps(s.getRequestTime(), LESSER_THAN_OR_EQUALS, instantTime)),
+        .filter(s -> compareTimestamps(s.requestedTime(), LESSER_THAN_OR_EQUALS, instantTime)),
         details);
   }
 
@@ -492,27 +492,27 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
 
   @Override
   public Stream<HoodieInstant> getReverseOrderedInstants() {
-    return getInstantsAsStream().sorted(instantComparator.getRequestTimePrimaryOrderingComparator().reversed());
+    return getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed());
   }
 
   @Override
   public Option<String> getLatestCompletionTime() {
     return Option.fromJavaOptional(getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
-        .max(instantComparator.getCompletionTimePrimaryOrderingComparator())
+        .max(instantComparator.completionTimeOrderedComparator())
         .map(HoodieInstant::getCompletionTime));
   }
 
   @Override
   public Stream<HoodieInstant> getInstantsOrderedByCompletionTime() {
     return getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
-        .sorted(instantComparator.getCompletionTimePrimaryOrderingComparator());
+        .sorted(instantComparator.completionTimeOrderedComparator());
   }
 
   @Override
   public boolean isBeforeTimelineStarts(String instant) {
     Option<HoodieInstant> firstNonSavepointCommit = getFirstNonSavepointCommit();
     return firstNonSavepointCommit.isPresent()
-        && compareTimestamps(instant, LESSER_THAN, firstNonSavepointCommit.get().getRequestTime());
+        && compareTimestamps(instant, LESSER_THAN, firstNonSavepointCommit.get().requestedTime());
   }
 
   @Override
@@ -528,7 +528,7 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
       synchronized (this) {
         if (this.firstNonSavepointCommit == null) {
           this.firstNonSavepointCommit =
-              findFirstNonSavepointCommit(this.instants, instantComparator.getRequestTimePrimaryOrderingComparator());
+              findFirstNonSavepointCommit(this.instants, instantComparator.requestedTimeOrderedComparator());
         }
       }
     }
@@ -543,7 +543,7 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
           this.firstNonSavepointCommitByCompletionTime =
               findFirstNonSavepointCommit(
                   this.instants.stream().filter(HoodieInstant::isCompleted).collect(Collectors.toList()),
-                  instantComparator.getCompletionTimePrimaryOrderingComparator());
+                  instantComparator.completionTimeOrderedComparator());
         }
       }
     }
@@ -581,7 +581,7 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
     if (this.instantTimeSet == null) {
       synchronized (this) {
         if (this.instantTimeSet == null) {
-          this.instantTimeSet = this.instants.stream().map(HoodieInstant::getRequestTime).collect(Collectors.toSet());
+          this.instantTimeSet = this.instants.stream().map(HoodieInstant::requestedTime).collect(Collectors.toSet());
         }
       }
     }
@@ -600,12 +600,12 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
       Comparator<HoodieInstant> instantComparator) {
     Set<String> savepointTimestamps = instants.stream()
         .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
-        .map(HoodieInstant::getRequestTime)
+        .map(HoodieInstant::requestedTime)
         .collect(Collectors.toSet());
     // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
     // So, the first non-savepoint commit is considered as beginning of the active timeline.
     return Option.fromJavaOptional(instants.stream()
-        .filter(entry -> !savepointTimestamps.contains(entry.getRequestTime()))
+        .filter(entry -> !savepointTimestamps.contains(entry.requestedTime()))
         .min(instantComparator));
   }
 
@@ -635,7 +635,7 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
     try {
       md = MessageDigest.getInstance(HASHING_ALGORITHM);
       instants.forEach(i -> md
-          .update(getUTF8Bytes(StringUtils.joinUsingDelim("_", i.getRequestTime(), i.getAction(), i.getState().name()))));
+          .update(getUTF8Bytes(StringUtils.joinUsingDelim("_", i.requestedTime(), i.getAction(), i.getState().name()))));
     } catch (NoSuchAlgorithmException nse) {
       throw new HoodieException(nse);
     }
@@ -650,10 +650,10 @@ public abstract class AbstractHoodieBaseTimeline implements HoodieTimeline {
     // some optimizations are based on the assumption all the instant lists are already sorted.
     // skip when one list contains all the instants of the other one.
     List<HoodieInstant> merged;
-    if (InstantComparatorUtils.compareTimestamps(instants1.get(instants1.size() - 1).getRequestTime(), LESSER_THAN_OR_EQUALS, instants2.get(0).getRequestTime())) {
+    if (InstantComparison.compareTimestamps(instants1.get(instants1.size() - 1).requestedTime(), LESSER_THAN_OR_EQUALS, instants2.get(0).requestedTime())) {
       merged = new ArrayList<>(instants1);
       merged.addAll(instants2);
-    } else if (InstantComparatorUtils.compareTimestamps(instants2.get(instants2.size() - 1).getRequestTime(), LESSER_THAN_OR_EQUALS, instants1.get(0).getRequestTime())) {
+    } else if (InstantComparison.compareTimestamps(instants2.get(instants2.size() - 1).requestedTime(), LESSER_THAN_OR_EQUALS, instants1.get(0).requestedTime())) {
       merged = new ArrayList<>(instants2);
       merged.addAll(instants1);
     } else {

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 public interface HoodieArchivedTimeline extends HoodieTimeline {
 
@@ -76,7 +76,7 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
     }
 
     public boolean isInRange(String instantTime) {
-      return InstantComparatorUtils.isInRange(instantTime, this.startTs, this.endTs);
+      return InstantComparison.isInRange(instantTime, this.startTs, this.endTs);
     }
   }
 
@@ -90,7 +90,7 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
     }
 
     public boolean isInRange(String instantTime) {
-      return InstantComparatorUtils.isInClosedOpenRange(instantTime, this.startTs, this.endTs);
+      return InstantComparison.isInClosedOpenRange(instantTime, this.startTs, this.endTs);
     }
   }
 

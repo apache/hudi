@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.timeline.{ActiveTimelineUtils, HoodieInstant, HoodieTimeline, TimelineLayout}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout, TimelineUtils}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -28,7 +28,6 @@ import java.time.ZonedDateTime
 import java.util
 import java.util.{Collections, Date}
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 
 class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {
@@ -121,7 +120,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
       for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet.asScala) {
         for (hoodieWriteStat <- partitionWriteStat.getValue.asScala) {
           rows.add(Row(
-            commit.getRequestTime, commit.getCompletionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
+            commit.requestedTime, commit.getCompletionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
             hoodieWriteStat.getFileId, hoodieWriteStat.getPrevCommit, hoodieWriteStat.getNumWrites,
             hoodieWriteStat.getNumInserts, hoodieWriteStat.getNumDeletes, hoodieWriteStat.getNumUpdateWrites,
             hoodieWriteStat.getTotalWriteErrors, hoodieWriteStat.getTotalLogBlocks, hoodieWriteStat.getTotalCorruptLogBlock,
@@ -141,7 +140,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
       .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
     val newCommits = new util.ArrayList[HoodieInstant](commits)
     val layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion)
-    Collections.sort(newCommits, layout.getInstantComparator.getRequestTimePrimaryOrderingComparator.reversed)
+    Collections.sort(newCommits, layout.getInstantComparator.requestedTimeOrderedComparator.reversed)
     (rows, newCommits)
   }
 
@@ -152,7 +151,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = layout.getCommitMetadataSerDe.deserialize(commit, timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      rows.add(Row(commit.getRequestTime, commit.getCompletionTime, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
+      rows.add(Row(commit.requestedTime, commit.getCompletionTime, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
         commitMetadata.fetchTotalFilesUpdated, commitMetadata.fetchTotalPartitionsWritten,
         commitMetadata.fetchTotalRecordsWritten, commitMetadata.fetchTotalUpdateRecordsWritten,
         commitMetadata.fetchTotalWriteErrors))
@@ -163,7 +162,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
   def getTimeDaysAgo(numberOfDays: Int): String = {
     val date = Date.from(ZonedDateTime.now.minusDays(numberOfDays).toInstant)
-    ActiveTimelineUtils.formatDate(date)
+    TimelineUtils.formatDate(date)
   }
 }
 

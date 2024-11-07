@@ -39,7 +39,7 @@ public class CompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O> i
 
   protected void transitionRequestedToInflight(HoodieTable table, String compactionInstantTime) {
     HoodieActiveTimeline timeline = table.getActiveTimeline();
-    HoodieInstant instant = table.getMetaClient().getTimelineLayout().getInstantFactory().getCompactionRequestedInstant(compactionInstantTime);
+    HoodieInstant instant = table.getMetaClient().getTimelineLayout().getInstantGenerator().getCompactionRequestedInstant(compactionInstantTime);
     // Mark instant as compaction inflight
     timeline.transitionCompactionRequestedToInflight(instant);
   }

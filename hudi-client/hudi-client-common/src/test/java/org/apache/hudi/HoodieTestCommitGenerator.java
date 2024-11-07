@@ -56,7 +56,7 @@ import java.util.UUID;
 import static org.apache.hudi.common.table.log.HoodieLogFormat.DEFAULT_WRITE_TOKEN;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 
 public class HoodieTestCommitGenerator {
   public static final String BASE_FILE_WRITE_TOKEN = "1-0-1";
@@ -125,7 +125,7 @@ public class HoodieTestCommitGenerator {
   public static void createCommitAndDataFiles(
       String basePath, String instantTime,
       Map<String, List<Pair<String, String>>> partitionPathToFileIdAndNameMap) throws IOException {
-    String commitFilename = INSTANT_FILE_NAME_FACTORY.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime());
+    String commitFilename = INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime());
     HoodieCommitMetadata commitMetadata =
         generateCommitMetadata(partitionPathToFileIdAndNameMap, Collections.emptyMap());
     createCommitFileWithMetadata(basePath, new HadoopStorageConfiguration(true), commitFilename, serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());

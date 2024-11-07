@@ -30,18 +30,16 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.versioning.DefaultCommitMetadataSerDe;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameParser;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
+import org.apache.hudi.common.table.timeline.versioning.DefaultTimelineFactory;
 import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.table.timeline.InstantFactory;
-import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.InstantFactoryV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameFactoryV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameParserV2;
-import org.apache.hudi.common.table.timeline.versioning.v2.TimelineV2Factory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -86,11 +84,11 @@ public class HoodieTestUtils {
   public static final int DEFAULT_LOG_VERSION = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
   public static final String HADOOP_STORAGE_CONF = "org.apache.hudi.storage.hadoop.HadoopStorageConfiguration";
-  public static final InstantFactory INSTANT_FACTORY = new InstantFactoryV2();
-  public static final TimelineFactory TIMELINE_FACTORY = new TimelineV2Factory(TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
-  public static final InstantFileNameFactory INSTANT_FILE_NAME_FACTORY = new InstantFileNameFactoryV2();
-  public static final InstantFileNameParser INSTANT_FILE_NAME_PARSER = new InstantFileNameParserV2();
-  public static final CommitMetadataSerDe COMMIT_METADATA_SER_DE = new CommitMetadataSerDeV2();
+  public static final InstantGenerator INSTANT_GENERATOR = new DefaultInstantGenerator();
+  public static final TimelineFactory TIMELINE_FACTORY = new DefaultTimelineFactory();
+  public static final InstantFileNameGenerator INSTANT_FILE_NAME_GENERATOR = new DefaultInstantFileNameGenerator();
+  public static final InstantFileNameParser INSTANT_FILE_NAME_PARSER = new DefaultInstantFileNameParser();
+  public static final CommitMetadataSerDe COMMIT_METADATA_SER_DE = new DefaultCommitMetadataSerDe();
 
   public static StorageConfiguration<Configuration> getDefaultStorageConf() {
     return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
@@ -370,7 +368,7 @@ public class HoodieTestUtils {
 
   public static HoodieInstant getCompleteInstant(HoodieStorage storage, StoragePath parent,
                                                  String instantTime, String action) {
-    return INSTANT_FACTORY.createNewInstant(getCompleteInstantFileInfo(storage, parent, instantTime, action));
+    return INSTANT_GENERATOR.createNewInstant(getCompleteInstantFileInfo(storage, parent, instantTime, action));
   }
 
   public static StoragePath getCompleteInstantPath(HoodieStorage storage, StoragePath parent,

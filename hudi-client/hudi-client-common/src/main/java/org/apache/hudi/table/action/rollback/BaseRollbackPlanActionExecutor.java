@@ -110,10 +110,10 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
       if (!instantToRollback.isRequested()) {
         rollbackRequests.addAll(getRollbackStrategy().getRollbackRequests(instantToRollback));
       }
-      HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan(new HoodieInstantInfo(instantToRollback.getRequestTime(),
+      HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan(new HoodieInstantInfo(instantToRollback.requestedTime(),
           instantToRollback.getAction()), rollbackRequests, LATEST_ROLLBACK_PLAN_VERSION);
       if (!skipTimelinePublish) {
-        if (table.getRollbackTimeline().filterInflightsAndRequested().containsInstant(rollbackInstant.getRequestTime())) {
+        if (table.getRollbackTimeline().filterInflightsAndRequested().containsInstant(rollbackInstant.requestedTime())) {
           LOG.warn("Request Rollback found with instant time " + rollbackInstant + ", hence skipping scheduling rollback");
         } else {
           table.getActiveTimeline().saveToRollbackRequested(rollbackInstant, TimelineMetadataUtils.serializeRollbackPlan(rollbackPlan));

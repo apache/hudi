@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.spark.launcher.SparkLauncher;
@@ -52,7 +52,7 @@ public class SavepointsCommand {
     String[][] rows = new String[commits.size()][];
     for (int i = 0; i < commits.size(); i++) {
       HoodieInstant commit = commits.get(i);
-      rows[i] = new String[] {commit.getRequestTime()};
+      rows[i] = new String[] {commit.requestedTime()};
     }
     return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_SAVEPOINT_TIME}, rows);
   }
@@ -108,7 +108,7 @@ public class SavepointsCommand {
     }
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(instant -> instant.getRequestTime().equals(instantTime)).collect(Collectors.toList());
+    List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(instant -> instant.requestedTime().equals(instantTime)).collect(Collectors.toList());
 
     if (instants.isEmpty()) {
       return String.format("Commit %s not found in Commits %s", instantTime, timeline);
@@ -142,7 +142,7 @@ public class SavepointsCommand {
     if (completedInstants.empty()) {
       throw new HoodieException("There are no completed savepoint to run delete");
     }
-    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
     HoodieInstant savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, instantTime);
 
     if (!completedInstants.containsInstant(savePoint)) {

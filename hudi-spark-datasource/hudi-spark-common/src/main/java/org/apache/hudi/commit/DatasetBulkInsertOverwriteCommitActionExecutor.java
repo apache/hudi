@@ -25,7 +25,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -51,7 +51,7 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
 
   @Override
   protected Option<HoodieData<WriteStatus>> doExecute(Dataset<Row> records, boolean arePartitionRecordsSorted) {
-    InstantFactory instantFactory = table.getInstantFactory();
+    InstantGenerator instantFactory = table.getInstantFactory();
     table.getActiveTimeline().transitionRequestedToInflight(instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, getCommitActionType(), instantTime), Option.empty());
     return Option.of(HoodieDatasetBulkInsertHelper
         .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false));

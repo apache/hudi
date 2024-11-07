@@ -291,7 +291,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
   private def queryTimestamp: Option[String] =
-    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getRequestTime))
+    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.requestedTime))
 
   /**
    * Returns true in case table supports Schema on Read (Schema Evolution)
@@ -679,7 +679,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val internalSchema = internalSchemaOpt.getOrElse(InternalSchema.getEmptyInternalSchema)
     val querySchemaString = SerDeHelper.toJson(internalSchema)
     if (!isNullOrEmpty(querySchemaString)) {
-      val instantFileNameFactory = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion).getInstantFileNameFactory
+      val instantFileNameFactory = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion).getInstantFileNameGenerator
       val validCommits = timeline.getInstants.iterator.asScala.map(instant => instantFileNameFactory.getFileName(instant)).mkString(",")
 
       conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))

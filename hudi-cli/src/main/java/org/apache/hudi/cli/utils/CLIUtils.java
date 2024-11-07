@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.table.timeline.AbstractHoodieBaseTimeline;
+import org.apache.hudi.common.table.timeline.BaseHoodieTimeline;
 
 import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -41,7 +41,7 @@ public class CLIUtils {
    * @param startTs                 Start instant time.
    * @param endTs                   End instant time.
    * @param includeArchivedTimeline Whether to include intants from the archived timeline.
-   * @return a {@link AbstractHoodieBaseTimeline} instance containing the instants in the specified range.
+   * @return a {@link BaseHoodieTimeline} instance containing the instants in the specified range.
    */
   public static HoodieTimeline getTimelineInRange(String startTs, String endTs, boolean includeArchivedTimeline) {
     if (isNullOrEmpty(startTs)) {

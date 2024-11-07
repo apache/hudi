@@ -237,7 +237,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     var commonOpts = opts
     val inputDF1 = spark.read.format("hudi")
       .options(commonOpts)
-      .option("as.of.instant", metaClient.getActiveTimeline.getInstants.get(1).getRequestTime)
+      .option("as.of.instant", metaClient.getActiveTimeline.getInstants.get(1).requestedTime)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, "false")
       .load(basePath)
@@ -286,7 +286,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     fsView.loadAllPartitions()
     fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
       val relativePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, partitionPath)
-      fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, metaClient.reloadActiveTimeline().lastInstant().get().getRequestTime).iterator().asScala.toSeq
+      fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, metaClient.reloadActiveTimeline().lastInstant().get().requestedTime).iterator().asScala.toSeq
     }.foreach(
       slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)
         + (if (slice.getBaseFile.isPresent) 1 else 0))
@@ -356,7 +356,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   private def createSQLTable(hudiOpts: Map[String, String], queryType: String): Unit = {
     val opts = hudiOpts + (
       DataSourceReadOptions.QUERY_TYPE.key -> queryType,
-      DataSourceReadOptions.START_COMMIT.key() -> metaClient.getActiveTimeline.getInstants.get(0).getRequestTime.replaceFirst(".", "0")
+      DataSourceReadOptions.START_COMMIT.key() -> metaClient.getActiveTimeline.getInstants.get(0).requestedTime.replaceFirst(".", "0")
     )
     val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
     inputDF1.createOrReplaceTempView("tbl")

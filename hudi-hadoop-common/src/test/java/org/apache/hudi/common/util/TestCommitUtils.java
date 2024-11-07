@@ -48,7 +48,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_AC
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.util.CommitUtils.getCheckpointValueAsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -163,7 +163,7 @@ public class TestCommitUtils {
   private void addDeltaCommit(HoodieActiveTimeline timeline,
                               String ts, String id, String batchId,
                               boolean isCompleted) throws IOException {
-    HoodieInstant instant = INSTANT_FACTORY.createNewInstant(
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(
         HoodieInstant.State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, ts);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.setOperationType(WriteOperationType.UPSERT);
@@ -173,21 +173,21 @@ public class TestCommitUtils {
     timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
     if (isCompleted) {
       timeline.saveAsComplete(
-          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.getRequestTime()),
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
           TimelineMetadataUtils.serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
     }
   }
 
   private void addCommit(HoodieActiveTimeline timeline,
                          String ts) throws IOException {
-    HoodieInstant instant = INSTANT_FACTORY.createNewInstant(
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(
         HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, ts);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     timeline.createNewInstant(instant);
     timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
     timeline.saveAsComplete(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.getRequestTime()),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
         TimelineMetadataUtils.serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
   }
 
@@ -200,7 +200,7 @@ public class TestCommitUtils {
         .setPreserveHoodieMetadata(true)
         .build();
     timeline.saveToCompactionRequested(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, COMPACTION_ACTION, ts),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, COMPACTION_ACTION, ts),
         TimelineMetadataUtils.serializeCompactionPlan(compactionPlan)
     );
   }
@@ -214,7 +214,7 @@ public class TestCommitUtils {
             .setClusteringPlan(new HoodieClusteringPlan())
             .build();
     timeline.saveToPendingClusterCommit(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, CLUSTERING_ACTION, ts),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, CLUSTERING_ACTION, ts),
         TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata)
     );
   }

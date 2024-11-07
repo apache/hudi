@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.timeline.versioning.v1;
 
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -29,7 +29,7 @@ import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class InstantFactoryV1 implements InstantFactory {
+public class InstantGeneratorV1 implements InstantGenerator {
 
   private static final Pattern NAME_FORMAT =
       Pattern.compile("^(\\d+)(\\.\\w+)(\\.\\D+)?$");
@@ -38,17 +38,17 @@ public class InstantFactoryV1 implements InstantFactory {
 
   @Override
   public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp) {
-    return new HoodieInstant(state, action, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(state, action, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp, String completionTime) {
-    return new HoodieInstant(state, action, timestamp, completionTime, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(state, action, timestamp, completionTime, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp, String completionTime, boolean isLegacy) {
-    return new HoodieInstant(state, action, timestamp, completionTime, isLegacy, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(state, action, timestamp, completionTime, isLegacy, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
@@ -81,52 +81,52 @@ public class InstantFactoryV1 implements InstantFactory {
     } else {
       throw new IllegalArgumentException("Failed to construct HoodieInstant: " + String.format(HoodieInstant.FILE_NAME_FORMAT_ERROR, fileName));
     }
-    return new HoodieInstant(state, action, timestamp, stateTransitionTime, true, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(state, action, timestamp, stateTransitionTime, true, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getRequestedInstant(final HoodieInstant instant) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.getRequestTime(), InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getCleanRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getCleanInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getCompactionRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getCompactionInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getLogCompactionRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.LOG_COMPACTION_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.LOG_COMPACTION_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getLogCompactionInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getReplaceCommitRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getReplaceCommitInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
@@ -141,12 +141,12 @@ public class InstantFactoryV1 implements InstantFactory {
 
   @Override
   public HoodieInstant getIndexRequestedInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.INDEXING_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.INDEXING_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   @Override
   public HoodieInstant getIndexInflightInstant(final String timestamp) {
-    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, timestamp, InstantComparatorV1.COMPARATOR);
+    return new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, timestamp, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
   }
 
   /**

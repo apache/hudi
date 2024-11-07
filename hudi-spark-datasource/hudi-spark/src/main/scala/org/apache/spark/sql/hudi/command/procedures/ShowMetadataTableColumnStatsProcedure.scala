@@ -137,7 +137,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
 
     val maxInstant = metaClient.createNewInstantTime()
-    val instants = timeline.getInstants.iterator().asScala.filter(_.getRequestTime < maxInstant)
+    val instants = timeline.getInstants.iterator().asScala.filter(_.requestedTime < maxInstant)
 
     val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
       with java.io.Serializable {

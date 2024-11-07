@@ -20,7 +20,7 @@ package org.apache.hudi.table.action.savepoint;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieRollbackException;
@@ -34,7 +34,7 @@ public class SavepointHelpers {
   private static final Logger LOG = LoggerFactory.getLogger(SavepointHelpers.class);
 
   public static void deleteSavepoint(HoodieTable table, String savepointTime) {
-    InstantFactory instantFactory = table.getInstantFactory();
+    InstantGenerator instantFactory = table.getInstantFactory();
     HoodieInstant savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {
@@ -55,13 +55,13 @@ public class SavepointHelpers {
         .filterCompletedAndCompactionInstants()
         .lastInstant();
     ValidationUtils.checkArgument(lastInstant.isPresent());
-    ValidationUtils.checkArgument(lastInstant.get().getRequestTime().equals(savepointTime),
+    ValidationUtils.checkArgument(lastInstant.get().requestedTime().equals(savepointTime),
         savepointTime + " is not the last commit after restoring to savepoint, last commit was "
-            + lastInstant.get().getRequestTime());
+            + lastInstant.get().requestedTime());
   }
 
   public static void validateSavepointPresence(HoodieTable table, String savepointTime) {
-    InstantFactory instantFactory = table.getInstantFactory();
+    InstantGenerator instantFactory = table.getInstantFactory();
     HoodieInstant savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {

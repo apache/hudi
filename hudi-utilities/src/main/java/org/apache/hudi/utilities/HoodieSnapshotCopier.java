@@ -58,8 +58,8 @@ import java.util.stream.Stream;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
@@ -100,7 +100,7 @@ public class HoodieSnapshotCopier implements Serializable {
       LOG.warn("No commits present. Nothing to snapshot");
       return;
     }
-    final String latestCommitTimestamp = latestCommit.get().getRequestTime();
+    final String latestCommitTimestamp = latestCommit.get().requestedTime();
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 

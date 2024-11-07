@@ -61,7 +61,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -158,7 +158,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // Create six commits
     Arrays.asList("001", "003", "005", "007").forEach(timestamp -> {
       activeTimeline.transitionCompactionInflightToComplete(true,
-          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), Option.empty());
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), Option.empty());
     });
     // Simulate a compaction commit in metadata table timeline
     // so the archival in data table can happen
@@ -220,7 +220,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     // get compaction plan before compaction
     HoodieCompactionPlan plan = TimelineMetadataUtils.deserializeCompactionPlan(
         HoodieCLI.getTableMetaClient().reloadActiveTimeline().readCompactionPlanAsBytes(
-            INSTANT_FACTORY.getCompactionRequestedInstant(instance)).get());
+            INSTANT_GENERATOR.getCompactionRequestedInstant(instance)).get());
 
     generateArchive();
 

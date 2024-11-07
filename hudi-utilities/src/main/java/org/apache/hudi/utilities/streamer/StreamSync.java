@@ -142,8 +142,8 @@ import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
@@ -530,7 +530,7 @@ public class StreamSync implements Serializable, Closeable {
   private Option<String> getLastPendingClusteringInstant(Option<HoodieTimeline> commitTimelineOpt) {
     if (commitTimelineOpt.isPresent()) {
       Option<HoodieInstant> pendingClusteringInstant = commitTimelineOpt.get().getLastPendingClusterInstant();
-      return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().getRequestTime()) : Option.empty();
+      return pendingClusteringInstant.isPresent() ? Option.of(pendingClusteringInstant.get().requestedTime()) : Option.empty();
     }
     return Option.empty();
   }
@@ -538,7 +538,7 @@ public class StreamSync implements Serializable, Closeable {
   private Option<String> getLastPendingCompactionInstant(Option<HoodieTimeline> commitTimelineOpt) {
     if (commitTimelineOpt.isPresent()) {
       Option<HoodieInstant> pendingCompactionInstant = commitTimelineOpt.get().filterPendingCompactionTimeline().lastInstant();
-      return pendingCompactionInstant.isPresent() ? Option.of(pendingCompactionInstant.get().getRequestTime()) : Option.empty();
+      return pendingCompactionInstant.isPresent() ? Option.of(pendingCompactionInstant.get().requestedTime()) : Option.empty();
     }
     return Option.empty();
   }
@@ -818,7 +818,7 @@ public class StreamSync implements Serializable, Closeable {
           String value = commitMetadata.getMetadata(CHECKPOINT_KEY);
           resumeCheckpointStr = Option.of(value);
         } else if (compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-            LESSER_THAN, lastCommit.get().getRequestTime())) {
+            LESSER_THAN, lastCommit.get().requestedTime())) {
           throw new HoodieStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
                   + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"

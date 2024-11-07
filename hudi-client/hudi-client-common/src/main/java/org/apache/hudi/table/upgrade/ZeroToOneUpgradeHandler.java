@@ -43,7 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
 
 /**
  * Upgrade handle to assist in upgrading hoodie table from version 0 to 1.
@@ -57,7 +57,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     // fetch pending commit info
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction();
-    List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getRequestTime)
+    List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::requestedTime)
         .collect(Collectors.toList());
     if (!commits.isEmpty() && instantTime != null) {
       // ignore the latest inflight commit since a new commit would have been started, and we need to fix any pending commits from previous launch
@@ -88,7 +88,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     try {
       // fetch hoodie instant
       Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstantsAsStream()
-          .filter(instant -> EQUALS.test(instant.getRequestTime(), commitInstantTime))
+          .filter(instant -> EQUALS.test(instant.requestedTime(), commitInstantTime))
           .findFirst());
       if (commitInstantOpt.isPresent()) {
         // delete existing markers
@@ -117,7 +117,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
 
   List<HoodieRollbackStat> getListBasedRollBackStats(HoodieTable<?, ?, ?, ?> table, HoodieEngineContext context, Option<HoodieInstant> commitInstantOpt) {
     List<HoodieRollbackRequest> hoodieRollbackRequests =
-        new ListingBasedRollbackStrategy(table, context, table.getConfig(), commitInstantOpt.get().getRequestTime(), false)
+        new ListingBasedRollbackStrategy(table, context, table.getConfig(), commitInstantOpt.get().requestedTime(), false)
             .getRollbackRequests(commitInstantOpt.get());
     return new BaseRollbackHelper(table.getMetaClient(), table.getConfig())
         .collectRollbackStats(context, commitInstantOpt.get(), hoodieRollbackRequests);

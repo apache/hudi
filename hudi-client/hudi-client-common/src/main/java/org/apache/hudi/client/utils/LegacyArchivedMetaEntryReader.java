@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -101,7 +101,7 @@ public class LegacyArchivedMetaEntryReader {
       }
       return null;
     });
-    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
     HoodieInstant instant = instantFactory.createNewInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
         instantTime, stateTransitionTime);
     return Pair.of(instant,details);
@@ -167,13 +167,13 @@ public class LegacyArchivedMetaEntryReader {
           String lastInstantTime = null;
           if (nextInstantAndDetail != null) {
             instantAndDetails.add(nextInstantAndDetail);
-            lastInstantTime = nextInstantAndDetail.getKey().getRequestTime();
+            lastInstantTime = nextInstantAndDetail.getKey().requestedTime();
             nextInstantAndDetail = null;
           }
           while (itr.hasNext()) {
             HoodieRecord<IndexedRecord> record = itr.next();
             Pair<HoodieInstant, Option<byte[]>> instantAndDetail = readInstant((GenericRecord) record.getData());
-            String instantTime = instantAndDetail.getKey().getRequestTime();
+            String instantTime = instantAndDetail.getKey().requestedTime();
             if (filter == null || filter.isInRange(instantTime)) {
               if (lastInstantTime == null) {
                 instantAndDetails.add(instantAndDetail);

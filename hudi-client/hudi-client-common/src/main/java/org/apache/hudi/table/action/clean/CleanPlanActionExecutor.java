@@ -116,7 +116,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       }
       LOG.info(
           "Earliest commit to retain for clean : {}",
-          earliestInstant.isPresent() ? earliestInstant.get().getRequestTime() : "null");
+          earliestInstant.isPresent() ? earliestInstant.get().requestedTime() : "null");
       LOG.info(
           "Total partitions to clean : {}, with policy {}",
           partitionsToClean.size(),
@@ -152,7 +152,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       }
 
       return new HoodieCleanerPlan(
-          earliestInstant.map(x -> new HoodieActionInstant(x.getRequestTime(), x.getAction(), x.getState().name())).orElse(null),
+          earliestInstant.map(x -> new HoodieActionInstant(x.requestedTime(), x.getAction(), x.getState().name())).orElse(null),
           planner.getLastCompletedCommitTimestamp(), // Note: This is the start time of the last completed ingestion before this clean.
           config.getCleanerPolicy().name(),
           Collections.emptyMap(),

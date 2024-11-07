@@ -36,7 +36,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -121,7 +121,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
       throws HoodieCommitException {
     try {
-      InstantFactory factory = table.getMetaClient().getTimelineLayout().getInstantFactory();
+      InstantGenerator factory = table.getMetaClient().getTimelineLayout().getInstantGenerator();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
       profile.getOutputPartitionPaths().forEach(path -> {
         WorkloadStat partitionStat = profile.getOutputWorkloadStat(path);
@@ -190,7 +190,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   }
 
   protected void autoCommit(HoodieWriteMetadata<O> result) {
-    InstantFactory factory = table.getMetaClient().getTimelineLayout().getInstantFactory();
+    InstantGenerator factory = table.getMetaClient().getTimelineLayout().getInstantGenerator();
     final Option<HoodieInstant> inflightInstant = Option.of(factory.createNewInstant(State.INFLIGHT,
         getCommitActionType(), instantTime));
     ValidationUtils.checkState(this.txnManagerOption.isPresent(), "The transaction manager has not been initialized");
@@ -213,7 +213,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   protected abstract void commit(HoodieWriteMetadata<O> result);
 
   protected void commit(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<O> result, List<HoodieWriteStat> writeStats) {
-    InstantFactory factory = table.getMetaClient().getTimelineLayout().getInstantFactory();
+    InstantGenerator factory = table.getMetaClient().getTimelineLayout().getInstantGenerator();
     String actionType = getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType);
     result.setCommitted(true);
@@ -269,7 +269,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> executeClustering(HoodieClusteringPlan clusteringPlan) {
     context.setJobStatus(this.getClass().getSimpleName(), "Clustering records for " + config.getTableName());
     HoodieInstant instant = ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline(),
-        table.getMetaClient().getTimelineLayout().getInstantFactory()).get();
+        table.getMetaClient().getTimelineLayout().getInstantGenerator()).get();
     // Mark instant as clustering inflight
     ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
     table.getMetaClient().reloadActiveTimeline();

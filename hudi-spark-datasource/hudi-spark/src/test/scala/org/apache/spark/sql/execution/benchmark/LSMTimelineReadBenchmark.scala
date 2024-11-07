@@ -23,7 +23,7 @@ import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{ActiveAction, CompletionTimeQueryView, HoodieArchivedTimeline, HoodieInstant, LSMTimeline}
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
-import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_FACTORY, TIMELINE_FACTORY}
+import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_GENERATOR, TIMELINE_FACTORY}
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
@@ -71,7 +71,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         val instantTime = startTs + i + ""
         val completionTime = startTs + i + 1000 + ""
         val action = if (i % 2 == 0) "delta_commit" else "commit"
-        val instant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime)
+        val instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime)
         val metadata: HoodieCommitMetadata = HoodieTestTable.of(metaClient).createCommitMetadata(instantTime, WriteOperationType.INSERT, util.Arrays.asList("par1", "par2"), 10, false)
         val serializedMetadata = serializeCommitMetadata(metaClient.getTimelineLayout.getCommitMetadataSerDe, metadata).get()
         instantBuffer.add(new DummyActiveAction(instant, serializedMetadata))

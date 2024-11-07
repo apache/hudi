@@ -27,7 +27,7 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -81,10 +81,10 @@ public class RestoresCommand {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     List<HoodieInstant> matchingInstants = activeTimeline.filterCompletedInstants().filter(completed ->
-            completed.getRequestTime().equals(restoreInstant)).getInstants();
+            completed.requestedTime().equals(restoreInstant)).getInstants();
     if (matchingInstants.isEmpty()) {
       matchingInstants = activeTimeline.filterInflights().filter(inflight ->
-              inflight.getRequestTime().equals(restoreInstant)).getInstants();
+              inflight.requestedTime().equals(restoreInstant)).getInstants();
     }
 
     // Assuming a single exact match is found in either completed or inflight instants
@@ -114,16 +114,16 @@ public class RestoresCommand {
                                            HoodieInstant restoreInstant) throws IOException {
     HoodieRestorePlan restorePlan = getRestorePlan(activeTimeline, restoreInstant);
     for (HoodieInstantInfo instantToRollback : restorePlan.getInstantsToRollback()) {
-      Comparable[] dataRow = createDataRow(restoreInstant.getRequestTime(), instantToRollback.getCommitTime(), "",
+      Comparable[] dataRow = createDataRow(restoreInstant.requestedTime(), instantToRollback.getCommitTime(), "",
               restoreInstant.getState());
       rows.add(dataRow);
     }
   }
 
   private HoodieRestorePlan getRestorePlan(HoodieActiveTimeline activeTimeline, HoodieInstant restoreInstant) throws IOException {
-    InstantFactory instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
     HoodieInstant instantKey = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, RESTORE_ACTION,
-            restoreInstant.getRequestTime());
+            restoreInstant.requestedTime());
     Option<byte[]> instantDetails = activeTimeline.getInstantDetails(instantKey);
     HoodieRestorePlan restorePlan = TimelineMetadataUtils
             .deserializeAvroMetadata(instantDetails.get(), HoodieRestorePlan.class);

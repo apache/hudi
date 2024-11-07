@@ -65,7 +65,7 @@ import java.util.SortedMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -181,7 +181,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // create one inflight instance.
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
-      metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_FACTORY.createNewInstant(State.REQUESTED,
+      metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_GENERATOR.createNewInstant(State.REQUESTED,
           HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
       // create one compaction instance before exist inflight instance.
@@ -209,7 +209,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // commit 3 (inflight)
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
-      metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_FACTORY.createNewInstant(State.REQUESTED,
+      metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_GENERATOR.createNewInstant(State.REQUESTED,
           HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
       // check that compaction will not be scheduled

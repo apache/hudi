@@ -24,7 +24,7 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -89,7 +89,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     validateBeforeScheduling();
     // make sure that it is idempotent, check with previously pending index operations.
     Set<String> indexesInflightOrCompleted = getInflightAndCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
-    InstantFactory instantFactory = table.getMetaClient().getTimelineLayout().getInstantFactory();
+    InstantGenerator instantFactory = table.getMetaClient().getTimelineLayout().getInstantGenerator();
 
     Set<String> requestedPartitions = partitionIndexTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedPartitions.addAll(partitionPaths);
@@ -134,7 +134,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
   private HoodieIndexPartitionInfo buildIndexPartitionInfo(MetadataPartitionType partitionType, HoodieInstant indexUptoInstant) {
     // for functional index, we need to pass the index name as the partition name
     String partitionName = MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) ? config.getIndexingConfig().getIndexName() : partitionType.getPartitionPath();
-    return new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, partitionName, indexUptoInstant.getRequestTime(), Collections.emptyMap());
+    return new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, partitionName, indexUptoInstant.requestedTime(), Collections.emptyMap());
   }
 
   private void validateBeforeScheduling() {

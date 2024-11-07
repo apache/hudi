@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 
 /**
  * Plans the restore action and add a restore.requested meta file to timeline.
@@ -74,19 +74,19 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               // filter only clustering related replacecommits (Not insert_overwrite related commits)
               .filter(instant -> ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantFactory))
               .getReverseOrderedInstants()
-              .filter(instant -> GREATER_THAN.test(instant.getRequestTime(), savepointToRestoreTimestamp))
+              .filter(instant -> GREATER_THAN.test(instant.requestedTime(), savepointToRestoreTimestamp))
               .collect(Collectors.toList());
 
       // Get all the commits on the timeline after the provided commit time
       List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
               .getReverseOrderedInstants()
-              .filter(instant -> GREATER_THAN.test(instant.getRequestTime(), savepointToRestoreTimestamp))
+              .filter(instant -> GREATER_THAN.test(instant.requestedTime(), savepointToRestoreTimestamp))
               .filter(instant -> !pendingClusteringInstantsToRollback.contains(instant))
               .collect(Collectors.toList());
 
       // Combine both lists - first rollback pending clustering and then rollback all other commits
       List<HoodieInstantInfo> instantsToRollback = Stream.concat(pendingClusteringInstantsToRollback.stream(), commitInstantsToRollback.stream())
-              .map(entry -> new HoodieInstantInfo(entry.getRequestTime(), entry.getAction()))
+              .map(entry -> new HoodieInstantInfo(entry.requestedTime(), entry.getAction()))
               .collect(Collectors.toList());
 
       HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp);

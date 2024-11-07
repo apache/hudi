@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.ActiveTimelineUtils
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -113,7 +113,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
   @throws[IOException]
   def createInsertRecords(srcFolder: Path): util.List[GenericRecord] = {
     val srcFile: Path = new Path(srcFolder.toString, "file1.parquet")
-    val startTime: Long = ActiveTimelineUtils.parseDateFromInstantTime("20170203000000").getTime / 1000
+    val startTime: Long = TimelineUtils.parseDateFromInstantTime("20170203000000").getTime / 1000
     val records: util.List[GenericRecord] = new util.ArrayList[GenericRecord]
     for (recordNum <- 0 until 96) {
       records.add(new HoodieTestDataGenerator().generateGenericRecord(recordNum.toString,
@@ -136,7 +136,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
   @throws[IOException]
   def createUpsertRecords(srcFolder: Path): util.List[GenericRecord] = {
     val srcFile = new Path(srcFolder.toString, "file1.parquet")
-    val startTime = ActiveTimelineUtils.parseDateFromInstantTime("20170203000000").getTime / 1000
+    val startTime = TimelineUtils.parseDateFromInstantTime("20170203000000").getTime / 1000
     val records = new util.ArrayList[GenericRecord]
     // 10 for update
     val dataGen = new HoodieTestDataGenerator

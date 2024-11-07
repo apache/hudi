@@ -26,9 +26,9 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
-import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -49,8 +49,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -140,7 +140,7 @@ public class TestCompletionTimeQueryView {
       testTable.addCommit(instantTime, Option.of(completionTime), Option.of(metadata));
       activeActions.add(
           new DummyActiveAction(
-              INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime),
+              INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime),
               serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), metadata).get()));
     }
     testTable.addRequestedCommit(String.format("%08d", 11));
@@ -152,8 +152,8 @@ public class TestCompletionTimeQueryView {
     writer.write(activeActions.subList(4, 6), Option.empty(), Option.empty());
     // reconcile the active timeline
     instants.subList(0, 3 * 6).forEach(
-        instant -> ActiveTimelineUtils.deleteInstantFile(metaClient.getStorage(),
-            metaClient.getMetaPath(), instant, INSTANT_FILE_NAME_FACTORY));
+        instant -> TimelineUtils.deleteInstantFile(metaClient.getStorage(),
+            metaClient.getMetaPath(), instant, INSTANT_FILE_NAME_GENERATOR));
     ValidationUtils.checkState(
         metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4,
         "should archive 6 instants with 4 as active");

@@ -54,7 +54,7 @@ public class RollbackUtils {
   public static HoodieRollbackPlan getRollbackPlan(HoodieTableMetaClient metaClient, HoodieInstant rollbackInstant)
       throws IOException {
     // TODO: add upgrade step if required.
-    final HoodieInstant requested = metaClient.getTimelineLayout().getInstantFactory().getRollbackRequestedInstant(rollbackInstant);
+    final HoodieInstant requested = metaClient.getTimelineLayout().getInstantGenerator().getRollbackRequestedInstant(rollbackInstant);
     return TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
   }

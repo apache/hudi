@@ -29,9 +29,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
-import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -100,7 +100,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       try {
-        metrics.updateCommitMetrics(ActiveTimelineUtils.parseDateFromInstantTime(compactionCommitTime).getTime(),
+        metrics.updateCommitMetrics(TimelineUtils.parseDateFromInstantTime(compactionCommitTime).getTime(),
             durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION);
       } catch (ParseException e) {
         throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
@@ -155,7 +155,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     if (clusteringTimer != null) {
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       try {
-        metrics.updateCommitMetrics(ActiveTimelineUtils.parseDateFromInstantTime(clusteringCommitTime).getTime(),
+        metrics.updateCommitMetrics(TimelineUtils.parseDateFromInstantTime(clusteringCommitTime).getTime(),
             durationInMs, metadata, HoodieActiveTimeline.CLUSTERING_ACTION);
       } catch (ParseException e) {
         throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
@@ -203,7 +203,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     HoodieFlinkTable<?> table = (HoodieFlinkTable<?>) createTable(config, storageConf, false);
     if (config.isMetadataTableEnabled()) {
       Option<String> latestPendingInstant = table.getActiveTimeline()
-          .filterInflightsAndRequested().lastInstant().map(HoodieInstant::getRequestTime);
+          .filterInflightsAndRequested().lastInstant().map(HoodieInstant::requestedTime);
       try {
         // initialize the metadata table path
         // guard the metadata writer with concurrent lock

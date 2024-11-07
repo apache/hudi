@@ -45,7 +45,7 @@ import org.springframework.shell.Shell;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -140,7 +140,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
 
     // 103 instant had rollback
     assertFalse(timeline.getCommitAndReplaceTimeline().containsInstant(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
   }
 
   /**
@@ -185,9 +185,9 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
 
     // 103 and 104 instant had rollback
     assertFalse(timeline.getCommitAndReplaceTimeline().containsInstant(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
     assertFalse(timeline.getCommitAndReplaceTimeline().containsInstant(
-        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "104")));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "104")));
   }
 
   /**
@@ -226,6 +226,6 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(1, timeline.getSavePointTimeline().countInstants(), "There should 1 instants.");
 
     // after delete, 100 instant should not exist.
-    assertFalse(timeline.containsInstant(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint1)));
+    assertFalse(timeline.containsInstant(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint1)));
   }
 }

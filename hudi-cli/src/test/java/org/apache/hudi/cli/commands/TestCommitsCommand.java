@@ -69,7 +69,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -130,24 +130,24 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   private LinkedHashMap<HoodieInstant, Integer[]> generateMixedData() throws Exception {
     // generate data and metadata
     LinkedHashMap<HoodieInstant, Integer[]> replaceCommitData = new LinkedHashMap<>();
-    replaceCommitData.put(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION,
+    replaceCommitData.put(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION,
         "103", InProcessTimeGenerator.createNewInstantTime()), new Integer[] {15, 10});
 
     LinkedHashMap<HoodieInstant, Integer[]> commitData = new LinkedHashMap<>();
-    commitData.put(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+    commitData.put(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
         "102", InProcessTimeGenerator.createNewInstantTime()), new Integer[] {15, 10});
-    commitData.put(INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+    commitData.put(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
         "101", InProcessTimeGenerator.createNewInstantTime()), new Integer[] {20, 10});
 
     for (Map.Entry<HoodieInstant, Integer[]> entry : commitData.entrySet()) {
-      String key = entry.getKey().getRequestTime();
+      String key = entry.getKey().requestedTime();
       Integer[] value = entry.getValue();
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 
     for (Map.Entry<HoodieInstant, Integer[]> entry : replaceCommitData.entrySet()) {
-      String key = entry.getKey().getRequestTime();
+      String key = entry.getKey().requestedTime();
       Integer[] value = entry.getValue();
       HoodieTestReplaceCommitMetadataGenerator.createReplaceCommitFileWithMetadata(tablePath1, key,
           Option.of(value[0]), Option.of(value[1]), metaClient);
@@ -415,7 +415,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     for (HoodieInstant commitInstant : data.keySet()) {
       Object result = shell.evaluate(() ->
-              String.format("commit showpartitions --commit %s", commitInstant.getRequestTime()));
+              String.format("commit showpartitions --commit %s", commitInstant.requestedTime()));
 
       assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
@@ -488,7 +488,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     Map<HoodieInstant, Integer[]> data = generateMixedData();
 
     for (HoodieInstant commitInstant : data.keySet()) {
-      Object result = shell.evaluate(() -> String.format("commit showfiles --commit %s", commitInstant.getRequestTime()));
+      Object result = shell.evaluate(() -> String.format("commit showfiles --commit %s", commitInstant.requestedTime()));
       assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
       Integer[] value = data.get(commitInstant);
@@ -539,7 +539,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     // the latest instant of test_table2 is 101
     List<String> commitsToCatchup = metaClient.getActiveTimeline().findInstantsAfter("101", Integer.MAX_VALUE)
-        .getInstantsAsStream().map(HoodieInstant::getRequestTime).collect(Collectors.toList());
+        .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
     String expected = String.format("Source %s is ahead by %d commits. Commits to catch up - %s",
         tableName1, commitsToCatchup.size(), commitsToCatchup);
     assertEquals(expected, result.toString());

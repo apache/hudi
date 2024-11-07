@@ -25,8 +25,8 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.model.HoodieTableQueryType.SNAPSHOT
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.InstantComparatorUtils
-import org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps
+import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
+import org.apache.hudi.common.table.timeline.InstantComparison
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
@@ -113,7 +113,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
           // Check if the as.of.instant is greater than or equal to the last completed instant.
           // We can still use RLI for data skipping for the latest snapshot.
           compareTimestamps(HoodieSqlCommonUtils.formatQueryInstant(instant),
-            InstantComparatorUtils.GREATER_THAN_OR_EQUALS, metaClient.getCommitsTimeline.filterCompletedInstants.lastInstant.get.getRequestTime)
+            InstantComparison.GREATER_THAN_OR_EQUALS, metaClient.getCommitsTimeline.filterCompletedInstants.lastInstant.get.requestedTime)
         }
     }
   }

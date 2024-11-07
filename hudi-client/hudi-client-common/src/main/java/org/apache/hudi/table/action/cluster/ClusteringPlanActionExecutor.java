@@ -61,7 +61,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
         table.getActiveTimeline().getLastClusteringInstant();
 
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getRequestTime).orElse("0"), Integer.MAX_VALUE)
+        .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::requestedTime).orElse("0"), Integer.MAX_VALUE)
         .countInstants();
 
     if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {

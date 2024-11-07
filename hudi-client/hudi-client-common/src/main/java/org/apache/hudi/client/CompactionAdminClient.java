@@ -30,8 +30,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.InstantFactory;
-import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -56,8 +56,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Client to perform admin operations related to compaction.
@@ -109,13 +109,13 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionPlan(String compactionInstant, boolean skipValidation,
       int parallelism, boolean dryRun) throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
-    InstantFileNameFactory instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameFactory();
+    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
+    InstantFileNameGenerator instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
     // Only if all operations are successfully executed
     if (!dryRun) {
       // Overwrite compaction request with empty compaction operations
       HoodieInstant inflight = instantFactory.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
-      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), metaClient.getTimelineLayout().getInstantFileNameFactory().getFileName(inflight));
+      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), metaClient.getTimelineLayout().getInstantFileNameGenerator().getFileName(inflight));
       if (metaClient.getStorage().exists(inflightPath)) {
         // We need to rollback data-files because of this inflight compaction before unscheduling
         throw new IllegalStateException("Please rollback the inflight compaction before unscheduling");
@@ -143,8 +143,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionFileId(HoodieFileGroupId fgId, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
-    InstantFileNameFactory instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameFactory();
+    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
+    InstantFileNameGenerator instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
 
     if (!dryRun) {
       // Ready to remove this file-Id from compaction request
@@ -199,7 +199,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       throws IOException {
     return TimelineMetadataUtils.deserializeCompactionPlan(
             metaClient.getActiveTimeline().readCompactionPlanAsBytes(
-                    metaClient.getTimelineLayout().getInstantFactory().getCompactionRequestedInstant(compactionInstant)).get());
+                    metaClient.getTimelineLayout().getInstantGenerator().getCompactionRequestedInstant(compactionInstant)).get());
   }
 
   /**

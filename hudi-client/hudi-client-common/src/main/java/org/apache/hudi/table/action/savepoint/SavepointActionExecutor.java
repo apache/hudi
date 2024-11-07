@@ -45,8 +45,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCleanerPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeHoodieCleanMetadata;
 
@@ -86,13 +86,13 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           } else {
             // clean is pending or inflight
             return deserializeCleanerPlan(
-                table.getActiveTimeline().getInstantDetails(instantFactory.createNewInstant(REQUESTED, instant.getAction(), instant.getRequestTime())).get())
+                table.getActiveTimeline().getInstantDetails(instantFactory.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime())).get())
                 .getEarliestInstantToRetain().getTimestamp();
           }
         } catch (IOException e) {
           throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
         }
-      }).orElseGet(() -> table.getCompletedCommitsTimeline().firstInstant().get().getRequestTime());
+      }).orElseGet(() -> table.getCompletedCommitsTimeline().firstInstant().get().requestedTime());
 
       // Cannot allow savepoint time on a commit that could have been cleaned
       ValidationUtils.checkArgument(compareTimestamps(instantTime, GREATER_THAN_OR_EQUALS, lastCommitRetained),
