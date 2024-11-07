@@ -156,6 +156,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * HoodieMetadata secondary index payload field ids
    */
+  public static final String SECONDARY_INDEX_RECORD_KEY_ESCAPE_CHAR = "\\";
   public static final String SECONDARY_INDEX_RECORD_KEY_SEPARATOR = "$";
   public static final String SECONDARY_INDEX_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
@@ -622,24 +623,77 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param isDeleted    true if this record is deleted
    */
   public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndexRecord(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
-    // the payload key is in the format of "secondaryKey_primaryKey"
-    HoodieKey key = new HoodieKey(String.format("%s%s%s",secondaryKey, SECONDARY_INDEX_RECORD_KEY_SEPARATOR, recordKey), partitionPath);
+    // the payload key is in the format of "secondaryKey$primaryKey"
+    HoodieKey key = new HoodieKey(constructSecondaryIndexKey(secondaryKey, recordKey), partitionPath);
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), new HoodieSecondaryIndexInfo(isDeleted));
     return new HoodieAvroRecord<>(key, payload);
   }
 
-  public static String getRecordKeyFromSecondaryIndex(String key) {
+  public static String getRecordKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the primary key from the payload key
     checkState(nonEmpty(key) && key.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR), "Invalid key format for secondary index payload: " + key);
-    return key.substring(key.lastIndexOf(SECONDARY_INDEX_RECORD_KEY_SEPARATOR) + 1);
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
+    return unescapeSpecialChars(key.substring(delimiterIndex + 1));
   }
 
-  public static String getSecondaryKeyFromSecondaryIndex(String key) {
+  public static String getSecondaryKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the secondary key from the payload key
     checkState(nonEmpty(key) && key.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR), "Invalid key format for secondary index payload: " + key);
-    return key.substring(0, key.lastIndexOf(SECONDARY_INDEX_RECORD_KEY_SEPARATOR));
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
+    return unescapeSpecialChars(key.substring(0, delimiterIndex));
+  }
+
+  static String constructSecondaryIndexKey(String secondaryKey, String recordKey) {
+    return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
+  }
+
+  private static String escapeSpecialChars(String str) {
+    StringBuilder escaped = new StringBuilder();
+    for (char c : str.toCharArray()) {
+      if (c == '\\' || c == '$') {
+        escaped.append('\\');  // Add escape character
+      }
+      escaped.append(c);  // Add the actual character
+    }
+    return escaped.toString();
+  }
+
+  private static int getSecondaryIndexKeySeparatorPosition(String key) {
+    int delimiterIndex = -1;
+    boolean isEscape = false;
+
+    // Find the delimiter index while skipping escaped $
+    for (int i = 0; i < key.length(); i++) {
+      char c = key.charAt(i);
+      if (c == '\\' && !isEscape) {
+        isEscape = true;
+      } else if (c == '$' && !isEscape) {
+        delimiterIndex = i;
+        break;
+      } else {
+        isEscape = false;
+      }
+    }
+    checkState(delimiterIndex != -1, "Invalid encoded key format");
+    return delimiterIndex;
+  }
+
+  private static String unescapeSpecialChars(String str) {
+    StringBuilder unescaped = new StringBuilder();
+    boolean isEscape = false;
+    for (char c : str.toCharArray()) {
+      if (isEscape) {
+        unescaped.append(c);
+        isEscape = false;
+      } else if (c == '\\') {
+        isEscape = true;  // Set escape flag to skip next character
+      } else {
+        unescaped.append(c);
+      }
+    }
+    return unescaped.toString();
   }
 
   public boolean isSecondaryIndexDeleted() {

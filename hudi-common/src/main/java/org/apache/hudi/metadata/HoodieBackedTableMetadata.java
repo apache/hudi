@@ -82,8 +82,8 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.getRecordKeyFromSecondaryIndex;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndex;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
@@ -846,10 +846,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       // Map of recordKey (primaryKey) -> log record that is not deleted for all input recordKeys
       Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
       logRecordScanner.getRecords().forEach(record -> {
-        String recordKey = getRecordKeyFromSecondaryIndex(record.getRecordKey());
+        String recordKey = getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
         HoodieMetadataPayload payload = record.getData();
-        if (!payload.isDeleted() && keySet.contains(recordKey)) { // process only valid records.
-          logRecordsMap.put(recordKey, record);
+        if (!payload.isDeleted()) { // process only valid records.
+          if (keySet.contains(recordKey)) {
+            logRecordsMap.put(recordKey, record);
+          }
         } else {
           deletedRecordsFromLogs.add(recordKey);
         }
@@ -857,24 +859,21 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       // Map of (record-key, secondary-index-record)
       Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords = fetchBaseFileAllRecordsByPayload(baseFileReader, keySet, partitionName);
-      if (baseFileRecords.isEmpty()) {
+      if (baseFileRecords == null || baseFileRecords.isEmpty()) {
         logRecordsMap.forEach((key1, value1) -> {
           if (!value1.getData().isDeleted()) {
-            recordKeyMap.put(key1, getSecondaryKeyFromSecondaryIndex(value1.getRecordKey()));
+            recordKeyMap.put(key1, getSecondaryKeyFromSecondaryIndexKey(value1.getRecordKey()));
           }
         });
       } else {
         // Iterate over all provided log-records, merging them into existing records
         logRecordsMap.forEach((key1, value1) -> baseFileRecords.merge(key1, value1, (oldRecord, newRecord) -> {
           Option<HoodieRecord<HoodieMetadataPayload>> mergedRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldRecord, newRecord);
-          if (!mergedRecord.isPresent() || mergedRecord.get().getData().isDeleted()) {
-            System.out.println(">>> mergedRecord is not present or deleted " + mergedRecord);
-          }
           return mergedRecord.orElse(null);
         }));
         baseFileRecords.forEach((key, value) -> {
           if (!deletedRecordsFromLogs.contains(key)) {
-            recordKeyMap.put(key, getSecondaryKeyFromSecondaryIndex(value.getRecordKey()));
+            recordKeyMap.put(key, getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
           }
         });
       }
@@ -897,8 +896,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return getRecordsByKeyPrefixes(keys, partitionName, false).map(
             record -> {
               if (!record.getData().isDeleted()) {
-                String recordKey = getRecordKeyFromSecondaryIndex(record.getRecordKey());
-                String secondaryKey = getSecondaryKeyFromSecondaryIndex(record.getRecordKey());
+                String recordKey = getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
+                String secondaryKey = getSecondaryKeyFromSecondaryIndexKey(record.getRecordKey());
                 return Pair.of(secondaryKey, recordKey);
               }
               return null;
@@ -915,15 +914,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return Collections.emptyMap();
     }
 
-    ClosableIterator<HoodieRecord<?>> records = reader.getRecordIterator();
+    ClosableIterator<HoodieRecord<?>> recordIterator = reader.getRecordIterator();
 
-    return toStream(records).map(record -> {
+    return toStream(recordIterator).map(record -> {
       GenericRecord data = (GenericRecord) record.getData();
       return composeRecord(data, partitionName);
     }).filter(record -> {
-      return keySet.contains(getRecordKeyFromSecondaryIndex(record.getRecordKey()));
+      return keySet.contains(getRecordKeyFromSecondaryIndexKey(record.getRecordKey()));
     }).collect(Collectors.toMap(record -> {
-      return getRecordKeyFromSecondaryIndex(record.getRecordKey());
+      return getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
     }, record -> record));
   }
 }

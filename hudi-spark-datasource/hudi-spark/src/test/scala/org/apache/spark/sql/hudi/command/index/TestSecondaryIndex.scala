@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.command.index
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
-
+import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestSecondaryIndex extends HoodieSparkSqlTestBase {
@@ -122,9 +122,9 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_city"))
           assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
 
-          checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-            Seq("austin", "e96c4396-3fad-413a-a942-4cb36106d720"),
-            Seq("san_francisco", "334e26e9-8355-45cc-97c6-c31daf0df330")
+          checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+            Seq(s"austin${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}e96c4396-3fad-413a-a942-4cb36106d720", false),
+            Seq(s"san_francisco${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}334e26e9-8355-45cc-97c6-c31daf0df330", false)
           )
         }
       }

@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -301,7 +302,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     String initialSecondaryKey = "sk1";
     String updatedSecondaryKey = "sk2";
     // test creation
-    String expectedPayloadKey = initialSecondaryKey + "_" + recordKey;
+    String expectedPayloadKey = initialSecondaryKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + recordKey;
     HoodieRecord<HoodieMetadataPayload> oldSecondaryIndexRecord =
         HoodieMetadataPayload.createSecondaryIndexRecord(recordKey, initialSecondaryKey, secondaryIndexPartition, false);
     assertEquals(expectedPayloadKey, oldSecondaryIndexRecord.getRecordKey());
@@ -314,7 +315,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     // test update and combine
     HoodieRecord<HoodieMetadataPayload> newSecondaryIndexRecord =
         HoodieMetadataPayload.createSecondaryIndexRecord(recordKey, updatedSecondaryKey, secondaryIndexPartition, false);
-    expectedPayloadKey = updatedSecondaryKey + "_" + recordKey;
+    expectedPayloadKey = updatedSecondaryKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + recordKey;
     assertEquals(expectedPayloadKey, newSecondaryIndexRecord.getRecordKey());
     combinedSecondaryIndexRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldSecondaryIndexRecord, newSecondaryIndexRecord);
     assertTrue(combinedSecondaryIndexRecord.isPresent());
