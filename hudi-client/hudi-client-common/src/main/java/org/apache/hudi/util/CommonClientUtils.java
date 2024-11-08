@@ -28,8 +28,8 @@ public class CommonClientUtils {
   public static void validateTableVersion(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
     if (!tableConfig.getTableVersion().equals(writeConfig.getWriteVersion())) {
-      throw new HoodieNotSupportedException(String.format("Table version (%s) and Writer version (%s) do not match.",
-          tableConfig.getTableVersion(), writeConfig.getWriteVersion()));
+      throw new HoodieNotSupportedException(String.format("Table version (%s) and Writer version (%s) do not match for table at: %s.",
+          tableConfig.getTableVersion(), writeConfig.getWriteVersion(), writeConfig.getBasePath()));
     }
   }
 }

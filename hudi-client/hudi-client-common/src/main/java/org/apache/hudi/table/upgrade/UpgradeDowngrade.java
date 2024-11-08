@@ -48,8 +48,6 @@ public class UpgradeDowngrade {
   private HoodieTableMetaClient metaClient;
   protected HoodieWriteConfig config;
   protected HoodieEngineContext context;
-  private StoragePath updatedPropsFilePath;
-  private StoragePath propsFilePath;
 
   public UpgradeDowngrade(
       HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
@@ -57,9 +55,15 @@ public class UpgradeDowngrade {
     this.metaClient = metaClient;
     this.config = config;
     this.context = context;
-    this.updatedPropsFilePath = new StoragePath(metaClient.getMetaPath(), HOODIE_UPDATED_PROPERTY_FILE);
-    this.propsFilePath = new StoragePath(metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
+  }
+
+  public HoodieTableMetaClient getMetaClient() {
+    return metaClient;
+  }
+
+  public void setMetaClient(HoodieTableMetaClient metaClient) {
+    this.metaClient = metaClient;
   }
 
   public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
