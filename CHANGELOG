@@ -379,3 +379,8 @@ cef0183d62 [ENG-14385][HUDI-8219] add concurrent schema evolution conflict detec
 ac9d0a8074 [ENG-15012][INTERNAL] Making bootstrap index default to false (#978)
 fef00d28a3 [ENG-16026][MINOR] Allow check for uncommitted log files in Metadata Validation (#976)
 ccd30871c9 [AUDIT-1011] Changelog for release-v1.40.0 (#975)
+
+---[2024-11-07 17:52:24] [release-v1.41.1] ---
+14042cf1949 [ENG-16492][INTERNAL] Close the remote view when the write client is closed (#1010)
+5cecceff48c [ENG-16492][INTERNAL] Include port in TimelineServerIdentifier to support multiple timeline servers with same host (#1005)
+b6a798da914 [ENG-16492][INTERNAL] Initialize timeline from client and use it to create view (#1004)
