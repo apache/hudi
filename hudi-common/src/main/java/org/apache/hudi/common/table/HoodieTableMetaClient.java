@@ -30,7 +30,7 @@ import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieIndexFunctionalOrSecondaryIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
@@ -141,7 +141,7 @@ public class HoodieTableMetaClient implements Serializable {
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
+  private Option<HoodieIndexFunctionalOrSecondaryIndexMetadata> indexMetadataOpt = Option.empty();
 
   /**
    * Instantiate HoodieTableMetaClient.
@@ -160,7 +160,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.basePath = new StoragePath(basePath);
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath, recordMergeMode, payloadClassName, recordMergerStrategy);
-    this.indexMetadataOpt = getIndexMetadata();
+    this.indexMetadataOpt = getFunctionalAndSecondaryIndexMetadata();
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -208,7 +208,7 @@ public class HoodieTableMetaClient implements Serializable {
     if (indexMetadataOpt.isPresent()) {
       indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
     } else {
-      indexMetadataOpt = Option.of(new HoodieIndexMetadata(Collections.singletonMap(indexName, indexDefinition)));
+      indexMetadataOpt = Option.of(new HoodieIndexFunctionalOrSecondaryIndexMetadata(Collections.singletonMap(indexName, indexDefinition)));
     }
     try {
       FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
@@ -218,9 +218,9 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Returns Option of {@link HoodieIndexMetadata} from index definition file if present, else returns empty Option.
+   * Returns Option of {@link HoodieIndexFunctionalOrSecondaryIndexMetadata} from index definition file if present, else returns empty Option.
    */
-  public Option<HoodieIndexMetadata> getIndexMetadata() {
+  public Option<HoodieIndexFunctionalOrSecondaryIndexMetadata> getFunctionalAndSecondaryIndexMetadata() {
     if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
       return indexMetadataOpt;
     }
@@ -228,7 +228,7 @@ public class HoodieTableMetaClient implements Serializable {
       StoragePath indexDefinitionPath =
           new StoragePath(tableConfig.getIndexDefinitionPath().get());
       try {
-        return Option.of(HoodieIndexMetadata.fromJson(
+        return Option.of(HoodieIndexFunctionalOrSecondaryIndexMetadata.fromJson(
             new String(FileIOUtils.readDataFromPath(storage, indexDefinitionPath).get())));
       } catch (IOException e) {
         throw new HoodieIOException("Could not load functional index metadata at path: " + tableConfig.getIndexDefinitionPath().get(), e);
@@ -237,7 +237,7 @@ public class HoodieTableMetaClient implements Serializable {
     return Option.empty();
   }
 
-  public void updateIndexMetadata(HoodieIndexMetadata newFunctionalIndexMetadata, String indexMetaPath) {
+  public void updateIndexMetadata(HoodieIndexFunctionalOrSecondaryIndexMetadata newFunctionalIndexMetadata, String indexMetaPath) {
     this.indexMetadataOpt = Option.of(newFunctionalIndexMetadata);
     try {
       // update the index metadata file as well

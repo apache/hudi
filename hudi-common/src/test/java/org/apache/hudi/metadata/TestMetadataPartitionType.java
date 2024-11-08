@@ -21,7 +21,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieIndexFunctionalOrSecondaryIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -56,7 +56,7 @@ public class TestMetadataPartitionType {
     // Simulate the configuration enabling given partition type, but the meta client not having it available (yet to initialize the partition)
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
     Mockito.when(tableConfig.isMetadataPartitionAvailable(partitionType)).thenReturn(false);
-    Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+    Mockito.when(metaClient.getFunctionalAndSecondaryIndexMetadata()).thenReturn(Option.empty());
     HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder();
     int expectedEnabledPartitions;
     switch (partitionType) {
@@ -107,7 +107,7 @@ public class TestMetadataPartitionType {
     // Simulate the meta client having RECORD_INDEX available but config not enabling it
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
     Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(true);
-    Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+    Mockito.when(metaClient.getFunctionalAndSecondaryIndexMetadata()).thenReturn(Option.empty());
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)).thenReturn(true);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(false).build();
 
@@ -126,7 +126,7 @@ public class TestMetadataPartitionType {
 
     // Neither config nor availability allows any partitions
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+    Mockito.when(metaClient.getFunctionalAndSecondaryIndexMetadata()).thenReturn(Option.empty());
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(Mockito.any())).thenReturn(false);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
 
@@ -144,9 +144,9 @@ public class TestMetadataPartitionType {
     // Simulate the meta client having FUNCTIONAL_INDEX available
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
     Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(true);
-    HoodieIndexMetadata functionalIndexMetadata =
-        new HoodieIndexMetadata(Collections.singletonMap("func_index_dummy", new HoodieIndexDefinition("func_index_dummy", null, null, null, null)));
-    Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.of(functionalIndexMetadata));
+    HoodieIndexFunctionalOrSecondaryIndexMetadata functionalIndexMetadata =
+        new HoodieIndexFunctionalOrSecondaryIndexMetadata(Collections.singletonMap("func_index_dummy", new HoodieIndexDefinition("func_index_dummy", null, null, null, null)));
+    Mockito.when(metaClient.getFunctionalAndSecondaryIndexMetadata()).thenReturn(Option.of(functionalIndexMetadata));
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FUNCTIONAL_INDEX)).thenReturn(true);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
 
@@ -201,8 +201,8 @@ public class TestMetadataPartitionType {
     indexDefinitions.put(
         secondaryIndexName,
         new HoodieIndexDefinition("secondary_index_dummySecondaryIndex", null, null, Collections.singletonList("name"), null));
-    HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(indexDefinitions);
-    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
+    HoodieIndexFunctionalOrSecondaryIndexMetadata indexMetadata = new HoodieIndexFunctionalOrSecondaryIndexMetadata(indexDefinitions);
+    when(metaClient.getFunctionalAndSecondaryIndexMetadata()).thenReturn(Option.of(indexMetadata));
     if (partitionType == MetadataPartitionType.FUNCTIONAL_INDEX) {
       assertEquals("func_index_dummyFunctionalIndex", partitionType.getPartitionPath(metaClient, functionalIndexName));
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
@@ -216,7 +216,7 @@ public class TestMetadataPartitionType {
   public void testExceptionForMissingFunctionalIndexMetadata() {
     MetadataPartitionType partitionType = MetadataPartitionType.FUNCTIONAL_INDEX;
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+    when(metaClient.getFunctionalAndSecondaryIndexMetadata()).thenReturn(Option.empty());
 
     assertThrows(IllegalArgumentException.class,
         () -> partitionType.getPartitionPath(metaClient, "testIndex"));

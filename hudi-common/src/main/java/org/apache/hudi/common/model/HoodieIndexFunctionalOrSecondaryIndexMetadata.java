@@ -36,18 +36,18 @@ import java.util.StringJoiner;
  * Represents the metadata for all functional and secondary indexes in Hudi.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class HoodieIndexMetadata implements Serializable {
+public class HoodieIndexFunctionalOrSecondaryIndexMetadata implements Serializable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexFunctionalOrSecondaryIndexMetadata.class);
 
   // Map to hold the index definitions keyed by their names.
   private Map<String, HoodieIndexDefinition> indexDefinitions;
 
-  public HoodieIndexMetadata() {
+  public HoodieIndexFunctionalOrSecondaryIndexMetadata() {
     this.indexDefinitions = new HashMap<>();
   }
 
-  public HoodieIndexMetadata(Map<String, HoodieIndexDefinition> indexDefinitions) {
+  public HoodieIndexFunctionalOrSecondaryIndexMetadata(Map<String, HoodieIndexDefinition> indexDefinitions) {
     this.indexDefinitions = indexDefinitions;
   }
 
@@ -80,16 +80,16 @@ public class HoodieIndexMetadata implements Serializable {
    * @return Deserialized instance of HoodieIndexesMetadata.
    * @throws IOException If any deserialization errors occur.
    */
-  public static HoodieIndexMetadata fromJson(String json) throws IOException {
+  public static HoodieIndexFunctionalOrSecondaryIndexMetadata fromJson(String json) throws IOException {
     if (json == null || json.isEmpty()) {
-      return new HoodieIndexMetadata();
+      return new HoodieIndexFunctionalOrSecondaryIndexMetadata();
     }
-    return JsonUtils.getObjectMapper().readValue(json, HoodieIndexMetadata.class);
+    return JsonUtils.getObjectMapper().readValue(json, HoodieIndexFunctionalOrSecondaryIndexMetadata.class);
   }
 
   @Override
   public String toString() {
-    return new StringJoiner(", ", HoodieIndexMetadata.class.getSimpleName() + "[", "]")
+    return new StringJoiner(", ", HoodieIndexFunctionalOrSecondaryIndexMetadata.class.getSimpleName() + "[", "]")
         .add("indexDefinitions=" + indexDefinitions)
         .toString();
   }

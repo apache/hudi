@@ -183,8 +183,8 @@ public enum MetadataPartitionType {
 
     @Override
     public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
-      if (metaClient.getIndexMetadata().isPresent()) {
-        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+      if (metaClient.getFunctionalAndSecondaryIndexMetadata().isPresent()) {
+        return metaClient.getFunctionalAndSecondaryIndexMetadata().get().getIndexDefinitions().values().stream()
             .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX));
       }
       return false;
@@ -192,8 +192,8 @@ public enum MetadataPartitionType {
 
     @Override
     public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
-      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
-      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
+      checkArgument(metaClient.getFunctionalAndSecondaryIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
+      return metaClient.getFunctionalAndSecondaryIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }
   },
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
@@ -206,8 +206,8 @@ public enum MetadataPartitionType {
 
     @Override
     public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
-      if (metaClient.getIndexMetadata().isPresent()) {
-        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+      if (metaClient.getFunctionalAndSecondaryIndexMetadata().isPresent()) {
+        return metaClient.getFunctionalAndSecondaryIndexMetadata().get().getIndexDefinitions().values().stream()
             .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX));
       }
       return false;
@@ -224,8 +224,8 @@ public enum MetadataPartitionType {
 
     @Override
     public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
-      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
-      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
+      checkArgument(metaClient.getFunctionalAndSecondaryIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
+      return metaClient.getFunctionalAndSecondaryIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
