@@ -328,51 +328,51 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     // Simple case
     String secondaryKey = "part1";
     String recordKey = "key1";
-    String constructedKey = HoodieMetadataPayload.constructSecondaryIndexKey(secondaryKey, recordKey);
+    String constructedKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
     assertEquals("part1$key1", constructedKey);
-    assertEquals(secondaryKey, HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(constructedKey));
-    assertEquals(recordKey, HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(constructedKey));
+    assertEquals(secondaryKey, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(constructedKey));
+    assertEquals(recordKey, SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(constructedKey));
 
     // Case with escape characters
     secondaryKey = "part\\one";
     recordKey = "key$two";
-    constructedKey = HoodieMetadataPayload.constructSecondaryIndexKey(secondaryKey, recordKey);
+    constructedKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
     assertEquals("part\\\\one$key\\$two", constructedKey);
-    assertEquals(secondaryKey, HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(constructedKey));
-    assertEquals(recordKey, HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(constructedKey));
+    assertEquals(secondaryKey, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(constructedKey));
+    assertEquals(recordKey, SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(constructedKey));
 
     // Complex case with multiple `$` and `\` characters
     secondaryKey = "comp\\lex$sec";
     recordKey = "prim\\ary$k\\ey";
-    constructedKey = HoodieMetadataPayload.constructSecondaryIndexKey(secondaryKey, recordKey);
+    constructedKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
     assertEquals("comp\\\\lex\\$sec$prim\\\\ary\\$k\\\\ey", constructedKey);
 
     // Verify correct extraction
-    String extractedSecondaryKey = HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(constructedKey);
-    String extractedPrimaryKey = HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(constructedKey);
+    String extractedSecondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(constructedKey);
+    String extractedPrimaryKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(constructedKey);
     assertEquals(secondaryKey, extractedSecondaryKey);
     assertEquals(recordKey, extractedPrimaryKey);
 
     // Edge case: only secondary key with no primary key
     String key = "secondaryOnly$";
-    recordKey = HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(key);
+    recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(key);
     assertEquals("", recordKey);
 
     // Edge case: only primary key with no secondary key
     key = "$primaryOnly";
-    secondaryKey = HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(key);
+    secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(key);
     assertEquals("", secondaryKey);
 
     // Edge case: empty string, invalid key format
-    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey(""));
-    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey(""));
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(""));
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(""));
 
     // Case with no separator
-    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey("invalidKey"));
-    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey("invalidKey"));
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey("invalidKey"));
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey("invalidKey"));
 
     // Case with only escape characters but no actual separator
-    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey("part\\one"));
-    assertThrows(IllegalStateException.class, () -> HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey("part\\one"));
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey("part\\one"));
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey("part\\one"));
   }
 }

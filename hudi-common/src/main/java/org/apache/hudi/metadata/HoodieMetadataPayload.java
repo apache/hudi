@@ -65,7 +65,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
-import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
@@ -624,76 +623,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndexRecord(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
     // the payload key is in the format of "secondaryKey$primaryKey"
-    HoodieKey key = new HoodieKey(constructSecondaryIndexKey(secondaryKey, recordKey), partitionPath);
+    HoodieKey key = new HoodieKey(SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey), partitionPath);
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), new HoodieSecondaryIndexInfo(isDeleted));
     return new HoodieAvroRecord<>(key, payload);
-  }
-
-  public static String getRecordKeyFromSecondaryIndexKey(String key) {
-    // the payload key is in the format of "secondaryKey$primaryKey"
-    // we need to extract the primary key from the payload key
-    checkState(nonEmpty(key) && key.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR), "Invalid key format for secondary index payload: " + key);
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return unescapeSpecialChars(key.substring(delimiterIndex + 1));
-  }
-
-  public static String getSecondaryKeyFromSecondaryIndexKey(String key) {
-    // the payload key is in the format of "secondaryKey$primaryKey"
-    // we need to extract the secondary key from the payload key
-    checkState(nonEmpty(key) && key.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR), "Invalid key format for secondary index payload: " + key);
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return unescapeSpecialChars(key.substring(0, delimiterIndex));
-  }
-
-  static String constructSecondaryIndexKey(String secondaryKey, String recordKey) {
-    return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
-  }
-
-  private static String escapeSpecialChars(String str) {
-    StringBuilder escaped = new StringBuilder();
-    for (char c : str.toCharArray()) {
-      if (c == '\\' || c == '$') {
-        escaped.append('\\');  // Add escape character
-      }
-      escaped.append(c);  // Add the actual character
-    }
-    return escaped.toString();
-  }
-
-  private static int getSecondaryIndexKeySeparatorPosition(String key) {
-    int delimiterIndex = -1;
-    boolean isEscape = false;
-
-    // Find the delimiter index while skipping escaped $
-    for (int i = 0; i < key.length(); i++) {
-      char c = key.charAt(i);
-      if (c == '\\' && !isEscape) {
-        isEscape = true;
-      } else if (c == '$' && !isEscape) {
-        delimiterIndex = i;
-        break;
-      } else {
-        isEscape = false;
-      }
-    }
-    checkState(delimiterIndex != -1, "Invalid encoded key format");
-    return delimiterIndex;
-  }
-
-  private static String unescapeSpecialChars(String str) {
-    StringBuilder unescaped = new StringBuilder();
-    boolean isEscape = false;
-    for (char c : str.toCharArray()) {
-      if (isEscape) {
-        unescaped.append(c);
-        isEscape = false;
-      } else if (c == '\\') {
-        isEscape = true;  // Set escape flag to skip next character
-      } else {
-        unescaped.append(c);
-      }
-    }
-    return unescaped.toString();
   }
 
   public boolean isSecondaryIndexDeleted() {

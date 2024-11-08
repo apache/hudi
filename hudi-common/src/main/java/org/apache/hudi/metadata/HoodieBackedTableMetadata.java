@@ -82,8 +82,6 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.getRecordKeyFromSecondaryIndexKey;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.getSecondaryKeyFromSecondaryIndexKey;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
@@ -846,7 +844,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       // Map of recordKey (primaryKey) -> log record that is not deleted for all input recordKeys
       Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
       logRecordScanner.getRecords().forEach(record -> {
-        String recordKey = getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
+        String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
         HoodieMetadataPayload payload = record.getData();
         if (!payload.isDeleted()) { // process only valid records.
           if (keySet.contains(recordKey)) {
@@ -858,11 +856,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       });
 
       // Map of (record-key, secondary-index-record)
-      Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords = fetchBaseFileAllRecordsByPayload(baseFileReader, keySet, partitionName);
+      Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords = fetchBaseFileAllRecordsByPayloadForSecIndex(baseFileReader, keySet, partitionName);
       if (baseFileRecords == null || baseFileRecords.isEmpty()) {
         logRecordsMap.forEach((key1, value1) -> {
           if (!value1.getData().isDeleted()) {
-            recordKeyMap.put(key1, getSecondaryKeyFromSecondaryIndexKey(value1.getRecordKey()));
+            recordKeyMap.put(key1, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value1.getRecordKey()));
           }
         });
       } else {
@@ -873,7 +871,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         }));
         baseFileRecords.forEach((key, value) -> {
           if (!deletedRecordsFromLogs.contains(key)) {
-            recordKeyMap.put(key, getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
+            recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
           }
         });
       }
@@ -896,8 +894,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return getRecordsByKeyPrefixes(keys, partitionName, false).map(
             record -> {
               if (!record.getData().isDeleted()) {
-                String recordKey = getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
-                String secondaryKey = getSecondaryKeyFromSecondaryIndexKey(record.getRecordKey());
+                String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
+                String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(record.getRecordKey());
                 return Pair.of(secondaryKey, recordKey);
               }
               return null;
@@ -908,7 +906,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
   }
 
-  private Map<String, HoodieRecord<HoodieMetadataPayload>> fetchBaseFileAllRecordsByPayload(HoodieSeekingFileReader reader, Set<String> keySet, String partitionName) throws IOException {
+  private Map<String, HoodieRecord<HoodieMetadataPayload>> fetchBaseFileAllRecordsByPayloadForSecIndex(HoodieSeekingFileReader reader, Set<String> keySet, String partitionName) throws IOException {
     if (reader == null) {
       // No base file at all
       return Collections.emptyMap();
@@ -920,9 +918,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       GenericRecord data = (GenericRecord) record.getData();
       return composeRecord(data, partitionName);
     }).filter(record -> {
-      return keySet.contains(getRecordKeyFromSecondaryIndexKey(record.getRecordKey()));
+      return keySet.contains(SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey()));
     }).collect(Collectors.toMap(record -> {
-      return getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
+      return SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
     }, record -> record));
   }
 }
