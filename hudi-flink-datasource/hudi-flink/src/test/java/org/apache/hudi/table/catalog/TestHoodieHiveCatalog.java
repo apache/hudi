@@ -231,6 +231,7 @@ public class TestHoodieHiveCatalog {
 
     CatalogBaseTable table2 = hoodieCatalog.getTable(tablePath);
     assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
+    options.remove(RECORDKEY_FIELD_NAME.key());
 
     // validate key generator for partitioned table
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
@@ -379,7 +380,7 @@ public class TestHoodieHiveCatalog {
     properties.put("table.type","wrong type");
     CatalogTable table =
             new CatalogTableImpl(schema,  properties, "hudi table");
-    assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
+    assertThrows(HoodieValidationException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
   }
 
   @ParameterizedTest
