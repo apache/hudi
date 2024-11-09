@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -484,6 +485,28 @@ public class TestHoodieHiveCatalog {
 
     Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
     assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.schema.verification"));
+  }
+
+  @Test
+  public void checkParameterSemantic() throws TableAlreadyExistException, DatabaseNotExistException {
+    HoodieHiveCatalog catalog = HoodieCatalogTestUtils.createHiveCatalog("myCatalog", true);
+    catalog.open();
+    Map<String, String> originOptions = new HashMap<>();
+    originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
+
+    // validate pk
+    originOptions.put(FlinkOptions.RECORD_KEY_FIELD.key(), "name");
+    CatalogTable table = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, table, false),
+        "Failed to create table, please check primary key statement and parameter " + FlinkOptions.RECORD_KEY_FIELD.key());
+    originOptions.remove(FlinkOptions.RECORD_KEY_FIELD.key());
+
+    // validate partition key
+    originOptions.put(FlinkOptions.PARTITION_PATH_FIELD.key(), "name");
+    CatalogTable table2 = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, table2, false),
+        "Failed to create table, please check partition key statement and parameter " + FlinkOptions.PARTITION_PATH_FIELD.key());
+    originOptions.remove(FlinkOptions.PARTITION_PATH_FIELD.key());
   }
 
   private Partition getHivePartition(CatalogPartitionSpec partitionSpec) throws Exception {

@@ -33,6 +33,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
@@ -465,6 +466,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
 
     try {
+      // validate parameter consistency
+      validateParameter(table);
       boolean isMorTable = OptionsResolver.isMorTable(table.getOptions());
       Table hiveTable = instantiateHiveTable(tablePath, table, inferTablePath(tablePath, table), isMorTable);
       //create hive table
@@ -475,6 +478,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       if (!ignoreIfExists) {
         throw new TableAlreadyExistException(getName(), tablePath, e);
       }
+    } catch (HoodieValidationException e) {
+      throw e;
     } catch (Exception e) {
       throw new HoodieCatalogException(
           String.format("Failed to create table %s", tablePath.getFullName()), e);
@@ -975,6 +980,34 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_DB.key(), k -> tablePath.getDatabaseName());
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_TABLE.key(), k -> tablePath.getObjectName());
       return newOptions;
+    }
+  }
+
+  public void validateParameter(CatalogBaseTable table) {
+    Map<String, String> properties = new HashMap<>(table.getOptions());
+
+    //check pk
+    if (table.getUnresolvedSchema().getPrimaryKey().isPresent()
+        && properties.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
+      List<String> pks = table.getUnresolvedSchema().getPrimaryKey().get().getColumnNames();
+      String[] primaryKeyFromParameter = properties.get(FlinkOptions.RECORD_KEY_FIELD.key()).split(",");
+      for (String field : primaryKeyFromParameter) {
+        if (!pks.contains(field)) {
+          throw new HoodieValidationException("Failed to create table, please check primary key statement and parameter " + FlinkOptions.RECORD_KEY_FIELD.key());
+        }
+      }
+    }
+
+    //check partition key
+    CatalogTable catalogTable = (CatalogTable) table;
+    if (catalogTable.isPartitioned() && properties.containsKey(FlinkOptions.PARTITION_PATH_FIELD.key())) {
+      final List<String> partitions = catalogTable.getPartitionKeys();
+      final String[] partitionsFromParameter = properties.get(FlinkOptions.PARTITION_PATH_FIELD.key()).split(",");
+      for (String field : partitionsFromParameter) {
+        if (!partitions.contains(field)) {
+          throw new HoodieValidationException("Failed to create table, please check partition key statement and parameter " + FlinkOptions.PARTITION_PATH_FIELD.key());
+        }
+      }
     }
   }
 
