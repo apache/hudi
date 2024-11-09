@@ -22,14 +22,15 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.{Row, SaveMode}
-import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.buildHoodieDropPartitionsConfig
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 
 class DropPartitionProcedure extends BaseProcedure
   with ProcedureBuilder
-  with Logging {
+  with Logging
+  with ProvidesHoodieConfig {
   override def build: Procedure = new DropPartitionProcedure
 
   val PARAMETERS: Array[ProcedureParameter] = Array[ProcedureParameter](
