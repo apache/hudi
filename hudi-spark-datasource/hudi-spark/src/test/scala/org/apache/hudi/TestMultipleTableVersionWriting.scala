@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
+import org.apache.hudi.exception.{HoodieException, HoodieUpgradeDowngradeException}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -34,7 +34,7 @@ class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
 
   @Test
   def testTableVersionAndWriteVersionMatching(): Unit = {
-    val basePath = s"${tempBasePath}/tbl_1";
+    val basePath = s"$tempBasePath/tbl_1"
     val df = spark.range(1).selectExpr("1 as id", "1 as name", "1 as partition")
 
     // write table with current version
@@ -43,7 +43,7 @@ class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val metaClient = HoodieTestUtils.createMetaClient(basePath);
+    val metaClient = HoodieTestUtils.createMetaClient(basePath)
     assertEquals(HoodieTableVersion.current().versionCode(),
       metaClient.getTableConfig.getTableVersion.versionCode())
 
@@ -59,14 +59,24 @@ class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
 
   @Test
   def testThrowsExceptionForIncompatibleTableVersion(): Unit = {
-    val basePath = s"${tempBasePath}/tbl_2";
-    HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX);
+    val basePath = s"$tempBasePath/tbl_2"
+    HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX)
 
     val df = spark.range(1).selectExpr("1 as id", "1 as name", "1 as partition")
-    assertThrows[HoodieNotSupportedException] {
+    // should error out when starting with table version 6 and writing with auto upgrade disabled
+    assertThrows[HoodieUpgradeDowngradeException] {
       df.write.format("hudi")
+        .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false")
         .mode(SaveMode.Append)
         .save(basePath)
     }
+    // should succeed when writing with auto upgrade enabled (default)
+    df.write.format("hudi")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val metaClient = HoodieTestUtils.createMetaClient(basePath)
+    assertEquals(HoodieTableVersion.current().versionCode(),
+      metaClient.getTableConfig.getTableVersion.versionCode())
   }
 }
