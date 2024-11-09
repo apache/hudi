@@ -536,7 +536,7 @@ public class TestWriteBase {
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
       TimelineUtils.deleteInstantFile(
           metaClient.getStorage(), metaClient.getMetaPath(), lastCompletedInstant.get(),
-          metaClient.getTimelineLayout().getInstantFileNameGenerator());
+          metaClient.getInstantFileNameGenerator());
       // refresh the heartbeat in case it is timed out.
       OutputStream outputStream = metaClient.getStorage().create(new StoragePath(
           HoodieTableMetaClient.getHeartbeatFolderPath(basePath)

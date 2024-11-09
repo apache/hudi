@@ -888,7 +888,19 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp) {
-    return getTimelineLayout().getInstantGenerator().createNewInstant(state, action, timestamp);
+    return getInstantGenerator().createNewInstant(state, action, timestamp);
+  }
+
+  public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp, String completionTime) {
+    return getInstantGenerator().createNewInstant(state, action, timestamp, completionTime);
+  }
+
+  public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp, String completionTime, boolean isLegacy) {
+    return getInstantGenerator().createNewInstant(state, action, timestamp, completionTime, isLegacy);
+  }
+
+  public HoodieInstant createNewInstant(StoragePathInfo pathInfo) {
+    return getInstantGenerator().createNewInstant(pathInfo);
   }
 
   public InstantFileNameParser getInstantFileNameParser() {

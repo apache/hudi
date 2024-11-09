@@ -251,7 +251,7 @@ public class HoodieInputFormatUtils {
                                                      List<Path> inputPaths) throws IOException {
     Set<String> partitionsToList = new HashSet<>();
     for (HoodieInstant commit : commitsToCheck) {
-      HoodieCommitMetadata commitMetadata = tableMetaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(commit,
+      HoodieCommitMetadata commitMetadata = tableMetaClient.getCommitMetadataSerDe().deserialize(commit,
           timeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
       partitionsToList.addAll(commitMetadata.getPartitionToWriteStats().keySet());
     }

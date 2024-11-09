@@ -88,7 +88,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public void persistHistorySchemaStr(String instantTime, String historySchemaStr) {
     cleanResidualFiles();
     HoodieActiveTimeline timeline = getMetaClient().getActiveTimeline();
-    InstantGenerator factory = metaClient.getTimelineLayout().getInstantGenerator();
+    InstantGenerator factory = metaClient.getInstantGenerator();
     HoodieInstant hoodieInstant = factory.createNewInstant(HoodieInstant.State.REQUESTED, SCHEMA_COMMIT_ACTION, instantTime);
     timeline.createNewInstant(hoodieInstant);
     byte[] writeContent = getUTF8Bytes(historySchemaStr);
@@ -158,7 +158,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
             .map(file -> file.getPath().getName())
             .filter(Objects::nonNull)
-            .filter(f -> commitList.contains(getMetaClient().getTimelineLayout().getInstantFileNameParser().extractTimestamp(f))).sorted().collect(Collectors.toList());
+            .filter(f -> commitList.contains(getMetaClient().getInstantFileNameParser().extractTimestamp(f))).sorted().collect(Collectors.toList());
         if (!validaSchemaFiles.isEmpty()) {
           StoragePath latestFilePath =
               new StoragePath(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));

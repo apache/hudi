@@ -797,7 +797,7 @@ public class HoodieStreamer implements Serializable {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
           .setConf(this.storage.getConf().newInstance())
           .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
-      final InstantGenerator instantFactory = meta.getTimelineLayout().getInstantGenerator();
+      final InstantGenerator instantFactory = meta.getInstantGenerator();
       return Pair.of(CompletableFuture.supplyAsync(() -> {
         boolean error = false;
         if (cfg.isAsyncCompactionEnabled()) {

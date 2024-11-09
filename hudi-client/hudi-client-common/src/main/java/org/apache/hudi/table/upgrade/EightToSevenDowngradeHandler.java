@@ -81,7 +81,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
     List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
     if (!instants.isEmpty()) {
-      InstantFileNameGenerator instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
+      InstantFileNameGenerator instantFileNameFactory = metaClient.getInstantFileNameGenerator();
       CommitMetadataSerDeV2 commitMetadataSerDeV2 = new CommitMetadataSerDeV2();
       CommitMetadataSerDeV1 commitMetadataSerDeV1 = new CommitMetadataSerDeV1();
       ActiveTimelineV1 activeTimelineV1 = new ActiveTimelineV1(metaClient);

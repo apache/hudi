@@ -89,7 +89,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     validateBeforeScheduling();
     // make sure that it is idempotent, check with previously pending index operations.
     Set<String> indexesInflightOrCompleted = getInflightAndCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
-    InstantGenerator instantFactory = table.getMetaClient().getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = table.getMetaClient().getInstantGenerator();
 
     Set<String> requestedPartitions = partitionIndexTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedPartitions.addAll(partitionPaths);

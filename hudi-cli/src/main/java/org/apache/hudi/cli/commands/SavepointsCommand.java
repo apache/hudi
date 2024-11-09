@@ -142,7 +142,7 @@ public class SavepointsCommand {
     if (completedInstants.empty()) {
       throw new HoodieException("There are no completed savepoint to run delete");
     }
-    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = metaClient.getInstantGenerator();
     HoodieInstant savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, instantTime);
 
     if (!completedInstants.containsInstant(savePoint)) {

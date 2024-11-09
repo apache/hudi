@@ -141,7 +141,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
           false,
           clusteringInstant,
-          serializeCommitMetadata(table.getMetaClient().getTimelineLayout().getCommitMetadataSerDe(), metadata),
+          serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata),
           table.getActiveTimeline());
     } catch (IOException e) {
       throw new HoodieClusteringException(

@@ -957,7 +957,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * if the partition path in the plan matches with the given partition path.
    */
   private static void deletePendingIndexingInstant(HoodieTableMetaClient metaClient, String partitionPath) {
-    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = metaClient.getInstantGenerator();
     metaClient.reloadActiveTimeline().filterPendingIndexTimeline().getInstantsAsStream().filter(instant -> REQUESTED.equals(instant.getState()))
         .forEach(instant -> {
           try {
@@ -1232,7 +1232,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     dataMetaClient.reloadActiveTimeline();
 
     // Fetch the commit to restore to (savepointed commit time)
-    InstantGenerator dataInstantFactory = dataMetaClient.getTimelineLayout().getInstantGenerator();
+    InstantGenerator dataInstantFactory = dataMetaClient.getInstantGenerator();
     HoodieInstant restoreInstant = dataInstantFactory.createNewInstant(REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
     HoodieInstant requested = dataInstantFactory.getRestoreRequestedInstant(restoreInstant);
     HoodieRestorePlan restorePlan = null;
@@ -1298,7 +1298,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // The commit which is being rolled back on the dataset
       final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
       // The deltacommit that will be rolled back
-      HoodieInstant deltaCommitInstant = metadataMetaClient.getTimelineLayout().getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED,
+      HoodieInstant deltaCommitInstant = metadataMetaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED,
           HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
       if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant)) {
         validateRollback(commitToRollbackInstantTime);

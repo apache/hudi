@@ -87,7 +87,7 @@ public class CompactHelpers<T, I, K, O> {
       // Callers should already guarantee the lock.
       activeTimeline.transitionCompactionInflightToComplete(false,
           instantFactory.getCompactionInflightInstant(compactionCommitTime),
-          serializeCommitMetadata(table.getMetaClient().getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+          serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
@@ -101,7 +101,7 @@ public class CompactHelpers<T, I, K, O> {
       InstantGenerator instantFactory = table.getInstantFactory();
       activeTimeline.transitionLogCompactionInflightToComplete(false,
           instantFactory.getLogCompactionInflightInstant(logCompactionCommitTime),
-          serializeCommitMetadata(table.getMetaClient().getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+          serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + logCompactionCommitTime, e);

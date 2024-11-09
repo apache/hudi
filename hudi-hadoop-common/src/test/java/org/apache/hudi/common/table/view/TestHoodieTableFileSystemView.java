@@ -193,11 +193,11 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(commitTimeline, instant1, Option.empty());
     saveAsComplete(commitTimeline, instant2, Option.empty());
     saveAsCompleteCluster(commitTimeline, clusteringInstant3,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), (HoodieReplaceCommitMetadata) commitMetadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), (HoodieReplaceCommitMetadata) commitMetadata));
     saveAsCompleteCluster(
         commitTimeline,
         clusteringInstant4,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), (HoodieReplaceCommitMetadata) commitMetadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), (HoodieReplaceCommitMetadata) commitMetadata));
 
     refreshFsView();
 
@@ -1935,7 +1935,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(
         commitTimeline,
         instant2,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
 
     //make sure view doesn't include fileId1
     refreshFsView();
@@ -2025,7 +2025,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(
         commitTimeline,
         instant1,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
     refreshFsView();
     assertEquals(0, roView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
@@ -2198,7 +2198,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(
         commitTimeline,
         instant1,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata1));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata1));
     commitTimeline.reload();
 
     // replace commit
@@ -2224,7 +2224,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsCompleteCluster(
         commitTimeline,
         instant2,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata2));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata2));
 
     // another insert commit
     String commitTime3 = "3";
@@ -2243,7 +2243,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(
         commitTimeline,
         instant3,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata3));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata3));
 
     metaClient.reloadActiveTimeline();
     refreshFsView();
@@ -2385,7 +2385,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(
         commitTimeline,
         instant1,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
 
     SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline(), true);
 
@@ -2407,7 +2407,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(
         commitTimeline,
         instant2,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
 
     // Verify file system view after 2nd commit.
     verifyFileSystemView(partitionPath, expectedState, fileSystemView);

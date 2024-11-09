@@ -138,13 +138,13 @@ public class TestUtils {
     ValidationUtils.checkArgument(instant.isCompleted());
     HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
     TimelineUtils.deleteInstantFile(metaClient.getStorage(), metaClient.getMetaPath(),
-        instant, metaClient.getTimelineLayout().getInstantFileNameGenerator());
+        instant, metaClient.getInstantFileNameGenerator());
     return metadata;
   }
 
   public static void saveInstantAsComplete(HoodieTableMetaClient metaClient, HoodieInstant instant, HoodieCommitMetadata metadata) throws Exception {
     metaClient.getActiveTimeline().saveAsComplete(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), metadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata));
   }
 
   public static String amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {

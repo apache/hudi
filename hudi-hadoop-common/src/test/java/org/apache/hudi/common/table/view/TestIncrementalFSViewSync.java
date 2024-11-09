@@ -256,7 +256,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
     metaClient.getActiveTimeline().saveAsComplete(
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), metadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata));
 
     view.sync();
     assertTrue(view.getLastInstant().isPresent());
@@ -299,7 +299,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
     metaClient.getActiveTimeline().saveAsComplete(
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), metadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata));
 
     view.sync();
     assertTrue(view.getLastInstant().isPresent());
@@ -1008,7 +1008,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieInstant inflightInstant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT,
         deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, instant);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
-    metaClient.getActiveTimeline().saveAsComplete(inflightInstant, serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), metadata));
+    metaClient.getActiveTimeline().saveAsComplete(inflightInstant, serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata));
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
   }
 
@@ -1031,7 +1031,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     metaClient.getActiveTimeline().saveAsComplete(
         inflightInstant,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), replaceCommitMetadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), replaceCommitMetadata));
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
   }
 

@@ -293,7 +293,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         .map(instant -> {
           try {
             HoodieCommitMetadata commitMetadata =
-                metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(instant, getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+                metaClient.getCommitMetadataSerDe().deserialize(instant, getInstantDetails(instant).get(), HoodieCommitMetadata.class);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);

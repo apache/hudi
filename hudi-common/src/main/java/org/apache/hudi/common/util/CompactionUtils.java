@@ -129,7 +129,7 @@ public class CompactionUtils {
     Function<HoodieTableMetaClient, HoodieTimeline> getFilteredTimelineByActionType =
         (hoodieTableMetaClient) -> hoodieTableMetaClient.getActiveTimeline().filterPendingCompactionTimeline();
     // Hoodie requested instant supplier
-    Function<String, HoodieInstant> requestedInstantSupplier = metaClient.getTimelineLayout().getInstantGenerator()::getCompactionRequestedInstant;
+    Function<String, HoodieInstant> requestedInstantSupplier = metaClient.getInstantGenerator()::getCompactionRequestedInstant;
     return getCompactionPlansByTimeline(metaClient, getFilteredTimelineByActionType, requestedInstantSupplier);
   }
 
@@ -143,7 +143,7 @@ public class CompactionUtils {
     Function<HoodieTableMetaClient, HoodieTimeline> filteredTimelineSupplier =
         (hoodieTableMetaClient) -> hoodieTableMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline();
     // Hoodie requested instant supplier
-    Function<String, HoodieInstant> requestedInstantSupplier = metaClient.getTimelineLayout().getInstantGenerator()::getLogCompactionRequestedInstant;
+    Function<String, HoodieInstant> requestedInstantSupplier = metaClient.getInstantGenerator()::getLogCompactionRequestedInstant;
     return getCompactionPlansByTimeline(metaClient, filteredTimelineSupplier, requestedInstantSupplier);
   }
 
@@ -169,7 +169,7 @@ public class CompactionUtils {
    * because we use same HoodieCompactionPlan for both the operations.
    */
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant) {
-    HoodieInstant compactionRequestedInstant = metaClient.getTimelineLayout().getInstantGenerator().getCompactionRequestedInstant(compactionInstant);
+    HoodieInstant compactionRequestedInstant = metaClient.getInstantGenerator().getCompactionRequestedInstant(compactionInstant);
     return getCompactionPlan(metaClient, compactionRequestedInstant);
   }
 
@@ -178,7 +178,7 @@ public class CompactionUtils {
    * because we use same HoodieCompactionPlan for both the operations.
    */
   public static HoodieCompactionPlan getLogCompactionPlan(HoodieTableMetaClient metaClient, String logCompactionInstant) {
-    HoodieInstant logCompactionRequestedInstant = metaClient.getTimelineLayout().getInstantGenerator().getLogCompactionRequestedInstant(logCompactionInstant);
+    HoodieInstant logCompactionRequestedInstant = metaClient.getInstantGenerator().getLogCompactionRequestedInstant(logCompactionInstant);
     return getCompactionPlan(metaClient, logCompactionRequestedInstant);
   }
 

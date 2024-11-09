@@ -545,7 +545,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
-    return serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commit).get();
+    return serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commit).get();
   }
 
   private byte[] getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
@@ -572,7 +572,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
-    return serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commit).get();
+    return serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commit).get();
   }
 
   private Option<byte[]> getCleanMetadata(String partition, String time, boolean isPartitionDeleted) throws IOException {

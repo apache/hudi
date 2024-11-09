@@ -372,7 +372,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     // check hoodieCommitMeta
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001");
-    HoodieCommitMetadata commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(instant,
+    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
         table.getMetaClient().getCommitTimeline()
             .getInstantDetails(instant)
             .get(),
@@ -400,7 +400,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     client.commit(newCommitTime, statuses);
     table = this.getHoodieTable(metaClient, cfg);
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime);
-    commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(instant1,
+    commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(instant1,
         table.getMetaClient().getCommitTimeline()
             .getInstantDetails(instant1)
             .get(),

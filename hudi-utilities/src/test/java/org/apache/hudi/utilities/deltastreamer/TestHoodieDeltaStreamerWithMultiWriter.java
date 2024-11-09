@@ -217,7 +217,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     cfgBackfillJob2.continuousMode = false;
     HoodieTableMetaClient meta = createMetaClient(new HadoopStorageConfiguration(hadoopConf), tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    HoodieCommitMetadata commitMetadata = meta.getTimelineLayout().getCommitMetadataSerDe().deserialize(
+    HoodieCommitMetadata commitMetadata = meta.getCommitMetadataSerDe().deserialize(
         timeline.firstInstant().get(), timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
     cfgBackfillJob2.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob2.configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
@@ -332,7 +332,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
       throws IOException {
     HoodieTimeline timeline =
         meta.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    return meta.getTimelineLayout().getCommitMetadataSerDe().deserialize(
+    return meta.getCommitMetadataSerDe().deserialize(
         timeline.firstInstant().get(), timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
   }
 

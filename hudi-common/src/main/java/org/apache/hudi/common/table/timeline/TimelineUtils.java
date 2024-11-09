@@ -256,7 +256,7 @@ public class TimelineUtils {
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
       LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
-      HoodieCommitMetadata commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(instant,
+      HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
           metaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
 
       return Option.ofNullable(commitMetadata.getExtraMetadata().get(extraMetadataKey));
@@ -393,7 +393,7 @@ public class TimelineUtils {
   public static void validateTimestampAsOf(HoodieTableMetaClient metaClient, String timestampAsOf) {
     Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
         .filterInflightsAndRequested()
-        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant, metaClient.getTimelineLayout().getInstantGenerator()))
+        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant, metaClient.getInstantGenerator()))
         .firstInstant();
 
     if (firstIncompleteCommit.isPresent()) {
@@ -444,7 +444,7 @@ public class TimelineUtils {
 
     Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
         .filterInflightsAndRequested()
-        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant, metaClient.getTimelineLayout().getInstantGenerator()))
+        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant, metaClient.getInstantGenerator()))
         .firstInstant();
 
     boolean noHollowCommit = firstIncompleteCommit
@@ -565,7 +565,7 @@ public class TimelineUtils {
    * @return Inflight Hoodie Instant
    */
   public static HoodieInstant getInflightInstant(final HoodieInstant instant, final HoodieTableMetaClient metaClient) {
-    InstantGenerator factory = metaClient.getTimelineLayout().getInstantGenerator();
+    InstantGenerator factory = metaClient.getInstantGenerator();
     if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
       if (instant.getAction().equals(COMMIT_ACTION)) {
         return factory.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, instant.requestedTime());

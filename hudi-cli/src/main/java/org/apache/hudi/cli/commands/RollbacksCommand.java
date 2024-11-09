@@ -98,7 +98,7 @@ public class RollbacksCommand {
       throws IOException {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     final List<Comparable[]> rows = new ArrayList<>();
-    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
     HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(instantFactory.createNewInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
         HoodieRollbackMetadata.class);

@@ -179,9 +179,9 @@ public class TimelineCommand {
       HoodieTableMetaClient metaClient, HoodieStorage storage, StoragePath metaPath) throws IOException {
     Map<String, Map<HoodieInstant.State, HoodieInstantWithModTime>> instantMap = new HashMap<>();
 
-    final InstantFileNameParser instantFileNameParser = metaClient.getTimelineLayout().getInstantFileNameParser();
+    final InstantFileNameParser instantFileNameParser = metaClient.getInstantFileNameParser();
     final InstantComparator instantComparator = metaClient.getTimelineLayout().getInstantComparator();
-    final InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
+    final InstantGenerator instantFactory = metaClient.getInstantGenerator();
 
     Stream<HoodieInstantWithModTime> instantStream =
         HoodieTableMetaClient.scanFiles(storage, metaPath, path -> {
@@ -307,7 +307,7 @@ public class TimelineCommand {
   private String getInstantToRollback(HoodieTimeline timeline, HoodieInstant instant) {
     try {
       if (instant.isInflight()) {
-        InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
+        InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
         HoodieInstant instantToUse = instantFactory.createNewInstant(
             HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime());
         HoodieRollbackPlan metadata = TimelineMetadataUtils
@@ -333,7 +333,7 @@ public class TimelineCommand {
     rollbackInstants.forEach(rollbackInstant -> {
       try {
         if (rollbackInstant.isInflight()) {
-          InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
+          InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
           HoodieInstant instantToUse = instantFactory.createNewInstant(
               HoodieInstant.State.REQUESTED, rollbackInstant.getAction(), rollbackInstant.requestedTime());
           HoodieRollbackPlan metadata = TimelineMetadataUtils

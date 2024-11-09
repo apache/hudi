@@ -73,7 +73,7 @@ public class CommitsCommand {
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getTimelineLayout().getCommitMetadataSerDe().deserialize(
+        final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
             commit,
             timeline.getInstantDetails(commit).get(),
             HoodieCommitMetadata.class);
@@ -113,7 +113,7 @@ public class CommitsCommand {
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getTimelineLayout().getCommitMetadataSerDe().deserialize(
+        final HoodieCommitMetadata commitMetadata = HoodieCLI.getTableMetaClient().getCommitMetadataSerDe().deserialize(
             commit,
             timeline.getInstantDetails(commit).get(),
             HoodieCommitMetadata.class);
@@ -412,7 +412,7 @@ public class CommitsCommand {
   Checks whether a commit or replacecommit action exists in the timeline.
   * */
   private Option<HoodieInstant> getCommitForInstant(HoodieTimeline timeline, String instantTime) {
-    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
     List<HoodieInstant> instants = Arrays.asList(
         instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime),
         instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),

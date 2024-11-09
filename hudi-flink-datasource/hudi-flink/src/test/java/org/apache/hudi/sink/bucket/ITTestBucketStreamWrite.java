@@ -104,7 +104,7 @@ public class ITTestBucketStreamWrite {
     String commitInstant = instant.requestedTime();
     String filename = INSTANT_FILE_NAME_GENERATOR.getFileName(activeCompletedTimeline.getInstants().get(0));
 
-    HoodieCommitMetadata commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe()
+    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe()
         .deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(),
             HoodieCommitMetadata.class);
 

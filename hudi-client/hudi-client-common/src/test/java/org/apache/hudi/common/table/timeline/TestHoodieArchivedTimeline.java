@@ -93,7 +93,7 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
       String completionTime = String.valueOf(instantTimeTs + 10);
       HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime);
       HoodieCommitMetadata metadata  = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
-      byte[] serializedMetadata = TimelineMetadataUtils.serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), metadata).get();
+      byte[] serializedMetadata = TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata).get();
       instantBuffer.add(new DummyActiveAction(instant, serializedMetadata));
       if (i % batchSize == 0) {
         // archive 10 instants each time

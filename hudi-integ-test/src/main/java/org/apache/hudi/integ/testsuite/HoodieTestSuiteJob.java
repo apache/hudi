@@ -154,7 +154,7 @@ public class HoodieTestSuiteJob {
       HoodieTimeline timeline = new ActiveTimelineV2(metaClient).getCommitsTimeline();
       // Pickup the schema version from nth commit from last (most recent insert/upsert will be rolled back).
       HoodieInstant prevInstant = timeline.nthFromLastInstant(nthCommit).get();
-      HoodieCommitMetadata commit = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(
+      HoodieCommitMetadata commit = metaClient.getCommitMetadataSerDe().deserialize(
           prevInstant,
           timeline.getInstantDetails(prevInstant).get(),
           HoodieCommitMetadata.class);

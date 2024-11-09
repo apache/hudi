@@ -101,7 +101,7 @@ public class TimelineDiffHelper {
                                                                                       HoodieTimeline newTimeline,
                                                                                       String completedAction, String pendingAction) {
     Set<HoodieInstant> newTimelineInstants = newTimeline.getInstantsAsStream().collect(Collectors.toSet());
-    InstantGenerator factory = metaClient.getTimelineLayout().getInstantGenerator();
+    InstantGenerator factory = metaClient.getInstantGenerator();
 
     return pendingActionTimelineFromOld.getInstantsAsStream().map(instant -> {
       if (newTimelineInstants.contains(instant)) {

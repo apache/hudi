@@ -75,13 +75,13 @@ public class MetadataConversionUtils {
         break;
       }
       case HoodieTimeline.COMMIT_ACTION: {
-        HoodieCommitMetadata commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(hoodieInstant, instantDetails.get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(hoodieInstant, instantDetails.get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
       }
       case HoodieTimeline.DELTA_COMMIT_ACTION: {
-        HoodieCommitMetadata deltaCommitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(hoodieInstant, instantDetails.get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata deltaCommitMetadata = metaClient.getCommitMetadataSerDe().deserialize(hoodieInstant, instantDetails.get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(deltaCommitMetadata));
         archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
         break;
@@ -234,7 +234,7 @@ public class MetadataConversionUtils {
       // inflight files can be empty in some certain cases, e.g. when users opt in clustering
       return Option.empty();
     }
-    return Option.of(metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(instant, inflightContent.get(), HoodieCommitMetadata.class));
+    return Option.of(metaClient.getCommitMetadataSerDe().deserialize(instant, inflightContent.get(), HoodieCommitMetadata.class));
   }
 
   private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(Option<byte[]> requestedContent) throws IOException {

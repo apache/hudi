@@ -150,7 +150,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     saveAsComplete(
         commitTimeline,
         instant1,
-        serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
     refreshFsView();
     assertEquals(0, roView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId1)).count());

@@ -78,7 +78,7 @@ public class UpgradeDowngradeUtils {
   public static void syncCompactionRequestedFileToAuxiliaryFolder(HoodieTable table) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
-    InstantFileNameGenerator instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
+    InstantFileNameGenerator instantFileNameFactory = metaClient.getInstantFileNameGenerator();
     HoodieTimeline compactionTimeline = timelineFactory.createActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     compactionTimeline.getInstantsAsStream().forEach(instant -> {

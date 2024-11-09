@@ -124,7 +124,7 @@ public class CompactionCommand {
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
-    InstantGenerator instantFactory = client.getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = client.getInstantGenerator();
     HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
         activeTimeline.readCompactionPlanAsBytes(
             instantFactory.getCompactionRequestedInstant(compactionInstantTime)).get());
@@ -175,7 +175,7 @@ public class CompactionCommand {
       @ShellOption(value = {"--partition"}, help = "Partition value", defaultValue = ShellOption.NULL) final String partition)
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
-    InstantGenerator instantFactory = client.getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = client.getInstantGenerator();
     HoodieArchivedTimeline archivedTimeline = client.getArchivedTimeline();
     HoodieInstant instant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED,
         HoodieTimeline.COMPACTION_ACTION, compactionInstantTime);
@@ -383,7 +383,7 @@ public class CompactionCommand {
    */
   private HoodieCompactionPlan readCompactionPlanForActiveTimeline(HoodieActiveTimeline activeTimeline,
                                                                    HoodieInstant instant) {
-    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
     try {
       if (!HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
         try {

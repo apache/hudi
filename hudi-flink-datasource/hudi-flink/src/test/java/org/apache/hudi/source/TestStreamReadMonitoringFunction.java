@@ -172,7 +172,7 @@ public class TestStreamReadMonitoringFunction {
     conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
     conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
     conf.set(FlinkOptions.READ_COMMITS_LIMIT, 2);
-    conf.set(FlinkOptions.READ_START_COMMIT, String.valueOf((Long.valueOf(firstInstant.getTimestamp()) - 100)));
+    conf.set(FlinkOptions.READ_START_COMMIT, String.valueOf((Long.valueOf(firstInstant.requestedTime()) - 100)));
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
       harness.setup();

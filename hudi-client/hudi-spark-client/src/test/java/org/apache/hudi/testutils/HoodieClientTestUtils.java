@@ -330,7 +330,7 @@ public class HoodieClientTestUtils {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       byte[] data = timeline.getInstantDetails(instant).get();
-      return Option.of(metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(instant, data, HoodieCommitMetadata.class));
+      return Option.of(metaClient.getCommitMetadataSerDe().deserialize(instant, data, HoodieCommitMetadata.class));
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from commit metadata", e);
     }

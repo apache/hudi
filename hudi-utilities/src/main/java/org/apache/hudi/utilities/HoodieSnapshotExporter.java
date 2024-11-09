@@ -292,7 +292,7 @@ public class HoodieSnapshotExporter {
                 if (fileStatus.isDirectory()) {
                   return false;
                 }
-                String instantTime = metaClient.getTimelineLayout().getInstantFileNameParser().extractTimestamp(path.getName());
+                String instantTime = metaClient.getInstantFileNameParser().extractTimestamp(path.getName());
                 return compareTimestamps(instantTime, LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
               }
             }).toArray(FileStatus[]::new);

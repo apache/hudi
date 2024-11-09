@@ -172,7 +172,7 @@ public class HoodieJavaWriteClient<T> extends
 
   public void transitionInflight(String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = metaClient.getInstantGenerator();
     metaClient.getActiveTimeline().transitionRequestedToInflight(
         instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
         Option.empty(), config.shouldAllowMultiWriteOnSameInstant());

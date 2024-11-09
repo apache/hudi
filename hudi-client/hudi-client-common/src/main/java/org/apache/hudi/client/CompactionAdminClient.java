@@ -109,13 +109,13 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionPlan(String compactionInstant, boolean skipValidation,
       int parallelism, boolean dryRun) throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
-    InstantFileNameGenerator instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
+    InstantGenerator instantFactory = metaClient.getInstantGenerator();
+    InstantFileNameGenerator instantFileNameFactory = metaClient.getInstantFileNameGenerator();
     // Only if all operations are successfully executed
     if (!dryRun) {
       // Overwrite compaction request with empty compaction operations
       HoodieInstant inflight = instantFactory.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
-      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), metaClient.getTimelineLayout().getInstantFileNameGenerator().getFileName(inflight));
+      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), metaClient.getInstantFileNameGenerator().getFileName(inflight));
       if (metaClient.getStorage().exists(inflightPath)) {
         // We need to rollback data-files because of this inflight compaction before unscheduling
         throw new IllegalStateException("Please rollback the inflight compaction before unscheduling");
@@ -143,8 +143,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionFileId(HoodieFileGroupId fgId, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
-    InstantFileNameGenerator instantFileNameFactory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
+    InstantGenerator instantFactory = metaClient.getInstantGenerator();
+    InstantFileNameGenerator instantFileNameFactory = metaClient.getInstantFileNameGenerator();
 
     if (!dryRun) {
       // Ready to remove this file-Id from compaction request
@@ -199,7 +199,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       throws IOException {
     return TimelineMetadataUtils.deserializeCompactionPlan(
             metaClient.getActiveTimeline().readCompactionPlanAsBytes(
-                    metaClient.getTimelineLayout().getInstantGenerator().getCompactionRequestedInstant(compactionInstant)).get());
+                    metaClient.getInstantGenerator().getCompactionRequestedInstant(compactionInstant)).get());
   }
 
   /**

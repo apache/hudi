@@ -1253,7 +1253,7 @@ public class HoodieTestTable implements AutoCloseable {
         return Option.of(replaceCommitMetadata);
       case HoodieTimeline.DELTA_COMMIT_ACTION:
       case HoodieTimeline.COMMIT_ACTION:
-        HoodieCommitMetadata commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(
+        HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
             hoodieInstant,
             metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         return Option.of(commitMetadata);

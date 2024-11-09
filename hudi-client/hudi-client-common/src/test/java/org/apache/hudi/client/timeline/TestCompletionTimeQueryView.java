@@ -141,7 +141,7 @@ public class TestCompletionTimeQueryView {
       activeActions.add(
           new DummyActiveAction(
               INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime),
-              serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), metadata).get()));
+              serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata).get()));
     }
     testTable.addRequestedCommit(String.format("%08d", 11));
     List<HoodieInstant> instants = TIMELINE_FACTORY.createActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());

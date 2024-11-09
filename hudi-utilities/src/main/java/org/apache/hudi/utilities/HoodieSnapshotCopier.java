@@ -160,7 +160,7 @@ public class HoodieSnapshotCopier implements Serializable {
                   if (fileStatus.isDirectory()) {
                     return false;
                   }
-                  String instantTime = tableMetadata.getTimelineLayout().getInstantFileNameParser().extractTimestamp(path.getName());
+                  String instantTime = tableMetadata.getInstantFileNameParser().extractTimestamp(path.getName());
                   return compareTimestamps(instantTime, LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
                 }
               }).toArray(FileStatus[]::new);

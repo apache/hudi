@@ -62,7 +62,7 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTimeline compactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
-    InstantFileNameGenerator factory = table.getMetaClient().getTimelineLayout().getInstantFileNameGenerator();
+    InstantFileNameGenerator factory = table.getMetaClient().getInstantFileNameGenerator();
 
     compactionTimeline.getInstantsAsStream().forEach(
         deleteInstant -> {

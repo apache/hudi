@@ -79,7 +79,7 @@ public class InternalSchemaManager implements Serializable {
       return DISABLED;
     }
 
-    InstantFileNameGenerator factory = metaClient.getTimelineLayout().getInstantFileNameGenerator();
+    InstantFileNameGenerator factory = metaClient.getInstantFileNameGenerator();
     String validCommits = metaClient
         .getCommitsAndCompactionTimeline()
         .filterCompletedInstants()

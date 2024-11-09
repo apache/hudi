@@ -501,7 +501,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<ClusteringOpDTO> dtos = executeRequest(PENDING_CLUSTERING_FILEGROUPS_URL, paramsMap,
           CLUSTERING_OP_DTOS_REFERENCE, RequestMethod.GET);
-      InstantGenerator factory = metaClient.getTimelineLayout().getInstantGenerator();
+      InstantGenerator factory = metaClient.getInstantGenerator();
       return dtos.stream().map(dto -> ClusteringOpDTO.toClusteringOperation(dto, factory));
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
@@ -514,7 +514,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<InstantDTO> instants = executeRequest(LAST_INSTANT_URL, paramsMap, INSTANT_DTOS_REFERENCE, RequestMethod.GET);
       return Option.fromJavaOptional(instants.stream()
-          .map(dto -> InstantDTO.toInstant(dto, metaClient.getTimelineLayout().getInstantGenerator())).findFirst());
+          .map(dto -> InstantDTO.toInstant(dto, metaClient.getInstantGenerator())).findFirst());
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

@@ -201,12 +201,12 @@ public class RepairsCommand {
       } catch (AvroRuntimeException e) {
         LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
         TimelineUtils.deleteInstantFile(client.getStorage(), client.getMetaPath(),
-            instant, client.getTimelineLayout().getInstantFileNameGenerator());
+            instant, client.getInstantFileNameGenerator());
       } catch (IOException ioe) {
         if (ioe.getMessage().contains("Not an Avro data file")) {
           LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
           TimelineUtils.deleteInstantFile(client.getStorage(), client.getMetaPath(),
-              instant, client.getTimelineLayout().getInstantFileNameGenerator());
+              instant, client.getInstantFileNameGenerator());
         } else {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }

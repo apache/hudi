@@ -104,7 +104,7 @@ public class CleansCommand {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
-    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
     HoodieInstant cleanInstant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, instantTime);
 
     if (!timeline.containsInstant(cleanInstant)) {

@@ -298,7 +298,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     writeTableMetadata(table, instantTime, metadata, writeStatuses);
     InstantGenerator instantFactory = table.getInstantFactory();
     activeTimeline.saveAsComplete(false, instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime),
-        serializeCommitMetadata(table.getMetaClient().getTimelineLayout().getCommitMetadataSerDe(), metadata));
+        serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata));
   }
 
   // Save internal schema
@@ -744,7 +744,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
         // So that we need to delete the whole MDT here.
         if (!deleteMDT) {
-          InstantGenerator instantFactory = mdtMetaClient.getTimelineLayout().getInstantGenerator();
+          InstantGenerator instantFactory = mdtMetaClient.getInstantGenerator();
           HoodieInstant syncedInstant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
           if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.requestedTime())) {
             LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than the MDT timeline %s",
@@ -973,7 +973,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (ClusteringUtils.isClusteringOrReplaceCommitAction(actionType)) {
       metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
     } else {
-      InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
+      InstantGenerator instantFactory = metaClient.getInstantGenerator();
       metaClient.getActiveTimeline().createNewInstant(instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, actionType,
           instantTime));
     }
@@ -1266,7 +1266,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected void doInitTable(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
     Option<HoodieInstant> ownerInstant = Option.empty();
     if (instantTime.isPresent()) {
-      InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
+      InstantGenerator instantFactory = metaClient.getInstantGenerator();
       ownerInstant = Option.of(instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
     }
     executeUsingTxnManager(ownerInstant, () -> {
@@ -1394,7 +1394,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                   || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION))
               .lastInstant();
       if (lastInstant.isPresent()) {
-        HoodieCommitMetadata commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(lastInstant.get(),
+        HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(lastInstant.get(),
             activeTimeline.getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
         String extraSchema = commitMetadata.getExtraMetadata().get(SCHEMA_KEY);
         if (!StringUtils.isNullOrEmpty(extraSchema)) {
@@ -1604,12 +1604,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     startCommitWithTime(instantTime, commitActionType, metaClient);
     config.setSchema(schema.toString());
     HoodieActiveTimeline timeLine = metaClient.getActiveTimeline();
-    InstantGenerator instantFactory = metaClient.getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = metaClient.getInstantGenerator();
     HoodieInstant requested = instantFactory.createNewInstant(State.REQUESTED, commitActionType, instantTime);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA);
     try {
-      timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), metadata));
+      timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata));
     } catch (IOException io) {
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
     }

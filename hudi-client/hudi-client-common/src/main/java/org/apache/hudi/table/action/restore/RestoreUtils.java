@@ -41,7 +41,7 @@ public class RestoreUtils {
    */
   public static HoodieRestorePlan getRestorePlan(HoodieTableMetaClient metaClient, HoodieInstant restoreInstant)
       throws IOException {
-    final HoodieInstant requested = metaClient.getTimelineLayout().getInstantGenerator().getRollbackRequestedInstant(restoreInstant);
+    final HoodieInstant requested = metaClient.getInstantGenerator().getRollbackRequestedInstant(restoreInstant);
     return TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().readRestoreInfoAsBytes(requested).get(), HoodieRestorePlan.class);
   }

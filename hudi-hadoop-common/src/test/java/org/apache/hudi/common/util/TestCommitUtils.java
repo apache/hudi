@@ -170,11 +170,11 @@ public class TestCommitUtils {
     commitMetadata.addMetadata(SINK_CHECKPOINT_KEY,
         getCheckpointValueAsString(id, batchId));
     timeline.createNewInstant(instant);
-    timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+    timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
     if (isCompleted) {
       timeline.saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
-          TimelineMetadataUtils.serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+          TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
     }
   }
 
@@ -185,10 +185,10 @@ public class TestCommitUtils {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     timeline.createNewInstant(instant);
-    timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+    timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
     timeline.saveAsComplete(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
-        TimelineMetadataUtils.serializeCommitMetadata(metaClient.getTimelineLayout().getCommitMetadataSerDe(), commitMetadata));
+        TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
   }
 
   private void addRequestedCompaction(HoodieActiveTimeline timeline,

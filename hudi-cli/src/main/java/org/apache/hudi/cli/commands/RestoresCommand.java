@@ -121,7 +121,7 @@ public class RestoresCommand {
   }
 
   private HoodieRestorePlan getRestorePlan(HoodieActiveTimeline activeTimeline, HoodieInstant restoreInstant) throws IOException {
-    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantGenerator();
+    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
     HoodieInstant instantKey = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, RESTORE_ACTION,
             restoreInstant.requestedTime());
     Option<byte[]> instantDetails = activeTimeline.getInstantDetails(instantKey);

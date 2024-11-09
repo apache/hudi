@@ -678,7 +678,7 @@ public class TestCleanPlanner {
     commitsTimeline.setInstants(instants);
     Collections.sort(instants);
     mock(HoodieTableMetaClient.class);
-    when(hoodieTable.getMetaClient().getTimelineLayout().getCommitMetadataSerDe()).thenReturn(COMMIT_METADATA_SER_DE);
+    when(hoodieTable.getMetaClient().getCommitMetadataSerDe()).thenReturn(COMMIT_METADATA_SER_DE);
     when(hoodieTable.getActiveTimeline().getInstantsAsStream()).thenReturn(instants.stream());
     when(hoodieTable.getCompletedCommitsTimeline()).thenReturn(commitsTimeline);
 

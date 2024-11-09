@@ -558,7 +558,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       baseFilesForCleaning = inflightCleaningTimeline.getInstantsAsStream().flatMap(instant -> {
         try {
           // convert inflight instant to requested and get clean plan
-          instant = metaClient.getTimelineLayout().getInstantGenerator().createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction(),
+          instant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction(),
               instant.requestedTime());
           HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, instant);
 
@@ -1485,7 +1485,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             if (!committedFilesMap.containsKey(instantTime)) {
               HoodieInstant instant =  completedInstantsTimeline.filter(i -> i.requestedTime().equals(instantTime))
                   .firstInstant().get();
-              HoodieCommitMetadata commitMetadata = metaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(
+              HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
                   instant, completedInstantsTimeline.getInstantDetails(instant).get(),
                   HoodieCommitMetadata.class
               );
