@@ -99,6 +99,10 @@ public class HoodieTableSink implements
         // close compaction for append mode
         conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
         DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream);
+        // async archive
+        if (OptionsResolver.needsAsyncArchive(conf)) {
+          pipeline = Pipelines.archive(conf, pipeline);
+        }
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
         } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
@@ -115,6 +119,10 @@ public class HoodieTableSink implements
           Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
       // write pipeline
       pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      // async archive
+      if (OptionsResolver.needsAsyncArchive(conf)) {
+        pipeline = Pipelines.archive(conf, pipeline);
+      }
       // compaction
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         // use synchronous compaction for bounded source.

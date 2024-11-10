@@ -27,6 +27,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sink.ArchiveFunction;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteOperator;
@@ -480,6 +481,15 @@ public class Pipelines {
         .name("clean_commits");
     cleanCommitDataStream.getTransformation().setMaxParallelism(1);
     return cleanCommitDataStream;
+  }
+
+  public static DataStream<Object> archive(Configuration conf, DataStream<Object> dataStream) {
+    DataStream<Object> archiveCommitDataStream = dataStream.map(new ArchiveFunction<>(conf))
+        .setParallelism(1)
+        .name("archive_commits")
+        .uid(opUID("archive_commits", conf));
+    archiveCommitDataStream.getTransformation().setMaxParallelism(1);
+    return archiveCommitDataStream;
   }
 
   public static DataStreamSink<Object> dummySink(DataStream<Object> dataStream) {

@@ -41,7 +41,7 @@ public class AsyncArchiveService extends HoodieAsyncTableService {
   private final BaseHoodieWriteClient writeClient;
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
-  protected AsyncArchiveService(BaseHoodieWriteClient writeClient) {
+  public AsyncArchiveService(BaseHoodieWriteClient writeClient) {
     super(writeClient.getConfig());
     this.writeClient = writeClient;
   }

@@ -346,6 +346,32 @@ public class HoodieFlinkWriteClient<T> extends
     }
   }
 
+  /**
+   * Starts async archiving service for finished commits.
+   *
+   * <p>The Flink write client is designed to write data set as buckets
+   * but archiving action should trigger after all the write actions within a
+   * checkpoint finish.
+   */
+  public void startAsyncArchiving() {
+    tableServiceClient.startAsyncArchiveService(this);
+  }
+
+  /**
+   * Blocks and wait for the async archiving service to finish.
+   *
+   * <p>The Flink write client is designed to write data set as buckets
+   * but archiving action should trigger after all the write actions within a
+   * checkpoint finish.
+   */
+  public void waitForArchivingFinish() {
+    if (tableServiceClient.asyncArchiveService != null) {
+      LOG.info("Archiver has been spawned already. Waiting for it to finish");
+      tableServiceClient.asyncArchive();
+      LOG.info("Archiver has finished");
+    }
+  }
+
   @Override
   public List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
                                      String instantTime,

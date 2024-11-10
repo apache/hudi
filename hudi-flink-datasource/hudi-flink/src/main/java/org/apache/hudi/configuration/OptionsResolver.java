@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -238,6 +239,15 @@ public class OptionsResolver {
    */
   public static boolean needsAsyncClustering(Configuration conf) {
     return isInsertOperation(conf) && conf.getBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED);
+  }
+
+  /**
+   * Returns whether there is need to execute the async archive.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsAsyncArchive(Configuration conf) {
+    return conf.getBoolean(HoodieArchivalConfig.ASYNC_ARCHIVE.key(), Boolean.valueOf(HoodieArchivalConfig.ASYNC_ARCHIVE.defaultValue()));
   }
 
   /**
