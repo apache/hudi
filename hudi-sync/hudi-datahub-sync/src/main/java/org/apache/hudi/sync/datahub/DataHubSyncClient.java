@@ -23,6 +23,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.SchemaDifference;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.exception.InvalidUnionTypeException;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
@@ -51,9 +53,11 @@ import com.linkedin.schema.UnionType;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.AvroTypeException;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +67,18 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   protected final DataHubSyncConfig config;
   private final DatasetUrn datasetUrn;
+
+  private static final String SCHEMA_FIELD_PATH_VERSION_TOKEN = "[version=2.0]";
   private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
+  private static final String NATIVE_TYPE_DATE = "date";
+  private static final String NATIVE_TYPE_UUID = "uuid";
+  private static final String NATIVE_TYPE_TIME_MILLIS = "time_millis";
+  private static final String NATIVE_TYPE_TIME_MICROS = "time_micros";
+  private static final String NATIVE_TYPE_TIMESTAMP_MILLIS = "timestamp_ntz_millis";
+  private static final String NATIVE_TYPE_TIMESTAMP_MICROS = "timestamp_ntz_micros";
+  private static final String NATIVE_TYPE_LOCAL_TIMESTAMP_MILLIS = "timestamp_millis";
+  private static final String NATIVE_TYPE_LOCAL_TIMESTAMP_MICROS = "timestamp_micros";
+  private static final String NATIVE_TYPE_DECIMAL = "decimal(%s,%s)";
 
   public DataHubSyncClient(DataHubSyncConfig config, HoodieTableMetaClient metaClient) {
     super(config, metaClient);
@@ -140,11 +155,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   private MetadataChangeProposalWrapper createSchemaMetadataUpdate(String tableName) {
     Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
-    List<SchemaField> fields = avroSchema.getFields().stream().map(f -> new SchemaField()
-            .setFieldPath(f.name())
-            .setType(toSchemaFieldDataType(f.schema().getType()))
-            .setDescription(f.doc(), SetMode.IGNORE_NULL)
-            .setNativeDataType(f.schema().getType().getName())).collect(Collectors.toList());
+    List<SchemaField> fields = createSchemaFields(avroSchema);
 
     final SchemaMetadata.PlatformSchema platformSchema = new SchemaMetadata.PlatformSchema();
     platformSchema.setOtherSchema(new OtherSchema().setRawSchema(avroSchema.toString()));
@@ -171,8 +182,113 @@ public class DataHubSyncClient extends HoodieSyncClient {
     }
   }
 
-  static SchemaFieldDataType toSchemaFieldDataType(Schema.Type type) {
-    switch (type) {
+  /**
+   * @see <a href="https://datahubproject.io/docs/advanced/field-path-spec-v2/">SchemaFieldPath Specification (Version 2)</a>
+   * @param avroSchema
+   * @return create list of datahub schema field from avro schema
+   */
+  @VisibleForTesting
+  static List<SchemaField> createSchemaFields(Schema avroSchema) {
+    List<SchemaField> schemaFields = new ArrayList<>();
+    for (Schema.Field field : avroSchema.getFields()) {
+      processField(schemaFields, SCHEMA_FIELD_PATH_VERSION_TOKEN, field);
+    }
+    return schemaFields;
+  }
+
+  private static void processField(
+      List<SchemaField> schemaFields, String parentPath, Schema.Field field) {
+    processField(schemaFields, parentPath, field, false);
+  }
+
+  /**
+   * Converts an avro schema field to a datahub schema field
+   */
+  private static void processField(
+      List<SchemaField> schemaFields, String parentPath, Schema.Field field, boolean isNullable) {
+    Schema avroSchema = field.schema();
+    Schema.Type avroType = avroSchema.getType();
+    String fieldPath = parentPath + "." + field.name();
+    switch (avroType) {
+      case BOOLEAN:
+      case INT:
+      case FLOAT:
+      case LONG:
+      case DOUBLE:
+      case FIXED:
+      case ENUM:
+      case STRING:
+      case BYTES:
+      case NULL:
+        addSchemaField(schemaFields, fieldPath, avroSchema, field.doc(), isNullable);
+        break;
+      case MAP:
+        addSchemaField(schemaFields, fieldPath, avroSchema, field.doc(), isNullable);
+        processField(schemaFields, fieldPath, new Schema.Field("key", Schema.create(Schema.Type.STRING)));
+        processField(schemaFields, fieldPath, new Schema.Field("value", avroSchema.getValueType()));
+        break;
+      case ARRAY:
+        addSchemaField(schemaFields, fieldPath, avroSchema, field.doc(), isNullable);
+        processField(schemaFields, fieldPath, new Schema.Field("element", avroSchema.getElementType()));
+        break;
+      case RECORD:
+        addSchemaField(schemaFields, fieldPath, avroSchema, field.doc(), isNullable);
+        for (Schema.Field recordField : avroSchema.getFields()) {
+          processField(schemaFields, fieldPath, recordField);
+        }
+        break;
+      case UNION:
+        if (avroSchema.getTypes().size() == 1) {
+          // Avro supports union with single type as well so use actual type in that case
+          processField(schemaFields, parentPath, new Schema.Field(field.name(), avroSchema.getTypes().get(0), field.doc()));
+        } else if (avroSchema.isNullable()) {
+          // In case of a union having null, remove it and mark field as nullable
+          List<Schema> remainingTypes = avroSchema.getTypes().stream()
+              .filter(t -> !t.getType().equals(Schema.Type.NULL))
+              .collect(Collectors.toList());
+          // remainingTypes won't be empty at this point as avro does not allow duplicate
+          // "null" type in union schema: https://avro.apache.org/docs/1.11.1/specification/#unions
+          // throwing error to avoid any invalid state
+          if (remainingTypes.isEmpty()) {
+            throw new InvalidUnionTypeException("Duplicate null type in union: " + avroSchema.getTypes());
+          }
+          if (remainingTypes.size() == 1) {
+            processField(schemaFields, parentPath, new Schema.Field(field.name(), remainingTypes.get(0), field.doc()), true);
+          } else {
+            processField(schemaFields, parentPath, new Schema.Field(field.name(), Schema.createUnion(remainingTypes), field.doc()), true);
+          }
+        } else {
+          addSchemaField(schemaFields, fieldPath, avroSchema, field.doc(), isNullable);
+          for (Schema unionSchema : avroSchema.getTypes()) {
+            if (!unionSchema.isNullable()) {
+              processField(schemaFields, fieldPath, new Schema.Field(unionSchema.getName(), unionSchema, unionSchema.getDoc()));
+            }
+          }
+        }
+        break;
+      default:
+        throw new AvroTypeException("Unexpected type: " + avroType.getName());
+    }
+  }
+
+  private static void addSchemaField(
+      List<SchemaField> schemaFields, String fieldPath, Schema avroSchema, String doc, boolean isNullable) {
+    SchemaField schemaField = new SchemaField()
+        .setFieldPath(fieldPath)
+        .setDescription(doc, SetMode.IGNORE_NULL)
+        .setNullable(isNullable)
+        .setNativeDataType(toSchemaFieldNativeDataType(avroSchema))
+        .setType(toSchemaFieldDataType(avroSchema.getType()));
+    schemaFields.add(schemaField);
+  }
+
+  /**
+   * @param avroType avro data type
+   * @return SchemaFieldDataType for given avro field schema
+   */
+  @VisibleForTesting
+  static SchemaFieldDataType toSchemaFieldDataType(Schema.Type avroType) {
+    switch (avroType) {
       case BOOLEAN:
         return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new BooleanType()));
       case INT:
@@ -199,7 +315,57 @@ public class DataHubSyncClient extends HoodieSyncClient {
       case STRING:
         return new SchemaFieldDataType().setType(SchemaFieldDataType.Type.create(new StringType()));
       default:
-        throw new AvroTypeException("Unexpected type: " + type.getName());
+        throw new AvroTypeException("Unexpected type: " + avroType.getName());
+    }
+  }
+
+  /**
+   * @param schema avro field schema
+   * @return native data type for given avro field schema
+   */
+  private static String toSchemaFieldNativeDataType(Schema schema) {
+    switch (schema.getType()) {
+      case INT:
+        // logical date and time type
+        if (schema.getLogicalType() == LogicalTypes.date()) {
+          return NATIVE_TYPE_DATE;
+        } else if (schema.getLogicalType() == LogicalTypes.timeMillis()) {
+          return NATIVE_TYPE_TIME_MILLIS;
+        }
+        return schema.getType().getName();
+      case LONG:
+        // logical time and timestamp type
+        if (schema.getLogicalType() == LogicalTypes.timestampMillis()) {
+          return NATIVE_TYPE_TIMESTAMP_MILLIS;
+        } else if (schema.getLogicalType() == LogicalTypes.localTimestampMillis()) {
+          return NATIVE_TYPE_LOCAL_TIMESTAMP_MILLIS;
+        } else if (schema.getLogicalType() == LogicalTypes.timestampMicros()) {
+          return NATIVE_TYPE_TIMESTAMP_MICROS;
+        } else if (schema.getLogicalType() == LogicalTypes.localTimestampMicros()) {
+          return NATIVE_TYPE_LOCAL_TIMESTAMP_MICROS;
+        } else if (schema.getLogicalType() == LogicalTypes.timeMillis()) {
+          return NATIVE_TYPE_TIME_MILLIS;
+        } else if (schema.getLogicalType() == LogicalTypes.timeMicros()) {
+          return NATIVE_TYPE_TIME_MICROS;
+        }
+        return schema.getType().getName();
+      case STRING:
+        // logical uuid type
+        if (schema.getLogicalType() == LogicalTypes.uuid()) {
+          return NATIVE_TYPE_UUID;
+        }
+        return schema.getType().getName();
+      case FIXED:
+      case BYTES:
+        // logical decimal type
+        if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          final LogicalTypes.Decimal decimalType =
+              (LogicalTypes.Decimal) schema.getLogicalType();
+          return String.format(NATIVE_TYPE_DECIMAL, decimalType.getPrecision(), decimalType.getScale());
+        }
+        return schema.getType().getName();
+      default:
+        return schema.getType().getName();
     }
   }
 }
