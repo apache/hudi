@@ -77,4 +77,19 @@ public class TestOptionsResolver {
     conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
     return conf;
   }
+
+  @Test
+  void testAreTableServicesEnabled() {
+    Configuration conf = new Configuration();
+    // default value should be true
+    assertTrue(OptionsResolver.areTableServicesEnabled(conf));
+
+    // explicitly set to true
+    conf.setBoolean(HoodieWriteConfig.TABLE_SERVICES_ENABLED.key(), true);
+    assertTrue(OptionsResolver.areTableServicesEnabled(conf));
+
+    // explicitly set to false
+    conf.setBoolean(HoodieWriteConfig.TABLE_SERVICES_ENABLED.key(), false);
+    assertFalse(OptionsResolver.areTableServicesEnabled(conf));
+  }
 }

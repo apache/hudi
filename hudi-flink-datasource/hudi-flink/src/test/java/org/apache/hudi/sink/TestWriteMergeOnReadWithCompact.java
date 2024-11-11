@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.utils.TestData.insertRow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
@@ -55,6 +56,32 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   protected void setUp(Configuration conf) {
     // trigger the compaction for every finished checkpoint
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+  }
+
+  @Test
+  public void testUpsertWithTableServiceDisabled() throws Exception {
+    // reset the config option
+    conf.setBoolean("hoodie.table.services.enabled", false);
+    conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, true);
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .handleEvents(1)
+        .checkpointComplete(1)
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .handleEvents(1)
+        .checkpointComplete(2)
+        .end();
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
+    long completedCompaction = writeClient.getHoodieTable().getActiveTimeline().getCompletedCompactionTimeline().getInstants().stream().count();
+    long pendingCompaction = writeClient.getHoodieTable().getActiveTimeline().filterPendingCompactionTimeline().getInstants().stream().count();
+    assertEquals(0, completedCompaction);
+    assertEquals(0, pendingCompaction);
   }
 
   @Test

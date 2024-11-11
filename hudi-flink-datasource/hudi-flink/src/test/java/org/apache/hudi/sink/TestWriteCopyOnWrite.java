@@ -320,7 +320,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
     conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
-    conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
 
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT_SAME_KEY)

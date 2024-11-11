@@ -117,6 +117,9 @@ public class PipelinesV2 {
       // close compaction for append mode
       conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
       DataStream<RowData> pipeline = Pipelines.append(conf, rowType, dataStream);
+      if (!OptionsResolver.areTableServicesEnabled(conf)) {
+        return pipeline;
+      }
       if (OptionsResolver.needsAsyncClustering(conf)) {
         return clusterV2(conf, rowType, pipeline);
       } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
@@ -131,6 +134,9 @@ public class PipelinesV2 {
     DataStream<RowData> pipeline;
     final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream, isBounded, overwrite);
     pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
+    if (!OptionsResolver.areTableServicesEnabled(conf)) {
+      return pipeline;
+    }
     // compaction
     if (OptionsResolver.needsAsyncCompaction(conf)) {
       // use synchronous compaction for bounded source.

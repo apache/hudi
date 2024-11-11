@@ -95,7 +95,9 @@ public class HoodieFlinkStreamer {
       // append mode should not compaction operator
       conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
       pipeline = Pipelines.append(conf, rowType, dataStream);
-      if (OptionsResolver.needsAsyncClustering(conf)) {
+      if (!OptionsResolver.areTableServicesEnabled(conf)) {
+        Pipelines.dummySink(pipeline);
+      } else if (OptionsResolver.needsAsyncClustering(conf)) {
         Pipelines.cluster(conf, rowType, pipeline);
       } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
         // add clean function to rollback failed writes for lazy failed writes cleaning policy
@@ -106,7 +108,9 @@ public class HoodieFlinkStreamer {
     } else {
       DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
       pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
-      if (OptionsResolver.needsAsyncCompaction(conf)) {
+      if (!OptionsResolver.areTableServicesEnabled(conf)) {
+        Pipelines.dummySink(pipeline);
+      } else if (OptionsResolver.needsAsyncCompaction(conf)) {
         Pipelines.compact(conf, pipeline);
       } else {
         Pipelines.clean(conf, pipeline);
