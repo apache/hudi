@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit tests {@link HoodieDataSourceInternalBatchWrite}.
  */
-public class TestHoodieDataSourceInternalBatchWrite extends
+class TestHoodieDataSourceInternalBatchWrite extends
     HoodieBulkInsertInternalWriterTestBase {
 
   private static Stream<Arguments> bulkInsertTypeParams() {

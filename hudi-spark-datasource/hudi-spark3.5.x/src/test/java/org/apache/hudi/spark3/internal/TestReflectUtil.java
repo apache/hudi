@@ -30,10 +30,10 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests {@link ReflectUtil}.
  */
-public class TestReflectUtil extends HoodieClientTestBase {
+class TestReflectUtil extends HoodieClientTestBase {
 
   @Test
-  public void testDataSourceWriterExtraCommitMetadata() throws Exception {
+  void testDataSourceWriterExtraCommitMetadata() throws Exception {
     SparkSession spark = sqlContext.sparkSession();
 
     String insertIntoSql = "insert into test_reflect_util values (1, 'z3', 1, '2021')";

@@ -148,7 +148,7 @@ The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version,
 
 For example,
 ```
-# Build against Spark 3.2.x
+# Build against Spark 3.5.x
 mvn clean package -DskipTests
 
 # Build against Spark 3.4.x

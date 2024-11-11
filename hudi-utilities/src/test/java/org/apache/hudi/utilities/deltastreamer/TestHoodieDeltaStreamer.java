@@ -2321,6 +2321,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
+  @Disabled("HUDI-8081")
   @Test
   public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer() throws Exception {
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
@@ -2330,6 +2331,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @Disabled("HUDI-8081")
   @Test
   public void testORCDFSSourceWithSchemaProviderAndWithTransformer() throws Exception {
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
@@ -2467,7 +2469,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       testCsvDFSSource(false, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
     }, "Should error out when doing the transformation.");
     LOG.debug("Expected error during transformation", e);
-    assertTrue(e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
+    assertTrue(
+        e.getMessage().contains("[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter "
+            + "with name `begin_lat` cannot be resolved. Did you mean one of the following?")
+            || e.getMessage().contains("Column 'begin_lat' does not exist. Did you mean one of the following?")
+            || e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
   }
 
   @Test

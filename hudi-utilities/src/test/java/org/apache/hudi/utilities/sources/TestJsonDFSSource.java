@@ -39,7 +39,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -79,7 +81,11 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
     RemoteIterator<LocatedFileStatus> files = fs.listFiles(generateOneFile("3", "000", 10), true);
 
     FileStatus file1Status = files.next();
-    InputBatch<Dataset<Row>> batch = sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
+    // Starting in Spark 3.4.2, we need to add this option because previous code relied on unexpected behavior
+    // see https://issues.apache.org/jira/browse/SPARK-44079
+    Map<String, String> dataframeReaderOptions = Collections.singletonMap("mode", "FAILFAST");
+    InputBatch<Dataset<Row>> batch = sourceFormatAdapter.fetchNewDataInRowFormat(
+        Option.empty(), Long.MAX_VALUE, dataframeReaderOptions);
     corruptFile(file1Status.getPath());
     assertTrue(batch.getBatch().isPresent());
     Throwable t = assertThrows(Exception.class,

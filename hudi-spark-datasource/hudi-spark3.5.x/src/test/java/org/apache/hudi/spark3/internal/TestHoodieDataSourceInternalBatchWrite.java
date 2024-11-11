@@ -24,8 +24,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.HoodieBulkInsertInternalWriterTestBase;
-import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.spark.sql.Dataset;
@@ -69,14 +67,13 @@ public class TestHoodieDataSourceInternalBatchWrite extends
 
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
-  public void testDataSourceWriter(boolean populateMetaFields) throws Exception {
+  void testDataSourceWriter(boolean populateMetaFields) throws Exception {
     testDataSourceWriterInternal(Collections.EMPTY_MAP, Collections.EMPTY_MAP, populateMetaFields);
   }
 
   private void testDataSourceWriterInternal(Map<String, String> extraMetadata, Map<String, String> expectedExtraMetadata, boolean populateMetaFields) throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     String instantTime = "001";
     // init writer
     HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
@@ -155,10 +152,9 @@ public class TestHoodieDataSourceInternalBatchWrite extends
 
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
-  public void testMultipleDataSourceWrites(boolean populateMetaFields) throws Exception {
+  void testMultipleDataSourceWrites(boolean populateMetaFields) throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     int partitionCounter = 0;
 
     // execute N rounds
@@ -199,13 +195,12 @@ public class TestHoodieDataSourceInternalBatchWrite extends
   }
 
   // Large writes are not required to be executed w/ regular CI jobs. Takes lot of running time.
-  @Disabled
+  @Disabled("Long running time")
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
-  public void testLargeWrites(boolean populateMetaFields) throws Exception {
+  void testLargeWrites(boolean populateMetaFields) throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     int partitionCounter = 0;
 
     // execute N rounds
@@ -254,10 +249,9 @@ public class TestHoodieDataSourceInternalBatchWrite extends
    */
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
-  public void testAbort(boolean populateMetaFields) throws Exception {
+  void testAbort(boolean populateMetaFields) throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     String instantTime0 = "00" + 0;
     // init writer
     HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =

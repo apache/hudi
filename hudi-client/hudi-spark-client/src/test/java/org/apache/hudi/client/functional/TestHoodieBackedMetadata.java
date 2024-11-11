@@ -1961,7 +1961,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @param writeConfig   - Write config
    */
   private void testTableOperationsImpl(HoodieSparkEngineContext engineContext, HoodieWriteConfig writeConfig) throws Exception {
-
     String newCommitTime = null;
     List<HoodieRecord> records = new ArrayList<>();
     List<WriteStatus> writeStatuses = null;
@@ -2015,7 +2014,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
-
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {

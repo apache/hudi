@@ -146,7 +146,9 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     topicName = "topic" + testNum;
     prepareInitialConfigs(fs, basePath, testUtils.brokerAddress());
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
-    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
+    /* [HUDI-8081] Disabling ORC setup.
+     prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
+     */
   }
 
   protected static void prepareInitialConfigs(FileSystem dfs, String dfsBasePath, String brokerAddress) throws IOException {

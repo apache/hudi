@@ -8,7 +8,6 @@ env:
   MODULES: "packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,hudi-aws,packaging/hudi-spark-bundle,hudi-sync/hudi-datahub-sync,packaging/hudi-aws-bundle,packaging/hudi-gcp-bundle,packaging/hudi-datahub-sync-bundle,packaging/hudi-hive-sync-bundle"
   AWS: "aws"
   SCALA_PROFILE: "scala-2.12"
-  SPARK_PROFILE: "spark3.2"
 
 permissions:
   id-token: write
@@ -17,6 +16,11 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - sparkProfile: "spark3.2"
+          - sparkProfile: "spark3.5"
     steps:
       - uses: actions/checkout@v2
         name: Checkout self
@@ -46,8 +50,14 @@ jobs:
         run: echo "RELEASE_BRANCH=${{ github.ref_name }}" >> $GITHUB_ENV
 
       - name: Set VERSION
-        run: echo "VERSION=$(echo $RELEASE_BRANCH | sed -e s/release-v//)" >> $GITHUB_ENV
-
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run: |
+          if [ "$SPARK_PROFILE" == "spark3.5" ]; then
+            echo "VERSION=$(echo $RELEASE_BRANCH | sed -e 's/release-v//')-spark35" >> $GITHUB_ENV
+          else
+            echo "VERSION=$(echo $RELEASE_BRANCH | sed -e 's/release-v//')" >> $GITHUB_ENV
+          fi
       - name: Print Version
         run: echo "$RELEASE_BRANCH $VERSION"
 
@@ -56,7 +66,11 @@ jobs:
         run: exit 1
 
       - name: Set java version
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: mvn versions:set -DnewVersion="$VERSION"-INTERNAL -T 4 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS
         
       - name: Deploy
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: mvn deploy -am -pl $MODULES -DskipTests -T 4 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS

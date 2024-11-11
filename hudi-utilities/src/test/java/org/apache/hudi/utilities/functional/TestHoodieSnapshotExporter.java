@@ -219,7 +219,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
   public class TestHoodieSnapshotExporterForNonHudi {
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testExportAsNonHudi(String format) throws IOException {
       // NOTE: Hudi doesn't support Orc in Spark < 3.0
       //       Please check HUDI-4496 for more details

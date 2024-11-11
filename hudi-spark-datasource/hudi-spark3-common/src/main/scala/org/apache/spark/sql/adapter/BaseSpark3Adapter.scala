@@ -47,8 +47,8 @@ import scala.collection.convert.Wrappers.JConcurrentMapWrapper
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
-  // JsonUtils for Support Spark Version >= 3.3
-  if (HoodieSparkUtils.gteqSpark3_3) JsonUtils.registerModules()
+  // JsonUtils for Support Spark Version >= 3.2
+  if (HoodieSparkUtils.gteqSpark3_2) JsonUtils.registerModules()
 
   private val cache = JConcurrentMapWrapper(
     new ConcurrentHashMap[ZoneId, DateFormatter](1))
