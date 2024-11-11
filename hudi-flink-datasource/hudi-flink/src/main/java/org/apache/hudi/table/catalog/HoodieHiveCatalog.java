@@ -465,9 +465,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       throw new HoodieCatalogException("CREATE VIEW is not supported.");
     }
 
+    // validate parameter consistency
+    validateParameterConsistency(table);
+
     try {
-      // validate parameter consistency
-      validateParameter(table);
       boolean isMorTable = OptionsResolver.isMorTable(table.getOptions());
       Table hiveTable = instantiateHiveTable(tablePath, table, inferTablePath(tablePath, table), isMorTable);
       //create hive table
@@ -478,8 +479,6 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       if (!ignoreIfExists) {
         throw new TableAlreadyExistException(getName(), tablePath, e);
       }
-    } catch (HoodieValidationException e) {
-      throw e;
     } catch (Exception e) {
       throw new HoodieCatalogException(
           String.format("Failed to create table %s", tablePath.getFullName()), e);
@@ -983,29 +982,39 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
   }
 
-  public void validateParameter(CatalogBaseTable table) {
+  public void validateParameterConsistency(CatalogBaseTable table) {
     Map<String, String> properties = new HashMap<>(table.getOptions());
 
-    //check pk
+    //Check consistency between pk statement and option 'hoodie.datasource.write.recordkey.field'.
+    String pkError = String.format("Primary key fields definition has inconsistency between pk statement and option '%s'",
+        FlinkOptions.RECORD_KEY_FIELD.key());
     if (table.getUnresolvedSchema().getPrimaryKey().isPresent()
         && properties.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
       List<String> pks = table.getUnresolvedSchema().getPrimaryKey().get().getColumnNames();
-      String[] primaryKeyFromParameter = properties.get(FlinkOptions.RECORD_KEY_FIELD.key()).split(",");
-      for (String field : primaryKeyFromParameter) {
+      String[] pkFromOptions = properties.get(FlinkOptions.RECORD_KEY_FIELD.key()).split(",");
+      if (pkFromOptions.length != pks.size()) {
+        throw new HoodieValidationException(pkError);
+      }
+      for (String field : pkFromOptions) {
         if (!pks.contains(field)) {
-          throw new HoodieValidationException("Failed to create table, please check primary key statement and parameter " + FlinkOptions.RECORD_KEY_FIELD.key());
+          throw new HoodieValidationException(pkError);
         }
       }
     }
 
-    //check partition key
+    //Check consistency between partition key statement and option 'hoodie.datasource.write.partitionpath.field'.
+    String partitionKeyError = String.format("Partition key fields definition has inconsistency between partition key statement and option '%s'",
+        FlinkOptions.PARTITION_PATH_FIELD.key());
     CatalogTable catalogTable = (CatalogTable) table;
     if (catalogTable.isPartitioned() && properties.containsKey(FlinkOptions.PARTITION_PATH_FIELD.key())) {
       final List<String> partitions = catalogTable.getPartitionKeys();
-      final String[] partitionsFromParameter = properties.get(FlinkOptions.PARTITION_PATH_FIELD.key()).split(",");
-      for (String field : partitionsFromParameter) {
+      final String[] partitionsFromOptions = properties.get(FlinkOptions.PARTITION_PATH_FIELD.key()).split(",");
+      if (partitionsFromOptions.length != partitions.size()) {
+        throw new HoodieValidationException(pkError);
+      }
+      for (String field : partitionsFromOptions) {
         if (!partitions.contains(field)) {
-          throw new HoodieValidationException("Failed to create table, please check partition key statement and parameter " + FlinkOptions.PARTITION_PATH_FIELD.key());
+          throw new HoodieValidationException(partitionKeyError);
         }
       }
     }

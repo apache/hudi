@@ -495,18 +495,32 @@ public class TestHoodieHiveCatalog {
     Map<String, String> originOptions = new HashMap<>();
     originOptions.put(FactoryUtil.CONNECTOR.key(), "hudi");
 
-    // validate pk
+    // validate pk: same quantity but different values
+    String pkError = String.format("Primary key fields definition has inconsistency between pk statement and option '%s'",
+        FlinkOptions.RECORD_KEY_FIELD.key());
     originOptions.put(FlinkOptions.RECORD_KEY_FIELD.key(), "name");
-    CatalogTable table = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
-    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, table, false),
-        "Failed to create table, please check primary key statement and parameter " + FlinkOptions.RECORD_KEY_FIELD.key());
+    CatalogTable pkTable = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, pkTable, false), pkError);
     originOptions.remove(FlinkOptions.RECORD_KEY_FIELD.key());
 
-    // validate partition key
+    // validate pk: the pk field exist in options but not in pk statement.
+    originOptions.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid,name");
+    CatalogTable pkTable1 = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, pkTable1, false), pkError);
+    originOptions.remove(FlinkOptions.RECORD_KEY_FIELD.key());
+
+    // validate partition key: same quantity but different values
+    String partitionKeyError = String.format("Partition key fields definition has inconsistency between partition key statement and option '%s'",
+        FlinkOptions.PARTITION_PATH_FIELD.key());
     originOptions.put(FlinkOptions.PARTITION_PATH_FIELD.key(), "name");
-    CatalogTable table2 = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
-    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, table2, false),
-        "Failed to create table, please check partition key statement and parameter " + FlinkOptions.PARTITION_PATH_FIELD.key());
+    CatalogTable partitionKeytable = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, partitionKeytable, false), partitionKeyError);
+    originOptions.remove(FlinkOptions.PARTITION_PATH_FIELD.key());
+
+    // validate partition key: the partition key field exist in options but not in partition key statement.
+    originOptions.put(FlinkOptions.PARTITION_PATH_FIELD.key(), "par1,name");
+    CatalogTable partitionKeytable1 = new CatalogTableImpl(schema, partitions, originOptions, "hudi table");
+    assertThrows(HoodieValidationException.class, () -> catalog.createTable(tablePath, partitionKeytable1, false), partitionKeyError);
     originOptions.remove(FlinkOptions.PARTITION_PATH_FIELD.key());
   }
 
