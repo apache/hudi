@@ -26,7 +26,7 @@ import scala.collection.JavaConverters._
 
 class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
 
-  test("Case1: Test Call drop_partition Procedure For Multiple Partitions: '*' stands for all partitions in any partition level") {
+  test("Case1: Test Call drop_partition Procedure For Multiple Partitions: '*' stands for all partitions in leaf partition") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + "/" + tableName
@@ -75,7 +75,7 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Case2: Test Call drop_partition Procedure For Multiple Partitions: '*' stands for all partitions in any partition level") {
+  test("Case2: Test Call drop_partition Procedure For Multiple Partitions: '*' stands for all partitions in middle partition") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + "/" + tableName
