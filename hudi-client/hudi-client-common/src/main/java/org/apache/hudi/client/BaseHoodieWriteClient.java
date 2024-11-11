@@ -1399,22 +1399,23 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Called after each write, to release any resources used.
    */
   protected void releaseResources(String instantTime) {
-    // do nothing here
+    // stop heartbeat for instant
+    heartbeatClient.stop(instantTime);
   }
 
   @Override
   public void close() {
     FileSystemViewStorageType viewStorageType = config.getViewStorageConfig().getStorageType();
+    // If there is a remote file system view used and the server is shared, the view on the server needs to be closed to free up memory
+    if (!shouldStopTimelineServer && (viewStorageType == FileSystemViewStorageType.REMOTE_ONLY || viewStorageType == FileSystemViewStorageType.REMOTE_FIRST)) {
+      createTable(config, hadoopConf).getHoodieView().close();
+    }
     // Stop timeline-server if running
     super.close();
     // Calling this here releases any resources used by your index, so make sure to finish any related operations
     // before this point
     this.index.close();
     this.tableServiceClient.close();
-    // If there is a remote file system view used and the server is shared, the view on the server needs to be closed to free up memory
-    if (!shouldStopTimelineServer && (viewStorageType == FileSystemViewStorageType.REMOTE_ONLY || viewStorageType == FileSystemViewStorageType.REMOTE_FIRST)) {
-      createTable(config, hadoopConf).getHoodieView().close();
-    }
   }
 
   public void setWriteTimer(String commitType) {

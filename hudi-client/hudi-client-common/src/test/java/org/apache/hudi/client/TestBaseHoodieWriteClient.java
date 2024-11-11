@@ -36,6 +36,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -56,12 +57,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
   @EnumSource(value = FileSystemViewStorageType.class, names = {"REMOTE_FIRST", "REMOTE_ONLY"})
   void validateClientClose(FileSystemViewStorageType viewStorageType) throws IOException {
     initMetaClient();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withStorageType(viewStorageType)
-            .build())
-        .build();
+    HoodieWriteConfig writeConfig = getHoodieWriteConfigForRemoteView(viewStorageType);
     HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
     EmbeddedTimelineService service = mock(EmbeddedTimelineService.class);
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
@@ -78,12 +74,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
   @EnumSource(value = FileSystemViewStorageType.class, names = {"REMOTE_FIRST", "REMOTE_ONLY"})
   void validateClientCloseSkippedIfTimelineServiceNotProvided(FileSystemViewStorageType viewStorageType) throws IOException {
     initMetaClient();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withStorageType(viewStorageType)
-            .build())
-        .build();
+    HoodieWriteConfig writeConfig = getHoodieWriteConfigForRemoteView(viewStorageType);
     HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
@@ -91,6 +82,18 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     writeClient.close();
     verify(table, never()).getHoodieView();
     verify(tableServiceClient).close();
+  }
+
+  private HoodieWriteConfig getHoodieWriteConfigForRemoteView(FileSystemViewStorageType viewStorageType) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .build())
+        .build();
+    // update the view config to simulate how the configs are updated when adding the embedded timeline service url and port
+    writeConfig.setViewStorageConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(viewStorageType).build());
+    return writeConfig;
   }
 
   @Test
@@ -140,11 +143,17 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     @Override
     protected HoodieTable<String, String, String, String> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
+      // table should only be made with remote view config for these tests
+      FileSystemViewStorageType storageType = config.getViewStorageConfig().getStorageType();
+      Assertions.assertTrue(storageType == FileSystemViewStorageType.REMOTE_FIRST || storageType == FileSystemViewStorageType.REMOTE_ONLY);
       return table;
     }
 
     @Override
     protected HoodieTable<String, String, String, String> createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
+      // table should only be made with remote view config for these tests
+      FileSystemViewStorageType storageType = config.getViewStorageConfig().getStorageType();
+      Assertions.assertTrue(storageType == FileSystemViewStorageType.REMOTE_FIRST || storageType == FileSystemViewStorageType.REMOTE_ONLY);
       return table;
     }
 
