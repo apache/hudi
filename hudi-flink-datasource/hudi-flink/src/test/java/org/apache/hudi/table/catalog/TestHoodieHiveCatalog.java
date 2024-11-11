@@ -380,7 +380,7 @@ public class TestHoodieHiveCatalog {
     properties.put("table.type","wrong type");
     CatalogTable table =
             new CatalogTableImpl(schema,  properties, "hudi table");
-    assertThrows(HoodieValidationException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
+    assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
   }
 
   @ParameterizedTest
