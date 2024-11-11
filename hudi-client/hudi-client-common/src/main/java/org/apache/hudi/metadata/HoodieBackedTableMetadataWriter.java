@@ -108,6 +108,7 @@ import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWr
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.extractFileNames;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForFunctionalIndex;
@@ -503,8 +504,22 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
-  private Pair<Integer, HoodieData<HoodieRecord>> initializePartitionStatsIndex(List<DirectoryInfo> partitionInfoList) {
-    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext, partitionInfoList, dataWriteConfig.getMetadataConfig(), dataMetaClient,
+  private Pair<Integer, HoodieData<HoodieRecord>> initializePartitionStatsIndex(List<DirectoryInfo> partitionInfoList) throws IOException {
+    // List of pairs of partition name and set of file names in the latest file slices
+    List<Pair<String, Set<String>>> partitionToFileNames = getPartitionFileSlicePairs().stream()
+        .collect(Collectors.groupingBy(
+            Pair::getLeft, // Group by partition name
+            Collectors.mapping(
+                // Extract file names from each FileSlice
+                pair -> extractFileNames(pair.getRight()),
+                Collectors.toList())))
+        .entrySet().stream() // Convert the map to a stream
+        .map(entry -> Pair.of(
+            entry.getKey(),
+            // Flatten the sets into a single stream
+            entry.getValue().stream().flatMap(Set::stream).collect(Collectors.toSet())))
+        .collect(Collectors.toList());
+    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext, partitionToFileNames, dataWriteConfig.getMetadataConfig(), dataMetaClient,
         Option.of(new Schema.Parser().parse(dataWriteConfig.getWriteSchema())));
     final int fileGroupCount = dataWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
     return Pair.of(fileGroupCount, records);

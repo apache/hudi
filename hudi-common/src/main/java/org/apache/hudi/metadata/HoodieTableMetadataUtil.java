@@ -2122,7 +2122,7 @@ public class HoodieTableMetadataUtil {
   }
 
   public static HoodieData<HoodieRecord> convertFilesToPartitionStatsRecords(HoodieEngineContext engineContext,
-                                                                             List<DirectoryInfo> partitionInfoList,
+                                                                             List<Pair<String, Set<String>>> partitionInfoList,
                                                                              HoodieMetadataConfig metadataConfig,
                                                                              HoodieTableMetaClient dataTableMetaClient,
                                                                              Option<Schema> writerSchemaOpt) {
@@ -2139,15 +2139,23 @@ public class HoodieTableMetadataUtil {
     // Create records for MDT
     int parallelism = Math.max(Math.min(partitionInfoList.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
     return engineContext.parallelize(partitionInfoList, parallelism).flatMap(partitionInfo -> {
-      final String partitionPath = partitionInfo.getRelativePath();
+      final String partitionPath = partitionInfo.getKey();
       // Step 1: Collect Column Metadata for Each File
-      List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getFileNameToSizeMap().keySet().stream()
+      List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getValue().stream()
           .map(fileName -> getFileStatsRangeMetadata(partitionPath, fileName, dataTableMetaClient, columnsToIndex, false,
               metadataConfig.getMaxReaderBufferSize()))
           .collect(Collectors.toList());
 
       return collectAndProcessColumnMetadata(fileColumnMetadata, partitionPath, true).iterator();
     });
+  }
+
+  public static Set<String> extractFileNames(FileSlice fileSlice) {
+    Set<String> fileNames = new HashSet<>();
+    Option<HoodieBaseFile> baseFile = fileSlice.getBaseFile();
+    baseFile.ifPresent(hoodieBaseFile -> fileNames.add(hoodieBaseFile.getFileName()));
+    fileSlice.getLogFiles().forEach(hoodieLogFile -> fileNames.add(hoodieLogFile.getFileName()));
+    return fileNames;
   }
 
   private static List<HoodieColumnRangeMetadata<Comparable>> getFileStatsRangeMetadata(String partitionPath,

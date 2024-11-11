@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -103,7 +104,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     hoodieTestTable = hoodieTestTable.addCommit(instant1);
     String instant2 = "20230918121110000";
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
-    List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList = new ArrayList<>();
+    List<Pair<String, Set<String>>> partitionInfoList = new ArrayList<>();
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
@@ -131,11 +132,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             engineContext);
         HoodieBaseFile baseFile2 = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId2).toString());
         fileSlice2.setBaseFile(baseFile2);
-        partitionInfoList.add(new HoodieTableMetadataUtil.DirectoryInfo(
-            p,
-            metaClient.getStorage().listDirectEntries(Arrays.asList(partitionMetadataPath, storagePath1, storagePath2)),
-            instant2,
-            Collections.emptySet()));
+        partitionInfoList.add(Pair.of(p,
+            metaClient.getStorage().listDirectEntries(Arrays.asList(partitionMetadataPath, storagePath1, storagePath2)).stream()
+                .map(e -> e.getPath().getName())
+                .filter(fileName -> !fileName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
+                .collect(Collectors.toSet())));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -216,7 +217,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     hoodieTestTable = hoodieTestTable.addCommit(instant1, Option.of(commitMetadata));
     String instant2 = "20230918121110000";
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
-    List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList = new ArrayList<>();
+    List<Pair<String, Set<String>>> partitionInfoList = new ArrayList<>();
     List<String> columnsToIndex = Arrays.asList("rider", "driver");
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
@@ -237,11 +238,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, dataGen.generateInsertsForPartition(instant2, 10, p), 1,
             metaClient.getStorage(), new Properties(), fileId1, instant2);
         fileSlice2.addLogFile(new HoodieLogFile(storagePath2.toUri().toString()));
-        partitionInfoList.add(new HoodieTableMetadataUtil.DirectoryInfo(
-            p,
-            metaClient.getStorage().listDirectEntries(Arrays.asList(partitionMetadataPath, storagePath1, storagePath2)),
-            instant2,
-            Collections.emptySet()));
+        partitionInfoList.add(Pair.of(p,
+            metaClient.getStorage().listDirectEntries(Arrays.asList(partitionMetadataPath, storagePath1, storagePath2)).stream()
+                .map(e -> e.getPath().getName())
+                .filter(fileName -> !fileName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
+                .collect(Collectors.toSet())));
         // NOTE: we need to set table config as we are not using write client explicitly and these configs are needed for log record reader
         metaClient.getTableConfig().setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
         metaClient.getTableConfig().setValue(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
