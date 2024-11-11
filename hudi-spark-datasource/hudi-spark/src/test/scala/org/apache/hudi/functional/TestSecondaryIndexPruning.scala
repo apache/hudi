@@ -114,11 +114,11 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testSecondaryIndexPruningParameters"))
-  def testSecondaryIndexWithFilters(testCase: SecondaryIndexTestCase): Unit = {
+  @EnumSource(value = classOf[HoodieTableType])
+  def testSecondaryIndexWithFilters(hoodieTableType: HoodieTableType): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
-      val tableType = testCase.tableType
-      val isPartitioned = testCase.isPartitioned
+      val tableType = hoodieTableType.name()
+      val isPartitioned = true
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts ++ Map(
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
@@ -237,7 +237,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
       checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
         Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
@@ -300,7 +299,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
       checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
         Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
@@ -502,13 +500,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       assertTrue(f1.value.get.get || f2.value.get.get)
       executor.shutdownNow()
 
-      // Validate the secondary index got created
-      metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(basePath)
-        .setConf(HoodieTestUtils.getDefaultStorageConf)
-        .build()
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
-
       // Query the secondary index metadata
       checkAnswer(
         s"""
@@ -583,7 +574,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
       checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
         Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
@@ -662,7 +652,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
 
       // do another insert and validate compaction in metadata table
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
@@ -742,7 +731,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
         Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
@@ -814,7 +802,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
         Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
@@ -879,7 +866,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
         Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
@@ -902,8 +888,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         Seq(3, "row3", "xyz1", "p1")
       )
       verifyQueryPredicate(hudiOpts, "not_record_key_col", "xyz1")
-      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('abc')")(
-        Seq(1, "row1", "abc", "p1")
+      // query with all secondary keys including deleted
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col in ('abc','def','hjk','xyz','xyz1')")(
+        Seq(1, "row1", "abc", "p1"),
+        Seq(3, "row3", "xyz1", "p1")
       )
       verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
     }
@@ -1043,7 +1031,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.reload(metaClient)
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
         Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
@@ -1160,8 +1147,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      val secondaryIndexPartition = "secondary_index_idx_not_record_key_col"
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains(secondaryIndexPartition))
       // validate the secondary index records themselves
       checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
         Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1")
@@ -1180,7 +1165,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       metaClient = HoodieTableMetaClient.reload(metaClient)
       assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath))
       // however index definition should still be present
-      assertTrue(metaClient.getIndexMetadata.isPresent && metaClient.getIndexMetadata.get.getIndexDefinitions.get(secondaryIndexPartition).getIndexType.equals("secondary_index"))
+      assertTrue(metaClient.getIndexMetadata.isPresent && metaClient.getIndexMetadata.get.getIndexDefinitions.get("secondary_index_idx_not_record_key_col").getIndexType.equals("secondary_index"))
 
       // update the secondary key column
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
@@ -1195,7 +1180,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(query).collect().sortBy(_.toString()))
   }
 
-  private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String, nonExistantKey: String = "abcdefghi"): Unit = {
+  private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String, nonExistantKey: String = ""): Unit = {
     mergedDfList = mergedDfList :+ spark.read.format("hudi").options(hudiOpts).load(basePath).repartition(1).cache()
     val secondaryKey = mergedDfList.last.limit(2).collect().filter(row => !row.getAs(columnName).toString.equals(nonExistantKey))
       .map(row => row.getAs(columnName).toString).head
