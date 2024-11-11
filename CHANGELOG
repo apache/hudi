@@ -395,3 +395,7 @@ c68ddd57437 [ENG-16492][INTERNAL] Initialize timeline from client and use it to 
 8b327068d28 [ENG-15951][INTERNAL] Adding logs to assist with data consistency issues (#999)
 a3808d49f6b [ENG-16600][HUDI-8126] Support proto messages for spark kryo serializer (#998)
 fa536c95038 [ENG-12785][INTERNAL] Fixing metadata metrics to honor metrics prefix (#993)
+
+---[2024-11-11 11:46:35] [changelog-release-v1.42.2] ---
+d0ecc40ce3 [ENG-16492][INTERNAL] Fix client close and heartbeat removal after conflict (#1023)
+1c2b0cceca [AUDIT-1050]: Changelog for release-v1.42.0 (#1018)
