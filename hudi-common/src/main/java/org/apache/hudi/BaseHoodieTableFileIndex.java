@@ -62,7 +62,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
 
@@ -147,7 +146,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     this.metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(configProperties)
-        .enable(configProperties.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS)
+        .enable(configProperties.getBoolean(ENABLE.key(), ENABLE.defaultValue())
             && HoodieTableMetadataUtil.isFilesPartitionAvailable(metaClient))
         .build();
 
