@@ -24,10 +24,12 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -38,6 +40,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -50,8 +54,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -80,6 +89,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final boolean schemaOnReadEnabled;
 
   private boolean closed = false;
+  protected List<HoodieRecord> recordList = new ArrayList<>();
+  protected boolean colStatsEnabled = false;
+  protected List<Schema.Field> fieldsToIndex = new ArrayList<>();
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
@@ -103,6 +115,17 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
+    if (config.isMetadataColumnStatsIndexEnabled()) {
+      this.colStatsEnabled = true;
+      if (config.getColumnsEnabledForColumnStatsIndex().isEmpty()) {
+        fieldsToIndex = writeSchemaWithMetaFields.getFields();
+      } else {
+        Set<String> columnsToIndexSet = new HashSet<>(config.getColumnsEnabledForColumnStatsIndex());
+        fieldsToIndex = writeSchemaWithMetaFields.getFields().stream()
+            .filter(field -> columnsToIndexSet.contains(field.name()))
+            .collect(Collectors.toList());
+      }
+    }
   }
 
   /**
@@ -280,5 +303,22 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       LOG.error("Fail to get indexRecord from " + record, e);
       return Option.empty();
     }
+  }
+
+  protected void attachColStats(HoodieWriteStat stat, List<HoodieRecord> recordList, List<Schema.Field> fieldsToIndex,
+                                       Schema writeSchemaWithMetaFields) {
+    // populate col stats if required
+    try {
+      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
+          HoodieTableMetadataUtil.collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields);
+      stat.putRecordsStats(columnRangeMetadataMap);
+      deflateAllRecords(recordList);
+    } catch (HoodieException e) {
+      throw new HoodieMetadataException("Failed to generate col stats for file " + stat.getPath(), e);
+    }
+  }
+
+  protected void deflateAllRecords(List<HoodieRecord> records) {
+    records.forEach(record -> record.deflate());
   }
 }

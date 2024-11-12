@@ -721,9 +721,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
               "Could not rename " + fromInstantPath + " to " + toInstantPath);
         }
       } else {
-        if (!metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName))) {
-          System.out.println("asdfasd");
-        }
         ValidationUtils.checkArgument(
             metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)));
         createCompleteFileInMetaPath(shouldLock, toInstant, data);
