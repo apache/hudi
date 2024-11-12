@@ -155,25 +155,11 @@ class HoodieStreamingSink(sqlContext: SQLContext,
               .setBasePath(client.getConfig.getBasePath)
               .build())
           }
-          val instantFactory = metaClient match {
-            case Some(meta) => meta.getTimelineLayout.getInstantGenerator
-            case None => {
-              // Could be the first micro-batch. As the batch is already done when ctrl reaches here, create a metaclient
-              var meta = HoodieTableMetaClient.builder()
-                .setConf(HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration))
-                .setBasePath(tablePath.get)
-                .build()
-              meta.getTimelineLayout.getInstantGenerator
-            }
-          }
           if (compactionInstantOps.isPresent) {
-            asyncCompactorService.enqueuePendingAsyncServiceInstant(
-              instantFactory.createNewInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionInstantOps.get()))
+            asyncCompactorService.enqueuePendingAsyncServiceInstant(compactionInstantOps.get())
           }
           if (clusteringInstant.isPresent) {
-            asyncClusteringService.enqueuePendingAsyncServiceInstant(instantFactory.createNewInstant(
-              State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusteringInstant.get()
-            ))
+            asyncClusteringService.enqueuePendingAsyncServiceInstant(clusteringInstant.get())
           }
           Success((true, commitOps, compactionInstantOps))
         case Failure(e) =>
@@ -281,7 +267,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
         .setBasePath(client.getConfig.getBasePath).build()
       val pendingInstants: java.util.List[HoodieInstant] =
         CompactionUtils.getPendingCompactionInstantTimes(metaClient)
-      pendingInstants.asScala.foreach((h: HoodieInstant) => asyncCompactorService.enqueuePendingAsyncServiceInstant(h))
+      pendingInstants.asScala.foreach((h: HoodieInstant) => asyncCompactorService.enqueuePendingAsyncServiceInstant(h.requestedTime()))
     }
   }
 
@@ -309,7 +295,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
         .setConf(HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration))
         .setBasePath(client.getConfig.getBasePath).build()
       val pendingInstants: java.util.List[HoodieInstant] = ClusteringUtils.getPendingClusteringInstantTimes(metaClient)
-      pendingInstants.asScala.foreach((h: HoodieInstant) => asyncClusteringService.enqueuePendingAsyncServiceInstant(h))
+      pendingInstants.asScala.foreach((h: HoodieInstant) => asyncClusteringService.enqueuePendingAsyncServiceInstant(h.requestedTime()))
     }
   }
 
