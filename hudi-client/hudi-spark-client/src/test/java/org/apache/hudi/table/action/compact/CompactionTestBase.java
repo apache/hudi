@@ -199,7 +199,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     HoodieWriteMetadata<?> compactionMetadata = client.compact(compactionInstantTime);
     if (!cfg.shouldAutoCommit()) {
       if (compactionMetadata.getCommitMetadata().isPresent()) {
-        client.commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+        client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty(), Option.empty());
       }
     }
     assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, compactionInstantTime).doesMarkerDirExist());

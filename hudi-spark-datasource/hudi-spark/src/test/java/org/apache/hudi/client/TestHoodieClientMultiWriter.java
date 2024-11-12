@@ -901,7 +901,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       if (tableType == HoodieTableType.MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(pendingCompactionTime);
-          client2.commitCompaction(pendingCompactionTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+          client2.commitCompaction(pendingCompactionTime, compactionMetadata, Option.empty(), Option.empty());
           validInstants.add(pendingCompactionTime);
         });
       }

@@ -22,18 +22,23 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
@@ -47,6 +52,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -246,13 +252,33 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
 
     public TestTableServiceClient(HoodieWriteConfig writeConfig, Iterator<HoodieTable<String, String, String, String>> tables,
                                   Option<EmbeddedTimelineService> timelineService, Map<String, Option<HoodiePendingRollbackInfo>> expectedRollbackInfo) {
-      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService);
+      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, new Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>>() {
+        @Override
+        public Option<HoodieTableMetadataWriter> apply(String val1, HoodieTableMetaClient val2) {
+          return Option.empty();
+        }
+      }, new Functions.Function1<String, Void>() {
+        @Override
+        public Void apply(String val1) {
+          return null;
+        }
+      });
       this.tables = tables;
       this.expectedRollbackInfo = expectedRollbackInfo;
     }
 
     @Override
+    protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> processAndFetchHoodieWriteStats(HoodieWriteMetadata<String> writeMetadata) {
+      return null;
+    }
+
+    @Override
     protected HoodieWriteMetadata<String> convertToOutputMetadata(HoodieWriteMetadata<String> writeMetadata) {
+      return null;
+    }
+
+    @Override
+    protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<String> writeMetadata) {
       return null;
     }
 

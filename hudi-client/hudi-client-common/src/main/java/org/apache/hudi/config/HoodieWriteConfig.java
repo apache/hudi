@@ -3633,7 +3633,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       }
       if (writeConcurrencyMode == WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL) {
         checkArgument(
-            writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ) && writeConfig.isSimpleBucketIndex(),
+            writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ),
             "Non-blocking concurrency control requires the MOR table with simple bucket index");
       }
 

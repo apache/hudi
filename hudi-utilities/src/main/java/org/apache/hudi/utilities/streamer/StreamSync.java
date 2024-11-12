@@ -518,7 +518,7 @@ public class StreamSync implements Serializable, Closeable {
       Option<String> pendingCompactionInstant = getLastPendingCompactionInstant(allCommitsTimelineOpt);
       if (pendingCompactionInstant.isPresent()) {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
-        writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
+        writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata, Option.empty());
         initializeMetaClientAndRefreshTimeline();
         reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null, metaClient);
       }

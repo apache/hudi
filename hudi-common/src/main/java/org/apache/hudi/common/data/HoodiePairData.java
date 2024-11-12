@@ -157,4 +157,5 @@ public interface HoodiePairData<K, V> extends Serializable {
    * @return the deduce number of shuffle partitions
    */
   int deduceNumPartitions();
+
 }

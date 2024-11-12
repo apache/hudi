@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -94,7 +93,7 @@ public class UpgradeDowngradeUtils {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {
             HoodieWriteMetadata result = writeClient.compact(compactionInstantOpt.get());
-            writeClient.commitCompaction(compactionInstantOpt.get(), (HoodieCommitMetadata) result.getCommitMetadata().get(), Option.empty());
+            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.empty());
           }
         }
       }
@@ -207,7 +206,7 @@ public class UpgradeDowngradeUtils {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {
             HoodieWriteMetadata result = writeClient.compact(compactionInstantOpt.get());
-            writeClient.commitCompaction(compactionInstantOpt.get(), (HoodieCommitMetadata) result.getCommitMetadata().get(), Option.empty());
+            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.empty());
           }
         }
       }

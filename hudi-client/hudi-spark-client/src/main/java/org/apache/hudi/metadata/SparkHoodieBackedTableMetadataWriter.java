@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils;
 import org.apache.hudi.common.data.HoodieData;
@@ -47,11 +48,14 @@ import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.PairFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,11 +66,13 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import scala.Tuple2;
+
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 
-public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
+public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
 
@@ -94,11 +100,30 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
+                                                 HoodieEngineContext context,
+                                                 Option<String> inflightInstantTimestamp,
+                                                 boolean shortLivedWriteClient) {
+    return new SparkHoodieBackedTableMetadataWriter(
+        conf, writeConfig, EAGER, context, inflightInstantTimestamp, shortLivedWriteClient);
+  }
+
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
+                                                 HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(
         conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
+  }
+
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
+                                                 HoodieWriteConfig writeConfig,
+                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                 HoodieEngineContext context,
+                                                 Option<String> inflightInstantTimestamp,
+                                                 boolean shortLivedWriteClient) {
+    return new SparkHoodieBackedTableMetadataWriter(
+        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp, shortLivedWriteClient);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
@@ -111,7 +136,16 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    this(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, true);
+  }
+
+  SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
+                                       HoodieWriteConfig writeConfig,
+                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                       HoodieEngineContext engineContext,
+                                       Option<String> inflightInstantTimestamp,
+                                       boolean shortLivedWriteClient) {
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, shortLivedWriteClient);
   }
 
   @Override
@@ -139,6 +173,78 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected JavaRDD<HoodieRecord> convertHoodieDataToEngineSpecificData(HoodieData<HoodieRecord> records) {
     return HoodieJavaRDD.getJavaRDD(records);
+  }
+
+  @Override
+  protected HoodieData<WriteStatus> convertEngineSpecificDataToHoodieData(JavaRDD<WriteStatus> records) {
+    return HoodieJavaRDD.of(records);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> repartitionByMDTFileSlice(HoodieData<HoodieRecord> records, int numPartitions) {
+    return HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(records).mapToPair(new PairFunction<HoodieRecord, Pair<String, String>, HoodieRecord>() {
+
+      @Override
+      public Tuple2<Pair<String, String>, HoodieRecord> call(HoodieRecord record) throws Exception {
+        return new Tuple2<>(Pair.of(record.getPartitionPath(), record.getCurrentLocation().getFileId()), record);
+      }
+    }).partitionBy(new Partitioner() {
+      @Override
+      public int numPartitions() {
+        return numPartitions;
+      }
+
+      @Override
+      public int getPartition(Object key) {
+        Pair<String, String> entry = (Pair<String, String>) key;
+        return mapPartitionKeyToSparkPartition(entry.getKey().concat(entry.getValue()), numPartitions);
+      }
+    }).values());
+  }
+
+  @Override
+  public JavaRDD<WriteStatus> writeToMDT(Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> mdtRecordsHoodieData, String instantTime, boolean initialCall) {
+    JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(mdtRecordsHoodieData.getValue());
+
+    if (initialCall) {
+      preWrite(instantTime);
+    }
+    engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
+    JavaRDD<WriteStatus> mdtWriteStatuses = getWriteClient().upsertPreppedPartialRecords(mdtRecords, instantTime, initialCall, true,
+        mdtRecordsHoodieData.getKey());
+
+    // todo update metrics.
+    return mdtWriteStatuses;
+  }
+
+  /**
+   * Map a record key to a file group in partition of interest.
+   * <p>
+   * Note: For hashing, the algorithm is same as String.hashCode() but is being defined here as hashCode()
+   * implementation is not guaranteed by the JVM to be consistent across JVM versions and implementations.
+   *
+   * @return An integer hash of the given string
+   */
+  public static int mapPartitionKeyToSparkPartition(String partitionKey, int numPartitions) {
+    int h = 0;
+    for (int i = 0; i < partitionKey.length(); ++i) {
+      h = 31 * h + partitionKey.charAt(i);
+    }
+
+    return Math.abs(Math.abs(h) % numPartitions);
+  }
+
+  @Override
+  protected void writeAndCommitBulkInsert(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs,
+                                          Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
+    writeClient.commit(instantTime, writeStatusJavaRDD);
+  }
+
+  @Override
+  protected void writeAndCommitUpsert(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs) {
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+    writeClient.commit(instantTime, writeStatusJavaRDD);
   }
 
   @Override
@@ -221,13 +327,17 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     return exprIndexRecords;
   }
 
+  protected MetadataIndexGenerator getMetadataIndexGenerator() {
+    return new SparkMetadataIndexGenerator();
+  }
+
   @Override
   protected HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
     return HoodieSparkTable.create(writeConfig, engineContext, metaClient);
   }
 
   @Override
-  public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
+  public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> initializeWriteClient() {
     return new SparkRDDWriteClient(engineContext, metadataWriteConfig, Option.empty());
   }
 

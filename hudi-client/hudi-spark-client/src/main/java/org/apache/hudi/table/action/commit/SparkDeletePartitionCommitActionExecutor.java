@@ -71,7 +71,7 @@ public class SparkDeletePartitionCommitActionExecutor<T>
       HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
       result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
       result.setIndexUpdateDuration(Duration.ofMillis(timer.endTimer()));
-      result.setWriteStatuses(context.emptyHoodieData());
+      result.setDataTableWriteStatuses(context.emptyHoodieData());
 
       // created requested
       HoodieInstant dropPartitionsInstant =
