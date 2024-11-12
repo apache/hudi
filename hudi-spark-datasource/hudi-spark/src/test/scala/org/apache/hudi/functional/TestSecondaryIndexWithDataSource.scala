@@ -39,7 +39,7 @@ import scala.collection.JavaConverters._
 @Tag("functional")
 class TestSecondaryIndexWithDataSource extends HoodieSparkSqlTestBase {
 
-  val tableName = "hoodie_test"
+  val tableName = "hoodie_test_dec_ds"
   var instantTime: AtomicInteger = new AtomicInteger(1)
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
@@ -61,6 +61,14 @@ class TestSecondaryIndexWithDataSource extends HoodieSparkSqlTestBase {
   var dataGen = new HoodieTestDataGenerator()
   var metaClient: HoodieTableMetaClient = _
   var basePath: String = _
+
+  override protected def afterAll(): Unit = {
+    super.afterAll()
+    if (dataGen != null) {
+      dataGen.close()
+      dataGen = null
+    }
+  }
 
   @Test
   def testCreateAndUpdateTableWithSecondaryIndex(): Unit = {
