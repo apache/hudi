@@ -39,7 +39,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieIndexFunctionalOrSecondaryIndexMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
@@ -568,7 +568,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private HoodieIndexDefinition getFunctionalIndexDefinition(String indexName) {
-    Option<HoodieIndexMetadata> functionalIndexMetadata = dataMetaClient.getIndexMetadata();
+    Option<HoodieIndexFunctionalOrSecondaryIndexMetadata> functionalIndexMetadata = dataMetaClient.getFunctionalAndSecondaryIndexMetadata();
     if (functionalIndexMetadata.isPresent()) {
       return functionalIndexMetadata.get().getIndexDefinitions().get(indexName);
     } else {
@@ -577,10 +577,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Set<String> getIndexPartitionsToInit(MetadataPartitionType partitionType) {
-    if (dataMetaClient.getIndexMetadata().isEmpty()) {
+    if (dataMetaClient.getFunctionalAndSecondaryIndexMetadata().isEmpty()) {
       return Collections.emptySet();
     }
-    Set<String> secondaryIndexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+    Set<String> secondaryIndexPartitions = dataMetaClient.getFunctionalAndSecondaryIndexMetadata().get().getIndexDefinitions().values().stream()
         .map(HoodieIndexDefinition::getIndexName)
         .filter(indexName -> indexName.startsWith(partitionType.getPartitionPath()))
         .collect(Collectors.toSet());

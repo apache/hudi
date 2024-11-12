@@ -53,7 +53,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieIndexFunctionalOrSecondaryIndexMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -582,9 +582,9 @@ public class HoodieTableMetadataUtil {
                                                               String instantTime, HoodieTableMetaClient dataMetaClient,
                                                               int bloomIndexParallelism, int columnStatsIndexParallelism,
                                                               Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap) {
-    Option<HoodieIndexMetadata> indexMetadata = dataMetaClient.getIndexMetadata();
+    Option<HoodieIndexFunctionalOrSecondaryIndexMetadata> indexMetadata = dataMetaClient.getFunctionalAndSecondaryIndexMetadata();
     if (indexMetadata.isPresent()) {
-      HoodieIndexMetadata metadata = indexMetadata.get();
+      HoodieIndexFunctionalOrSecondaryIndexMetadata metadata = indexMetadata.get();
       Map<String, HoodieIndexDefinition> indexDefinitions = metadata.getIndexDefinitions();
       if (indexDefinitions.isEmpty()) {
         throw new HoodieMetadataException("Functional index metadata not found");

@@ -1079,7 +1079,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private void validateSecondaryIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
                                       HoodieTableMetaClient metaClient) {
-    Collection<HoodieIndexDefinition> indexDefinitions = metaClient.getIndexMetadata().get().getIndexDefinitions().values();
+    Collection<HoodieIndexDefinition> indexDefinitions = metaClient.getFunctionalAndSecondaryIndexMetadata().get().getIndexDefinitions().values();
     for (HoodieIndexDefinition indexDefinition : indexDefinitions) {
       validateSecondaryIndex(engineContext, metadataContext, metaClient, indexDefinition);
     }

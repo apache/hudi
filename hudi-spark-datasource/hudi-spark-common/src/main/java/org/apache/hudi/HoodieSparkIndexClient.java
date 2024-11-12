@@ -93,16 +93,16 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     }
 
     if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
-        || !metaClient.getIndexMetadata().isPresent()
-        || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexName)) {
+        || !metaClient.getFunctionalAndSecondaryIndexMetadata().isPresent()
+        || !metaClient.getFunctionalAndSecondaryIndexMetadata().get().getIndexDefinitions().containsKey(indexName)) {
       LOG.info("Index definition is not present. Registering the index first");
       register(metaClient, indexName, indexType, columns, options);
     }
 
-    ValidationUtils.checkState(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
+    ValidationUtils.checkState(metaClient.getFunctionalAndSecondaryIndexMetadata().isPresent(), "Index definition is not present");
 
     LOG.info("Creating index {} of using {}", indexName, indexType);
-    HoodieIndexDefinition functionalIndexDefinition = metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName);
+    HoodieIndexDefinition functionalIndexDefinition = metaClient.getFunctionalAndSecondaryIndexMetadata().get().getIndexDefinitions().get(indexName);
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinition)), toScalaOption(Option.empty()))) {
       // generate index plan
@@ -127,7 +127,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     }
 
     LOG.info("Dropping index {}", indexName);
-    HoodieIndexDefinition indexDefinition = metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName);
+    HoodieIndexDefinition indexDefinition = metaClient.getFunctionalAndSecondaryIndexMetadata().get().getIndexDefinitions().get(indexName);
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, indexDefinition)), toScalaOption(Option.empty()))) {
       writeClient.dropIndex(Collections.singletonList(indexName));

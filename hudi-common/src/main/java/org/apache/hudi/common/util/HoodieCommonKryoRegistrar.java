@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
-import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieIndexFunctionalOrSecondaryIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -105,7 +105,7 @@ public class HoodieCommonKryoRegistrar {
         HoodieMetaserverConfig.class,
         HoodieTimeGeneratorConfig.class,
         Option.class,
-        HoodieIndexMetadata.class,
+        HoodieIndexFunctionalOrSecondaryIndexMetadata.class,
         HashMap.class,
         StoragePath.class,
         HoodieTableMetaClient.class

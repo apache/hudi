@@ -77,7 +77,7 @@ class FunctionalIndexSupport(spark: SparkSession,
    * Return true if metadata table is enabled and functional index metadata partition is available.
    */
   def isIndexAvailable: Boolean = {
-    metadataConfig.isEnabled && metaClient.getIndexMetadata.isPresent && !metaClient.getIndexMetadata.get().getIndexDefinitions.isEmpty
+    metadataConfig.isEnabled && metaClient.getFunctionalAndSecondaryIndexMetadata.isPresent && !metaClient.getFunctionalAndSecondaryIndexMetadata.get().getIndexDefinitions.isEmpty
   }
 
   /**
@@ -99,7 +99,7 @@ class FunctionalIndexSupport(spark: SparkSession,
       // Currently, only one functional index in the query is supported. HUDI-7620 for supporting multiple functions.
       checkState(functionToColumnNames.size == 1, "Currently, only one function with functional index in the query is supported")
       val (indexFunction, targetColumnName) = functionToColumnNames.head
-      val indexDefinitions = metaClient.getIndexMetadata.get().getIndexDefinitions
+      val indexDefinitions = metaClient.getFunctionalAndSecondaryIndexMetadata.get().getIndexDefinitions
       indexDefinitions.asScala.collectFirst {
         case (indexPartition, indexDefinition)
           if indexDefinition.getIndexFunction.equals(indexFunction) && indexDefinition.getSourceFields.contains(targetColumnName) =>
@@ -138,7 +138,7 @@ class FunctionalIndexSupport(spark: SparkSession,
   private def loadFunctionalIndexDataFrame(indexPartition: String,
                                            shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
-      val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
+      val indexDefinition = metaClient.getFunctionalAndSecondaryIndexMetadata.get().getIndexDefinitions.get(indexPartition)
       val indexType = indexDefinition.getIndexType
       // NOTE: Currently only functional indexes created using column_stats is supported.
       // HUDI-7007 tracks for adding support for other index types such as bloom filters.
