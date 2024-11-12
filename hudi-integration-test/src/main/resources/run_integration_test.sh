@@ -38,6 +38,7 @@ while IFS='=' read -r key value; do
 done < "$config_file"
 
 echo "TEST_SCRIPT_NAME: $TEST_SCRIPT_NAME"
+echo "MDT_VALIDATION_SCRIPT_NAME: $TEST_SCRIPT_NAME"
 
 # Start Hudi streamer
 ./$TEST_SCRIPT_NAME $CONFIG_PATH $TEST_BASE_PATH &
@@ -45,6 +46,14 @@ pid1=$!
 echo "Test running PID: $pid1"
 
 # Start Async validation
+if [[ -n "$MDT_VALIDATION_SCRIPT_NAME" ]]; then
+  echo "Start MDT validation script separately."
+  ./$MDT_VALIDATION_SCRIPT_NAME $CONFIG_PATH $TEST_BASE_PATH &
+  pid2=$!
+  echo "MDT validation running PID: $pid2"
+else
+  echo "No separate MDT validation script to run."
+fi
 
 # Function to handle Ctrl+C (SIGINT)
 cleanup() {
@@ -52,9 +61,17 @@ cleanup() {
   kill "$pid1"  # Kill the process
   wait "$pid1"  # Wait for the process to fully terminate
   echo "Process terminated."
+  if [[ -n "$pid2" ]]; then
+    kill "$pid2"  # Kill the process
+    wait "$pid2"  # Wait for the process to fully terminate
+    echo "Process 2 terminated."
+  fi
   exit 0
 }
 
 trap cleanup SIGINT
 wait $pid1
+if [[ -n "$pid2" ]]; then
+  wait $pid2
+fi
 echo "Testing has finished."
