@@ -419,6 +419,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
     HoodieRecord populatedRecord = record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
 
+    if (colStatsEnabled) {
+      this.recordList.add(record);
+    }
     if (shouldPreserveRecordMetadata) {
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
     } else {
@@ -477,6 +480,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
+      if (colStatsEnabled) {
+        attachColStats(stat, recordList, fieldsToIndex, writeSchemaWithMetaFields);
+      }
 
       performMergeDataValidationCheck(writeStatus);
 
