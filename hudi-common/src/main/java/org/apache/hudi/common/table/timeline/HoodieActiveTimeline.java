@@ -292,6 +292,165 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return commit instant
    */
   HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata);
+  /*=======
+  public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock,
+                                                           HoodieInstant inflightInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.getTimestamp());
+    // Then write to timeline
+    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, data);
+    return commitInstant;
+  }
+
+  private void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
+    transitionPendingState(fromInstant, toInstant, data, false);
+  }
+
+  protected void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant,
+                                           HoodieInstant toInstant, Option<byte[]> data) {
+    this.transitionStateToComplete(shouldLock, fromInstant, toInstant, data, Option.empty());
+  }
+
+  protected void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant,
+                                           HoodieInstant toInstant, Option<byte[]> data,
+                                           Option<String> completionTimeOpt) {
+    ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
+    String fromInstantFileName = fromInstant.getFileName();
+    // Ensures old state exists in timeline
+    LOG.info("Checking for file exists ?" + getInstantFileNamePath(fromInstantFileName));
+    try {
+      if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+        // Re-create the .inflight file by opening a new file and write the commit metadata in
+        createFileInMetaPath(fromInstantFileName, data, false);
+        StoragePath fromInstantPath = getInstantFileNamePath(fromInstantFileName);
+        HoodieInstant instantWithCompletionTime =
+            new HoodieInstant(toInstant.getState(), toInstant.getAction(),
+                toInstant.getTimestamp(), completionTimeOpt.map(entry -> entry).orElse(metaClient.createNewInstantTime(false)));
+        StoragePath toInstantPath =
+            getInstantFileNamePath(instantWithCompletionTime.getFileName());
+        boolean success = metaClient.getStorage().rename(fromInstantPath, toInstantPath);
+        if (!success) {
+          throw new HoodieIOException(
+              "Could not rename " + fromInstantPath + " to " + toInstantPath);
+        }
+      } else {
+        ValidationUtils.checkArgument(
+            metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)));
+        createCompleteFileInMetaPath(shouldLock, toInstant, data);
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not complete " + fromInstant, e);
+    }
+  }
+
+  protected void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
+                                        boolean allowRedundantTransitions) {
+    ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
+    String fromInstantFileName = fromInstant.getFileName();
+    String toInstantFileName = toInstant.getFileName();
+    try {
+      HoodieStorage storage = metaClient.getStorage();
+      if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+        // Re-create the .inflight file by opening a new file and write the commit metadata in
+        createFileInMetaPath(fromInstantFileName, data, allowRedundantTransitions);
+        StoragePath fromInstantPath = getInstantFileNamePath(fromInstantFileName);
+        StoragePath toInstantPath = getInstantFileNamePath(toInstantFileName);
+        boolean success = storage.rename(fromInstantPath, toInstantPath);
+        if (!success) {
+          throw new HoodieIOException("Could not rename " + fromInstantPath + " to " + toInstantPath);
+        }
+      } else {
+        // Ensures old state exists in timeline
+        ValidationUtils.checkArgument(storage.exists(getInstantFileNamePath(fromInstantFileName)),
+            "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
+        // Use Write Once to create Target File
+        if (allowRedundantTransitions) {
+          FileIOUtils.createFileInPath(storage, getInstantFileNamePath(toInstantFileName), data);
+        } else {
+          storage.createImmutableFileInPath(getInstantFileNamePath(toInstantFileName), data);
+        }
+        LOG.info("Create new file for toInstant ?" + getInstantFileNamePath(toInstantFileName));
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not complete " + fromInstant, e);
+    }
+  }
+
+  protected void revertCompleteToInflight(HoodieInstant completed, HoodieInstant inflight) {
+    ValidationUtils.checkArgument(completed.isCompleted());
+    ValidationUtils.checkArgument(inflight.isInflight());
+    ValidationUtils.checkArgument(completed.getTimestamp().equals(inflight.getTimestamp()));
+    StoragePath inflightFilePath = getInstantFileNamePath(inflight.getFileName());
+    StoragePath completedFilePath = getInstantFileNamePath(getInstantFileName(completed));
+    try {
+      if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+        if (!metaClient.getStorage().exists(inflightFilePath)) {
+          boolean success = metaClient.getStorage().rename(completedFilePath, inflightFilePath);
+          if (!success) {
+            throw new HoodieIOException(
+                "Could not rename " + completedFilePath + " to " + inflightFilePath);
+          }
+        }
+      } else {
+        StoragePath requestedInstantFilePath = getInstantFileNamePath(new HoodieInstant(State.REQUESTED, inflight.getAction(),
+            inflight.getTimestamp()).getFileName());
+
+        // If inflight and requested files do not exist, create one
+        if (!metaClient.getStorage().exists(requestedInstantFilePath)) {
+          metaClient.getStorage().create(requestedInstantFilePath, false).close();
+        }
+
+        if (!metaClient.getStorage().exists(inflightFilePath)) {
+          metaClient.getStorage().create(inflightFilePath, false).close();
+        }
+
+        boolean success = metaClient.getStorage().deleteFile(completedFilePath);
+        ValidationUtils.checkArgument(success, "State Reverting failed");
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not complete revert " + completed, e);
+    }
+  }
+
+  private StoragePath getInstantFileNamePath(String fileName) {
+    return new StoragePath(fileName.contains(SCHEMA_COMMIT_ACTION) ? metaClient.getSchemaFolderName() : metaClient.getMetaPath().toString(), fileName);
+  }
+
+  public void transitionRequestedToInflight(String commitType, String inFlightInstant) {
+    HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, commitType, inFlightInstant);
+    transitionRequestedToInflight(requested, Option.empty(), false);
+  }
+
+  public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content) {
+    transitionRequestedToInflight(requested, content, false);
+  }
+
+  public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content,
+      boolean allowRedundantTransitions) {
+    HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, requested.getAction(), requested.getTimestamp());
+    ValidationUtils.checkArgument(requested.isRequested(), "Instant " + requested + " in wrong state");
+    transitionPendingState(requested, inflight, content, allowRedundantTransitions);
+  }
+
+  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content) {
+    saveToCompactionRequested(instant, content, false);
+  }
+
+  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+    createFileInMetaPath(instant.getFileName(), content, overwrite);
+  }
+
+  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content) {
+    saveToLogCompactionRequested(instant, content, false);
+  }
+
+  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
+    createFileInMetaPath(instant.getFileName(), content, overwrite);
+  }
+  >>>>>>> ddf00dd470a (Fixing CreateHandle and MergeHandle to generate col stats and stitch it with HoodieWriteStat) */
 
   /**
    * Save Restore requested instant with metadata.

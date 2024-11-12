@@ -82,15 +82,10 @@ public class MetadataIndexGenerator implements Serializable {
 
   protected static List<Pair<String, HoodieRecord>> processWriteStatusForColStats(WriteStatus writeStatus) {
     List<Pair<String, HoodieRecord>> allRecords = new ArrayList<>();
-    // Generating col stats records
-    if (writeStatus.getStat() instanceof HoodieDeltaWriteStat) { // fix col stats even for base data files.
-      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = ((HoodieDeltaWriteStat) writeStatus.getStat()).getColumnStats().get();
-      Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnRangeMap.values();
-      allRecords.addAll(HoodieMetadataPayload.createColumnStatsRecords(writeStatus.getStat().getPartitionPath(), columnRangeMetadataList, false)
-          .collect(Collectors.toList()).stream().map(record -> Pair.of(COLUMN_STATS.getPartitionPath(), record)).collect(Collectors.toList()));
-    } else {
-      // no op for now. once base file's writeStatus has col stats populated, we can fetch from here.
-    }
+    Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = writeStatus.getStat().getColumnStats().get();
+    Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnRangeMap.values();
+    allRecords.addAll(HoodieMetadataPayload.createColumnStatsRecords(writeStatus.getStat().getPartitionPath(), columnRangeMetadataList, false)
+        .collect(Collectors.toList()).stream().map(record -> Pair.of(COLUMN_STATS.getPartitionPath(), record)).collect(Collectors.toList()));
     return allRecords;
   }
 
