@@ -167,10 +167,10 @@ class ExpressionPayload(@transient record: GenericRecord,
                             existingRecord: IndexedRecord,
                             schema: Schema,
                             properties: Properties): HOption[IndexedRecord] = {
-    val originalPayload = properties.getProperty(PAYLOAD_ORIGINAL_AVRO_PAYLOAD)
-    if (originalPayload.equals(classOf[OverwriteWithLatestAvroPayload].getName)) {
+    val tablePayloadClass = properties.getProperty(PAYLOAD_ORIGINAL_AVRO_PAYLOAD)
+    if (tablePayloadClass.equals(classOf[OverwriteWithLatestAvroPayload].getName)) {
       HOption.of(incomingRecord)
-    } else if (originalPayload.equals(classOf[DefaultHoodieRecordPayload].getName)) {
+    } else if (tablePayloadClass.equals(classOf[DefaultHoodieRecordPayload].getName)) {
       if (needUpdatingPersistedRecord(existingRecord, incomingRecord, properties)) {
         HOption.of(incomingRecord)
       } else {
@@ -183,7 +183,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       } else {
         val consistentLogicalTimestampEnabled = properties.getProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean
-        val incomingRecordPayload = HoodieRecordUtils.loadPayload(originalPayload, incomingRecord,
+        val incomingRecordPayload = HoodieRecordUtils.loadPayload(tablePayloadClass, incomingRecord,
           HoodieAvroUtils.getNestedFieldVal(incomingRecord, orderingField, true, consistentLogicalTimestampEnabled)
             .asInstanceOf[Comparable[_]]).asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
         incomingRecordPayload.combineAndGetUpdateValue(existingRecord, schema, properties)
