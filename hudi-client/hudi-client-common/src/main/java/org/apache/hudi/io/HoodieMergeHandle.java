@@ -487,6 +487,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
+      if (colStatsEnabled) {
+        attachColStats(stat, recordList, fieldsToIndex, writeSchemaWithMetaFields);
+      }
 
       performMergeDataValidationCheck(writeStatus);
 
