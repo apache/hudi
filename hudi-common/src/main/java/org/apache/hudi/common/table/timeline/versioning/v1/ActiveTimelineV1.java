@@ -149,6 +149,10 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(new HoodieRequestedReplaceMetadata()), false);
   }
 
+  public String createCompletionTime() {
+    return this.metaClient.createNewInstantTime(false);
+  }
+
   @Override
   public <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata) {
     LOG.info("Marking instant complete " + instant);
@@ -160,6 +164,11 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
+    saveAsComplete(instant, metadata);
+  }
+
+  @Override
+  public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt) {
     saveAsComplete(instant, metadata);
   }
 

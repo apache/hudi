@@ -152,6 +152,10 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(new HoodieRequestedReplaceMetadata()), false);
   }
 
+  public String createCompletionTime() {
+    return this.metaClient.createNewInstantTime(false);
+  }
+
   @Override
   public <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata) {
     saveAsComplete(true, instant, metadata);
@@ -159,11 +163,16 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
+    saveAsComplete(shouldLock, instant, metadata, Option.empty());
+  }
+
+  @Override
+  public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt) {
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime());
-    transitionStateToComplete(shouldLock, instant, commitInstant, metadata);
+    transitionStateToComplete(shouldLock, instant, commitInstant, metadata, completionTimeOpt);
     LOG.info("Completed " + instant);
   }
 
@@ -283,8 +292,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
             .filter(instantCommitMetadataPair ->
                 WriteOperationType.canUpdateSchema(instantCommitMetadataPair.getRight().getOperationType())
                     && !StringUtils.isNullOrEmpty(instantCommitMetadataPair.getValue().getMetadata(HoodieCommitMetadata.SCHEMA_KEY)))
-            .findFirst()
-    );
+            .findFirst());
   }
 
   @Override
@@ -486,7 +494,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
+    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata), Option.empty());
     return commitInstant;
   }
 
@@ -495,6 +503,11 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
+    transitionStateToComplete(shouldLock, fromInstant, toInstant, metadata, Option.empty());
+  }
+
+  protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata,
+                                               Option<String> completionTimeOpt) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     String fromInstantFileName = instantFileNameGenerator.getFileName(fromInstant);
     try {
@@ -504,7 +517,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         StoragePath fromInstantPath = getInstantFileNamePath(fromInstantFileName);
         HoodieInstant instantWithCompletionTime =
             instantGenerator.createNewInstant(toInstant.getState(), toInstant.getAction(),
-                toInstant.requestedTime(), metaClient.createNewInstantTime(false));
+                toInstant.requestedTime(), completionTimeOpt.map(entry -> entry).orElse(metaClient.createNewInstantTime(false)));
         StoragePath toInstantPath =
             getInstantFileNamePath(instantFileNameGenerator.getFileName(instantWithCompletionTime));
         boolean success = metaClient.getStorage().rename(fromInstantPath, toInstantPath);

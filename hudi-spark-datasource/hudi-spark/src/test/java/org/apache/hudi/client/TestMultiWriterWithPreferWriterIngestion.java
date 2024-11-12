@@ -169,7 +169,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     future2 = executors.submit(() -> {
       try {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(instant5);
-        client2.commitCompaction(instant5, compactionMetadata.getCommitMetadata().get(), Option.empty());
+        client2.commitCompaction(instant5, compactionMetadata, Option.empty(), Option.empty());
         validInstants.add(instant5);
       } catch (Exception e2) {
         if (tableType == HoodieTableType.MERGE_ON_READ) {

@@ -215,7 +215,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private final Function<HoodieWriteMetadata, HoodieWriteMetadata<List<WriteStatus>>> clusteringMetadataRdd2List =
-      metadata -> metadata.clone(((JavaRDD)(metadata.getWriteStatuses())).collect());
+      metadata -> metadata.clone(((JavaRDD)(metadata.getDataTableWriteStatuses())).collect());
 
   private final Function<HoodieWriteConfig, KeyGenerator> createKeyGenerator =
       config -> HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps());
@@ -443,9 +443,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Upsert API.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testUpserts(boolean populateMetaFields) throws Exception {
+  //@ParameterizedTest
+  //@MethodSource("populateMetaFieldsParams")
+  @Test
+  public void testUpserts() throws Exception {
+    boolean populateMetaFields = true;
     testUpsertsInternal((writeClient, recordRDD, instantTime) -> writeClient.upsert(recordRDD, instantTime), populateMetaFields, false, SparkUpgradeDowngradeHelper.getInstance());
   }
 

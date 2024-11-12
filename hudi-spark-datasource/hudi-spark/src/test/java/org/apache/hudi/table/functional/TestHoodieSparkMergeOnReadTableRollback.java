@@ -618,7 +618,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       compactionInstantTime = "006";
       client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
-      client.commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+      client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
 
       allFiles = listAllBaseFilesInPath(hoodieTable);
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -704,7 +704,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       String compactionInstantTime = client.createNewInstantTime();
       client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
-      client.commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+      client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
 
       upsertRecords(client, client.createNewInstantTime(), records, dataGen);
       upsertRecords(client, client.createNewInstantTime(), records, dataGen);
@@ -713,7 +713,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       String compactionInstantTime1 = client.createNewInstantTime();
       client.scheduleCompactionAtInstant(compactionInstantTime1, Option.empty());
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata1 = client.compact(compactionInstantTime1);
-      client.commitCompaction(compactionInstantTime1, compactionMetadata1.getCommitMetadata().get(), Option.empty());
+      client.commitCompaction(compactionInstantTime1, compactionMetadata1, Option.empty());
 
       upsertRecords(client, client.createNewInstantTime(), records, dataGen);
 
@@ -799,7 +799,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         String compactionInstantTime = "005";
         client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
-        client.commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+        client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
 
         validateRecords(cfg, metaClient, updates3);
         List<HoodieRecord> updates4 = updateAndGetRecords("006", client, dataGen, records);
@@ -1014,7 +1014,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       // Do a compaction
       newCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(newCommitTime);
-      statuses = compactionMetadata.getWriteStatuses();
+      statuses = compactionMetadata.getDataTableWriteStatuses();
       // Ensure all log files have been compacted into base files
       String extension = table.getBaseFileExtension();
       Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
@@ -1118,7 +1118,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
     assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
     assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
-    client.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    client.commitCompaction(instantTime, compactionMetadata, Option.empty());
     return numLogFiles;
   }
 

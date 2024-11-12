@@ -70,7 +70,7 @@ public abstract class HoodieJavaTable<T>
 
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
-    return metadata.clone(metadata.getWriteStatuses().collectAsList());
+    return metadata.clone(metadata.getDataTableWriteStatuses().collectAsList());
   }
 
   @Override
