@@ -38,6 +38,10 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
     super(trackSuccessRecords, failureFraction);
   }
 
+  public FailOnFirstErrorWriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
+    super(trackSuccessRecords, failureFraction, isMetadataTable);
+  }
+
   @Override
   public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     LOG.error(String.format("Error writing record %s with data %s and optionalRecordMetadata %s", record, record.getData(),

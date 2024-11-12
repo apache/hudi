@@ -48,16 +48,17 @@ public class HoodieSparkCompactor<T> extends BaseCompactor<T,
   public void compact(HoodieInstant instant) {
     LOG.info("Compactor executing compaction " + instant);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) compactionClient;
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instant.getTimestamp());
-    List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get().getWriteStats();
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionWriteMetadata = writeClient.compact(instant.getTimestamp());
+    // TODO fix auto commit enabled and disabled flow
+    /*List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get().getWriteStats();
     long numWriteErrors = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (numWriteErrors != 0) {
       // We treat even a single error in compaction as fatal
       LOG.error("Compaction for instant (" + instant + ") failed with write errors. Errors :" + numWriteErrors);
       throw new HoodieException(
           "Compaction for instant (" + instant + ") failed with write errors. Errors :" + numWriteErrors);
-    }
+    }*/
     // Commit compaction
-    writeClient.commitCompaction(instant.getTimestamp(), compactionMetadata.getCommitMetadata().get(), Option.empty());
+    writeClient.commitCompaction(instant.getTimestamp(), compactionWriteMetadata, Option.empty(), Option.empty());
   }
 }

@@ -202,7 +202,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     }
 
     HoodieWriteMetadata<List<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-    writeMetadata.setWriteStatuses(statuses);
+    writeMetadata.setDataTableWriteStatuses(statuses);
     writeMetadata.setWriteStats(statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
     validateWriteResult(clusteringPlan, instant, writeMetadata);
@@ -219,7 +219,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     // commit the clustering
     this.table.getMetaClient().reloadActiveTimeline();
     this.writeClient.completeTableService(
-        TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant, Option.of(HoodieListData.lazy(writeMetadata.getWriteStatuses())));
+        TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant, Option.of(HoodieListData.lazy(writeMetadata.getDataTableWriteStatuses())));
 
     clusteringMetrics.updateCommitMetrics(instant, writeMetadata.getCommitMetadata().get());
     // whether to clean up the input base parquet files used for clustering
@@ -240,7 +240,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
    * We can also make these validations in BaseCommitActionExecutor to reuse pre-commit hooks for multiple actions.
    */
   private static void validateWriteResult(HoodieClusteringPlan clusteringPlan, String instantTime, HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    if (writeMetadata.getWriteStatuses().isEmpty()) {
+    if (writeMetadata.getDataTableWriteStatuses().isEmpty()) {
       throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + instantTime
           + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
           + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()

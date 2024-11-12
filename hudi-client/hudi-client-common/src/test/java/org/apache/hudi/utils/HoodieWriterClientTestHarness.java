@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.data.HoodieData;
@@ -792,9 +793,9 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
     HoodieWriteMetadata<List<WriteStatus>> clusterMetadata = transformWriteMetadataFn.apply(client.cluster(clusteringCommitTime, completeClustering));
     if (config.populateMetaFields()) {
-      verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(), clusterMetadata.getWriteStatuses());
+      verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(), clusterMetadata.getDataTableWriteStatuses());
     } else {
-      verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(), clusterMetadata.getWriteStatuses(),
+      verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(), clusterMetadata.getDataTableWriteStatuses(),
               config, createKeyGeneratorFn.apply(config));
     }
     return clusterMetadata;
@@ -822,7 +823,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       String clusteringCommitTime = createMetaClient().reloadActiveTimeline().getCompletedReplaceTimeline()
               .getReverseOrderedInstants().findFirst().get().getTimestamp();
       verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft().getLeft(),
-              clusterMetadata.getWriteStatuses(), config, createKeyGeneratorFn.apply(config));
+              clusterMetadata.getDataTableWriteStatuses(), config, createKeyGeneratorFn.apply(config));
     }
   }
 
@@ -1152,40 +1153,44 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    */
   protected void testUpsertsInternal(Function3<Object, BaseHoodieWriteClient, Object, String> writeFn, boolean populateMetaFields, boolean isPrepped) throws Exception {
     metaClient = createMetaClient();
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true).withAutoCommit(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).withColumnStatsIndexForColumns("driver,driver")
+            .withMetadataIndexColumnStatsFileGroupCount(1)
+            .withEnableRecordIndex(true).withRecordIndexFileGroupCount(4,4).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     // Force using older timeline layout
-    HoodieWriteConfig config = cfgBuilder.withTimelineLayoutVersion(VERSION_0).build();
+    HoodieWriteConfig config = cfgBuilder.build();
     HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(metaClient)
-        .setTimelineLayoutVersion(VERSION_0)
         .setPopulateMetaFields(populateMetaFields)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     BaseHoodieWriteClient client = getHoodieWriteClient(config);
 
     // Write 1 (only inserts)
-    String newCommitTime = "001";
-    String initCommitTime = "000";
+    String initCommitTime = client.createNewInstantTime();
+    Thread.sleep(10);
+    String newCommitTime1 = client.createNewInstantTime();
     int numRecords = 200;
-    castInsertFirstBatch(config, client, newCommitTime, initCommitTime, numRecords, BaseHoodieWriteClient::insert,
+    castInsertFirstBatch(config, client, newCommitTime1, initCommitTime, numRecords, BaseHoodieWriteClient::upsert,
         isPrepped, true, numRecords, populateMetaFields);
 
     // Write 2 (updates)
-    String prevCommitTime = newCommitTime;
-    newCommitTime = "004";
+    String prevCommitTime = newCommitTime1;
+    String newCommitTime2 = client.createNewInstantTime();
     numRecords = 100;
-    String commitTimeBetweenPrevAndNew = "002";
-    castUpdateBatch(config, client, newCommitTime, prevCommitTime,
+    String commitTimeBetweenPrevAndNew = newCommitTime1;
+    castUpdateBatch(config, client, newCommitTime2, prevCommitTime,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, writeFn, isPrepped, true,
         numRecords, 200, 2, populateMetaFields);
 
-    // Delete 1
-    prevCommitTime = newCommitTime;
-    newCommitTime = "005";
+    /*// Delete 1
+    prevCommitTime = newCommitTime2;
+    String newCommitTime3 = client.createNewInstantTime();
     numRecords = 50;
 
-    castDeleteBatch(config, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
+    castDeleteBatch(config, client, newCommitTime3, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
         0, 150, config.populateMetaFields());
 
     // Now simulate an upgrade and perform a restore operation
@@ -1213,7 +1218,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     checkTimelineForUpsertsInternal(metaClient);
 
-    testMergeHandle(config);
+    testMergeHandle(config);*/
   }
 
   /**

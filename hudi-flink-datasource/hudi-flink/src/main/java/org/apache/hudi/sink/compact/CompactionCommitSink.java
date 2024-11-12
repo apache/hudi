@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -198,7 +199,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
         table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema());
 
     // commit the compaction
-    this.writeClient.commitCompaction(instant, metadata, Option.empty());
+    this.writeClient.commitCompaction(instant, metadata, Option.empty(), Collections.emptyList());
 
     this.compactionMetrics.updateCommitMetrics(instant, metadata);
     this.compactionMetrics.markCompactionCompleted();

@@ -103,7 +103,7 @@ public abstract class SingleSparkJobExecutionStrategy<T>
         });
 
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-    writeMetadata.setWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
+    writeMetadata.setDataTableWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
     return writeMetadata;
   }
 

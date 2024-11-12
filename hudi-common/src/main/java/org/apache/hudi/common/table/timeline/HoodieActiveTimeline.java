@@ -236,16 +236,24 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
+  public String createCompletionTime() {
+    return this.metaClient.createNewInstantTime(false);
+  }
+
   public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
     saveAsComplete(true, instant, data);
   }
 
   public void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<byte[]> data) {
+    this.saveAsComplete(shouldLock, instant, data, Option.empty());
+  }
+
+  public void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<byte[]> data, Option<String> completionTimeOpt) {
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, instant.getAction(), instant.getTimestamp());
-    transitionStateToComplete(shouldLock, instant, commitInstant, data);
+    transitionStateToComplete(shouldLock, instant, commitInstant, data, completionTimeOpt);
     LOG.info("Completed " + instant);
   }
 
@@ -687,6 +695,12 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   protected void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant,
                                            HoodieInstant toInstant, Option<byte[]> data) {
+    this.transitionStateToComplete(shouldLock, fromInstant, toInstant, data, Option.empty());
+  }
+
+  protected void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant,
+                                           HoodieInstant toInstant, Option<byte[]> data,
+                                           Option<String> completionTimeOpt) {
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     String fromInstantFileName = fromInstant.getFileName();
     // Ensures old state exists in timeline
@@ -698,7 +712,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         StoragePath fromInstantPath = getInstantFileNamePath(fromInstantFileName);
         HoodieInstant instantWithCompletionTime =
             new HoodieInstant(toInstant.getState(), toInstant.getAction(),
-                toInstant.getTimestamp(), metaClient.createNewInstantTime(false));
+                toInstant.getTimestamp(), completionTimeOpt.map(entry -> entry).orElse(metaClient.createNewInstantTime(false)));
         StoragePath toInstantPath =
             getInstantFileNamePath(instantWithCompletionTime.getFileName());
         boolean success = metaClient.getStorage().rename(fromInstantPath, toInstantPath);
@@ -707,6 +721,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
               "Could not rename " + fromInstantPath + " to " + toInstantPath);
         }
       } else {
+        if (!metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName))) {
+          System.out.println("asdfasd");
+        }
         ValidationUtils.checkArgument(
             metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)));
         createCompleteFileInMetaPath(shouldLock, toInstant, data);

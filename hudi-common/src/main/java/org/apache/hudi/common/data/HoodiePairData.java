@@ -64,6 +64,8 @@ public interface HoodiePairData<K, V> extends Serializable {
    */
   HoodieData<V> values();
 
+  HoodiePairData<K, V> union(HoodiePairData<K, V> other);
+
   /**
    * Returns number of held pairs
    */
@@ -134,4 +136,5 @@ public interface HoodiePairData<K, V> extends Serializable {
    * @return the deduce number of shuffle partitions
    */
   int deduceNumPartitions();
+
 }

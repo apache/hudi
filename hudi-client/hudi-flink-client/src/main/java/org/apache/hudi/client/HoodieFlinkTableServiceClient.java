@@ -33,7 +33,9 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -41,6 +43,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -54,6 +58,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -65,15 +70,16 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   protected HoodieFlinkTableServiceClient(HoodieEngineContext context,
                                           HoodieWriteConfig clientConfig,
-                                          Option<EmbeddedTimelineService> timelineService) {
-    super(context, clientConfig, timelineService);
+                                          Option<EmbeddedTimelineService> timelineService,
+                                          Functions.Function1<String, Option<HoodieTableMetadataWriter>> getMetadataWriterFunc) {
+    super(context, clientConfig, timelineService, getMetadataWriterFunc);
   }
 
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = createTable(config, storageConf).compact(context, compactionInstantTime);
-    commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty(), Collections.emptyList());
     return compactionMetadata;
   }
 
@@ -181,8 +187,22 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   @Override
+  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> processAndFetchHoodieWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    List<Pair<Boolean, HoodieWriteStat>> writeStats = writeMetadata.getDataTableWriteStatuses().stream().map(writeStatus ->
+        Pair.of(writeStatus.isMetadataTable(), writeStatus.getStat())).collect(Collectors.toList());
+    List<HoodieWriteStat> dataTableWriteStats = writeStats.stream().filter(entry -> !entry.getKey()).map(Pair::getValue).collect(Collectors.toList());
+    List<HoodieWriteStat> mdtWriteStats = writeStats.stream().filter(Pair::getKey).map(Pair::getValue).collect(Collectors.toList());
+    if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
+      dataTableWriteStats.clear();
+      dataTableWriteStats.addAll(mdtWriteStats);
+      mdtWriteStats.clear();
+    }
+    return Pair.of(dataTableWriteStats, mdtWriteStats);
+  }
+
+  @Override
   protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    return HoodieListData.eager(writeMetadata.getWriteStatuses());
+    return HoodieListData.eager(writeMetadata.getDataTableWriteStatuses());
   }
 
   @Override
@@ -229,5 +249,10 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   @Override
   protected void handleWriteErrors(List<HoodieWriteStat> writeStats, TableServiceType tableServiceType) {
     // No-op
+  }
+
+  @Override
+  Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
+    return getMetadataWriterFunc.apply(triggeringInstantTimestamp);
   }
 }

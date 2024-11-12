@@ -21,16 +21,40 @@ package org.apache.hudi.table.action.deltacommit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.commit.BucketInfo;
+import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.table.action.commit.SparkHoodiePartitioner;
+import org.apache.hudi.table.action.commit.SparkMetadataUpsertPartitioner;
+
+import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.storage.StorageLevel;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import scala.Tuple2;
 
 public class SparkUpsertPreppedDeltaCommitActionExecutor<T>
     extends BaseSparkDeltaCommitActionExecutor<T> {
 
-  private final HoodieData<HoodieRecord<T>> preppedRecords;
+  protected HoodieData<HoodieRecord<T>> preppedRecords;
 
   public SparkUpsertPreppedDeltaCommitActionExecutor(HoodieSparkEngineContext context,
                                                      HoodieWriteConfig config, HoodieTable table,
@@ -43,4 +67,5 @@ public class SparkUpsertPreppedDeltaCommitActionExecutor<T>
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     return super.execute(preppedRecords);
   }
+
 }

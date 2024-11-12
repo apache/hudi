@@ -67,7 +67,7 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
     if (writeResult.getWriteStats().isPresent()) {
       partitionsModified = writeResult.getWriteStats().get().stream().map(HoodieWriteStat::getPartitionPath).collect(Collectors.toSet());
     } else {
-      partitionsModified = new HashSet<>(writeResult.getWriteStatuses().map(WriteStatus::getPartitionPath).collectAsList());
+      partitionsModified = new HashSet<>(writeResult.getDataTableWriteStatuses().map(WriteStatus::getPartitionPath).collectAsList());
     }
     return partitionsModified;
   }

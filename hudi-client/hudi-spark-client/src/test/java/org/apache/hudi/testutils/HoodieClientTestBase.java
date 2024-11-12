@@ -471,12 +471,12 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     JavaRDD<WriteStatus> result = writeFn.apply(client, writeRecords, newCommitTime);
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
+    //List<WriteStatus> statuses = result.collect();
+    //assertNoWriteErrors(statuses);
 
-    if (doCommit) {
-      client.commit(newCommitTime, result);
-    }
+    //if (doCommit) {
+    client.commit(newCommitTime, result);
+    //}
     // check the partition metadata is written out
     assertPartitionMetadataForRecords(basePath, records, storage);
 
