@@ -37,8 +37,8 @@ import org.slf4j.LoggerFactory;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Node to validate data set sanity like total file versions retained, has cleaning happened, has archival happened, etc.
