@@ -125,7 +125,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
 
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(
         instantTime, durationInMs, instantsRolledBack, instantToMetadata);
-    HoodieInstant restoreInflightInstant = instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.RESTORE_ACTION, instantTime);
+    HoodieInstant restoreInflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.RESTORE_ACTION, instantTime);
     writeToMetadata(restoreMetadata, restoreInflightInstant);
     table.getActiveTimeline().saveAsComplete(restoreInflightInstant, TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));
     // get all pending rollbacks instants after restore instant time and delete them.
@@ -138,8 +138,8 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
       if (entry.isCompleted()) {
         table.getActiveTimeline().deleteCompletedRollback(entry);
       }
-      table.getActiveTimeline().deletePending(instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
-      table.getActiveTimeline().deletePending(instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
+      table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
+      table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
     });
     LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + savepointToRestoreTimestamp);
     return restoreMetadata;

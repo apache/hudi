@@ -76,7 +76,7 @@ public class SparkDeletePartitionCommitActionExecutor<T>
 
       // created requested
       HoodieInstant dropPartitionsInstant =
-          instantFactory.createNewInstant(REQUESTED, REPLACE_COMMIT_ACTION, instantTime);
+          instantGenerator.createNewInstant(REQUESTED, REPLACE_COMMIT_ACTION, instantTime);
       if (!table.getStorage().exists(
           new StoragePath(table.getMetaClient().getMetaPath(),
               instantFileNameFactory.getFileName(dropPartitionsInstant)))) {

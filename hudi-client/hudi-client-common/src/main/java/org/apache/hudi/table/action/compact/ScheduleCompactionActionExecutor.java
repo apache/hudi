@@ -91,12 +91,12 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
       extraMetadata.ifPresent(plan::setExtraMetadata);
       try {
         if (operationType.equals(WriteOperationType.COMPACT)) {
-          HoodieInstant compactionInstant = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED,
+          HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
               HoodieTimeline.COMPACTION_ACTION, instantTime);
           table.getActiveTimeline().saveToCompactionRequested(compactionInstant,
               TimelineMetadataUtils.serializeCompactionPlan(plan));
         } else {
-          HoodieInstant logCompactionInstant = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED,
+          HoodieInstant logCompactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
               HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
           table.getActiveTimeline().saveToLogCompactionRequested(logCompactionInstant,
               TimelineMetadataUtils.serializeCompactionPlan(plan));

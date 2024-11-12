@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -172,9 +171,8 @@ public class HoodieJavaWriteClient<T> extends
 
   public void transitionInflight(String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    InstantGenerator instantFactory = metaClient.getInstantGenerator();
     metaClient.getActiveTimeline().transitionRequestedToInflight(
-        instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
+        metaClient.createNewInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
         Option.empty(), config.shouldAllowMultiWriteOnSameInstant());
   }
 

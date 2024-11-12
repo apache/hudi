@@ -141,8 +141,8 @@ public class TestCleanActionExecutor {
     when(activeTimeline.readCleanerInfoAsBytes(cleanInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
 
     when(mockHoodieTable.getCleanTimeline()).thenReturn(cleanTimeline);
-    when(mockHoodieTable.getInstantFactory()).thenReturn(INSTANT_GENERATOR);
-    when(mockHoodieTable.getInstantFileNameFactory()).thenReturn(INSTANT_FILE_NAME_GENERATOR);
+    when(mockHoodieTable.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
+    when(mockHoodieTable.getInstantFileNameGenerator()).thenReturn(INSTANT_FILE_NAME_GENERATOR);
     when(mockHoodieTable.getInstantFileNameParser()).thenReturn(INSTANT_FILE_NAME_PARSER);
     HoodieTimeline inflightsAndRequestedTimeline = mock(HoodieTimeline.class);
     when(cleanTimeline.filterInflightsAndRequested()).thenReturn(inflightsAndRequestedTimeline);

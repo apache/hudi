@@ -52,7 +52,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -235,8 +234,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable table = createTable(config);
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
-    InstantGenerator instantFactory = table.getInstantFactory();
-    HoodieInstant inflightInstant = instantFactory.createNewInstant(State.INFLIGHT, commitActionType, instantTime);
+    HoodieInstant inflightInstant = table.getMetaClient().createNewInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
@@ -296,8 +294,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     // update Metadata table
     writeTableMetadata(table, instantTime, metadata, writeStatuses);
-    InstantGenerator instantFactory = table.getInstantFactory();
-    activeTimeline.saveAsComplete(false, instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime),
+    activeTimeline.saveAsComplete(false, table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime),
         serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata));
   }
 
@@ -744,8 +741,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
         // So that we need to delete the whole MDT here.
         if (!deleteMDT) {
-          InstantGenerator instantFactory = mdtMetaClient.getInstantGenerator();
-          HoodieInstant syncedInstant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
+          HoodieInstant syncedInstant = mdtMetaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
           if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.requestedTime())) {
             LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than the MDT timeline %s",
                 savepointTime, mdtMetaClient.getCommitsTimeline().firstInstant().get().requestedTime()));
@@ -973,8 +969,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (ClusteringUtils.isClusteringOrReplaceCommitAction(actionType)) {
       metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
     } else {
-      InstantGenerator instantFactory = metaClient.getInstantGenerator();
-      metaClient.getActiveTimeline().createNewInstant(instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, actionType,
+      metaClient.getActiveTimeline().createNewInstant(metaClient.createNewInstant(HoodieInstant.State.REQUESTED, actionType,
           instantTime));
     }
   }
@@ -1028,8 +1023,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void dropIndex(List<String> metadataPartitions) {
     HoodieTable table = createTable(config);
     String dropInstant = createNewInstantTime();
-    InstantGenerator instantFactory = table.getInstantFactory();
-    HoodieInstant ownerInstant = instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, dropInstant);
+    HoodieInstant ownerInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, dropInstant);
     this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
@@ -1266,8 +1260,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected void doInitTable(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
     Option<HoodieInstant> ownerInstant = Option.empty();
     if (instantTime.isPresent()) {
-      InstantGenerator instantFactory = metaClient.getInstantGenerator();
-      ownerInstant = Option.of(instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
+      ownerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType,
+          metaClient.getTableType()), instantTime.get()));
     }
     executeUsingTxnManager(ownerInstant, () -> {
       tryUpgrade(metaClient, instantTime);
@@ -1604,8 +1598,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     startCommitWithTime(instantTime, commitActionType, metaClient);
     config.setSchema(schema.toString());
     HoodieActiveTimeline timeLine = metaClient.getActiveTimeline();
-    InstantGenerator instantFactory = metaClient.getInstantGenerator();
-    HoodieInstant requested = instantFactory.createNewInstant(State.REQUESTED, commitActionType, instantTime);
+    HoodieInstant requested = metaClient.createNewInstant(State.REQUESTED, commitActionType, instantTime);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA);
     try {

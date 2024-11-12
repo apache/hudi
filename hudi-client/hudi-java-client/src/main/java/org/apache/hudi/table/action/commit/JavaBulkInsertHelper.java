@@ -73,7 +73,7 @@ public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<Hoo
     // It's possible the transition to inflight could have already happened.
     if (!table.getActiveTimeline().filterInflights().containsInstant(instantTime)) {
       table.getActiveTimeline().transitionRequestedToInflight(
-          table.getInstantFactory().createNewInstant(HoodieInstant.State.REQUESTED, table.getMetaClient().getCommitActionType(), instantTime),
+          table.getInstantGenerator().createNewInstant(HoodieInstant.State.REQUESTED, table.getMetaClient().getCommitActionType(), instantTime),
           Option.empty(),
           config.shouldAllowMultiWriteOnSameInstant());
     }

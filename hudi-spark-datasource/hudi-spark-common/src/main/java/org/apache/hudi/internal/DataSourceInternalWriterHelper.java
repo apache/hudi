@@ -100,9 +100,8 @@ public class DataSourceInternalWriterHelper {
 
   public void createInflightCommit() {
     metaClient.getActiveTimeline().transitionRequestedToInflight(
-        metaClient.getInstantGenerator().createNewInstant(State.REQUESTED,
-                          CommitUtils.getCommitActionType(operationType, metaClient.getTableType()),
-                          instantTime), Option.empty());
+        metaClient.createNewInstant(State.REQUESTED,
+            CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime), Option.empty());
   }
 
   public HoodieTable getHoodieTable() {

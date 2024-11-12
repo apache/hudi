@@ -280,7 +280,7 @@ public class HoodieFlinkClusteringJob {
       }
 
       Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(clusteringInstant.requestedTime(),
-          table.getActiveTimeline(), table.getInstantFactory());
+          table.getActiveTimeline(), table.getInstantGenerator());
       if (inflightInstantOpt.isPresent()) {
         LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
         table.rollbackInflightClustering(inflightInstantOpt.get(),
@@ -309,7 +309,7 @@ public class HoodieFlinkClusteringJob {
       }
 
       HoodieInstant instant = ClusteringUtils.getRequestedClusteringInstant(clusteringInstant.requestedTime(),
-          table.getActiveTimeline(), table.getInstantFactory()).get();
+          table.getActiveTimeline(), table.getInstantGenerator()).get();
 
       int inputGroupSize = clusteringPlan.getInputGroups().size();
 

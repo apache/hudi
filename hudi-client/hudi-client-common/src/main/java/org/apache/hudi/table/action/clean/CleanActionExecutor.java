@@ -174,7 +174,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       return HoodieCleanStat.newBuilder().withPolicy(config.getCleanerPolicy()).withPartitionPath(partitionPath)
           .withEarliestCommitRetained(Option.ofNullable(
               actionInstant != null
-                  ? instantFactory.createNewInstant(HoodieInstant.State.valueOf(actionInstant.getState()),
+                  ? instantGenerator.createNewInstant(HoodieInstant.State.valueOf(actionInstant.getState()),
                   actionInstant.getAction(), actionInstant.getTimestamp())
                   : null))
           .withLastCompletedCommitTimestamp(cleanerPlan.getLastCompletedCommitTimestamp())

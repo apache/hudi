@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantComparator;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
@@ -412,11 +411,10 @@ public class CommitsCommand {
   Checks whether a commit or replacecommit action exists in the timeline.
   * */
   private Option<HoodieInstant> getCommitForInstant(HoodieTimeline timeline, String instantTime) {
-    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
     List<HoodieInstant> instants = Arrays.asList(
-        instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime),
-        instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
-        instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime));
+        HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime),
+        HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
+        HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime));
 
     return Option.fromJavaOptional(instants.stream().filter(timeline::containsInstant).findAny());
   }

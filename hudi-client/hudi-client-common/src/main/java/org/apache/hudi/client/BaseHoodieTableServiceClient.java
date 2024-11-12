@@ -395,8 +395,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
-    InstantGenerator instantFactory = table.getMetaClient().getInstantGenerator();
-    final HoodieInstant logCompactionInstant = instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionCommitTime);
+    final HoodieInstant logCompactionInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION,
+        logCompactionCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(logCompactionInstant), Option.empty());
       preCommit(metadata);
@@ -632,8 +632,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
                                              TableServiceType tableServiceType) {
     // A lock is required to guard against race conditions between an ongoing writer and scheduling a table service.
     HoodieTable<?, ?, ?, ?> table = createTable(config, storageConf, true);
-    InstantGenerator instantFactory = table.getInstantFactory();
-    final Option<HoodieInstant> inflightInstant = Option.of(instantFactory.createNewInstant(HoodieInstant.State.REQUESTED,
+    final Option<HoodieInstant> inflightInstant = Option.of(table.getMetaClient().createNewInstant(HoodieInstant.State.REQUESTED,
         tableServiceType.getAction(), instantTime));
     try {
       this.txnManager.beginTransaction(inflightInstant, Option.empty());
@@ -1110,10 +1109,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           // is reconstructed to allow the rollback to be reattempted, and the deleteInstants
           // is set to false since they are already deleted.
           // Execute rollback
-          InstantGenerator factory = table.getMetaClient().getInstantGenerator();
           HoodieRollbackMetadata rollbackMetadata = commitInstantOpt.isPresent()
               ? table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true, skipLocking)
-              : table.rollback(context, rollbackInstantTime, factory.createNewInstant(
+              : table.rollback(context, rollbackInstantTime, table.getMetaClient().createNewInstant(
                   HoodieInstant.State.INFLIGHT, rollbackPlanOption.get().getInstantToRollback().getAction(), commitInstantTime),
               false, skipLocking);
           if (timerContext != null) {

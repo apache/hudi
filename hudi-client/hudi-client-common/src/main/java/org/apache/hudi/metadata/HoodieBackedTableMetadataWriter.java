@@ -1298,7 +1298,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // The commit which is being rolled back on the dataset
       final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
       // The deltacommit that will be rolled back
-      HoodieInstant deltaCommitInstant = metadataMetaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED,
+      HoodieInstant deltaCommitInstant = metadataMetaClient.createNewInstant(HoodieInstant.State.COMPLETED,
           HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
       if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant)) {
         validateRollback(commitToRollbackInstantTime);

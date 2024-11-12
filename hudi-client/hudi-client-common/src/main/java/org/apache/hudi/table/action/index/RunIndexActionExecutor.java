@@ -225,7 +225,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     });
 
     // delete inflight instant
-    table.getMetaClient().reloadActiveTimeline().deleteInstantFileIfExists(instantFactory.getIndexInflightInstant(indexInstant.requestedTime()));
+    table.getMetaClient().reloadActiveTimeline().deleteInstantFileIfExists(instantGenerator.getIndexInflightInstant(indexInstant.requestedTime()));
   }
 
   private List<HoodieInstant> getInstantsToCatchup(String indexUptoInstant) {
@@ -269,7 +269,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
       txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
       updateMetadataPartitionsTableConfig(table.getMetaClient(),
           finalIndexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
-      table.getActiveTimeline().saveAsComplete(false, instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, INDEXING_ACTION, indexInstant.requestedTime()),
+      table.getActiveTimeline().saveAsComplete(false, instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, INDEXING_ACTION, indexInstant.requestedTime()),
           TimelineMetadataUtils.serializeIndexCommitMetadata(indexCommitMetadata));
     } finally {
       txnManager.endTransaction(Option.of(indexInstant));

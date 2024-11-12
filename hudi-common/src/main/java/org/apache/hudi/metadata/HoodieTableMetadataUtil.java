@@ -1072,7 +1072,7 @@ public class HoodieTableMetadataUtil {
     HoodieTimeline timeline = metaClient.getActiveTimeline();
     TimelineFactory factory = metaClient.getTimelineLayout().getTimelineFactory();
     if (timeline.empty()) {
-      final HoodieInstant instant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
+      final HoodieInstant instant = metaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
           metaClient.createNewInstantTime(false));
       timeline = factory.createDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline()::getInstantDetails);
     }

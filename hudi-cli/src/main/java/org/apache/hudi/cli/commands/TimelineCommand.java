@@ -307,8 +307,7 @@ public class TimelineCommand {
   private String getInstantToRollback(HoodieTimeline timeline, HoodieInstant instant) {
     try {
       if (instant.isInflight()) {
-        InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
-        HoodieInstant instantToUse = instantFactory.createNewInstant(
+        HoodieInstant instantToUse = HoodieCLI.getTableMetaClient().createNewInstant(
             HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime());
         HoodieRollbackPlan metadata = TimelineMetadataUtils
             .deserializeAvroMetadata(timeline.getInstantDetails(instantToUse).get(), HoodieRollbackPlan.class);
@@ -333,8 +332,7 @@ public class TimelineCommand {
     rollbackInstants.forEach(rollbackInstant -> {
       try {
         if (rollbackInstant.isInflight()) {
-          InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
-          HoodieInstant instantToUse = instantFactory.createNewInstant(
+          HoodieInstant instantToUse = HoodieCLI.getTableMetaClient().createNewInstant(
               HoodieInstant.State.REQUESTED, rollbackInstant.getAction(), rollbackInstant.requestedTime());
           HoodieRollbackPlan metadata = TimelineMetadataUtils
               .deserializeAvroMetadata(timeline.getInstantDetails(instantToUse).get(), HoodieRollbackPlan.class);

@@ -150,9 +150,9 @@ public class SparkBootstrapCommitActionExecutor<T>
     HoodieTableMetaClient metaClient = table.getMetaClient();
     String bootstrapInstantTime = HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
     metaClient.getActiveTimeline().createNewInstant(
-        instantFactory.createNewInstant(State.REQUESTED, metaClient.getCommitActionType(), bootstrapInstantTime));
+        instantGenerator.createNewInstant(State.REQUESTED, metaClient.getCommitActionType(), bootstrapInstantTime));
 
-    table.getActiveTimeline().transitionRequestedToInflight(instantFactory.createNewInstant(State.REQUESTED,
+    table.getActiveTimeline().transitionRequestedToInflight(instantGenerator.createNewInstant(State.REQUESTED,
         metaClient.getCommitActionType(), bootstrapInstantTime), Option.empty());
 
     HoodieData<BootstrapWriteStatus> bootstrapWriteStatuses = runMetadataBootstrap(partitionFilesList);
@@ -237,7 +237,7 @@ public class SparkBootstrapCommitActionExecutor<T>
             partitionFilesList, config);
     // Start Full Bootstrap
     String bootstrapInstantTime = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
-    final HoodieInstant requested = instantFactory.createNewInstant(
+    final HoodieInstant requested = instantGenerator.createNewInstant(
         State.REQUESTED, table.getMetaClient().getCommitActionType(), bootstrapInstantTime);
     table.getActiveTimeline().createNewInstant(requested);
 

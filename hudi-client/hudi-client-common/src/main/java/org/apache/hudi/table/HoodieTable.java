@@ -134,8 +134,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected final TaskContextSupplier taskContextSupplier;
   private transient HoodieTableMetadata metadata;
   private transient HoodieStorageLayout storageLayout;
-  private final InstantGenerator instantFactory;
-  private final InstantFileNameGenerator instantFileNameFactory;
+  private final InstantGenerator instantGenerator;
+  private final InstantFileNameGenerator instantFileNameGenerator;
   private final InstantFileNameParser instantFileNameParser;
   private final boolean isMetadataTable;
 
@@ -146,8 +146,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.config = config;
     this.context = context;
     this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
-    this.instantFactory = metaClient.getInstantGenerator();
-    this.instantFileNameFactory = metaClient.getInstantFileNameGenerator();
+    this.instantGenerator = metaClient.getInstantGenerator();
+    this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     this.instantFileNameParser = metaClient.getInstantFileNameParser();
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
@@ -302,12 +302,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return metaClient;
   }
 
-  public InstantGenerator getInstantFactory() {
-    return instantFactory;
+  public InstantGenerator getInstantGenerator() {
+    return instantGenerator;
   }
 
-  public InstantFileNameGenerator getInstantFileNameFactory() {
-    return instantFileNameFactory;
+  public InstantFileNameGenerator getInstantFileNameGenerator() {
+    return instantFileNameGenerator;
   }
 
   public InstantFileNameParser getInstantFileNameParser() {
@@ -671,7 +671,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
     if (deleteInstants) {
       // above rollback would still keep requested in the timeline. so, lets delete it if if are looking to purge the pending clustering fully.
-      getActiveTimeline().deletePending(instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, inflightInstant.getAction(), inflightInstant.requestedTime()));
+      getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, inflightInstant.getAction(), inflightInstant.requestedTime()));
     }
   }
 

@@ -104,7 +104,7 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
    * @return Rollback Plan if generated
    */
   protected Option<HoodieRollbackPlan> requestRollback(String startRollbackTime) {
-    final HoodieInstant rollbackInstant = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime);
+    final HoodieInstant rollbackInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime);
     try {
       List<HoodieRollbackRequest> rollbackRequests = new ArrayList<>();
       if (!instantToRollback.isRequested()) {

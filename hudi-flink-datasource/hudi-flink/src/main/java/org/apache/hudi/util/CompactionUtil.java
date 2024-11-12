@@ -137,7 +137,7 @@ public class CompactionUtil {
   }
 
   public static void rollbackCompaction(HoodieFlinkTable<?> table, String instantTime) {
-    HoodieInstant inflightInstant = table.getInstantFactory().getCompactionInflightInstant(instantTime);
+    HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(instantTime);
     if (table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(inflightInstant)) {
       LOG.warn("Rollback failed compaction instant: [" + instantTime + "]");
       table.rollbackInflightCompaction(inflightInstant);

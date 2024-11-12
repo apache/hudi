@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 
 import java.io.IOException;
@@ -38,9 +37,8 @@ public class CommitUtil {
   public static long countNewRecords(HoodieTableMetaClient metaClient, List<String> commitsToCatchup) throws IOException {
     long totalNew = 0;
     HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
-    InstantGenerator instantFactory = metaClient.getInstantGenerator();
     for (String commit : commitsToCatchup) {
-      HoodieInstant instant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, commit);
+      HoodieInstant instant = metaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, commit);
       HoodieCommitMetadata c = metaClient.getCommitMetadataSerDe().deserialize(
           instant,
           timeline.getInstantDetails(instant).get(),

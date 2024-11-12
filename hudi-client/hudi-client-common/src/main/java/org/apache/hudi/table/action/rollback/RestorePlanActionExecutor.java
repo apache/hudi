@@ -66,13 +66,13 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
 
   @Override
   public Option<HoodieRestorePlan> execute() {
-    final HoodieInstant restoreInstant = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
+    final HoodieInstant restoreInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
     try {
       // Get all the commits on the timeline after the provided commit time
       // rollback pending clustering instants first before other instants (See HUDI-3362)
       List<HoodieInstant> pendingClusteringInstantsToRollback = table.getActiveTimeline().filterPendingReplaceOrClusteringTimeline()
               // filter only clustering related replacecommits (Not insert_overwrite related commits)
-              .filter(instant -> ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantFactory))
+              .filter(instant -> ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantGenerator))
               .getReverseOrderedInstants()
               .filter(instant -> GREATER_THAN.test(instant.requestedTime(), savepointToRestoreTimestamp))
               .collect(Collectors.toList());

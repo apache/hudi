@@ -46,7 +46,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   @Override
   public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
-    InstantGenerator instantFactory = table.getInstantFactory();
+    InstantGenerator instantFactory = table.getInstantGenerator();
     HoodieInstant inflightInstant = WriteOperationType.COMPACT.equals(operationType)
         ? instantFactory.getCompactionInflightInstant(instantTime)
         : instantFactory.getLogCompactionInflightInstant(instantTime);

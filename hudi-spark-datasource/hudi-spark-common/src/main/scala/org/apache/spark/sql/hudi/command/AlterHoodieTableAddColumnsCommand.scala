@@ -110,7 +110,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
 
     val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
     val timeLine = hoodieTable.getActiveTimeline
-    val requested = hoodieTable.getInstantFactory.createNewInstant(State.REQUESTED, commitActionType, instantTime)
+    val requested = hoodieTable.getInstantGenerator.createNewInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
     timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(hoodieTable.getMetaClient.getTimelineLayout.getCommitMetadataSerDe, metadata))

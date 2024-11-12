@@ -27,7 +27,6 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -121,8 +120,7 @@ public class RestoresCommand {
   }
 
   private HoodieRestorePlan getRestorePlan(HoodieActiveTimeline activeTimeline, HoodieInstant restoreInstant) throws IOException {
-    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
-    HoodieInstant instantKey = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, RESTORE_ACTION,
+    HoodieInstant instantKey = HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.REQUESTED, RESTORE_ACTION,
             restoreInstant.requestedTime());
     Option<byte[]> instantDetails = activeTimeline.getInstantDetails(instantKey);
     HoodieRestorePlan restorePlan = TimelineMetadataUtils

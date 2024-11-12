@@ -91,7 +91,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
     Option<HoodieClusteringPlan> planOption = createClusteringPlan();
     if (planOption.isPresent()) {
       HoodieInstant clusteringInstant =
-          instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
+          instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
       try {
         HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
             .setOperationType(WriteOperationType.CLUSTER.name())

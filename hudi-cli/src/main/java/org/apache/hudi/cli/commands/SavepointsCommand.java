@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.spark.launcher.SparkLauncher;
@@ -142,8 +141,8 @@ public class SavepointsCommand {
     if (completedInstants.empty()) {
       throw new HoodieException("There are no completed savepoint to run delete");
     }
-    InstantGenerator instantFactory = metaClient.getInstantGenerator();
-    HoodieInstant savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, instantTime);
+    HoodieInstant savePoint = metaClient.createNewInstant(HoodieInstant.State.COMPLETED,
+        HoodieTimeline.SAVEPOINT_ACTION, instantTime);
 
     if (!completedInstants.containsInstant(savePoint)) {
       return String.format("Commit %s not found in Commits %s", instantTime, completedInstants);

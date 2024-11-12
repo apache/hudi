@@ -175,9 +175,8 @@ public class CompactionCommand {
       @ShellOption(value = {"--partition"}, help = "Partition value", defaultValue = ShellOption.NULL) final String partition)
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
-    InstantGenerator instantFactory = client.getInstantGenerator();
     HoodieArchivedTimeline archivedTimeline = client.getArchivedTimeline();
-    HoodieInstant instant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED,
+    HoodieInstant instant = client.createNewInstant(HoodieInstant.State.COMPLETED,
         HoodieTimeline.COMPACTION_ACTION, compactionInstantTime);
     try {
       archivedTimeline.loadCompactionDetailsInMemory(compactionInstantTime);

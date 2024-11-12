@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 
@@ -104,8 +103,7 @@ public class CleansCommand {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
-    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
-    HoodieInstant cleanInstant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, instantTime);
+    HoodieInstant cleanInstant = HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, instantTime);
 
     if (!timeline.containsInstant(cleanInstant)) {
       return "Clean " + instantTime + " not found in metadata " + timeline;

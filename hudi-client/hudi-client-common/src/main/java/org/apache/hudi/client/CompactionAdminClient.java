@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -109,12 +108,11 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionPlan(String compactionInstant, boolean skipValidation,
       int parallelism, boolean dryRun) throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    InstantGenerator instantFactory = metaClient.getInstantGenerator();
     InstantFileNameGenerator instantFileNameFactory = metaClient.getInstantFileNameGenerator();
     // Only if all operations are successfully executed
     if (!dryRun) {
       // Overwrite compaction request with empty compaction operations
-      HoodieInstant inflight = instantFactory.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
+      HoodieInstant inflight = metaClient.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
       StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), metaClient.getInstantFileNameGenerator().getFileName(inflight));
       if (metaClient.getStorage().exists(inflightPath)) {
         // We need to rollback data-files because of this inflight compaction before unscheduling
@@ -122,7 +120,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       }
       // Leave the trace in aux folder but delete from metapath.
       // TODO: Add a rollback instant but for compaction
-      HoodieInstant instant = instantFactory.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
+      HoodieInstant instant = metaClient.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
       boolean deleted = metaClient.getStorage().deleteFile(
           new StoragePath(metaClient.getMetaPath(), instantFileNameFactory.getFileName(instant)));
       ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
@@ -143,7 +141,6 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionFileId(HoodieFileGroupId fgId, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    InstantGenerator instantFactory = metaClient.getInstantGenerator();
     InstantFileNameGenerator instantFileNameFactory = metaClient.getInstantFileNameGenerator();
 
     if (!dryRun) {
@@ -161,7 +158,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       HoodieCompactionPlan newPlan =
           HoodieCompactionPlan.newBuilder().setOperations(newOps).setExtraMetadata(plan.getExtraMetadata()).build();
       HoodieInstant inflight =
-          instantFactory.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
+          metaClient.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
       StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), instantFileNameFactory.getFileName(inflight));
       if (metaClient.getStorage().exists(inflightPath)) {
         // revert if in inflight state
@@ -169,7 +166,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       }
       // Overwrite compaction plan with updated info
       metaClient.getActiveTimeline().saveToCompactionRequested(
-          instantFactory.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
+          metaClient.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
           TimelineMetadataUtils.serializeCompactionPlan(newPlan), true);
     }
     return new ArrayList<>();

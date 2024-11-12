@@ -189,7 +189,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       }
 
       List<String> inflights = pendingCommitsTimeline.getInstantsAsStream()
-          .filter(instant -> !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantFactory))
+          .filter(instant -> !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantGenerator))
           .map(HoodieInstant::requestedTime)
           .collect(Collectors.toList());
       if ((instantTimeToRollback != null) && !inflights.isEmpty()
@@ -214,7 +214,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
 
     final boolean isPendingClustering = !instantToRollback.isCompleted()
         && ClusteringUtils.isClusteringInstant(
-            table.getMetaClient().getActiveTimeline(), instantToRollback, instantFactory);
+            table.getMetaClient().getActiveTimeline(), instantToRollback, instantGenerator);
     validateSavepointRollbacks();
     if (!isPendingCompaction && !isPendingClustering) {
       validateRollbackCommitSequence();
@@ -294,7 +294,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       activeTimeline.deletePending(instantToBeDeleted);
       if (instantToBeDeleted.isInflight() && !table.getMetaClient().getTimelineLayoutVersion().isNullVersion()) {
         // Delete corresponding requested instant
-        instantToBeDeleted = instantFactory.createNewInstant(HoodieInstant.State.REQUESTED, instantToBeDeleted.getAction(),
+        instantToBeDeleted = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, instantToBeDeleted.getAction(),
             instantToBeDeleted.requestedTime());
         activeTimeline.deletePending(instantToBeDeleted);
       }
@@ -328,10 +328,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     instantsToBackup.add(instantToRollback);
     if (instantToRollback.isCompleted()) {
       instantsToBackup.add(TimelineUtils.getInflightInstant(instantToRollback, table.getMetaClient()));
-      instantsToBackup.add(instantFactory.getRequestedInstant(instantToRollback));
+      instantsToBackup.add(instantGenerator.getRequestedInstant(instantToRollback));
     }
     if (instantToRollback.isInflight()) {
-      instantsToBackup.add(instantFactory.getRequestedInstant(instantToRollback));
+      instantsToBackup.add(instantGenerator.getRequestedInstant(instantToRollback));
     }
 
     for (HoodieInstant instant : instantsToBackup) {

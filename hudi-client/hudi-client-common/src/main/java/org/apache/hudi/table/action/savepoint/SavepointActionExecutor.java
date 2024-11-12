@@ -86,7 +86,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           } else {
             // clean is pending or inflight
             return deserializeCleanerPlan(
-                table.getActiveTimeline().getInstantDetails(instantFactory.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime())).get())
+                table.getActiveTimeline().getInstantDetails(instantGenerator.createNewInstant(REQUESTED, instant.getAction(), instant.requestedTime())).get())
                 .getEarliestInstantToRetain().getTimestamp();
           }
         } catch (IOException e) {
@@ -144,9 +144,9 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint
       table.getActiveTimeline().createNewInstant(
-          instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
+          instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
       table.getActiveTimeline()
-          .saveAsComplete(instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
+          .saveAsComplete(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
               TimelineMetadataUtils.serializeSavepointMetadata(metadata));
       LOG.info("Savepoint " + instantTime + " created");
       return metadata;

@@ -121,7 +121,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
       throws HoodieCommitException {
     try {
-      InstantGenerator factory = table.getMetaClient().getInstantGenerator();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
       profile.getOutputPartitionPaths().forEach(path -> {
         WorkloadStat partitionStat = profile.getOutputWorkloadStat(path);
@@ -154,7 +153,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = getCommitActionType();
-      HoodieInstant requested = factory.createNewInstant(State.REQUESTED, commitActionType, instantTime);
+      HoodieInstant requested = table.getMetaClient().createNewInstant(State.REQUESTED, commitActionType, instantTime);
       activeTimeline.transitionRequestedToInflight(
           requested,
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata),
@@ -213,7 +212,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   protected abstract void commit(HoodieWriteMetadata<O> result);
 
   protected void commit(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<O> result, List<HoodieWriteStat> writeStats) {
-    InstantGenerator factory = table.getMetaClient().getInstantGenerator();
     String actionType = getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType);
     result.setCommitted(true);
@@ -228,7 +226,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       // cannot serialize maps with null values
       metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
       activeTimeline.saveAsComplete(false,
-          factory.createNewInstant(State.INFLIGHT, actionType, instantTime),
+          table.getMetaClient().createNewInstant(State.INFLIGHT, actionType, instantTime),
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));

@@ -97,7 +97,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
     } catch (Exception e) {
       HoodieTableMetaClient metaClient = table.getMetaClient();
-      HoodieInstant inflightInstant = instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
+      HoodieInstant inflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
       try {
         if (!metaClient.getStorage().exists(
             new StoragePath(metaClient.getMetaPath(), instantFileNameFactory.getFileName(inflightInstant)))) {

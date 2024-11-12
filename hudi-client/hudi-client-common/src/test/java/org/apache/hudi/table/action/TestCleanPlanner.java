@@ -121,8 +121,8 @@ public class TestCleanPlanner {
 
     SyncableFileSystemView mockFsView = mock(SyncableFileSystemView.class);
     when(mockHoodieTable.getHoodieView()).thenReturn(mockFsView);
-    when(mockHoodieTable.getInstantFactory()).thenReturn(INSTANT_GENERATOR);
-    when(mockHoodieTable.getInstantFileNameFactory()).thenReturn(INSTANT_FILE_NAME_GENERATOR);
+    when(mockHoodieTable.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
+    when(mockHoodieTable.getInstantFileNameGenerator()).thenReturn(INSTANT_FILE_NAME_GENERATOR);
     when(mockHoodieTable.getInstantFileNameParser()).thenReturn(INSTANT_FILE_NAME_PARSER);
 
     // setup savepoint mocks
@@ -170,8 +170,8 @@ public class TestCleanPlanner {
     // setup savepoint mocks
     Set<String> savepointTimestamps = savepoints.keySet().stream().collect(Collectors.toSet());
     when(mockHoodieTable.getSavepointTimestamps()).thenReturn(savepointTimestamps);
-    when(mockHoodieTable.getInstantFactory()).thenReturn(INSTANT_GENERATOR);
-    when(mockHoodieTable.getInstantFileNameFactory()).thenReturn(INSTANT_FILE_NAME_GENERATOR);
+    when(mockHoodieTable.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
+    when(mockHoodieTable.getInstantFileNameGenerator()).thenReturn(INSTANT_FILE_NAME_GENERATOR);
     when(mockHoodieTable.getInstantFileNameParser()).thenReturn(INSTANT_FILE_NAME_PARSER);
     if (!savepoints.isEmpty()) {
       for (Map.Entry<String, List<String>> entry : savepoints.entrySet()) {

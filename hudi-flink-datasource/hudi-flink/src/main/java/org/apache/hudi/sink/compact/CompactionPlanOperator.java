@@ -137,7 +137,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       // do nothing.
       LOG.info("Empty compaction plan for instant " + compactionInstantTime);
     } else {
-      HoodieInstant instant = table.getInstantFactory().getCompactionRequestedInstant(compactionInstantTime);
+      HoodieInstant instant = table.getInstantGenerator().getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
       table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
       table.getMetaClient().reloadActiveTimeline();

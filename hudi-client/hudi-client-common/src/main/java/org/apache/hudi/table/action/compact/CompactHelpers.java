@@ -63,7 +63,7 @@ public class CompactHelpers<T, I, K, O> {
   public HoodieCommitMetadata createCompactionMetadata(
       HoodieTable table, String compactionInstantTime, HoodieData<WriteStatus> writeStatuses,
       String schema) throws IOException {
-    InstantGenerator instantFactory = table.getInstantFactory();
+    InstantGenerator instantFactory = table.getInstantGenerator();
     byte[] planBytes = table.getActiveTimeline().readCompactionPlanAsBytes(
         instantFactory.getCompactionRequestedInstant(compactionInstantTime)).get();
     HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(planBytes);
@@ -83,7 +83,7 @@ public class CompactHelpers<T, I, K, O> {
   public void completeInflightCompaction(HoodieTable table, String compactionCommitTime, HoodieCommitMetadata commitMetadata) {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
-      InstantGenerator instantFactory = table.getInstantFactory();
+      InstantGenerator instantFactory = table.getInstantGenerator();
       // Callers should already guarantee the lock.
       activeTimeline.transitionCompactionInflightToComplete(false,
           instantFactory.getCompactionInflightInstant(compactionCommitTime),
@@ -98,7 +98,7 @@ public class CompactHelpers<T, I, K, O> {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
       // Callers should already guarantee the lock.
-      InstantGenerator instantFactory = table.getInstantFactory();
+      InstantGenerator instantFactory = table.getInstantGenerator();
       activeTimeline.transitionLogCompactionInflightToComplete(false,
           instantFactory.getLogCompactionInflightInstant(logCompactionCommitTime),
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), commitMetadata));

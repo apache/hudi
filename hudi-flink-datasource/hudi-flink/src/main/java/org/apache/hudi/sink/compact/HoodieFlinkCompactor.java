@@ -242,7 +242,7 @@ public class HoodieFlinkCompactor {
 
       List<String> compactionInstantTimes = requested.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
       compactionInstantTimes.forEach(timestamp -> {
-        HoodieInstant inflightInstant = table.getInstantFactory().getCompactionInflightInstant(timestamp);
+        HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(timestamp);
         if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
           LOG.info("Rollback inflight compaction instant: [" + timestamp + "]");
           table.rollbackInflightCompaction(inflightInstant);
@@ -270,7 +270,7 @@ public class HoodieFlinkCompactor {
         return;
       }
 
-      InstantGenerator instantFactory = table.getInstantFactory();
+      InstantGenerator instantFactory = table.getInstantGenerator();
       List<HoodieInstant> instants = compactionInstantTimes.stream().map(instantFactory::getCompactionRequestedInstant).collect(Collectors.toList());
 
       int totalOperations = Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum());
