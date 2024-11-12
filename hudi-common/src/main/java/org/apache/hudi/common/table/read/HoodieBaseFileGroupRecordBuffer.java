@@ -40,7 +40,6 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -68,6 +67,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_FOUND_WITHOUT_ORDERING_VALUE;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
@@ -306,20 +306,26 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
             return Option.empty();
           }
-          Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
-          // Checks the ordering value does not equal to 0
-          // because we use 0 as the default value which means natural order
-          boolean chooseExisting = !deleteOrderingVal.equals(0)
-              && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-              && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
-          if (chooseExisting) {
-            // The DELETE message is obsolete if the old message has greater orderingVal.
+          Comparable deleteOrderingVal = deleteRecord.getOrderingVal(orderingFieldDefault);
+          // Here existing record represents newer record with the same key, which can be a delete or non-delete record.
+          // Therefore, we should use event time based merging if possible. So, the newer record is returned if
+          // 1. the delete is processing time based, or
+          // 2. delete is event time based, and the existing record has higher value.
+          if (isProcessingTimeBasedDelete(deleteOrderingVal)) {
+            existingRecordMetadataPair.getRight().put(DELETE_FOUND_WITHOUT_ORDERING_VALUE, "true");
+            return Option.empty();
+          }
+          if (deleteOrderingVal.compareTo(existingOrderingVal) <= 0) {
             return Option.empty();
           }
       }
     }
     // Do delete.
     return Option.of(deleteRecord);
+  }
+
+  private boolean isProcessingTimeBasedDelete(Comparable orderingVal) {
+    return orderingVal.equals(orderingFieldDefault);
   }
 
   /**
@@ -412,6 +418,10 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
               newer, newerInfoMap, readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
+          }
+          // If a processing time based delete is found, the newer record is returned.
+          if (newerInfoMap.containsKey(DELETE_FOUND_WITHOUT_ORDERING_VALUE)) {
+            return newer;
           }
           if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
             return older;
