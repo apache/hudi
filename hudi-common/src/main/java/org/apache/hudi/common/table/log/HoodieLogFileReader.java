@@ -73,6 +73,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   private final HoodieStorage storage;
   private final HoodieLogFile logFile;
+  private final long logFileSize;
   private final int bufferSize;
   private final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
@@ -107,6 +108,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     //       further
     StoragePath updatedPath = FSUtils.makeQualified(storage, logFile.getPath());
     this.logFile = updatedPath.equals(logFile.getPath()) ? logFile : new HoodieLogFile(updatedPath, logFile.getFileSize());
+    this.logFileSize = logFile.getFileSize() <= 0 ? storage.getPathInfo(logFile.getPath()).getLength() : logFile.getFileSize();
     this.bufferSize = bufferSize;
     this.inputStream = getDataInputStream(this.storage, this.logFile, bufferSize);
     this.readerSchema = readerSchema;
@@ -153,7 +155,6 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     HoodieLogBlockType blockType = tryReadBlockType(nextBlockVersion);
 
     // 4. Read the header for a log block, if present
-
     Map<HeaderMetadataType, String> header =
         nextBlockVersion.hasHeader() ? HoodieLogBlock.getHeaderMetadata(inputStream) : null;
 
@@ -261,7 +262,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     return new HoodieCorruptBlock(corruptedBytes, () -> getDataInputStream(storage, this.logFile, bufferSize), true, Option.of(logBlockContentLoc), new HashMap<>(), new HashMap<>());
   }
 
-  private boolean isBlockCorrupted(int blocksize) throws IOException {
+  private boolean isBlockCorrupted(int blockSize) throws IOException {
     if (StorageSchemes.isWriteTransactional(storage.getScheme())) {
       // skip block corrupt check if writes are transactional. see https://issues.apache.org/jira/browse/HUDI-2118
       return false;
@@ -269,27 +270,22 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     long currentPos = inputStream.getPos();
     long blockSizeFromFooter;
 
-    try {
-      // check if the blocksize mentioned in the footer is the same as the header;
-      // by seeking and checking the length of a long.  We do not seek `currentPos + blocksize`
-      // which can be the file size for the last block in the file, causing EOFException
-      // for some FSDataInputStream implementation
-      inputStream.seek(currentPos + blocksize - Long.BYTES);
-      // Block size in the footer includes the magic header, which the header does not include.
-      // So we have to shorten the footer block size by the size of magic hash
-      blockSizeFromFooter = inputStream.readLong() - magicBuffer.length;
-    } catch (EOFException e) {
-      LOG.info("Found corrupted block in file {} with block size({}) running past EOF", logFile, blocksize);
-      // this is corrupt
-      // This seek is required because contract of seek() is different for naked DFSInputStream vs BufferedFSInputStream
-      // release-3.1.0-RC1/DFSInputStream.java#L1455
-      // release-3.1.0-RC1/BufferedFSInputStream.java#L73
-      inputStream.seek(currentPos);
+    if (currentPos + blockSize > logFileSize) {
+      LOG.info("Corrupted block detected: block runs past EOF in file '{}'. Block size: {}", logFile, blockSize);
       return true;
     }
 
-    if (blocksize != blockSizeFromFooter) {
-      LOG.info("Found corrupted block in file {}. Header block size({}) did not match the footer block size({})", logFile, blocksize, blockSizeFromFooter);
+    // check if the blocksize mentioned in the footer is the same as the header;
+    // by seeking and checking the length of a long.  We do not seek `currentPos + blocksize`
+    // which can be the file size for the last block in the file, causing EOFException
+    // for some FSDataInputStream implementation
+    inputStream.seek(currentPos + blockSize - Long.BYTES);
+    // Block size in the footer includes the magic header, which the header does not include.
+    // So we have to shorten the footer block size by the size of magic hash
+    blockSizeFromFooter = inputStream.readLong() - magicBuffer.length;
+
+    if (blockSize != blockSizeFromFooter) {
+      LOG.info("Found corrupted block in file {}. Header block size({}) did not match the footer block size({})", logFile, blockSize, blockSizeFromFooter);
       inputStream.seek(currentPos);
       return true;
     }

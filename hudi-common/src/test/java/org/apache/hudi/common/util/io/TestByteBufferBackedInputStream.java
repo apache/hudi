@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.io;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.EOFException;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -32,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestByteBufferBackedInputStream {
 
   @Test
-  public void testConstructor() {
+  public void testConstructor() throws EOFException {
     byte[] bytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xE, 0xE, 0xD };
     ByteBuffer byteBuf = ByteBuffer.wrap(bytes, 0, 1);
     ByteBuffer byteBufClone = byteBuf.duplicate();
@@ -41,7 +42,7 @@ public class TestByteBufferBackedInputStream {
     ByteBufferBackedInputStream first = new ByteBufferBackedInputStream(byteBuf);
 
     assertEquals(first.read(), 0xD);
-    assertThrows(IllegalArgumentException.class, first::read);
+    assertThrows(EOFException.class, first::read);
     // Make sure that the original buffer stays intact
     assertEquals(byteBufClone, byteBuf);
 
@@ -54,11 +55,11 @@ public class TestByteBufferBackedInputStream {
     ByteBufferBackedInputStream third = new ByteBufferBackedInputStream(bytes, 1, 1);
 
     assertEquals(third.read(), 0xE);
-    assertThrows(IllegalArgumentException.class, third::read);
+    assertThrows(EOFException.class, third::read);
   }
 
   @Test
-  public void testRead() {
+  public void testRead() throws EOFException {
     byte[] sourceBytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xE, 0xE, 0xD };
 
     ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes);
@@ -75,7 +76,7 @@ public class TestByteBufferBackedInputStream {
   }
 
   @Test
-  public void testSeek() {
+  public void testSeek() throws EOFException {
     byte[] sourceBytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xA, 0xE, 0xD };
 
     ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes, 1, 7);
@@ -91,11 +92,11 @@ public class TestByteBufferBackedInputStream {
     assertEquals(0xE, secondRead);
 
     // Try to seek past the stream boundary
-    assertThrows(IllegalArgumentException.class, () -> stream.seek(8));
+    assertThrows(EOFException.class, () -> stream.seek(8));
   }
 
   @Test
-  public void testCopyFrom() {
+  public void testCopyFrom() throws EOFException {
     byte[] sourceBytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xA, 0xE, 0xD };
 
     ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes);

@@ -24,6 +24,8 @@ import org.apache.parquet.io.DelegatingSeekableInputStream;
 import org.apache.parquet.io.InputFile;
 import org.apache.parquet.io.SeekableInputStream;
 
+import java.io.EOFException;
+
 /**
  * Implementation of {@link InputFile} backed by {@code byte[]} buffer
  */
@@ -52,7 +54,7 @@ public class ByteBufferBackedInputFile implements InputFile {
       }
 
       @Override
-      public void seek(long newPos) {
+      public void seek(long newPos) throws EOFException {
         ((ByteBufferBackedInputStream) getStream()).seek(newPos);
       }
     };

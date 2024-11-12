@@ -18,8 +18,11 @@
 
 package org.apache.hudi.common.util.io;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
 import javax.annotation.Nonnull;
 
+import java.io.EOFException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
@@ -56,17 +59,17 @@ public class ByteBufferBackedInputStream extends InputStream {
   }
 
   @Override
-  public int read() {
+  public int read() throws EOFException {
     if (!buffer.hasRemaining()) {
-      throw new IllegalArgumentException("Reading past backed buffer boundary");
+      throw new EOFException("Reached end of buffer");
     }
     return buffer.get() & 0xFF;
   }
 
   @Override
-  public int read(@Nonnull byte[] bytes, int offset, int length) {
+  public int read(@Nonnull byte[] bytes, int offset, int length) throws EOFException {
     if (!buffer.hasRemaining()) {
-      throw new IllegalArgumentException("Reading past backed buffer boundary");
+      throw new EOFException("Reached end of buffer");
     }
     // Determine total number of bytes available to read
     int available = Math.min(length, buffer.remaining());
@@ -93,15 +96,15 @@ public class ByteBufferBackedInputStream extends InputStream {
    *
    * @param pos target position to seek to w/in the holding buffer
    */
-  public void seek(long pos) {
+  public void seek(long pos) throws EOFException {
+    ValidationUtils.checkArgument(pos >= 0, "Position must be greater than or equal zero.");
+
     buffer.reset(); // to mark
     int offset = buffer.position();
     // NOTE: That the new pos is still relative to buffer's offset
     int newPos = offset + (int) pos;
-    if (newPos > buffer.limit() || newPos < offset) {
-      throw new IllegalArgumentException(
-          String.format("Can't seek past the backing buffer (limit %d, offset %d, new %d)", buffer.limit(), offset, newPos)
-      );
+    if (newPos > buffer.limit()) {
+      throw new EOFException(String.format("Reached end of buffer (offset: %d, length: %d)", pos, buffer.remaining()));
     }
 
     buffer.position(newPos);
@@ -119,16 +122,12 @@ public class ByteBufferBackedInputStream extends InputStream {
    * @param length length of the sequence to copy
    * @return number of bytes copied
    */
-  public int copyFrom(long pos, byte[] targetBuffer, int offset, int length) {
+  public int copyFrom(long pos, byte[] targetBuffer, int offset, int length) throws EOFException {
+    ValidationUtils.checkArgument(length <= targetBuffer.length, "Length must not exceed the target buffer's length");
+
     int bufferPos = bufferOffset + (int) pos;
     if (bufferPos > buffer.limit()) {
-      throw new IllegalArgumentException(
-          String.format("Can't read past the backing buffer boundary (offset %d, length %d)", pos, buffer.limit() - bufferOffset)
-      );
-    } else if (length > targetBuffer.length) {
-      throw new IllegalArgumentException(
-          String.format("Target buffer is too small (length %d, buffer size %d)", length, targetBuffer.length)
-      );
+      throw new EOFException(String.format("Reached end of buffer (offset: %d, length: %d)", pos, buffer.limit() - bufferOffset));
     }
     // Determine total number of bytes available to read
     int available = Math.min(length, buffer.limit() - bufferPos);
