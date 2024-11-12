@@ -696,8 +696,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       instantTime = "002";
       client.scheduleCompactionAtInstant(instantTime, Option.of(metadata.getExtraMetadata()));
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instantTime);
-      statuses = compactionMetadata.getWriteStatuses();
-      client.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+      statuses = compactionMetadata.getDataTableWriteStatuses();
+      client.commitCompaction(instantTime, compactionMetadata, Option.empty(), Option.empty());
 
       // Read from commit file
       table = HoodieSparkTable.create(cfg, context());

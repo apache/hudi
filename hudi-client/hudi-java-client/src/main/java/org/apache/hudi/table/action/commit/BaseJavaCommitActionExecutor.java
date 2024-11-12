@@ -86,11 +86,13 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords) {
-    return execute(inputRecords, Option.empty());
+    return execute(inputRecords, Option.empty(), true, false, Collections.EMPTY_LIST);
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
+  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer,
+                                                        boolean saveWorkloadProfileToInflight, boolean writesToMetadata,
+                                                        List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
 
     WorkloadProfile workloadProfile =
@@ -132,7 +134,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     // Update the index back
     List<WriteStatus> statuses = table.getIndex().updateLocation(HoodieListData.eager(writeStatuses), context, table).collectAsList();
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
-    result.setWriteStatuses(statuses);
+    result.setDataTableWriteStatuses(statuses);
     return statuses;
   }
 
@@ -193,11 +195,11 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   @Override
   protected void commit(HoodieWriteMetadata<List<WriteStatus>> result) {
-    commit(result, result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+    commit(result, result.getDataTableWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
   }
 
   protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
-    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getDataTableWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         result.getPartitionToReplaceFileIds(), extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }
 
@@ -298,7 +300,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     // Update the index back
     List<WriteStatus> statuses = table.getIndex().updateLocation(HoodieListData.eager(writeStatuses), context, table).collectAsList();
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
-    result.setWriteStatuses(statuses);
+    result.setDataTableWriteStatuses(statuses);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
     commitOnAutoCommit(result);
   }

@@ -32,6 +32,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -793,7 +794,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertTrue(client.commit(newCommitTime, writeStatuses));
 
       // metadata writer to delete column_stats partition
-      try (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> metadataWriter = metadataWriter(client, storageConf, jsc)) {
+      try (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> metadataWriter = metadataWriter(client)) {
         assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
         metadataWriter.deletePartitions("0000003", Arrays.asList(COLUMN_STATS));
 
@@ -3601,7 +3602,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     validateMetadata(config, ignoreFilesWithCommit, storage, basePath, metaClient, storageConf, engineContext, tableMetadata, client, timer);
 
-    HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> metadataWriter = metadataWriter(client, storageConf, engineContext.jsc());
+    HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> metadataWriter = metadataWriter(client);
     assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
 
     // Validate write config for metadata table
@@ -3779,7 +3780,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
     });
 
-    try (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> metadataWriter = metadataWriter(client, storageConf, engineContext.jsc())) {
+    try (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> metadataWriter = metadataWriter(client, storageConf, engineContext)) {
       assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
 
       // Validate write config for metadata table
@@ -3889,9 +3890,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     return allfiles;
   }
 
-  private static HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> metadataWriter(SparkRDDWriteClient client, StorageConfiguration<?> storageConf, JavaSparkContext jsc) {
-    return (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>>) SparkHoodieBackedTableMetadataWriter
-        .create(storageConf, client.getConfig(), new HoodieSparkEngineContext(jsc));
+  private HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> metadataWriter(SparkRDDWriteClient client) {
+    return metadataWriter(client, storageConf, new HoodieSparkEngineContext(jsc));
+  }
+
+  private static HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> metadataWriter(SparkRDDWriteClient client, StorageConfiguration storageConf,
+                                                                                                      HoodieEngineContext engineContext) {
+    return (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>>) SparkHoodieBackedTableMetadataWriter
+        .create(storageConf, client.getConfig(), engineContext);
   }
 
   public static HoodieTableMetadata metadata(SparkRDDWriteClient client, HoodieStorage storage) {

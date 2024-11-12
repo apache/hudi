@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -176,19 +177,21 @@ public class SparkBootstrapCommitActionExecutor<T>
     // Update the index back
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
-    result.setWriteStatuses(statuses);
+    result.setDataTableWriteStatuses(statuses);
     commitOnAutoCommit(result);
   }
 
   @Override
-  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer,
+                                                              boolean saveWorkloadProfileToInflight,
+                                                              boolean writesToMetadata, List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
     // NO_OP
     return null;
   }
 
   @Override
   protected void setCommitMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
-    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().map(WriteStatus::getStat).collectAsList(),
+    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getDataTableWriteStatuses().map(WriteStatus::getStat).collectAsList(),
         result.getPartitionToReplaceFileIds(),
         extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }
@@ -198,7 +201,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     // Perform bootstrap index write and then commit. Make sure both record-key and bootstrap-index
     // is all done in a single job DAG.
     Map<String, List<Pair<BootstrapFileMapping, HoodieWriteStat>>> bootstrapSourceAndStats =
-        result.getWriteStatuses().collectAsList().stream()
+        result.getDataTableWriteStatuses().collectAsList().stream()
             .map(w -> {
               BootstrapWriteStatus ws = (BootstrapWriteStatus) w;
               return Pair.of(ws.getBootstrapSourceFileMapping(), ws.getStat());
@@ -215,6 +218,7 @@ public class SparkBootstrapCommitActionExecutor<T>
       LOG.info("Finished writing bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
           + config.getBasePath());
     }
+    // siva to validate.
     commit(result, bootstrapSourceAndStats.values().stream()
         .flatMap(f -> f.stream().map(Pair::getValue)).collect(Collectors.toList()));
     LOG.info("Committing metadata bootstrap !!");
