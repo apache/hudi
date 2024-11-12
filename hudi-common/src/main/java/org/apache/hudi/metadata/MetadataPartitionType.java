@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import org.apache.avro.generic.GenericRecord;
@@ -184,7 +185,7 @@ public enum MetadataPartitionType {
     public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
       if (metaClient.getIndexMetadata().isPresent()) {
         return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
-            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX));
+            .anyMatch(HoodieIndexDefinition::isFunctionalIndex);
       }
       return false;
     }
