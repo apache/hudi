@@ -155,7 +155,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * HoodieMetadata secondary index payload field ids
    */
-  public static final String SECONDARY_INDEX_FIELD_RECORD_KEY = "recordKey";
+  public static final String SECONDARY_INDEX_RECORD_KEY_ESCAPE_CHAR = "\\";
+  public static final String SECONDARY_INDEX_RECORD_KEY_SEPARATOR = "$";
   public static final String SECONDARY_INDEX_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   /**
@@ -221,7 +222,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this(key, MetadataPartitionType.RECORD_INDEX.getRecordType(), null, null, null, recordIndexMetadata, null, false);
   }
 
-  private HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
+  protected HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
     this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata, secondaryIndexMetadata.getIsDeleted());
   }
 
@@ -344,7 +345,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       HoodieRecord<HoodieMetadataPayload> oldRecord,
       HoodieRecord<HoodieMetadataPayload> newRecord) {
     // If the new record is tombstone, we can discard it
-    if (newRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
+    if (newRecord.getData().isDeleted() || newRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
       return Option.empty();
     }
 
@@ -620,15 +621,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param secondaryKey Secondary key of the record
    * @param isDeleted    true if this record is deleted
    */
-  public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndex(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
-
-    HoodieKey key = new HoodieKey(secondaryKey, partitionPath);
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(secondaryKey, new HoodieSecondaryIndexInfo(recordKey, isDeleted));
+  public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndexRecord(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
+    // the payload key is in the format of "secondaryKey$primaryKey"
+    HoodieKey key = new HoodieKey(SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey), partitionPath);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), new HoodieSecondaryIndexInfo(isDeleted));
     return new HoodieAvroRecord<>(key, payload);
-  }
-
-  public String getRecordKeyFromSecondaryIndex() {
-    return secondaryIndexMetadata.getRecordKey();
   }
 
   public boolean isSecondaryIndexDeleted() {
