@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -178,6 +179,12 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     @Override
     public String upsertPreppedRecords(String preppedRecords, String instantTime) {
+      return "";
+    }
+
+    @Override
+    public String upsertPreppedPartialRecords(String preppedRecords, String instantTime, boolean initialCall, boolean writesToMetadataTable,
+                                              List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
       return "";
     }
 

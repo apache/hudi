@@ -28,7 +28,9 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -53,7 +55,13 @@ public class HoodieJavaWriteClient<T> extends
 
   public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer(),
+        new Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>>() {
+      @Override
+      public Option<HoodieTableMetadataWriter> apply(String val1, HoodieTableMetaClient metaClient) {
+        return getMetadataWriter(val1, metaClient);
+      }
+    });
   }
 
   @Override
@@ -66,7 +74,13 @@ public class HoodieJavaWriteClient<T> extends
                                boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer(),
+        new Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>>() {
+      @Override
+      public Option<HoodieTableMetadataWriter> apply(String val1, HoodieTableMetaClient metaClient) {
+        return getMetadataWriter(val1, metaClient);
+      }
+    });
   }
 
   @Override
@@ -128,6 +142,21 @@ public class HoodieJavaWriteClient<T> extends
     table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
     HoodieWriteMetadata<List<WriteStatus>> result = table.upsertPrepped(context,instantTime, preppedRecords);
+    return postWrite(result, instantTime, table);
+  }
+
+  @Override
+  public List<WriteStatus> upsertPreppedPartialRecords(List<HoodieRecord<T>> preppedRecords,
+                                                String instantTime, boolean initialCall,
+                                                       boolean writesToMetadataTable,
+                                                       List<Pair<String,String>> mdtPartitionPathFileIdPairs) {
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
+    table.validateUpsertSchema();
+    if (initialCall) {
+      preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+    }
+    HoodieWriteMetadata<List<WriteStatus>> result = table.upsertPreppedPartial(context,instantTime, preppedRecords, initialCall, writesToMetadataTable, mdtPartitionPathFileIdPairs);
     return postWrite(result, instantTime, table);
   }
 

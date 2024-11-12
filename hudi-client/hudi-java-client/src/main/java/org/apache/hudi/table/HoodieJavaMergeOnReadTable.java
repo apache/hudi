@@ -69,7 +69,6 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
                                                               List<HoodieRecord<T>> preppedRecords) {
     return new JavaUpsertPreppedDeltaCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
         this, instantTime, preppedRecords).execute();
-
   }
 
   @Override

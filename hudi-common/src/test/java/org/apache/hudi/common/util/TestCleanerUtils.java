@@ -35,25 +35,25 @@ class TestCleanerUtils {
 
   @Test
   void rollbackFailedWrites_CleanWithEagerPolicy() {
-    assertFalse(CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy.EAGER, HoodieActiveTimeline.CLEAN_ACTION, rollbackFunction));
+    assertFalse(CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy.EAGER, HoodieActiveTimeline.CLEAN_ACTION, false, rollbackFunction));
     verify(rollbackFunction, never()).apply();
   }
 
   @Test
   void rollbackFailedWrites_CleanWithLazyPolicy() {
     when(rollbackFunction.apply()).thenReturn(true);
-    assertTrue(CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy.LAZY, HoodieActiveTimeline.CLEAN_ACTION, rollbackFunction));
+    assertTrue(CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy.LAZY, HoodieActiveTimeline.CLEAN_ACTION, false, rollbackFunction));
   }
 
   @Test
   void rollbackFailedWrites_CommitWithEagerPolicy() {
     when(rollbackFunction.apply()).thenReturn(true);
-    assertTrue(CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy.EAGER, HoodieActiveTimeline.COMMIT_ACTION, rollbackFunction));
+    assertTrue(CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy.EAGER, HoodieActiveTimeline.COMMIT_ACTION, false, rollbackFunction));
   }
 
   @Test
   void rollbackFailedWrites_CommitWithLazyPolicy() {
-    assertFalse(CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy.LAZY, HoodieActiveTimeline.COMMIT_ACTION, rollbackFunction));
+    assertFalse(CleanerUtils.rollbackFailedWrites(HoodieFailedWritesCleaningPolicy.LAZY, HoodieActiveTimeline.COMMIT_ACTION, false, rollbackFunction));
     verify(rollbackFunction, never()).apply();
   }
 }

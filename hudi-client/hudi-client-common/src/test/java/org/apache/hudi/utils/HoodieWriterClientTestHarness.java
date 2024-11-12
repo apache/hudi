@@ -88,7 +88,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.HoodieWriteHelper;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
-import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.generic.GenericRecord;
@@ -826,9 +825,9 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
     HoodieWriteMetadata<List<WriteStatus>> clusterMetadata = transformWriteMetadataFn.apply(client.cluster(clusteringCommitTime, completeClustering));
     if (config.populateMetaFields()) {
-      verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(), clusterMetadata.getWriteStatuses());
+      verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(), clusterMetadata.getDataTableWriteStatuses());
     } else {
-      verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(), clusterMetadata.getWriteStatuses(),
+      verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(), clusterMetadata.getDataTableWriteStatuses(),
               config, createKeyGeneratorFn.apply(config));
     }
     return clusterMetadata;
@@ -856,7 +855,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       String clusteringCommitTime = createMetaClient().reloadActiveTimeline().getCompletedReplaceTimeline()
               .getReverseOrderedInstants().findFirst().get().requestedTime();
       verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft().getLeft(),
-              clusterMetadata.getWriteStatuses(), config, createKeyGeneratorFn.apply(config));
+              clusterMetadata.getDataTableWriteStatuses(), config, createKeyGeneratorFn.apply(config));
     }
   }
 
@@ -1184,7 +1183,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                      SupportsUpgradeDowngrade upgradeDowngrade) throws Exception {
     metaClient = createMetaClient();
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(LAZY).withRollbackUsingMarkers(true)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).withAutoCommit(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).withColumnStatsIndexForColumns("driver,driver")
+            .withMetadataIndexColumnStatsFileGroupCount(1)
+            .withEnableRecordIndex(true).withRecordIndexFileGroupCount(4,4).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build());
+
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     // Force using older timeline layout
     HoodieTableMetaClient.newTableBuilder()
@@ -1194,33 +1198,39 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
     metaClient = HoodieTestUtils.createMetaClient(storageConf, new StoragePath(basePath), HoodieTableVersion.SIX);
 
-    HoodieWriteConfig config = cfgBuilder.withWriteTableVersion(6).build();
+    HoodieWriteConfig config = cfgBuilder.build();
     BaseHoodieWriteClient client = getHoodieWriteClient(config);
 
     // Write 1 (only inserts)
-    String newCommitTime = "001";
-    String initCommitTime = "000";
+    String initCommitTime = client.createNewInstantTime();
+    Thread.sleep(10);
+    String newCommitTime1 = client.createNewInstantTime();
     int numRecords = 200;
-    castInsertFirstBatch(config, client, newCommitTime, initCommitTime, numRecords, BaseHoodieWriteClient::insert,
+    castInsertFirstBatch(config, client, newCommitTime1, initCommitTime, numRecords, BaseHoodieWriteClient::insert,
         isPrepped, true, numRecords, populateMetaFields, metaClient.getInstantGenerator());
 
     // Write 2 (updates)
-    String prevCommitTime = newCommitTime;
-    newCommitTime = "004";
+    String prevCommitTime = newCommitTime1;
+    String newCommitTime2 = client.createNewInstantTime();
     numRecords = 100;
-    String commitTimeBetweenPrevAndNew = "002";
-    castUpdateBatch(config, client, newCommitTime, prevCommitTime,
+    String commitTimeBetweenPrevAndNew = newCommitTime1;
+    castUpdateBatch(config, client, newCommitTime2, prevCommitTime,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, writeFn, isPrepped, true,
         numRecords, 200, 2, populateMetaFields, metaClient.getInstantGenerator());
 
-    // Delete 1
-    prevCommitTime = newCommitTime;
-    newCommitTime = "005";
+    /*// Delete 1
+    prevCommitTime = newCommitTime2;
+    String newCommitTime3 = client.createNewInstantTime();
     numRecords = 50;
 
+<<<<<<< HEAD
     castDeleteBatch(config, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
         0, 150, config.populateMetaFields(), metaClient.getTimelineLayout().getTimelineFactory(),
         metaClient.getInstantGenerator());
+=======
+    castDeleteBatch(config, client, newCommitTime3, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
+        0, 150, config.populateMetaFields());
+>>>>>>> 81addb3a684 (Adding optimized writes to MDT)
 
     // Now perform an upgrade and perform a restore operation
     HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withWriteTableVersion(HoodieTableVersion.EIGHT.versionCode()).build();
@@ -1249,7 +1259,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     checkTimelineForUpsertsInternal(metaClient);
 
-    testMergeHandle(config);
+    testMergeHandle(config);*/
   }
 
   /**

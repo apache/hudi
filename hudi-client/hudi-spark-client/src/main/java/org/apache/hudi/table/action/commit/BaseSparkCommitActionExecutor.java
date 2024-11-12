@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -148,11 +149,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords) {
-    return this.execute(inputRecords, Option.empty());
+    return this.execute(inputRecords, Option.empty(), true, false, Collections.emptyList());
   }
 
   @Override
-  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer,
+                                                              boolean saveWorkloadProfileToInflight, boolean writesToMetadata,
+                                                              List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
     if (!config.isSourceRddPersisted() || inputRDD.getStorageLevel() == StorageLevel.NONE()) {
@@ -162,6 +165,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       LOG.info("RDD PreppedRecords was persisted at: {}", inputRDD.getStorageLevel());
     }
 
+    HoodieData<WriteStatus> writeStatuses = null;
+    ValidationUtils.checkState(!writesToMetadata, "Writes to Metadata table has to be use SparkMetadataTableUpsertCommitActionExecutor");
     // Handle records update with clustering
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
     LOG.info("Num spark partitions for inputRecords before triggering workload profile {}", inputRecordsWithClusteringUpdate.getNumPartitions());
@@ -177,10 +182,12 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
-    saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
-
+    if (saveWorkloadProfileToInflight) {
+      saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
+    }
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
-    HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
+    writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
+
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
     updateIndexAndCommitIfNeeded(writeStatuses, result);
     if (sourceReadAndIndexTimer.isPresent()) {
@@ -237,7 +244,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
   }
 
-  private HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
+  protected HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
     JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> mappedRDD = HoodieJavaPairRDD.getJavaPairRDD(
         dedupedRecords.mapToPair(record -> Pair.of(new Tuple2<>(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record)));
 
@@ -273,7 +280,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     // Update the index back
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
-    result.setWriteStatuses(statuses);
+    result.setDataTableWriteStatuses(statuses);
     return statuses;
   }
 
@@ -290,7 +297,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @Override
   protected void setCommitMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
-    List<HoodieWriteStat> writeStats = result.getWriteStatuses().map(WriteStatus::getStat).collectAsList();
+    // only required for auto commit enabled flow.
+    List<HoodieWriteStat> writeStats = result.getDataTableWriteStatuses().map(WriteStatus::getStat).collectAsList();
     result.setWriteStats(writeStats);
     result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(writeStats,
         result.getPartitionToReplaceFileIds(),
@@ -301,7 +309,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
     commit(result, result.getWriteStats().isPresent()
-        ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
+        ? result.getWriteStats().get() : result.getDataTableWriteStatuses().map(WriteStatus::getStat).collectAsList());
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeStatuses) {

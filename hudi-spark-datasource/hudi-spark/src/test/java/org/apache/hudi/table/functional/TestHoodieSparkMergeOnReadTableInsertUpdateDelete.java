@@ -444,7 +444,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
       assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
       assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
-      writeClient.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+      writeClient.commitCompaction(instantTime, compactionMetadata, Option.empty(), Option.empty());
     }
   }
 

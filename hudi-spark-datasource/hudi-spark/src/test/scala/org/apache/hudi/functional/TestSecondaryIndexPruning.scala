@@ -1784,6 +1784,9 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       .withPath(basePath)
       .build()
   }
+
+  private def metadataWriter(clientConfig: HoodieWriteConfig): HoodieBackedTableMetadataWriter[_,_] = SparkHoodieBackedTableMetadataWriter.create(
+    storageConf, clientConfig, new HoodieSparkEngineContext(jsc)).asInstanceOf[HoodieBackedTableMetadataWriter[_,_]]
 }
 
 object TestSecondaryIndexPruning {

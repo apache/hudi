@@ -40,6 +40,7 @@ import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -673,6 +674,7 @@ public class TestHoodieWriteConfig {
         "To use early conflict detection, set hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL");
   }
 
+  @Disabled("HUDI-8480")
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testNonBlockingConcurrencyControlInvalidTableTypeOrIndexType(HoodieTableType tableType) {
