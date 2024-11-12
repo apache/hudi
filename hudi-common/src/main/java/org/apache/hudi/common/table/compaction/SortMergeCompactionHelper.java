@@ -16,35 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.common.table.compaction;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
-import org.apache.avro.Schema;
+import java.util.Comparator;
 
-import java.io.IOException;
-import java.util.Properties;
-
-public interface HoodieFileWriter extends AutoCloseable {
-  boolean canWrite();
-
-  void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException;
-
-  void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException;
-
-  void close() throws IOException;
-
-  default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema) throws IOException {
-    writeWithMetadata(key, record, schema, new Properties());
-  }
-
-  default void write(String recordKey, HoodieRecord record, Schema schema) throws IOException {
-    write(recordKey, record, schema, new Properties());
-  }
-
-  default void writeFooterMetadata(String key, String value) {
-    // no-op
-    // TODO: remove default
-  }
+public class SortMergeCompactionHelper {
+  public static final Comparator<String> DEFAULT_RECORD_KEY_COMPACTOR = String::compareTo;
+  public static final Comparator<HoodieKey> DEFAULT_HOODIE_KEY_COMPACTOR = (o1, o2) -> DEFAULT_RECORD_KEY_COMPACTOR.compare(o1.getRecordKey(), o2.getRecordKey());
+  public static final Comparator<HoodieRecord> DEFAULT_RECORD_COMPACTOR = (o1, o2) -> DEFAULT_HOODIE_KEY_COMPACTOR.compare(o1.getKey(), o2.getKey());
 }
