@@ -207,7 +207,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private HoodieMetadataFileSystemView getMetadataView() {
-    if (metadataView == null) {
+    if (metadataView == null || !metadataView.equals(metadata.getMetadataFileSystemView())) {
       ValidationUtils.checkState(metadata != null, "Metadata table not initialized");
       ValidationUtils.checkState(dataMetaClient != null, "Data table meta client not initialized");
       metadataView = new HoodieMetadataFileSystemView(dataMetaClient, dataMetaClient.getActiveTimeline(), metadata);
