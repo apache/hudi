@@ -18,9 +18,11 @@
 
 package org.apache.hudi.table.marker;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.table.HoodieTable;
 
@@ -61,5 +63,12 @@ public class WriteMarkersFactory {
       default:
         throw new HoodieException("The marker type \"" + markerType.name() + "\" is not supported.");
     }
+  }
+
+  public static WriteMarkers getDirectMarkers(HoodieStorage storage,
+                                              String mdtBasePath,
+                                              HoodieTableMetaClient mdtMetaClient,
+                                              String instantTime) {
+    return new DirectWriteMarkers(storage, mdtBasePath, mdtMetaClient.getMarkerFolderPath(instantTime), instantTime);
   }
 }

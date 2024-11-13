@@ -79,8 +79,8 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.marker.DirectWriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -955,9 +955,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return new LogFileCreationCallback() {
       @Override
       public boolean preFileCreation(HoodieLogFile logFile) {
-        WriteMarkers writeMarkers = new DirectWriteMarkers(
-            storage, metadataWriteConfig.getBasePath(),
-            metadataMetaClient.getMarkerFolderPath(instantTime), instantTime);
+        WriteMarkers writeMarkers = WriteMarkersFactory.getDirectMarkers(
+            storage, metadataWriteConfig.getBasePath(), metadataMetaClient, instantTime);
         return writeMarkers.createIfNotExists(partitionPath, logFile.getFileName(), IOType.CREATE,
             metadataWriteConfig, fileId, metadataMetaClient.getActiveTimeline()).isPresent();
       }
