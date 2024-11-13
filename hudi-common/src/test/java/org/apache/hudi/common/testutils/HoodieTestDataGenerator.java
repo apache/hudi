@@ -285,7 +285,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
-    if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
+    if (TRIP_FLATTENED_SCHEMA.equals(schemaStr)) {
+      return generateRandomValue(key, commitTime, true);
+    } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
       return generateRandomValue(key, commitTime, isFlattened);
     } else if (TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForTripSchema(key, commitTime);
@@ -695,7 +697,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * @return  List of {@link HoodieRecord}s
    */
   public List<HoodieRecord> generateInserts(String instantTime, Integer n, boolean isFlattened) {
-    return generateInsertsStream(instantTime, n, isFlattened, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
+    return generateInsertsStream(instantTime, n, isFlattened, isFlattened ? TRIP_FLATTENED_SCHEMA : TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
 
   /**
@@ -873,6 +875,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return updates;
   }
 
+  public List<HoodieRecord> generateUpdates(String instantTime, Integer n) throws IOException {
+    return generateUpdates(instantTime, n, TRIP_EXAMPLE_SCHEMA);
+  }
+
   /**
    * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned
    * list
@@ -881,11 +887,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * @param n          Number of updates (including dups)
    * @return list of hoodie record updates
    */
-  public List<HoodieRecord> generateUpdates(String instantTime, Integer n) throws IOException {
+  public List<HoodieRecord> generateUpdates(String instantTime, Integer n, String schemaStr) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (int i = 0; i < n; i++) {
-      Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-      Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+      Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
+      Integer numExistingKeys = numKeysBySchema.get(schemaStr);
       KeyPartition kp = existingKeys.get(rand.nextInt(numExistingKeys - 1));
       HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
       updates.add(record);
@@ -926,6 +932,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n) {
     return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
+  }
+
+  public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n, String schemaStr) {
+    return generateUniqueUpdatesStream(instantTime, n, schemaStr).collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateUniqueUpdatesNestedExample(String instantTime, Integer n) {
