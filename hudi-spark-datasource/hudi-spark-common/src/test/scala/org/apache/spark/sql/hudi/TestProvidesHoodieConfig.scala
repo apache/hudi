@@ -24,8 +24,9 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.{RuntimeConfig, SQLContext, SparkSession}
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.internal.{SQLConf, SessionState, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -95,7 +96,11 @@ class TestProvidesHoodieConfig {
     when(mockCatalog.preCombineKey).thenCallRealMethod()
     when(mockCatalog.partitionSchema).thenReturn(StructType(Nil))
     when(mockCatalog.primaryKeys).thenReturn(Array("key"))
-    when(mockCatalog.tableName).thenReturn("hudi_table")
+    when(mockCatalog.table).thenReturn(CatalogTable.apply(
+      TableIdentifier.apply("hudi_table", Option.apply("hudi_database")),
+      CatalogTableType.EXTERNAL,
+      CatalogStorageFormat.empty,
+      StructType(Nil)))
     val props = new TypedProperties()
     props.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key, "segment")
     val mockTableConfig = spy(classOf[HoodieTableConfig])
