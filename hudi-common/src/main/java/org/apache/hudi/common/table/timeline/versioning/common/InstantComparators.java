@@ -50,10 +50,10 @@ public class InstantComparators {
 
   }
 
-  public static class TimestampBasedComparator implements Serializable, Comparator<HoodieInstant> {
+  public static class RequestedTimeBasedComparator implements Serializable, Comparator<HoodieInstant> {
     private final ActionComparator actionComparator;
 
-    public TimestampBasedComparator(Map<String, String> comparableActions) {
+    public RequestedTimeBasedComparator(Map<String, String> comparableActions) {
       this.actionComparator = new ActionComparator(comparableActions);
     }
 
@@ -71,10 +71,10 @@ public class InstantComparators {
   }
 
   public static class CompletionTimeBasedComparator implements Serializable, Comparator<HoodieInstant> {
-    private final TimestampBasedComparator timestampBasedComparator;
+    private final RequestedTimeBasedComparator timestampBasedComparator;
 
     public CompletionTimeBasedComparator(Map<String, String> comparableActions) {
-      this.timestampBasedComparator = new TimestampBasedComparator(comparableActions);
+      this.timestampBasedComparator = new RequestedTimeBasedComparator(comparableActions);
     }
 
     @Override

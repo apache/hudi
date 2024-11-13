@@ -44,7 +44,7 @@ public class InstantComparatorV1 implements Serializable, InstantComparator {
       new InstantComparators.ActionComparator(COMPARABLE_ACTIONS);
 
   public static final Comparator<HoodieInstant> REQUESTED_TIME_BASED_COMPARATOR =
-      new InstantComparators.TimestampBasedComparator(COMPARABLE_ACTIONS);
+      new InstantComparators.RequestedTimeBasedComparator(COMPARABLE_ACTIONS);
 
   public static final Comparator<HoodieInstant> COMPLETION_TIME_BASED_COMPARATOR =
       new InstantComparators.CompletionTimeBasedComparator(COMPARABLE_ACTIONS);
