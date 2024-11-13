@@ -854,6 +854,7 @@ public class StreamSync implements Serializable, Closeable {
                                                                               Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
     // write to hudi and fetch result
+    startCommit(instantTime);
     WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
     Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
     Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
@@ -960,42 +961,17 @@ public class StreamSync implements Serializable, Closeable {
 
   /**
    * Try to start a new commit.
-   * <p>
-   * Exception will be thrown if it failed in 2 tries.
+   * Exception will be thrown if the commit can't be started with instantTime.
    *
-   * @return Instant time of the commit
    */
-  private String startCommit(String instantTime, boolean retryEnabled) {
-    final int maxRetries = 2;
-    int retryNum = 1;
-    RuntimeException lastException = null;
-    while (retryNum <= maxRetries) {
-      try {
-        String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-        writeClient.startCommitWithTime(instantTime, commitActionType);
-        return instantTime;
-      } catch (IllegalArgumentException ie) {
-        lastException = ie;
-        if (!retryEnabled) {
-          throw ie;
-        }
-        LOG.error("Got error trying to start a new commit. Retrying after sleeping for a sec", ie);
-        retryNum++;
-        try {
-          Thread.sleep(1000);
-        } catch (InterruptedException e) {
-          // No-Op
-        }
-      }
-      instantTime = HoodieActiveTimeline.createNewInstantTime();
-    }
-    throw lastException;
+  @VisibleForTesting
+  void startCommit(String instantTime) {
+    String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
+    writeClient.startCommitWithTime(instantTime, commitActionType);
   }
 
   private WriteClientWriteResult writeToSink(InputBatch inputBatch, String instantTime, boolean useRowWriter) {
     WriteClientWriteResult writeClientWriteResult = null;
-    instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
-
     if (useRowWriter) {
       Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.getSqlContext().emptyDataFrame());
       HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetSchema());

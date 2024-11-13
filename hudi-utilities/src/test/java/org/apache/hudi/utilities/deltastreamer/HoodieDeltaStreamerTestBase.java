@@ -513,7 +513,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
 
-  void assertRecordCount(long expected, String tablePath, SQLContext sqlContext) {
+  protected void assertRecordCount(long expected, String tablePath, SQLContext sqlContext) {
     sqlContext.clearCache();
     long recordCount = sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tablePath).count();
     assertEquals(expected, recordCount);
@@ -568,7 +568,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         .count());
   }
 
-  static class TestHelpers {
+  protected static class TestHelpers {
 
     static HoodieDeltaStreamer.Config makeDropAllConfig(String basePath, WriteOperationType op) {
       return makeConfig(basePath, op, Collections.singletonList(TestHoodieDeltaStreamer.DropAllTransformer.class.getName()));
@@ -595,10 +595,10 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           useSchemaProviderClass, 1000, updatePayloadClass, payloadClassName, tableType, "timestamp", null);
     }
 
-    static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
-                                                 List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
-                                                 int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
-                                                 String checkpoint) {
+    public static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
+                                                        List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
+                                                        int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
+                                                        String checkpoint) {
       return makeConfig(basePath, op, sourceClassName, transformerClassNames, propsFilename, enableHiveSync, useSchemaProviderClass, sourceLimit, updatePayloadClass, payloadClassName,
           tableType, sourceOrderingField, checkpoint, false);
     }
