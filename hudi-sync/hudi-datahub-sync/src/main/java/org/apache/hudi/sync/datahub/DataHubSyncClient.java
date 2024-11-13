@@ -53,6 +53,7 @@ import com.linkedin.schema.UnionType;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.AvroTypeException;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
@@ -70,15 +71,6 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   private static final String SCHEMA_FIELD_PATH_VERSION_TOKEN = "[version=2.0]";
   private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
-  private static final String NATIVE_TYPE_DATE = "date";
-  private static final String NATIVE_TYPE_UUID = "uuid";
-  private static final String NATIVE_TYPE_TIME_MILLIS = "time_millis";
-  private static final String NATIVE_TYPE_TIME_MICROS = "time_micros";
-  private static final String NATIVE_TYPE_TIMESTAMP_MILLIS = "timestamp_ntz_millis";
-  private static final String NATIVE_TYPE_TIMESTAMP_MICROS = "timestamp_ntz_micros";
-  private static final String NATIVE_TYPE_LOCAL_TIMESTAMP_MILLIS = "timestamp_millis";
-  private static final String NATIVE_TYPE_LOCAL_TIMESTAMP_MICROS = "timestamp_micros";
-  private static final String NATIVE_TYPE_DECIMAL = "decimal(%s,%s)";
 
   public DataHubSyncClient(DataHubSyncConfig config, HoodieTableMetaClient metaClient) {
     super(config, metaClient);
@@ -320,52 +312,21 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   /**
+   * <li>timestamp with no timezone or global timestamp will be represented as "timestamp"</li>
+   * <li>timestamp in a local timezone will be represented as "local-timestamp"</li>
    * @param schema avro field schema
    * @return native data type for given avro field schema
    */
   private static String toSchemaFieldNativeDataType(Schema schema) {
-    switch (schema.getType()) {
-      case INT:
-        // logical date and time type
-        if (schema.getLogicalType() == LogicalTypes.date()) {
-          return NATIVE_TYPE_DATE;
-        } else if (schema.getLogicalType() == LogicalTypes.timeMillis()) {
-          return NATIVE_TYPE_TIME_MILLIS;
-        }
-        return schema.getType().getName();
-      case LONG:
-        // logical time and timestamp type
-        if (schema.getLogicalType() == LogicalTypes.timestampMillis()) {
-          return NATIVE_TYPE_TIMESTAMP_MILLIS;
-        } else if (schema.getLogicalType() == LogicalTypes.localTimestampMillis()) {
-          return NATIVE_TYPE_LOCAL_TIMESTAMP_MILLIS;
-        } else if (schema.getLogicalType() == LogicalTypes.timestampMicros()) {
-          return NATIVE_TYPE_TIMESTAMP_MICROS;
-        } else if (schema.getLogicalType() == LogicalTypes.localTimestampMicros()) {
-          return NATIVE_TYPE_LOCAL_TIMESTAMP_MICROS;
-        } else if (schema.getLogicalType() == LogicalTypes.timeMillis()) {
-          return NATIVE_TYPE_TIME_MILLIS;
-        } else if (schema.getLogicalType() == LogicalTypes.timeMicros()) {
-          return NATIVE_TYPE_TIME_MICROS;
-        }
-        return schema.getType().getName();
-      case STRING:
-        // logical uuid type
-        if (schema.getLogicalType() == LogicalTypes.uuid()) {
-          return NATIVE_TYPE_UUID;
-        }
-        return schema.getType().getName();
-      case FIXED:
-      case BYTES:
-        // logical decimal type
-        if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
-          final LogicalTypes.Decimal decimalType =
-              (LogicalTypes.Decimal) schema.getLogicalType();
-          return String.format(NATIVE_TYPE_DECIMAL, decimalType.getPrecision(), decimalType.getScale());
-        }
-        return schema.getType().getName();
-      default:
-        return schema.getType().getName();
+    LogicalType logicalType = schema.getLogicalType();
+    if (logicalType != null) {
+      if (logicalType instanceof LogicalTypes.Decimal) {
+        LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) logicalType;
+        return String.format("decimal(%s,%s)", decimalType.getPrecision(), decimalType.getScale());
+      } else {
+        return logicalType.getName();
+      }
     }
+    return schema.getType().getName();
   }
 }

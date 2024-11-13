@@ -83,12 +83,13 @@ class TestDataHubSchemaExtractor {
     List<SchemaField> schemaFields = DataHubSyncClient.createSchemaFields(readAvroSchema("schema/logical_types.avsc"));
     List<SchemaField> expectedSchemaFields = Arrays.asList(
         createSchemaField("[version=2.0].decimalField", toSchemaFieldDataType(Schema.Type.BYTES), "decimal(9,2)"),
+        createSchemaField("[version=2.0].decimalFieldWithoutScale", toSchemaFieldDataType(Schema.Type.BYTES), "decimal(9,0)"),
         createSchemaField("[version=2.0].decimalFieldWithoutPrecisionAndScale", toSchemaFieldDataType(Schema.Type.BYTES), "bytes"),
-        createSchemaField("[version=2.0].timestampMillisField", toSchemaFieldDataType(Schema.Type.LONG), "timestamp_ntz_millis"),
-        createSchemaField("[version=2.0].timestampMicrosField", toSchemaFieldDataType(Schema.Type.LONG), "timestamp_ntz_micros"),
+        createSchemaField("[version=2.0].timestampMillisField", toSchemaFieldDataType(Schema.Type.LONG), "timestamp-millis"),
+        createSchemaField("[version=2.0].timestampMicrosField", toSchemaFieldDataType(Schema.Type.LONG), "timestamp-micros"),
         createSchemaField("[version=2.0].dateField", toSchemaFieldDataType(Schema.Type.INT), "date"),
-        createSchemaField("[version=2.0].timeMillisField", toSchemaFieldDataType(Schema.Type.INT), "time_millis"),
-        createSchemaField("[version=2.0].timeMicrosField", toSchemaFieldDataType(Schema.Type.LONG), "time_micros"),
+        createSchemaField("[version=2.0].timeMillisField", toSchemaFieldDataType(Schema.Type.INT), "time-millis"),
+        createSchemaField("[version=2.0].timeMicrosField", toSchemaFieldDataType(Schema.Type.LONG), "time-micros"),
         createSchemaField("[version=2.0].uuidField", toSchemaFieldDataType(Schema.Type.STRING), "uuid")
     );
 

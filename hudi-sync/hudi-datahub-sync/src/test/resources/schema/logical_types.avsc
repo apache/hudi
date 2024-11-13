@@ -12,6 +12,14 @@
       }
     },
     {
+      "name": "decimalFieldWithoutScale",
+      "type": {
+        "type": "bytes",
+        "logicalType": "decimal",
+        "precision": 9
+      }
+    },
+    {
       "name": "decimalFieldWithoutPrecisionAndScale",
       "type": {
         "type": "bytes",
