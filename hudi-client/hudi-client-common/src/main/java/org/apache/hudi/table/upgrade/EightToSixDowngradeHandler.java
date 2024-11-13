@@ -19,22 +19,21 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -43,101 +42,73 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
-import static org.apache.hudi.common.table.timeline.HoodieInstant.UNDERSCORE;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.downgradeActiveTimelineInstant;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.downgradeFromLSMTimeline;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 /**
- * Version 7 is going to be placeholder version for bridge release 0.16.0.
+ * Version 6 is the table version for release 0.x (0.14.0 onwards).
  * Version 8 is the placeholder version to track 1.x.
  */
-public class EightToSevenDowngradeHandler implements DowngradeHandler {
+public class EightToSixDowngradeHandler implements DowngradeHandler {
 
-  private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
-    UpgradeDowngradeUtils.runCompaction(table, context, config, upgradeDowngradeHelper);
-    UpgradeDowngradeUtils.syncCompactionRequestedFileToAuxiliaryFolder(table);
+    // Rollback and run compaction in one step
+    rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, true);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
+    // Handle timeline downgrade:
+    //  - rename instants in active timeline to old format for table version 6
+    //  - convert LSM timeline format to archived timeline for table version 6
     List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
     if (!instants.isEmpty()) {
       InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
       CommitMetadataSerDeV2 commitMetadataSerDeV2 = new CommitMetadataSerDeV2();
       CommitMetadataSerDeV1 commitMetadataSerDeV1 = new CommitMetadataSerDeV1();
       ActiveTimelineV1 activeTimelineV1 = new ActiveTimelineV1(metaClient);
-      String tmpFilePrefix = "temp_commit_file_for_eight_to_seven_downgrade_";
       context.map(instants, instant -> {
         String fileName = instantFileNameGenerator.getFileName(instant);
-        if (fileName.contains(UNDERSCORE)) {
-          try {
-            // Rename the metadata file name from the ${instant_time}_${completion_time}.action[.state] format in version 1.x to the ${instant_time}.action[.state] format in version 0.x.
-            StoragePath fromPath = new StoragePath(metaClient.getMetaPath(), fileName);
-            StoragePath toPath = new StoragePath(metaClient.getMetaPath(), fileName.replaceAll(UNDERSCORE + "\\d+", ""));
-            boolean success = true;
-            if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
-              HoodieCommitMetadata commitMetadata =
-                  commitMetadataSerDeV2.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-              Option<byte[]> data = commitMetadataSerDeV1.serialize(commitMetadata);
-              // Create a temporary file to store the json metadata.
-              String tmpFileName = tmpFilePrefix + UUID.randomUUID() + ".json";
-              StoragePath tmpPath = new StoragePath(metaClient.getTempFolderPath(), tmpFileName);
-              String tmpPathStr = tmpPath.toUri().toString();
-              activeTimelineV1.createFileInMetaPath(tmpPathStr, data, true);
-              // Note. this is a 2 step. First we create the V1 commit file and then delete file. If it fails in the middle, rerunning downgrade will be idempotent.
-              metaClient.getStorage().deleteFile(toPath); // First delete if it was created by previous failed downgrade.
-              success = metaClient.getStorage().rename(tmpPath, toPath);
-              metaClient.getStorage().deleteFile(fromPath);
-            } else {
-              success = metaClient.getStorage().rename(fromPath, toPath);
-            }
-            // TODO: We need to rename the action-related part of the metadata file name here when we bring separate action name for clustering/compaction in 1.x as well.
-            if (!success) {
-              throw new HoodieIOException("an error that occurred while renaming " + fromPath + " to: " + toPath);
-            }
-            return true;
-          } catch (IOException e) {
-            LOG.error("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
-            throw new HoodieException(e);
-          }
-        }
-        return false;
+        return downgradeActiveTimelineInstant(instant, metaClient, fileName, commitMetadataSerDeV2, commitMetadataSerDeV1, activeTimelineV1);
       }, instants.size());
     }
+    downgradeFromLSMTimeline(table, context, config);
 
+    // downgrade table properties
     downgradePartitionFields(config, context, upgradeDowngradeHelper, tablePropsToAdd);
+    unsetInitialVersion(config, metaClient.getTableConfig(), tablePropsToAdd);
+    unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd);
+    downgradeKeyGeneratorType(config, metaClient.getTableConfig(), tablePropsToAdd);
+    downgradeBootstrapIndexType(config, metaClient.getTableConfig(), tablePropsToAdd);
     // Prepare parameters.
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       // Delete unsupported metadata partitions in table version 7.
       downgradeMetadataPartitions(context, metaClient.getStorage(), metaClient, tablePropsToAdd);
-      UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SEVEN, metaClient);
+      UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SIX, metaClient);
     }
     return tablePropsToAdd;
   }
 
-  private static void downgradePartitionFields(HoodieWriteConfig config,
-                                               HoodieEngineContext context,
-                                               SupportsUpgradeDowngrade upgradeDowngradeHelper,
-                                               Map<ConfigProperty, String> tablePropsToAdd) {
+  static void downgradePartitionFields(HoodieWriteConfig config,
+                                       HoodieEngineContext context,
+                                       SupportsUpgradeDowngrade upgradeDowngradeHelper,
+                                       Map<ConfigProperty, String> tablePropsToAdd) {
     HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
     String keyGenerator = tableConfig.getKeyGeneratorClassName();
     String partitionPathField = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
@@ -145,6 +116,43 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         && (keyGenerator.equals(KeyGeneratorType.CUSTOM.getClassName()) || keyGenerator.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName()))) {
       tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS, tableConfig.getPartitionFieldProp());
     }
+  }
+
+  static void unsetInitialVersion(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+    tableConfig.getProps().remove(HoodieTableConfig.INITIAL_VERSION.key());
+  }
+
+  static void unsetRecordMergeMode(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+    Triple<RecordMergeMode, String, String> mergingConfigs =
+        HoodieTableConfig.inferCorrectMergingBehavior(config.getRecordMergeMode(), tableConfig.getPayloadClass(), tableConfig.getRecordMergeStrategyId());
+    if (StringUtils.nonEmpty(mergingConfigs.getMiddle())) {
+      tablePropsToAdd.put(HoodieTableConfig.PAYLOAD_CLASS_NAME, mergingConfigs.getMiddle());
+    }
+    if (StringUtils.nonEmpty(mergingConfigs.getRight())) {
+      tablePropsToAdd.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID, mergingConfigs.getRight());
+    }
+    tableConfig.getProps().remove(HoodieTableConfig.RECORD_MERGE_MODE.key());
+  }
+
+  static void downgradeBootstrapIndexType(HoodieWriteConfig config,
+                                          HoodieTableConfig tableConfig,
+                                          Map<ConfigProperty, String> tablePropsToAdd) {
+    String bootstrapIndexClassName = BootstrapIndexType.getBootstrapIndexClassName(config);
+    if (StringUtils.nonEmpty(bootstrapIndexClassName)) {
+      tablePropsToAdd.put(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME, bootstrapIndexClassName);
+    }
+    tableConfig.getProps().remove(HoodieTableConfig.BOOTSTRAP_INDEX_TYPE.key());
+  }
+
+  static void downgradeKeyGeneratorType(HoodieWriteConfig config,
+                                        HoodieTableConfig tableConfig,
+                                        Map<ConfigProperty, String> tablePropsToAdd) {
+    String keyGenerator = KeyGeneratorType.getKeyGeneratorClassName(config);
+    if (StringUtils.nonEmpty(keyGenerator)) {
+      keyGenerator = KeyGeneratorType.getKeyGeneratorClassName(config);
+      tablePropsToAdd.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGenerator);
+    }
+    tableConfig.getProps().remove(HoodieTableConfig.KEY_GENERATOR_TYPE.key());
   }
 
   static void downgradeMetadataPartitions(HoodieEngineContext context,

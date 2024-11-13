@@ -544,7 +544,7 @@ public class HoodieTableConfig extends HoodieConfig {
         hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
       }
       if (hoodieConfig.contains(BOOTSTRAP_BASE_PATH)) {
-        if (tableVersion.greaterThan(HoodieTableVersion.SEVEN)) {
+        if (tableVersion.greaterThan(HoodieTableVersion.SIX)) {
           hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_TYPE, BootstrapIndexType.getBootstrapIndexType(hoodieConfig).toString());
         } else {
           // Use the default bootstrap index class.

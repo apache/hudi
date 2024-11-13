@@ -184,7 +184,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
         // downgrade table from version eight to version seven
         checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SEVEN')""")(Seq(true))
         metaClient = HoodieTableMetaClient.reload(metaClient)
-        assertResult(HoodieTableVersion.SEVEN.versionCode) {
+        assertResult(HoodieTableVersion.SIX.versionCode) {
           metaClient.getTableConfig.getTableVersion.versionCode()
         }
         // Verify whether the naming format of instant files is consistent with 0.x

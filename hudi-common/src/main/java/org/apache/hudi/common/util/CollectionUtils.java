@@ -265,6 +265,11 @@ public class CollectionUtils {
     return Collections.unmodifiableMap(map);
   }
 
+  public static <K, V> Map<V, K> reverseMap(final Map<K, V> map) {
+    return map.entrySet().stream().collect(Collectors.collectingAndThen(
+        Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey), Collections::unmodifiableMap));
+  }
+
   @SafeVarargs
   public static <T> Set<T> createSet(final T... elements) {
     return Stream.of(elements).collect(Collectors.toSet());

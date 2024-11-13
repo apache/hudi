@@ -153,6 +153,21 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
         txnManager.beginTransaction(Option.empty(), Option.empty());
       }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
+      return archiveInstants(context, instantsToArchive, false);
+    } finally {
+      if (acquireLock) {
+        txnManager.endTransaction(Option.empty());
+      }
+    }
+  }
+
+  @Override
+  public int archiveInstants(HoodieEngineContext context, List<HoodieInstant> instantsToArchive, boolean acquireLock) throws IOException {
+    try {
+      if (acquireLock) {
+        // there is no owner or instant time per se for archival.
+        txnManager.beginTransaction(Option.empty(), Option.empty());
+      }
       boolean success = true;
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter();
