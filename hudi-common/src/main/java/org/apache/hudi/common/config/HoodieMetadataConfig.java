@@ -360,7 +360,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PARTITION_STATS_INDEX_CONSOLIDATE_ON_EVERY_WRITE = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.consolidate.on.every.write")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("When enabled, partition stats is consolidated is computed on every commit for the min/max value of every column "
           + "at the storage partition level. Typically, the min/max range for each column can become wider (i.e. the minValue is <= all valid values "
@@ -535,7 +535,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isPartitionStatsIndexConsolidationEnabledOnEveryWrite() {
-    return getBooleanOrDefault(PARTITION_STATS_INDEX_CONSOLIDATE_ON_EVERY_WRITE);
+    return isPartitionStatsIndexEnabled() && getBooleanOrDefault(PARTITION_STATS_INDEX_CONSOLIDATE_ON_EVERY_WRITE);
   }
 
   public boolean isSecondaryIndexEnabled() {
