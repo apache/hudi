@@ -170,8 +170,10 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       // its safe to modify config here, since we are running in task side.
       ((HoodieTable) compactionHandler).getConfig().setDefault(config);
     } else {
-      readerSchema = HoodieAvroUtils.addMetadataFields(
-          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+      Schema schema = new Schema.Parser().parse(config.getSchema());
+      readerSchema = config.populateMetaFields()
+          ? HoodieAvroUtils.addMetadataFields(schema, config.allowOperationMetadataField())
+          : schema;
     }
     LOG.info("Compaction operation started for base file: " + operation.getDataFileName() + " and delta files: " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
