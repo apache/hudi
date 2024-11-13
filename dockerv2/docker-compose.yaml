@@ -1,0 +1,261 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+services:
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    container_name: ngrok
+    command:
+      - "start"
+      - "--all"
+      - "--config"
+      - "/etc/ngrok.yml"
+    volumes:
+      - ./ngrok.yml:/etc/ngrok.yml
+    ports:
+      - 4040:4040
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+
+  zookeeper:
+    image: quay.io/debezium/zookeeper:2.7.0.Final
+    ports:
+     - 2181:2181
+     - 2888:2888
+     - 3888:3888
+  kafka:
+    container_name: kafka
+    image: quay.io/debezium/kafka:2.7.0.Final
+    ports:
+     - 29092:29092
+    links:
+     - zookeeper
+    environment:
+     - ZOOKEEPER_CONNECT=zookeeper:2181
+     - KAFKA_LISTENERS=DOCKER://kafka:29092, NGROK://kafka:9092
+     - KAFKA_ADVERTISED_LISTENERS=DOCKER://kafka:29092
+     - KAFKA_INTER_BROKER_LISTENER_NAME=DOCKER
+     - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=DOCKER:PLAINTEXT,NGROK:PLAINTEXT
+    entrypoint: 
+      - /bin/sh 
+      - -c 
+      - |
+        if [[ -v NGROK_AUTHTOKEN ]]; then
+          echo "Waiting for ngrok tunnel to be created"
+          while : ; do
+            curl_status=$$(curl -s -o /dev/null -w %{http_code} http://ngrok:4040/api/tunnels/kafka)
+            echo -e $$(date) "\tTunnels API HTTP state: " $$curl_status " (waiting for 200)"
+            if [ $$curl_status -eq 200 ] ; then
+              break
+            fi
+            sleep 5 
+          done
+          echo "ngrok tunnel is up"
+          NGROK_LISTENER=$(curl -s  http://ngrok:4040/api/tunnels/kafka | grep -Po '"public_url":.*?[^\\]",' | cut -d':' -f2- | tr -d ',"' | sed 's/tcp:\/\//NGROK:\/\//g')
+          echo $$NGROK_LISTENER
+          export KAFKA_ADVERTISED_LISTENERS="$$KAFKA_ADVERTISED_LISTENERS, $$NGROK_LISTENER"
+          echo "KAFKA_ADVERTISED_LISTENERS is set to " $$KAFKA_ADVERTISED_LISTENERS
+        else
+          export KAFKA_ADVERTISED_LISTENERS="$$KAFKA_ADVERTISED_LISTENERS, NGROK://kafka:9092"
+        fi
+        /docker-entrypoint.sh start
+
+  trino:
+    container_name: trino
+    hostname: trino
+    ports:
+      - '8080:8080'
+    image: 'trinodb/trino:418'
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog
+      - ./data:/home/data
+      - ./trino/config/log.properties:/etc/trino/log.properties
+
+#  presto:
+#    container_name: presto
+#    hostname: presto
+#    ports:
+#      - '8082:8082'
+#    image: 'prestodb/presto:0.283'
+#    volumes:
+#      - ./presto/catalog:/opt/presto-server/etc/catalog
+#      - ./presto/config.properties:/opt/presto-server/etc/config.properties
+#      - ./presto/jvm.config:/opt/presto-server/etc/jvm.config
+#      - ./presto/node.properties:/opt/presto-server/etc/node.properties
+#      - ./data:/home/data
+
+  metastore_db:
+    image: postgres:11
+    hostname: metastore_db
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+      POSTGRES_DB: metastore
+
+  hive-metastore:
+    hostname: hive-metastore
+    image: 'starburstdata/hive:3.1.3-e.10'
+    ports:
+      - '9083:9083' # Metastore Thrift
+    environment:
+      HIVE_METASTORE_DRIVER: org.postgresql.Driver
+      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://metastore_db:5432/metastore
+      HIVE_METASTORE_USER: hive
+      HIVE_METASTORE_PASSWORD: hive
+      HIVE_METASTORE_WAREHOUSE_DIR: s3a://warehouse/
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: admin
+      S3_SECRET_KEY: password
+      S3_PATH_STYLE_ACCESS: "true"
+      REGION: ""
+      GOOGLE_CLOUD_KEY_FILE_PATH: ""
+      AZURE_ADL_CLIENT_ID: ""
+      AZURE_ADL_CREDENTIAL: ""
+      AZURE_ADL_REFRESH_URL: ""
+      AZURE_ABFS_STORAGE_ACCOUNT: ""
+      AZURE_ABFS_ACCESS_KEY: ""
+      AZURE_WASB_STORAGE_ACCOUNT: ""
+      AZURE_ABFS_OAUTH: ""
+      AZURE_ABFS_OAUTH_TOKEN_PROVIDER: ""
+      AZURE_ABFS_OAUTH_CLIENT_ID: ""
+      AZURE_ABFS_OAUTH_SECRET: ""
+      AZURE_ABFS_OAUTH_ENDPOINT: ""
+      AZURE_WASB_ACCESS_KEY: ""
+      HIVE_METASTORE_USERS_IN_ADMIN_ROLE: "admin"
+    depends_on:
+      - metastore_db
+    healthcheck:
+      test: bash -c "exec 6<> /dev/tcp/localhost/9083"
+
+  jupyter:
+    container_name: jupyter
+    hostname: jupyter
+    image: 'almondsh/almond:latest'
+    ports:
+      - '8888:8888'
+    volumes:
+      - ./notebook:/home/jovyan/work
+      - ./jars:/home/jars
+      - ./data:/home/data
+
+  spark:
+    container_name: spark 
+    hostname: spark
+    image: 'atwong.docker.scarf.sh/atwong/hudi-openjdk-8-spark-3.4:latest'
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    volumes:
+      - ./xtable:/opt/xtable/jars
+      - ./spark/conf/spark-defaults.conf:/spark/conf/spark-defaults.conf:ro
+      - ./spark/conf/core-site.xml:/spark/conf/core-site.xml:ro
+      - ./spark/conf/core-site.xml:/hadoop/etc/hadoop/core-site.xml:ro
+      - ./spark/conf/hudi-defaults.conf:/etc/hudi/conf/hudi-defaults.conf:ro
+      - ./spark/jars:/root/.ivy2/jars
+      - ./spark/cache:/root/.ivy2/cache
+      - ./lakeview:/opt/lakeview
+      - ./demo:/opt/demo
+    entrypoint: >
+      /bin/sh -c "
+      tail -f /dev/null;
+      "
+
+  openjdk8:
+    container_name: openjdk8
+    hostname: openjdk8
+    image: 'atwong.docker.scarf.sh/atwong/hudi-openjdk-8-spark-3.4-hive-2.3.9-hadoop-2.10.2:latest'
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    volumes:
+      - ./xtable:/opt/xtable/jars
+      - ./spark/conf/spark-defaults.conf:/spark/conf/spark-defaults.conf:ro
+      - ./spark/conf/core-site.xml:/spark/conf/core-site.xml:ro
+      - ./spark/conf/core-site.xml:/hadoop/etc/hadoop/core-site.xml:ro
+      - ./spark/conf/hudi-defaults.conf:/etc/hudi/conf/hudi-defaults.conf:ro
+      - ./spark/jars:/root/.ivy2/jars
+      - ./spark/cache:/root/.ivy2/cache
+      - ./lakeview:/opt/lakeview
+      - ./demo:/opt/demo
+    entrypoint: >
+      /bin/sh -c "
+      tail -f /dev/null;
+      "
+
+  openjdk11:
+    container_name: openjdk11
+    hostname: openjdk11
+    image: 'atwong.docker.scarf.sh/atwong/hudi-openjdk-11-spark-3.4-hive-2.3.9-hadoop-2.10.2:latest'
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    volumes:
+      - ./xtable:/opt/xtable/jars
+      - ./spark/conf/spark-defaults.conf:/spark/conf/spark-defaults.conf:ro
+      - ./spark/conf/core-site.xml:/spark/conf/core-site.xml:ro
+      - ./spark/conf/core-site.xml:/hadoop/etc/hadoop/core-site.xml:ro
+      - ./spark/conf/hudi-defaults.conf:/etc/hudi/conf/hudi-defaults.conf:ro
+#      - ./spark/jars:/root/.ivy2/jars
+#      - ./spark/cache:/root/.ivy2/cache
+      - ./lakeview:/opt/lakeview
+      - ./demo:/opt/demo
+    entrypoint: >
+      /bin/sh -c "
+      tail -f /dev/null;
+      "
+
+  minio:
+    image: minio/minio:latest
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_DOMAIN=minio
+    networks:
+      default:
+        aliases:
+          - warehouse.minio
+    ports:
+      - 9001:9001
+      - 9000:9000
+    command: ["server", "/data", "--console-address", ":9001"]
+  mc:
+    depends_on:
+      - minio
+    image: minio/mc:latest
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc config host add minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc rm -r --force minio/warehouse;
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc policy set public minio/warehouse;
+      tail -f /dev/null
+      "
+
+networks:
+  default:
+     name: datalakehouse
