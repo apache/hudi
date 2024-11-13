@@ -399,3 +399,9 @@ fa536c95038 [ENG-12785][INTERNAL] Fixing metadata metrics to honor metrics prefi
 ---[2024-11-11 11:46:35] [changelog-release-v1.42.2] ---
 d0ecc40ce3 [ENG-16492][INTERNAL] Fix client close and heartbeat removal after conflict (#1023)
 1c2b0cceca [AUDIT-1050]: Changelog for release-v1.42.0 (#1018)
+
+---[2024-11-13 13:42:31] [release-v1.44.1] ---
+4dd96c385a [ENG-17106][HUDI-7507] Adding timestamp ordering validation before creating requested instant (#1025)
+de8b829cea [ENG-16492][INTERNAL] Fail fast when deltacommit cannot be started with instantTime in StreamSync (#1031)
+e191a70c52 [ENG-17203][HUDI-8508] Fix timeline service port assignment bug (#1032)
+ed151b3183 [AUDIT-1051] Change log for release-v1.42.2 (Hotfix on top of 1.42.0)  (#1028)
