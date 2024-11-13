@@ -90,7 +90,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
         switch (type) {
           case MERGE:
           case CREATE:
-            return createRollbackRequestForCreateMerge(fileId, partitionPath, filePath, instantToRollback);
+            return createRollbackRequestForCreateAndMerge(fileId, partitionPath, filePath, instantToRollback);
           case APPEND:
             return createRollbackRequestForAppend(fileId, partitionPath, filePath, instantToRollback, filePathStr);
           default:
@@ -102,10 +102,10 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
     }
   }
 
-  protected HoodieRollbackRequest createRollbackRequestForCreateMerge(String fileId,
-                                                                      String partitionPath,
-                                                                      StoragePath filePath,
-                                                                      HoodieInstant instantToRollback) {
+  protected HoodieRollbackRequest createRollbackRequestForCreateAndMerge(String fileId,
+                                                                         String partitionPath,
+                                                                         StoragePath filePath,
+                                                                         HoodieInstant instantToRollback) {
     if (table.version().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       return new HoodieRollbackRequest(partitionPath, fileId, instantToRollback.getTimestamp(),
           Collections.singletonList(filePath.toString()), Collections.emptyMap());

@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -234,12 +235,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         }
       }
       if (logFiles.containsKey(fileId)) {
-        logFiles.get(fileId).stream().sorted(HoodieLogFile.getLogFileComparator()).forEach(logFile -> group.addLogFile(completionTimeQueryView, logFile));
+        // this should work for both table versions >= 8 and lower.
+        logFiles.get(fileId).stream().sorted(HoodieLogFile.getLogFileComparator())
+            .forEach(logFile -> group.addLogFile(completionTimeQueryView, logFile));
       }
       fileGroups.add(group);
     });
 
     return fileGroups;
+  }
+
+  private boolean tableVersion8AndAbove() {
+    HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
+    return tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT);
   }
 
   /**
@@ -556,6 +564,41 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
+   * Returns true if the file-group is under pending-compaction and the file-slice' baseInstant matches compaction
+   * Instant.
+   *
+   * @param fileSlice File Slice
+   */
+  private boolean isFileSliceAfterPendingCompaction(FileSlice fileSlice) {
+    Option<Pair<String, CompactionOperation>> compactionWithInstantTime =
+        getPendingCompactionOperationWithInstant(fileSlice.getFileGroupId());
+    return (compactionWithInstantTime.isPresent())
+        && fileSlice.getBaseInstantTime().equals(compactionWithInstantTime.get().getKey());
+  }
+
+  /**
+   * With async compaction, it is possible to see partial/complete base-files due to inflight-compactions, Ignore those
+   * base-files.
+   *
+   * @param fileSlice File Slice
+   * @param includeEmptyFileSlice include empty file-slice
+   */
+  protected Stream<FileSlice> filterBaseFileAfterPendingCompaction(FileSlice fileSlice, boolean includeEmptyFileSlice) {
+    if (isFileSliceAfterPendingCompaction(fileSlice)) {
+      LOG.debug("File Slice (" + fileSlice + ") is in pending compaction");
+      // Base file is filtered out of the file-slice as the corresponding compaction
+      // instant not completed yet.
+      FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
+      fileSlice.getLogFiles().forEach(transformed::addLogFile);
+      if (transformed.isEmpty() && !includeEmptyFileSlice) {
+        return Stream.of();
+      }
+      return Stream.of(transformed);
+    }
+    return Stream.of(fileSlice);
+  }
+
+  /**
    * Ignores the uncommitted base and log files.
    *
    * @param fileSlice File Slice
@@ -566,7 +609,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     List<HoodieLogFile> committedLogFiles = fileSlice.getLogFiles().filter(logFile -> completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime())).collect(Collectors.toList());
     if ((fileSlice.getBaseFile().isPresent() && !committedBaseFile.isPresent())
         || committedLogFiles.size() != fileSlice.getLogFiles().count()) {
-      LOG.debug("File Slice (" + fileSlice + ") has uncommitted files.");
+      LOG.debug("File Slice ({}) has uncommitted files.", fileSlice);
       // A file is filtered out of the file-slice if the corresponding
       // instant has not completed yet.
       FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
@@ -854,7 +897,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchLatestFileSlices(partitionPath)
           .filter(slice -> !isFileGroupReplaced(slice.getFileGroupId()))
-          .flatMap(slice -> this.filterUncommittedFiles(slice, true))
+          .flatMap(slice -> tableVersion8AndAbove()
+              ? this.filterUncommittedFiles(slice, true)
+              : this.filterBaseFileAfterPendingCompaction(slice, true))
           .map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
@@ -885,7 +930,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
             .filter(fg -> !isFileGroupReplaced(fg))
             .map(HoodieFileGroup::getLatestFileSlice)
             .filter(Option::isPresent).map(Option::get)
-            .flatMap(slice -> this.filterUncommittedFiles(slice, true));
+            .flatMap(slice -> tableVersion8AndAbove()
+                ? this.filterUncommittedFiles(slice, true)
+                : this.filterBaseFileAfterPendingCompaction(slice, true));
+
         if (bootstrapIndex.useIndex()) {
           final Map<HoodieFileGroupId, BootstrapBaseFileMapping> bootstrapBaseFileMappings = getBootstrapBaseFileMappings(partition);
           if (!bootstrapBaseFileMappings.isEmpty()) {
@@ -915,7 +963,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         if (!fs.isPresent()) {
           return Option.empty();
         }
-        return Option.ofNullable(filterUncommittedFiles(fs.get(), true).map(this::addBootstrapBaseFileIfPresent).findFirst().orElse(null));
+        Stream<FileSlice> fileSlices = tableVersion8AndAbove()
+            ? this.filterUncommittedFiles(fs.get(), true)
+            : this.filterBaseFileAfterPendingCompaction(fs.get(), true);
+
+        return Option.ofNullable(fileSlices
+            .map(this::addBootstrapBaseFileIfPresent)
+            .findFirst()
+            .orElse(null)
+        );
       }
     } finally {
       readLock.unlock();
@@ -957,15 +1013,23 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
           .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime));
       if (includeFileSlicesInPendingCompaction) {
-        return allFileSliceStream.map(this::getLatestFileSliceFilteringUncommittedFiles)
-            .filter(Option::isPresent).map(Option::get)
+        Stream<Option<FileSlice>> fileSliceOpts;
+        if (tableVersion8AndAbove()) {
+          fileSliceOpts = allFileSliceStream.map(this::getLatestFileSliceFilteringUncommittedFiles);
+        } else {
+          fileSliceOpts = allFileSliceStream
+              .map(sliceStream -> sliceStream.flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, false)))
+              .map(sliceStream -> Option.fromJavaOptional(sliceStream.findFirst()));
+        }
+        return fileSliceOpts.filter(Option::isPresent).map(Option::get)
             .map(this::addBootstrapBaseFileIfPresent);
       } else {
+        Predicate<FileSlice> sliceFilter = (slice) -> !isPendingCompactionScheduledForFileId(slice.getFileGroupId())
+            && !slice.isEmpty();
         return allFileSliceStream
-            .map(sliceStream ->
-                getLatestFileSliceFilteringUncommittedFiles(sliceStream
-                    .filter(slice -> !isPendingCompactionScheduledForFileId(slice.getFileGroupId()))
-                    .filter(slice -> !slice.isEmpty())))
+            .map(sliceStream -> tableVersion8AndAbove()
+                ? getLatestFileSliceFilteringUncommittedFiles(sliceStream.filter(sliceFilter))
+                : Option.fromJavaOptional(sliceStream.filter(sliceFilter).findFirst()))
             .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
       }
     } finally {
@@ -987,13 +1051,17 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
     try {
       readLock.lock();
+      HoodieTableVersion version = metaClient.getTableConfig().getTableVersion();
       List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
       return formattedPartitionList.stream().collect(Collectors.toMap(
           Function.identity(),
           partitionPath -> fetchAllStoredFileGroups(partitionPath)
               .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
               .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime))
-              .map(this::getLatestFileSliceFilteringUncommittedFiles)
+              .map(sliceStream -> tableVersion8AndAbove()
+                  ? getLatestFileSliceFilteringUncommittedFiles(sliceStream)
+                  : Option.fromJavaOptional(sliceStream.flatMap(slice ->
+                  this.filterBaseFileAfterPendingCompaction(slice, false)).findFirst()))
               .filter(Option::isPresent).map(Option::get)
               .map(this::addBootstrapBaseFileIfPresent)
       ));
@@ -1014,7 +1082,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
             Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
             // if the file-group is under construction, pick the latest before compaction instant time.
             if (fileSlice.isPresent()) {
-              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, filterUncommittedLogs(fileSlice.get())));
+              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, tableVersion8AndAbove()
+                      ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get())
+              );
             }
             return fileSlice;
           }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
@@ -1039,13 +1109,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Stream<FileSlice> getAllLogsMergedFileSliceBeforeOrOn(String partitionStr, String maxInstantTime) {
     try {
       readLock.lock();
+      HoodieTableVersion version = metaClient.getTableConfig().getTableVersion();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
       return fetchAllStoredFileGroups(partition)
           .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
           .map(fileGroup -> fetchAllLogsMergedFileSlice(fileGroup, maxInstantTime))
           .filter(Option::isPresent).map(Option::get)
-          .map(this::filterUncommittedLogs)
+          .map(slice -> tableVersion8AndAbove() ? filterUncommittedLogs(slice) : slice)
           .map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
