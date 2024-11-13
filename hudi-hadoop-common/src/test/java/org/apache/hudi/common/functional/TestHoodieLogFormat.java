@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.AppendResult;
@@ -59,6 +61,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.CorruptedLogFileException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -108,6 +111,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.useExternalHdfs;
@@ -2773,6 +2778,78 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testLogReaderWithNoMetaFields(ExternalSpillableMap.DiskMapType diskMapType,
+      boolean isCompressionEnabled,
+      boolean enableOptimizedLogBlocksScan
+  ) throws IOException, URISyntaxException, InterruptedException {
+    final String recordKeyField = "name";
+    final String instantTime = "100";
+
+    // Clear the meta directory to ensure a clean test environment
+    storage.deleteDirectory(new StoragePath(basePath, METAFOLDER_NAME));
+
+    // Initialize the Hoodie table and do not populate meta fields
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), false);
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), recordKeyField);
+    HoodieTestUtils.init(storage.getConf().newInstance(), basePath, HoodieTableType.MERGE_ON_READ, properties);
+
+    // Generate a list of test records
+    Schema schema = getSimpleSchema();
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<GenericRecord> genRecords = testUtil.generateHoodieTestRecords(0, 400, schema).stream().map(r -> {
+      try {
+        return (GenericRecord) ((HoodieAvroPayload) r.getData()).getInsertValue(schema).get();
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    }).collect(Collectors.toList());
+
+    // Deduplicate test records by Record Key to easily verify consistency with scanner results,
+    // as it is difficult to replicate the deduplication strategy of the Scanner
+    List<IndexedRecord> duplicatedRecords = genRecords.stream().collect(Collectors.toMap(
+        r -> r.get(recordKeyField).toString(), // Use the recordKeyField as the key
+        r -> r,
+        (r1, r2) -> r1
+    )).values().stream().collect(Collectors.toList());
+
+    Set<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, duplicatedRecords, 4, storage);
+    FileCreateUtils.createDeltaCommit(basePath, instantTime, storage);
+
+    // Scan all log blocks
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+        .withStorage(storage)
+        .withBasePath(basePath)
+        .withLogFilePaths(logFiles.stream().map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
+        .withReaderSchema(schema)
+        .withLatestInstantTime(instantTime)
+        .withMaxMemorySizeInBytes(10240L)
+        .withReverseReader(false)
+        .withBufferSize(BUFFER_SIZE)
+        .withSpillableMapBasePath(spillableBasePath)
+        .withDiskMapType(diskMapType)
+        .withBitCaskDiskMapCompressionEnabled(isCompressionEnabled)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
+        .build();
+
+    List<IndexedRecord> scannedRecords = new ArrayList<>();
+    for (HoodieRecord record : scanner) {
+      scannedRecords.add((IndexedRecord) ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
+    }
+
+    for (IndexedRecord record : scannedRecords) {
+      for (String metaField : HOODIE_META_COLUMNS_WITH_OPERATION) {
+        assertNull(record.getSchema().getField(metaField), "Scanned record has meta field");
+      }
+    }
+
+    assertEquals(sort(duplicatedRecords, recordKeyField), sort(scannedRecords, recordKeyField),
+        "Scanner records count should be the same as test records");
+    scanner.close();
+  }
+
   private static Stream<Arguments> testArguments() {
     // Arg1: ExternalSpillableMap Type, Arg2: isDiskMapCompressionEnabled, Arg3: enableOptimizedLogBlocksScan
     return Stream.of(
@@ -2809,8 +2886,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   private static List<IndexedRecord> sort(List<IndexedRecord> records) {
+    return sort(records, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+  }
+
+  private static List<IndexedRecord> sort(List<IndexedRecord> records, String sortField) {
     List<IndexedRecord> copy = new ArrayList<>(records);
-    copy.sort(Comparator.comparing(r -> ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString()));
+    copy.sort(Comparator.comparing(r -> ((GenericRecord) r).get(sortField).toString()));
     return copy;
   }
 
