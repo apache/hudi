@@ -341,10 +341,9 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           spark.sql(s"update $tableName set price = 4000 where id = 6")
           // Validate widened stats
           checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
-            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500, true),
-            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500, true),
-            // for COW table, that stats are consolidated on every write as there is a new slice for the same filegroup
-            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4000, isPartitionStatsIndexConsolidationEnabledOnEveryWrite.toBoolean || tableType == "cow")
+            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500, isPartitionStatsIndexConsolidationEnabledOnEveryWrite.toBoolean),
+            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500, isPartitionStatsIndexConsolidationEnabledOnEveryWrite.toBoolean),
+            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4000, isPartitionStatsIndexConsolidationEnabledOnEveryWrite.toBoolean)
           )
           // verify file pruning
           var metaClient = HoodieTableMetaClient.builder()
@@ -357,10 +356,12 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           // Second update (reduce max value)
           spark.sql(s"delete from $tableName where id = 6")
           // Validate that stats have recomputed and tightened
+          // if tighter bound, note that record with prev max was deleted
+          val expectedMaxValue = if(isPartitionStatsIndexConsolidationEnabledOnEveryWrite.toBoolean) 3000 else 4000
           checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
-            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500, true),
-            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500, true),
-            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 3000, true) // tighter bound, note that record with prev max was deleted
+            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500, isPartitionStatsIndexConsolidationEnabledOnEveryWrite.toBoolean),
+            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500, isPartitionStatsIndexConsolidationEnabledOnEveryWrite.toBoolean),
+            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, expectedMaxValue, isPartitionStatsIndexConsolidationEnabledOnEveryWrite.toBoolean)
           )
           // verify file pruning
           metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -447,7 +448,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
         Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, true),
         Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, true),
-        Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4003, false)
+        Seq(getPartitionStatsIndexKey("ts=30", "price"), 4003, 4003, true)
       )
     }
   }
