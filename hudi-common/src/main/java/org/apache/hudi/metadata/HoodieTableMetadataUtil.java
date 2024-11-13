@@ -61,7 +61,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -2159,7 +2158,7 @@ public class HoodieTableMetadataUtil {
   }
 
   public static HoodieData<HoodieRecord> convertFilesToPartitionStatsRecords(HoodieEngineContext engineContext,
-                                                                             List<DirectoryInfo> partitionInfoList,
+                                                                             List<Pair<String, FileSlice>> partitionInfoList,
                                                                              HoodieMetadataConfig metadataConfig,
                                                                              HoodieTableMetaClient dataTableMetaClient,
                                                                              Option<Schema> writerSchemaOpt) {
@@ -2173,18 +2172,36 @@ public class HoodieTableMetadataUtil {
       return engineContext.emptyHoodieData();
     }
     LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndex);
+
+    // Group by partition path and collect file names (BaseFile and LogFiles)
+    List<Pair<String, Set<String>>> partitionToFileNames = partitionInfoList.stream()
+        .collect(Collectors.groupingBy(Pair::getLeft,
+            Collectors.mapping(pair -> extractFileNames(pair.getRight()), Collectors.toList())))
+        .entrySet().stream()
+        .map(entry -> Pair.of(entry.getKey(),
+            entry.getValue().stream().flatMap(Set::stream).collect(Collectors.toSet())))
+        .collect(Collectors.toList());
+
     // Create records for MDT
-    int parallelism = Math.max(Math.min(partitionInfoList.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-    return engineContext.parallelize(partitionInfoList, parallelism).flatMap(partitionInfo -> {
-      final String partitionPath = partitionInfo.getRelativePath();
+    int parallelism = Math.max(Math.min(partitionToFileNames.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
+    return engineContext.parallelize(partitionToFileNames, parallelism).flatMap(partitionInfo -> {
+      final String partitionPath = partitionInfo.getKey();
       // Step 1: Collect Column Metadata for Each File
-      List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getFileNameToSizeMap().keySet().stream()
+      List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getValue().stream()
           .map(fileName -> getFileStatsRangeMetadata(partitionPath, fileName, dataTableMetaClient, columnsToIndex, false,
               metadataConfig.getMaxReaderBufferSize()))
           .collect(Collectors.toList());
 
       return collectAndProcessColumnMetadata(fileColumnMetadata, partitionPath, true).iterator();
     });
+  }
+
+  private static Set<String> extractFileNames(FileSlice fileSlice) {
+    Set<String> fileNames = new HashSet<>();
+    Option<HoodieBaseFile> baseFile = fileSlice.getBaseFile();
+    baseFile.ifPresent(hoodieBaseFile -> fileNames.add(hoodieBaseFile.getFileName()));
+    fileSlice.getLogFiles().forEach(hoodieLogFile -> fileNames.add(hoodieLogFile.getFileName()));
+    return fileNames;
   }
 
   private static List<HoodieColumnRangeMetadata<Comparable>> getFileStatsRangeMetadata(String partitionPath,
@@ -2234,8 +2251,7 @@ public class HoodieTableMetadataUtil {
           .collect(Collectors.toList());
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-      boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient)
-          && (metadataConfig.isPartitionStatsIndexConsolidationEnabledOnEveryWrite() || shouldConsolidatePartitionStats(commitMetadata, dataMetaClient));
+      boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient);
       HoodieTableMetadata tableMetadata;
       if (shouldScanColStatsForTightBound) {
         tableMetadata = HoodieTableMetadata.create(engineContext, dataMetaClient.getStorage(), metadataConfig, dataMetaClient.getBasePath().toString());
@@ -2277,31 +2293,6 @@ public class HoodieTableMetadataUtil {
       });
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);
-    }
-  }
-
-  private static boolean shouldConsolidatePartitionStats(HoodieCommitMetadata commitMetadata, HoodieTableMetaClient metaClient) {
-    if (WriteOperationType.isPartitionStatsTightBoundRequired(commitMetadata.getOperationType())) {
-      return true;
-    }
-    // if not for compaction or clustering, lets check for any new base file added.
-    HoodieTableFileSystemView fsv = getFileSystemView(metaClient);
-    try {
-      fsv.loadPartitions(new ArrayList<>(commitMetadata.getPartitionToWriteStats().keySet()));
-      // Collect already existing filegroupIds.
-      Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
-      commitMetadata.getPartitionToWriteStats().keySet().forEach(partition -> {
-        partitionToExistingFileIds.put(partition, fsv.getLatestBaseFiles(partition).map(baseFile -> baseFile.getFileId()).collect(Collectors.toList()));
-      });
-      // check if new base file is added to any of existing file groups.
-      // as of now, if any one partition has a new base file added, we are triggering tighter bound computation for all partitions touched in this commit.
-      return commitMetadata.getPartitionToWriteStats().entrySet().stream().filter(entry -> {
-        List<String> existingFileIds = partitionToExistingFileIds.get(entry.getKey());
-        return entry.getValue().stream().filter(writeStat -> writeStat.getPath().contains(".parquet"))
-            .filter(writeStat -> existingFileIds.contains(writeStat.getFileId())).findAny().isPresent();
-      }).findAny().isPresent();
-    } finally {
-      fsv.close();
     }
   }
 
