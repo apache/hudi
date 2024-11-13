@@ -26,6 +26,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -40,13 +41,17 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.exception.ExceptionUtil.getRootCause;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertLinesMatch;
 
 public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientTestHarness {
 
@@ -104,26 +109,32 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientT
       }, false).collect();
     }
 
-    // first writes, it will create new bucket files based on the records
+    // 1st write, will create new bucket files based on the records
     getHoodieWriteClient(config).startCommitWithTime("0");
-    List<WriteStatus> writeStatues = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "0").collect();
-    Map<String, WriteStatus> writeStatuesMap = new HashMap<>();
-    writeStatues.forEach(ws -> writeStatuesMap.put(ws.getFileId(), ws));
+    List<WriteStatus> writeStatuses = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "0").collect();
+    Map<String, WriteStatus> writeStatusesMap = new HashMap<>();
+    writeStatuses.forEach(ws -> writeStatusesMap.put(ws.getFileId(), ws));
 
-    // second writes the same records, all records should be mapped to the same bucket files
-    getHoodieWriteClient(config).startCommitWithTime("1");
-    List<WriteStatus> writeStatues2 = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "1").collect();
-    writeStatues2.forEach(ws -> assertEquals(ws.getTotalRecords(), writeStatuesMap.get(ws.getFileId()).getTotalRecords()));
+    getHoodieWriteClient(config).startCommitWithTime("2");
+    try {
+      // MOR table, 2nd write of the same records, all records should be mapped to the same bucket files
+      List<WriteStatus> writeStatuses2 = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "2").collect();
+      writeStatuses2.forEach(ws -> assertEquals(ws.getTotalRecords(), writeStatusesMap.get(ws.getFileId()).getTotalRecords()));
+    } catch (Exception ex) {
+      // COW table, 2nd bulk insert is restricted if it's not overwrite
+      assertEquals("COPY_ON_WRITE", tableType);
+      Throwable rootExceptionCause = getRootCause(ex);
+      assertInstanceOf(HoodieNotSupportedException.class, rootExceptionCause);
+      // we call BulkInsertInternalPartitionerFactory.get() directly, which behaves like we set hoodie.datasource.write.row.writer.enable = 'false'
+      assertLinesMatch(Collections.singletonList("Multiple bulk insert.* COW.* not supported.*"),
+          Collections.singletonList(rootExceptionCause.getMessage()));
+    }
   }
 
   private static final List<Object> TABLE_TYPES = Arrays.asList(
       "COPY_ON_WRITE",
       "MERGE_ON_READ"
   );
-
-  private static Iterable<Object> tableTypes() {
-    return TABLE_TYPES;
-  }
 
   // table type, partitionSort
   private static Iterable<Object[]> configParams() {
