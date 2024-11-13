@@ -2251,8 +2251,7 @@ public class HoodieTableMetadataUtil {
           .collect(Collectors.toList());
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-      boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient)
-          && metadataConfig.isPartitionStatsIndexConsolidationEnabledOnEveryWrite();
+      boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient);
       HoodieTableMetadata tableMetadata;
       if (shouldScanColStatsForTightBound) {
         tableMetadata = HoodieTableMetadata.create(engineContext, dataMetaClient.getStorage(), metadataConfig, dataMetaClient.getBasePath().toString());
