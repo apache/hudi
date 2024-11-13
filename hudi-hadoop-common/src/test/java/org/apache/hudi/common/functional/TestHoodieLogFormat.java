@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.AppendResult;
@@ -418,10 +419,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(2, logFileList.size());
   }
 
-  @Test
-  public void testBasicWriteAndScan() throws IOException, URISyntaxException, InterruptedException {
+  @ParameterizedTest
+  @ValueSource(ints = {6, 8})
+  public void testBasicWriteAndScan(int tableVersion) throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+            .withTableVersion(HoodieTableVersion.fromVersionCode(tableVersion))
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
     Schema schema = getSimpleSchema();

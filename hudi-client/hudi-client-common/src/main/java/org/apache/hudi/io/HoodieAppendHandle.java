@@ -194,12 +194,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
       } else {
         // Set the base commit time as the current instantTime for new inserts into log files
-        prevCommit = instantTime;
         // Handle log file only case. This is necessary for the concurrent clustering and writer case (e.g., consistent hashing bucket index).
         // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute
-        if (record.getCurrentLocation() != null && HoodieInstantTimeGenerator.isValidInstantTime(record.getCurrentLocation().getInstantTime())) {
-          prevCommit = record.getCurrentLocation().getInstantTime();
-        }
+        prevCommit = getInstantTimeForLogFile(record);
         // This means there is no base data file, start appending to a new log file
         LOG.info("New file group from append handle for partition {}", partitionPath);
       }
@@ -232,7 +229,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       partitionMetadata.trySave();
 
       String instantTime = config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
-          ? getFileInstant(record) : deltaWriteStat.getPrevCommit();
+          ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();
       this.writer = createLogWriter(instantTime);
     } catch (Exception e) {
       LOG.error("Error in update task at commit " + instantTime, e);
@@ -246,7 +243,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   /**
    * Returns the instant time to use in the log file name.
    */
-  private String getFileInstant(HoodieRecord<?> record) {
+  private String getInstantTimeForLogFile(HoodieRecord<?> record) {
     if (config.isConsistentHashingEnabled()) {
       // Handle log file only case. This is necessary for the concurrent clustering and writer case (e.g., consistent hashing bucket index).
       // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute

@@ -46,6 +46,10 @@ public class CommonClientUtils {
       throw new HoodieNotSupportedException("Partial updates are not supported for table versions < 8. "
           + "Please unset " + HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key());
     }
+
+    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.isNonBlockingConcurrencyControl()) {
+      throw new HoodieNotSupportedException("Non-blocking concurrency control is not supported for table versions < 8.");
+    }
   }
 
   public static String generateWriteToken(TaskContextSupplier taskContextSupplier) {
