@@ -28,6 +28,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -42,7 +43,6 @@ import static org.apache.hudi.testutils.SparkDatasetTestUtils.STRUCT_TYPE;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.getInternalRowWithError;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.getRandomRows;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.toInternalRows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Unit tests {@link HoodieBulkInsertDataInternalWriter}.
@@ -142,14 +142,11 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     internalRows.addAll(toInternalRows(inputRows2, ENCODER));
 
     // issue writes
-    try {
+    Assertions.assertThrows(Exception.class, () -> {
       for (InternalRow internalRow : internalRows) {
         writer.write(internalRow);
       }
-      fail("Should have failed");
-    } catch (Throwable e) {
-      // expected
-    }
+    });
 
     HoodieWriterCommitMessage commitMetadata = (HoodieWriterCommitMessage) writer.commit();
 
