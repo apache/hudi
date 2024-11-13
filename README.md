@@ -48,7 +48,7 @@ analytical datasets on DFS (Cloud stores, HDFS or any Hadoop FileSystem compatib
 * Optimize data lake layout with clustering
  
 Hudi supports three types of queries:
- * **Snapshot Query** - Provides snapshot queries on real-time data, using a combination of columnar & row-based storage (e.g [Parquet](https://parquet.apache.org/) + [Avro](https://avro.apache.org/)).
+ * **Snapshot Query** - Provides snapshot queries on real-time data, using a combination of columnar & row-based storage (e.g [Parquet](https://parquet.apache.org/) + [Avro](https://avro.apache.org/docs/)).
  * **Incremental Query** - Provides a change stream with records inserted or updated after a point in time.
  * **Read Optimized Query** - Provides excellent snapshot query performance via purely columnar storage (e.g. [Parquet](https://parquet.apache.org/)).
 
