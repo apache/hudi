@@ -130,6 +130,11 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
+  protected void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime) {
+    validateTimestampInternal(metaClient, instantTime);
+  }
+
+  @Override
   public JavaRDD<HoodieRecord<T>> filterExists(JavaRDD<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);

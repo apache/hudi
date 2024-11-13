@@ -124,4 +124,13 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals(metaClient1.toString(), metaClient2.toString());
     assertNotEquals(metaClient1.toString(), new Object().toString());
   }
+
+  @Test
+  void testIsMetadataTable() throws IOException {
+    HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
+    assertFalse(metaClient1.isMetadataTable());
+
+    HoodieTableMetaClient mdtMetaClient = HoodieTestUtils.init(tempDir.toAbsolutePath() + "/.hoodie/metadata", getTableType());
+    assertTrue(mdtMetaClient.isMetadataTable());
+  }
 }

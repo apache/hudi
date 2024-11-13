@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -304,6 +305,10 @@ public class HoodieTableMetaClient implements Serializable {
 
   public TimelineLayoutVersion getTimelineLayoutVersion() {
     return timelineLayoutVersion;
+  }
+
+  public Boolean isMetadataTable() {
+    return HoodieTableMetadata.isMetadataTable(getBasePath());
   }
 
   /**

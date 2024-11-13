@@ -133,6 +133,12 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(false).build())
         .build();
+    String commit1 = HoodieActiveTimeline.createNewInstantTime();
+    String commit2 = HoodieActiveTimeline.createNewInstantTime(10);
+    String commit3 = HoodieActiveTimeline.createNewInstantTime(100);
+    String commit4 = HoodieActiveTimeline.createNewInstantTime(200);
+    String commit5 = HoodieActiveTimeline.createNewInstantTime(300);
+    String commit6 = HoodieActiveTimeline.createNewInstantTime(400);
 
     if (useSourceProfile) {
       when(sourceProfile.get().getSourceProfile()).thenReturn(new TestSourceProfile(Long.MAX_VALUE, 4, 500));
@@ -141,20 +147,20 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, "100");
-      Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, "200");
-      Pair<String, List<HoodieRecord>> inserts3 = writeRecords(writeClient, INSERT, null, "300");
-      Pair<String, List<HoodieRecord>> inserts4 = writeRecords(writeClient, INSERT, null, "400");
-      Pair<String, List<HoodieRecord>> inserts5 = writeRecords(writeClient, INSERT, null, "500");
+      Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, commit1);
+      Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, commit2);
+      Pair<String, List<HoodieRecord>> inserts3 = writeRecords(writeClient, INSERT, null, commit3);
+      Pair<String, List<HoodieRecord>> inserts4 = writeRecords(writeClient, INSERT, null, commit4);
+      Pair<String, List<HoodieRecord>> inserts5 = writeRecords(writeClient, INSERT, null,  commit5);
 
       // read everything upto latest
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 500, inserts5.getKey());
 
-      // even if the begin timestamp is archived (100), full table scan should kick in, but should filter for records having commit time > 100
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("100"), 400, inserts5.getKey());
+      // even if the begin timestamp is archived (commit1), full table scan should kick in, but should filter for records having commit time > 100
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(commit1), 400, inserts5.getKey());
 
       // even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("400"), 100, inserts5.getKey());
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(commit4), 100, inserts5.getKey());
 
       // read just the latest
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 100, inserts5.getKey());
@@ -162,7 +168,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       // ensure checkpoint does not move
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 0, inserts5.getKey());
 
-      Pair<String, List<HoodieRecord>> inserts6 = writeRecords(writeClient, INSERT, null, "600");
+      Pair<String, List<HoodieRecord>> inserts6 = writeRecords(writeClient, INSERT, null, commit6);
 
       // insert new batch and ensure the checkpoint moves
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 100, inserts6.getKey());

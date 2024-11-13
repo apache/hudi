@@ -94,6 +94,11 @@ public class HoodieJavaCopyOnWriteTable<T>
   }
 
   @Override
+  public void validateForLatestTimestamp(String instantTime) {
+    validateForLatestTimestampInternal(instantTime);
+  }
+
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> upsert(HoodieEngineContext context,
                                                        String instantTime,
                                                        List<HoodieRecord<T>> records) {

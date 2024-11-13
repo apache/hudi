@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.timeline.TimestampUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -958,6 +959,18 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       validateSchema();
     } catch (HoodieException e) {
       throw new HoodieInsertException("Failed insert schema compatibility check", e);
+    }
+  }
+
+  /**
+   * Validates that the instantTime is latest in the write timeline.
+   * @param instantTime instant time of interest.
+   */
+  public abstract void validateForLatestTimestamp(String instantTime);
+
+  protected void validateForLatestTimestampInternal(String instantTime) {
+    if (this.config.shouldEnableTimestampOrderinValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
     }
   }
 

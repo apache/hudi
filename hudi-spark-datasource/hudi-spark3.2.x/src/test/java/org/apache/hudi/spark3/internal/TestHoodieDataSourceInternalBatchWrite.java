@@ -21,6 +21,7 @@ package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -75,7 +76,7 @@ class TestHoodieDataSourceInternalBatchWrite extends
   private void testDataSourceWriterInternal(Map<String, String> extraMetadata, Map<String, String> expectedExtraMetadata, boolean populateMetaFields) throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
-    String instantTime = "001";
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
     // init writer
     HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
         new HoodieDataSourceInternalBatchWrite(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), hadoopConf, extraMetadata, populateMetaFields, false);
@@ -160,7 +161,7 @@ class TestHoodieDataSourceInternalBatchWrite extends
 
     // execute N rounds
     for (int i = 0; i < 2; i++) {
-      String instantTime = "00" + i;
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
       // init writer
       HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
           new HoodieDataSourceInternalBatchWrite(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), hadoopConf, Collections.emptyMap(), populateMetaFields, false);
@@ -206,7 +207,7 @@ class TestHoodieDataSourceInternalBatchWrite extends
 
     // execute N rounds
     for (int i = 0; i < 3; i++) {
-      String instantTime = "00" + i;
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
       // init writer
       HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
           new HoodieDataSourceInternalBatchWrite(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), hadoopConf, Collections.emptyMap(), populateMetaFields, false);

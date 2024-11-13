@@ -1307,25 +1307,29 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     HoodieJavaWriteClient client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
 
     // perform 1 successful commit
-    writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
+    String commit1 = HoodieActiveTimeline.createNewInstantTime();
+    writeBatch(client, commit1, commit1, Option.of(Arrays.asList(commit1)), commit1,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, true);
 
     // Perform 2 failed writes to table
-    writeBatch(client, "200", "100", Option.of(Arrays.asList("200")), "100",
+    String commit2 = HoodieActiveTimeline.createNewInstantTime();
+    writeBatch(client, commit2, commit1, Option.of(Arrays.asList(commit2)), commit1,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, false);
     client.close();
+    String commit3 = HoodieActiveTimeline.createNewInstantTime();
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
-    writeBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
+    writeBatch(client, commit3, commit2, Option.of(Arrays.asList(commit3)), commit3,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, false);
     client.close();
     // refresh data generator to delete records generated from failed commits
     dataGen = new HoodieTestDataGenerator();
     // Perform 1 successful write
+    String commit4 = HoodieActiveTimeline.createNewInstantTime();
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
-    writeBatch(client, "400", "300", Option.of(Arrays.asList("400")), "400",
+    writeBatch(client, commit4, commit3, Option.of(Arrays.asList(commit4)), commit4,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, true);
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
@@ -1337,13 +1341,14 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     // Await till enough time passes such that the first 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
+      conditionMet = client.getHeartbeatClient().isHeartbeatExpired(commit3);
       Thread.sleep(2000);
     }
     client.close();
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     // Perform 1 successful write
-    writeBatch(client, "500", "400", Option.of(Arrays.asList("500")), "500",
+    String commit5 = HoodieActiveTimeline.createNewInstantTime();
+    writeBatch(client, commit5, commit4, Option.of(Arrays.asList(commit5)), commit5,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, true);
     client.clean();
@@ -1384,47 +1389,53 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     HoodieTestUtils.init(hadoopConf, basePath);
     HoodieFailedWritesCleaningPolicy cleaningPolicy = EAGER;
     HoodieJavaWriteClient client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
+    String commit1 = HoodieActiveTimeline.createNewInstantTime();
     // Perform 1 successful writes to table
-    writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
+    writeBatch(client, commit1, commit1, Option.of(Arrays.asList(commit1)), commit1,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, true);
 
     // Perform 1 failed writes to table
-    writeBatch(client, "200", "100", Option.of(Arrays.asList("200")), "200",
+    String commit2 = HoodieActiveTimeline.createNewInstantTime();
+    writeBatch(client, commit2, commit1, Option.of(Arrays.asList(commit2)), commit2,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, false);
     client.close();
     // Toggle cleaning policy to LAZY
     cleaningPolicy = HoodieFailedWritesCleaningPolicy.LAZY;
+    String commit3 = HoodieActiveTimeline.createNewInstantTime();
     // Perform 2 failed writes to table
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
-    writeBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
+    writeBatch(client, commit3, commit2, Option.of(Arrays.asList(commit3)), commit3,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, false);
     client.close();
+    String commit4 = HoodieActiveTimeline.createNewInstantTime();
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
-    writeBatch(client, "400", "300", Option.of(Arrays.asList("400")), "400",
+    writeBatch(client, commit4, commit3, Option.of(Arrays.asList(commit4)), commit4,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, false);
     client.close();
     // Await till enough time passes such that the 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("400");
+      conditionMet = client.getHeartbeatClient().isHeartbeatExpired(commit4);
       Thread.sleep(2000);
     }
     client.clean();
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();
     assertTrue(timeline.getTimelineOfActions(
         CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 3);
+    String commit5 = HoodieActiveTimeline.createNewInstantTime();
     // Perform 2 failed commits
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
-    writeBatch(client, "500", "400", Option.of(Arrays.asList("300")), "300",
+    writeBatch(client, commit5, commit4, Option.of(Arrays.asList(commit3)), commit3,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, false);
     client.close();
+    String commit6 = HoodieActiveTimeline.createNewInstantTime();
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
-    writeBatch(client, "600", "500", Option.of(Arrays.asList("400")), "400",
+    writeBatch(client, commit6, commit5, Option.of(Arrays.asList(commit4)), commit4,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, false);
     client.close();
@@ -1446,28 +1457,33 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     ExecutorService service = Executors.newFixedThreadPool(2);
     HoodieTestUtils.init(hadoopConf, basePath);
     HoodieJavaWriteClient client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
+    String commit1 = HoodieActiveTimeline.createNewInstantTime();
     // perform 1 successful write
-    writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
+    writeBatch(client, commit1, commit1, Option.of(Arrays.asList(commit1)), commit1,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 100,
         0, true);
 
     // Perform 2 failed writes to table
-    writeBatch(client, "200", "100", Option.of(Arrays.asList("200")), "200",
+    String commit2 = HoodieActiveTimeline.createNewInstantTime();
+    writeBatch(client, commit2, commit1, Option.of(Arrays.asList(commit2)), commit2,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 100,
         0, false);
     client.close();
+
+    String commit3 = HoodieActiveTimeline.createNewInstantTime();
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
-    writeBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
+    writeBatch(client, commit3, commit2, Option.of(Arrays.asList(commit3)), commit3,
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 100,
         0, false);
     client.close();
     // refresh data generator to delete records generated from failed commits
     dataGen = new HoodieTestDataGenerator();
+    String commit4 = HoodieActiveTimeline.createNewInstantTime();
     // Create a successful commit
-    Future<List<WriteStatus>> commit3 = service.submit(() -> writeBatch(new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
-        "400", "300", Option.of(Arrays.asList("400")), "300", 100, dataGen::generateInserts,
+    Future<List<WriteStatus>> commit4Future = service.submit(() -> writeBatch(new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
+        commit4, commit3, Option.of(Arrays.asList(commit4)), commit3, 100, dataGen::generateInserts,
         HoodieJavaWriteClient::bulkInsert, false, 100, 100, 0, true));
-    commit3.get();
+    commit4Future.get();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
 
     assertTrue(metaClient.getActiveTimeline().getTimelineOfActions(
@@ -1478,14 +1494,15 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     // Await till enough time passes such that the first 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
+      conditionMet = client.getHeartbeatClient().isHeartbeatExpired(commit3);
       Thread.sleep(2000);
     }
-    Future<List<WriteStatus>> commit4 = service.submit(() -> writeBatch(new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
-        "500", "400", Option.of(Arrays.asList("500")), "500", 100, dataGen::generateInserts,
+    String commit5 = HoodieActiveTimeline.createNewInstantTime();
+    Future<List<WriteStatus>> commit5Future = service.submit(() -> writeBatch(new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
+        commit5, commit4, Option.of(Arrays.asList(commit5)), commit5, 100, dataGen::generateInserts,
         HoodieJavaWriteClient::bulkInsert, false, 100, 100, 0, true));
     Future<HoodieCleanMetadata> clean1 = service.submit(() -> new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)).clean());
-    commit4.get();
+    commit5Future.get();
     clean1.get();
     client.close();
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();

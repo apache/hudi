@@ -30,12 +30,15 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.Transformations;
@@ -68,7 +71,9 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -83,9 +88,11 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieSparkClientTestHarness.buildProfile;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness {
@@ -703,5 +710,45 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
           u.getPartitionPath().equals(partitionPath)).count();
       assertEquals(fewRecordsForDelete.size() - numRecordsInPartition, status.getTotalErrorRecords());
     }
+  }
+
+  @ParameterizedTest
+  @MethodSource("generateParametersForValidateTimestampInternal")
+  void testValidateTimestampInternal(
+      boolean shouldEnableTimestampOrderinValidation,
+      boolean supportsOcc,
+      boolean shouldValidateForLatestTimestamp
+  ) throws IOException {
+    HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder()
+        .withPath(basePath())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .build())
+        .withEnableTimestampOrderingValidation(shouldEnableTimestampOrderinValidation);
+    if (supportsOcc) {
+      writeConfigBuilder.withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
+    }
+    setUp(writeConfigBuilder.build().getProps());
+    HoodieTable hoodieTable = HoodieSparkTable.create(writeConfigBuilder.build(), context(), metaClient);
+
+    HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
+    HoodieInstant instant1 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "002");
+    timeline.createNewInstant(instant1);
+
+    if (shouldValidateForLatestTimestamp) {
+      HoodieInstant lastEntry = metaClient.getActiveTimeline().getWriteTimeline().lastInstant().get();
+      IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> hoodieTable.validateForLatestTimestampInternal("001"));
+      assertEquals(String.format("Found later commit time %s, compared to the current instant 001, hence failing to create requested commit meta file", lastEntry), exception.getMessage());
+    } else {
+      assertDoesNotThrow(() -> hoodieTable.validateForLatestTimestampInternal("002"));
+    }
+  }
+
+  private static Stream<Arguments> generateParametersForValidateTimestampInternal() {
+    return Stream.of(
+        Arguments.of(true, true, true),
+        Arguments.of(true, false, false),
+        Arguments.of(false, false, false)
+    );
   }
 }

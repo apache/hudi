@@ -201,6 +201,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         || (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())
         && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0)) {
       // Only create cleaner plan which does some work
+      table.validateForLatestTimestamp(startCleanTime);
       createCleanRequested(startCleanTime, cleanerPlan);
       return Option.of(cleanerPlan);
     }

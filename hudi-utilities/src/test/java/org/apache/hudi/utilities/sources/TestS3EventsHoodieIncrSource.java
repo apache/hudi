@@ -220,7 +220,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
   private HoodieWriteConfig getWriteConfig() {
     return getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(5).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .build();

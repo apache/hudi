@@ -802,6 +802,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Just before wrapping up a commit, do validate commit metadata consistency. "
           + "Compare with markers and ensure there are no additional duplicate files found");
 
+  public static final ConfigProperty<Boolean> ENABLE_TIMESTAMP_ORDERING_VALIDATION = ConfigProperty
+      .key("hoodie.timestamp.ordering.validate.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.15.1")
+      .withDocumentation("Enable validation for commit time generation to ensure new commit time generated is always the latest among other entries. "
+          + "This is for additional safety to always generate a monotonically increasing commit times (for ingestion writer, table services etc).");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2690,6 +2698,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(OnehouseInternalConfig.MARKER_NUM_FILE_ENTRIES_TO_PRINT.key(), OnehouseInternalConfig.MARKER_NUM_FILE_ENTRIES_TO_PRINT.defaultValue());
   }
 
+  public Boolean shouldEnableTimestampOrderinValidation() {
+    return getBoolean(ENABLE_TIMESTAMP_ORDERING_VALIDATION);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -3221,6 +3233,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder doValidateCommitMetadataConsistency(boolean doPostCommitValidateMetadataConsistency) {
       writeConfig.setValue(VALIDATE_COMMIT_METADATA_CONSISTENCY, String.valueOf(doPostCommitValidateMetadataConsistency));
+      return this;
+    }
+
+    public Builder withEnableTimestampOrderingValidation(boolean enableTimestampOrderingValidation) {
+      writeConfig.setValue(ENABLE_TIMESTAMP_ORDERING_VALIDATION, Boolean.toString(enableTimestampOrderingValidation));
       return this;
     }
 

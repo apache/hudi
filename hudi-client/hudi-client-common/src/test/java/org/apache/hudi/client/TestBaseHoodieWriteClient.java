@@ -19,16 +19,23 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
@@ -39,13 +46,20 @@ import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -114,6 +128,80 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     verify(tableServiceClient).close();
   }
 
+  @ParameterizedTest
+  @MethodSource("generateParametersForValidateTimestampInternal")
+  void testValidateTimestampInternal(
+      boolean shouldEnableTimestampOrderingValidation,
+      boolean supportsOcc,
+      boolean shouldValidateForLatestTimestamp
+  ) throws IOException {
+    initMetaClient();
+    HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .build())
+        .withEnableTimestampOrderingValidation(shouldEnableTimestampOrderingValidation);
+    if (supportsOcc) {
+      writeConfigBuilder.withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
+    }
+
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
+    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
+    TestWriteClient writeClient = new TestWriteClient(writeConfigBuilder.build(), table, Option.empty(), tableServiceClient);
+
+    HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
+    HoodieInstant instant1 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "002");
+    timeline.createNewInstant(instant1);
+    if (shouldValidateForLatestTimestamp) {
+      HoodieInstant lastEntry = metaClient.getActiveTimeline().getWriteTimeline().lastInstant().get();
+      IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> writeClient.validateTimestampInternal(metaClient, "001"));
+      assertEquals(String.format("Found later commit time %s, compared to the current instant 001, hence failing to create requested commit meta file", lastEntry), exception.getMessage());
+    } else {
+      assertDoesNotThrow(() -> writeClient.validateTimestampInternal(metaClient, "001"));
+    }
+  }
+
+  private static Stream<Arguments> generateParametersForValidateTimestampInternal() {
+    return Stream.of(
+        Arguments.of(true, true, true),
+        Arguments.of(true, false, false),
+        Arguments.of(false, false, false)
+    );
+  }
+
+  @Test
+  void testStartCommit() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .build())
+        .withEnableTimestampOrderingValidation(true)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withLockWaitTimeInMillis(50L)
+            .withNumRetries(2)
+            .withRetryWaitTimeInMillis(10L)
+            .withClientNumRetries(2)
+            .withClientRetryWaitTimeInMillis(10L)
+            .build())
+        .build();
+
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
+    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
+    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
+
+    writeClient.startCommitWithTime("001", "commit");
+
+    HoodieDefaultTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
+    assertTrue(writeTimeline.lastInstant().isPresent());
+    assertEquals("commit", writeTimeline.lastInstant().get().getAction());
+    assertEquals("001", writeTimeline.lastInstant().get().getTimestamp());
+  }
+
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {
     private final HoodieTable<String, String, String, String> table;
 
@@ -155,6 +243,11 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
       FileSystemViewStorageType storageType = config.getViewStorageConfig().getStorageType();
       Assertions.assertTrue(storageType == FileSystemViewStorageType.REMOTE_FIRST || storageType == FileSystemViewStorageType.REMOTE_ONLY);
       return table;
+    }
+
+    @Override
+    protected void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime) {
+      // no op
     }
 
     @Override

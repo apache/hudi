@@ -113,6 +113,11 @@ public class HoodieJavaWriteClient<T> extends
   }
 
   @Override
+  protected void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime) {
+    validateTimestampInternal(metaClient, instantTime);
+  }
+
+  @Override
   public List<WriteStatus> upsert(List<HoodieRecord<T>> records,
                                   String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =

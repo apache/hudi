@@ -132,6 +132,11 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
+  protected void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime) {
+    // no op
+  }
+
+  @Override
   public List<HoodieRecord<T>> filterExists(List<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieFlinkTable<T> table = getHoodieTable();

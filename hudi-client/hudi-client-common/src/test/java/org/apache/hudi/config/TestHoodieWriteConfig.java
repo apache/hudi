@@ -60,6 +60,7 @@ import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieWriteConfig.TABLE_SERVICES_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -520,6 +521,20 @@ public class TestHoodieWriteConfig {
         - writeConfig.getViewStorageConfig().getMaxMemoryForPendingClusteringFileGroups()
         - writeConfig.getViewStorageConfig().getMaxMemoryForReplacedFileGroups(),
         writeConfig.getViewStorageConfig().getMaxMemoryForFileGroupMap());
+  }
+
+  @Test
+  void testEnableTimestampOrderingValidationConfig() {
+    HoodieWriteConfig writeConfigBuilderWithTimestampOrderingDefault = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
+    assertFalse(writeConfigBuilderWithTimestampOrderingDefault.shouldEnableTimestampOrderinValidation());
+
+    HoodieWriteConfig writeConfigBuilderWithTimestampOrderingFalse = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withEnableTimestampOrderingValidation(false).build();
+    assertFalse(writeConfigBuilderWithTimestampOrderingFalse.shouldEnableTimestampOrderinValidation());
+
+    HoodieWriteConfig writeConfigBuilderWithTimestampOrderingTrue = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withEnableTimestampOrderingValidation(true).build();
+    assertTrue(writeConfigBuilderWithTimestampOrderingTrue.shouldEnableTimestampOrderinValidation());
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {

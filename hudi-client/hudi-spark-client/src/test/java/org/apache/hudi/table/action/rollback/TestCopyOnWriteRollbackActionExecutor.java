@@ -435,14 +435,11 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(
         ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
 
-    // Save an older instant for us to run clustering.
-    String clusteringInstant1 = HoodieActiveTimeline.createNewInstantTime();
+    // Lets just trigger scheduling for a clustering instant.
+    String clusteringInstant1 = ClusteringTestUtils.runClustering(clusteringClient, false, false);
 
-    // Create completed clustering commit
+    // Create another clustering commit (and complete it)
     ClusteringTestUtils.runClustering(clusteringClient, false, true);
-
-    // Now execute clustering on the saved instant and do not allow it to commit.
-    ClusteringTestUtils.runClusteringOnInstant(clusteringClient, false, false, clusteringInstant1);
 
     HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().withEmbeddedTimelineServerEnabled(false).build());
     HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, secondCommit);

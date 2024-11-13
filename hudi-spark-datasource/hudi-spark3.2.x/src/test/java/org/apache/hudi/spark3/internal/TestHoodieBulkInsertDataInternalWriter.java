@@ -19,6 +19,7 @@
 
 package org.apache.hudi.spark3.internal;
 
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,6 +44,7 @@ import static org.apache.hudi.testutils.SparkDatasetTestUtils.STRUCT_TYPE;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.getInternalRowWithError;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.getRandomRows;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.toInternalRows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -69,7 +71,7 @@ class TestHoodieBulkInsertDataInternalWriter extends
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     // execute N rounds
     for (int i = 0; i < 2; i++) {
-      String instantTime = "00" + i;
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
       // init writer
       HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000),
           RANDOM.nextLong(), STRUCT_TYPE, populateMetaFields, sorted);
@@ -115,7 +117,7 @@ class TestHoodieBulkInsertDataInternalWriter extends
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
-    String instantTime = "001";
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
     HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000),
         RANDOM.nextLong(), STRUCT_TYPE, true, false);
 
@@ -141,7 +143,7 @@ class TestHoodieBulkInsertDataInternalWriter extends
       }
       fail("Should have failed");
     } catch (Throwable e) {
-      // expected
+      assertEquals("java.lang.String cannot be cast to org.apache.spark.unsafe.types.UTF8String", e.getMessage());
     }
 
     HoodieWriterCommitMessage commitMetadata = (HoodieWriterCommitMessage) writer.commit();

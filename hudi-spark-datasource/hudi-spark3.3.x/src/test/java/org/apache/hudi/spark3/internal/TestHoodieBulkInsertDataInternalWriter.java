@@ -42,6 +42,7 @@ import static org.apache.hudi.testutils.SparkDatasetTestUtils.STRUCT_TYPE;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.getInternalRowWithError;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.getRandomRows;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.toInternalRows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -148,7 +149,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
       }
       fail("Should have failed");
     } catch (Throwable e) {
-      // expected
+      assertEquals("java.lang.String cannot be cast to org.apache.spark.unsafe.types.UTF8String", e.getMessage());
     }
 
     HoodieWriterCommitMessage commitMetadata = (HoodieWriterCommitMessage) writer.commit();
