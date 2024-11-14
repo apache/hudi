@@ -94,6 +94,10 @@ public class HoodieDataQualityValidator implements Serializable {
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for valuation", required = false)
     public int parallelism = 10;
 
+    @Parameter(names = {"--log-records", "-lr"}, description = "Log records" +
+        "from input data", required = false)
+    public Boolean logRecords = false;
+
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
 
@@ -169,15 +173,14 @@ public class HoodieDataQualityValidator implements Serializable {
   public void run() {
     try {
       LOG.info(cfg.toString());
-      LOG.info(" ****** Validating table size stats wih ******");
+      LOG.info(" ****** Validating Hudi table data with source data ******");
       assertDataQuality();
     } catch (Exception e) {
-      throw new HoodieException("Unable to do fetch table size stats." + cfg.basePath, e);
+      throw new HoodieException("Unable to do data quality validation." + cfg.basePath, e);
     }
   }
 
   private void assertDataQuality() {
-
     SparkSession spark = SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
     List<String> fieldsToValidate = Arrays.asList(cfg.fieldsToValidate.split(","));
     Dataset<Row> expectedDf = cfg.useOverwriteWithLatest ? getInputDfBasedOnLatestValue(cfg.recordKeyField, cfg.partitionPathField,
@@ -185,7 +188,8 @@ public class HoodieDataQualityValidator implements Serializable {
         fieldsToValidate): getInputDfBasedOnOrderingValue(cfg.recordKeyField, cfg.partitionPathField,
         cfg.orderingFieldConfig, spark, cfg.sourcePath,
         fieldsToValidate);
-    Dataset<Row> hudiDf = getDatasetToValidate(spark, cfg.basePath, fieldsToValidate);
+    Dataset<Row> hudiDf = getDatasetToValidate(spark, cfg.basePath, fieldsToValidate,
+        cfg.useOverwriteWithLatest ? "rider" : cfg.orderingFieldConfig);
 
     Dataset<Row> exceptInputDf = expectedDf.except(hudiDf);
     Dataset<Row> exceptHudiDf = hudiDf.except(expectedDf);
@@ -193,6 +197,12 @@ public class HoodieDataQualityValidator implements Serializable {
     long exceptHudiCount = exceptHudiDf.count();
     LOG.info("Except input df count " + exceptInputDf + ", except hudi count " + exceptHudiCount +", total records found " + expectedDf.count());
     if (exceptInputCount != 0 || exceptHudiCount != 0) {
+      if (cfg.logRecords) {
+        LOG.info("Logging Source except hudi df ");
+        expectedDf.except(hudiDf).sort(cfg.partitionPathField, cfg.recordKeyField).collectAsList().forEach(row -> LOG.info("   " + row.toString()));
+        LOG.info("Logging Hudi except input data ");
+        hudiDf.except(expectedDf).sort(cfg.partitionPathField, cfg.recordKeyField).collectAsList().forEach(row -> LOG.info("   " + row.toString()));
+      }
       LOG.error("Data set validation failed. Total count in hudi " + expectedDf.count() + ", input df count " + hudiDf.count()
           + ". InputDf except hudi df = " + exceptInputCount + ", Hudi df except Input df " + exceptHudiCount);
       throw new AssertionError("Hudi contents does not match contents input data. ");
@@ -223,7 +233,8 @@ public class HoodieDataQualityValidator implements Serializable {
         })
         .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder)
         .filter("_hoodie_is_deleted != true")
-        .select(JavaConverters.asScalaIteratorConverter(allCols.iterator()).asScala().toSeq());
+        .select(JavaConverters.asScalaIteratorConverter(allCols.iterator()).asScala().toSeq())
+        .orderBy(cfg.partitionPathField, cfg.recordKeyField, orderingField);
   }
 
   private Dataset<Row> getInputDfBasedOnLatestValue(String recordKeyField, String partitionPathField, String orderingField,
@@ -249,16 +260,18 @@ public class HoodieDataQualityValidator implements Serializable {
         })
         .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder)
         .filter("_hoodie_is_deleted != true")
-        .select(JavaConverters.asScalaIteratorConverter(allCols.iterator()).asScala().toSeq());
+        .select(JavaConverters.asScalaIteratorConverter(allCols.iterator()).asScala().toSeq())
+        .orderBy(cfg.partitionPathField, cfg.recordKeyField, orderingField);
   }
 
-  public Dataset<Row> getDatasetToValidate(SparkSession session, String basePath, List<String> fieldsToValidate) {
+  public Dataset<Row> getDatasetToValidate(SparkSession session, String basePath, List<String> fieldsToValidate, String orderingField) {
 
     // fieldNames.head, fieldNames.tail: _*)
     // HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*
     Dataset<Row> hudiDf = session.read().format("hudi").load(basePath);
     List<Column> allCols = fieldsToValidate.stream().map(entry -> new Column(entry)).collect(Collectors.toList());
-    return hudiDf.select(JavaConverters.asScalaIteratorConverter(allCols.iterator()).asScala().toSeq());
+    return hudiDf.select(JavaConverters.asScalaIteratorConverter(allCols.iterator()).asScala().toSeq())
+        .orderBy(cfg.partitionPathField, cfg.recordKeyField, orderingField);
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {
