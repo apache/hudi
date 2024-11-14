@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.timeline.versioning.v1;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -99,7 +98,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                     .map(r -> (GenericRecord) r.getData())
                     .filter(commitsFilter::apply)
                     .forEach(r -> {
-                      String instantTime = r.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
+                      String instantTime = r.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();
                       instantsInRange.add(instantTime);
                       recordConsumer.accept(instantTime, r);
                     });

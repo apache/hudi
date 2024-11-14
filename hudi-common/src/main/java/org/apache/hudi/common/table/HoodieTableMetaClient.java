@@ -128,6 +128,8 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String INDEX_DEFINITION_FOLDER_NAME = ".index_defs";
   public static final String INDEX_DEFINITION_FILE_NAME = "index.json";
 
+  public static final String COMMIT_TIME_KEY = "commitTime";
+
   // In-memory cache for archived timeline based on the start instant time
   // Only one entry should be present in this map
   private final Map<String, HoodieArchivedTimeline> archivedTimelineMap = new HashMap<>();

@@ -36,8 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 

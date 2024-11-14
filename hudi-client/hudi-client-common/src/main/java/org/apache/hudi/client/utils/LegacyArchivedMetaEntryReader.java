@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.client.timeline.ActiveActionWithDetails;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -87,7 +86,7 @@ public class LegacyArchivedMetaEntryReader {
    * Reads the avro record for instant and details.
    */
   private Pair<HoodieInstant, Option<byte[]>> readInstant(GenericRecord record) {
-    final String instantTime = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
+    final String instantTime = record.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
     final String stateTransitionTime = (String) record.get(STATE_TRANSITION_TIME);
     final Option<byte[]> details = getMetadataKey(action).map(key -> {
