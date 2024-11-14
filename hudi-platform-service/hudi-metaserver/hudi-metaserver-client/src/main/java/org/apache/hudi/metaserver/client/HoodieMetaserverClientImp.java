@@ -20,7 +20,6 @@ package org.apache.hudi.metaserver.client;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.instantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -114,7 +113,7 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
   public List<HoodieInstant> listInstants(String db, String tb, int commitNum) {
     return exceptionWrapper(() -> this.client.listInstants(db, tb, commitNum).stream()
         .map(instant -> EntityConversions.fromTHoodieInstant(instant, instantGenerator))
-        .sorted(Comparator.comparing(HoodieInstant::getRequestTime).reversed())
+        .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed())
         .collect(Collectors.toList())).get();
   }
 
