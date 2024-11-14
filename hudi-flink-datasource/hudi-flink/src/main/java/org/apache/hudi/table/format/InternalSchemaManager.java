@@ -121,7 +121,8 @@ public class InternalSchemaManager implements Serializable {
     InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(
         commitInstantTime, tablePath,
         new HoodieHadoopStorage(tablePath, getHadoopConf()),
-        validCommits, layout);
+        validCommits, layout.getInstantFileNameParser(),
+        layout.getCommitMetadataSerDe(), layout.getInstantGenerator());
     if (querySchema.equals(fileSchema)) {
       return InternalSchema.getEmptyInternalSchema();
     }
