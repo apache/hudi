@@ -3,7 +3,7 @@ title: "Apache Hudi meets Apache Flink"
 excerpt: "The design and latest progress of the integration of Apache Hudi and Apache Flink."
 author: wangxianghu
 category: blog
-image: /assets/images/blog/2020-10-15-apache-hudi-meets-apache-flink.png
+image: /assets/images/blog/user_stories5.png
 tags:
 - blog
 - apache flink

@@ -3,7 +3,7 @@ title: "Apache Hudi 2023: A Year In Review"
 excerpt: "Reflect on and celebrate the myriad of exciting developments and accomplishments that have defined the year 2023 for the Hudi community."
 author: Shiyan Xu
 category: blog
-image: /assets/images/blog/2023-12-28-a-year-in-review-2023/00.cover.png
+image: /assets/images/blog/user_stories1.png
 tags:
 - apache hudi
 - community

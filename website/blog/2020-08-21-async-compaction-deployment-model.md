@@ -3,6 +3,7 @@ title: "Async Compaction Deployment Models"
 excerpt: "Mechanisms for executing compaction jobs in Hudi asynchronously"
 author: vbalaji
 category: blog
+image: /assets/images/blog/user_stories2.png
 tags:
 - how-to
 - compaction

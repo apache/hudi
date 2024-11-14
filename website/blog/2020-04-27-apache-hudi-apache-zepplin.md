@@ -3,6 +3,7 @@ title: "Apache Hudi Support on Apache Zeppelin"
 excerpt: "Integrating HUDI's real-time and read-optimized query capabilities into Apache Zeppelin’s notebook"
 author: leesf
 category: blog
+image: /assets/images/blog/user_stories4.png
 tags:
 - how-to
 - apache zeppelin
