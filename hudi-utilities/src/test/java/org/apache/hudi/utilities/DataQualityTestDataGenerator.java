@@ -47,14 +47,14 @@ public class DataQualityTestDataGenerator  extends UtilitiesTestBase {
   @Test
   public void testGenerateData() throws IOException {
     int initialInserts = 10000;
-    int recurrentInserts = 1000;
-    int recurrentUpdates = 8000;
-    int updatesWithLowerOrderingValue = 2000;
+    int recurrentInserts = 2000;
+    int recurrentUpdates = 4000;
+    int updatesWithLowerOrderingValue = 500;
     int recurrentDeletes = 1000;
     int totalRounds = 10;
-    int numMillsLess = 60000;
+    int numMillsLess = 120000;
 
-    String basePath = "/tmp/trial10";
+    String basePath = "/tmp/test_data/";
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/path").build();
