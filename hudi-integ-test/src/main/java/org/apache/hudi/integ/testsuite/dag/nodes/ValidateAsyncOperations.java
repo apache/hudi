@@ -71,7 +71,7 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
           String earliestCommitToRetain = cleanMetadata.getEarliestCommitToRetain();
           log.warn("Earliest commit to retain : " + earliestCommitToRetain);
           long unCleanedInstants = metaClient.getActiveTimeline().filterCompletedInstants().filter(instant ->
-              compareTimestamps(instant.getRequestTime(), GREATER_THAN_OR_EQUALS, earliestCommitToRetain)).countInstants();
+              compareTimestamps(instant.requestedTime(), GREATER_THAN_OR_EQUALS, earliestCommitToRetain)).countInstants();
           ValidationUtils.checkArgument(unCleanedInstants >= (maxCommitsRetained + 1), "Total uncleaned instants " + unCleanedInstants
               + " mismatched with max commits retained " + (maxCommitsRetained + 1));
         }
