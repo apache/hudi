@@ -120,6 +120,8 @@ public class TestCleanPlanner {
                           List<HoodieFileGroup> replacedFileGroups, Pair<Boolean, List<CleanFileInfo>> expected) throws IOException {
 
     SyncableFileSystemView mockFsView = mock(SyncableFileSystemView.class);
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+    when(mockHoodieTable.getMetaClient()).thenReturn(mockMetaClient);
     when(mockHoodieTable.getHoodieView()).thenReturn(mockFsView);
     when(mockHoodieTable.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
     when(mockHoodieTable.getInstantFileNameGenerator()).thenReturn(INSTANT_FILE_NAME_GENERATOR);
@@ -134,6 +136,7 @@ public class TestCleanPlanner {
       for (Pair<String, Option<byte[]>> savepoint : savepoints) {
         HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft());
         when(activeTimeline.getInstantDetails(instant)).thenReturn(savepoint.getRight());
+        when(mockMetaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint.getLeft())).thenReturn(instant);
       }
     }
     String partitionPath = "partition1";
