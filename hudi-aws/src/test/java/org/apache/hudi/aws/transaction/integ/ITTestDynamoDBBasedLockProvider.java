@@ -111,17 +111,6 @@ public class ITTestDynamoDBBasedLockProvider {
     dynamoDb = getDynamoClientWithLocalEndpoint();
   }
 
-  public static Stream<Object> testDimensions() {
-    return Stream.of(
-        // Without parititon key, only table name is used.
-        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG, DynamoDBBasedLockProvider.class),
-        Arguments.of(LOCK_CONFIGURATION, DynamoDBBasedLockProvider.class),
-        // Even if we have partition key set, nothing would break.
-        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_WITH_PART_KEY, DynamoDBBasedImplicitPartitionKeyLockProvider.class),
-        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG, DynamoDBBasedImplicitPartitionKeyLockProvider.class)
-    );
-  }
-
   public static Stream<Object> badTestDimensions() {
     return Stream.of(
         Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_NO_TBL_NAME, DynamoDBBasedLockProvider.class),
@@ -162,6 +151,18 @@ public class ITTestDynamoDBBasedLockProvider {
     Assertions.assertEquals(IllegalArgumentException.class, e.getCause().getCause().getClass());
   }
 
+  public static Stream<Arguments> testDimensions() {
+    return Stream.of(
+        // Without partition key, only table name is used.
+        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG, DynamoDBBasedLockProvider.class),
+        // Even if we have partition key set, nothing would break.
+        Arguments.of(LOCK_CONFIGURATION, DynamoDBBasedLockProvider.class),
+        // Even if we have partition key set, nothing would break.
+        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_WITH_PART_KEY, DynamoDBBasedImplicitPartitionKeyLockProvider.class),
+        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG, DynamoDBBasedImplicitPartitionKeyLockProvider.class)
+    );
+  }
+
   @ParameterizedTest
   @MethodSource("testDimensions")
   void testAcquireLock(LockConfiguration lockConfig, Class<?> lockProviderClass) {
@@ -181,14 +182,16 @@ public class ITTestDynamoDBBasedLockProvider {
         Assertions.assertEquals(tableName, dynamoDbBasedLockProvider.getPartitionKey());
       }
     } else if (lockProviderClass.equals(DynamoDBBasedImplicitPartitionKeyLockProvider.class)) {
-      String tableName = (String) lockConfig.getConfig().get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
       String basePath = (String) lockConfig.getConfig().get(DynamoDbBasedLockConfig.BASE_PATH_KEY);
+      Assertions.assertTrue(basePath.startsWith(SCHEME_S3A));
       // Base path is constructed with prefix s3a, verify that for partition key calculation, s3a is replaced with s3
       Assertions.assertEquals(
-          tableName + '-' + HashID.generateXXHashAsString(SCHEME_S3 + URI_NO_CLOUD_PROVIDER_PREFIX, HashID.Size.BITS_64),
+          HashID.generateXXHashAsString(SCHEME_S3 + URI_NO_CLOUD_PROVIDER_PREFIX, HashID.Size.BITS_64),
           dynamoDbBasedLockProvider.getPartitionKey());
       Assertions.assertTrue(basePath.startsWith(SCHEME_S3A));
     }
+
+    // Test lock acquisition and release
     Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     dynamoDbBasedLockProvider.unlock();
   }

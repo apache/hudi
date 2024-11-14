@@ -76,7 +76,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
   protected final String tableName;
   protected volatile LockItem lock;
 
-  private final String dynamoDBPartitionKey;
+  protected final String dynamoDBPartitionKey;
 
   public abstract String getDynamoDBPartitionKey(LockConfiguration lockConfiguration);
 
@@ -216,7 +216,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
     LOG.info("Created dynamoDB table " + tableName);
   }
 
-  private String generateLogSuffixString() {
+  protected String generateLogSuffixString() {
     return StringUtils.join("DynamoDb table = ", tableName, ", partition key = ", dynamoDBPartitionKey);
   }
 
