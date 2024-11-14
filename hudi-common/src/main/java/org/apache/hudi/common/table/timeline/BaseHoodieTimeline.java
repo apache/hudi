@@ -115,14 +115,6 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
     clearState();
   }
 
-  /**
-   * For serializing and de-serializing.
-   *
-   * @deprecated
-   */
-  public BaseHoodieTimeline() {
-  }
-
   @Override
   public HoodieTimeline filterInflights() {
     return factory.createDefaultTimeline(getInstantsAsStream().filter(HoodieInstant::isInflight), details);
