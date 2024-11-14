@@ -342,12 +342,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   private RawTripTestPayload generateRandomValue(
       HoodieKey key, String instantTime, boolean isFlattened, long timestamp, int numMillisLess) throws IOException {
+    long curTime = System.currentTimeMillis();
+    curTime = numMillisLess > 0 ? (curTime - numMillisLess) : curTime;
     GenericRecord rec = generateGenericRecord(
         key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp,
-        false, isFlattened);
-    long currentTs = (Long)rec.get("current_ts");
+        false, isFlattened, curTime);
     return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, false,
-        numMillisLess > 0 ? currentTs - numMillisLess : currentTs );
+        curTime );
   }
 
   private RawTripTestPayload generateNestedExampleRandomValue(
@@ -382,7 +383,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   private GenericRecord generateRandomDeleteValueAsGenRec(HoodieKey key, String instantTime) throws IOException {
     return generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
-        true, false);
+        true, false, System.currentTimeMillis());
   }
 
   /**
@@ -491,19 +492,25 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       rec.put("_hoodie_is_deleted", false);
     }
   }
-  
+
+  public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
+                                             long timestamp, boolean isDeleteRecord,
+                                             boolean isFlattened) {
+    return generateGenericRecord(rowKey, partitionPath, riderName, driverName, timestamp, isDeleteRecord, isFlattened, -1);
+  }
+
   /**
    * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is true
    */
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
                                                     long timestamp, boolean isDeleteRecord,
-                                                    boolean isFlattened) {
+                                                    boolean isFlattened, long currentTimeMs) {
     GenericRecord rec = new GenericData.Record(isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA);
     generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
     if (isFlattened) {
       generateFareFlattenedValues(rec);
     } else {
-      generateExtraSchemaValues(rec, System.currentTimeMillis());
+      generateExtraSchemaValues(rec, currentTimeMs);
       generateMapTypeValues(rec);
       generateFareNestedValues(rec);
       generateTipNestedValues(rec);
