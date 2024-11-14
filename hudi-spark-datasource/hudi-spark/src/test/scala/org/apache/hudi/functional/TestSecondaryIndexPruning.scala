@@ -192,6 +192,17 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
         Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
+      // update the secondary key column after creating multiple secondary indexes
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
+      // validate the secondary index records themselves
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7 and key like '%row1'")(
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+      )
+      // validate data and data skipping
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
+        Seq(1, "row1", "xyz", "p1")
+      )
+      verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
     }
   }
 
