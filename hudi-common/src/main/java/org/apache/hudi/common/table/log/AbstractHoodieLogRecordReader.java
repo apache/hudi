@@ -27,10 +27,12 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -146,6 +148,12 @@ public abstract class AbstractHoodieLogRecordReader {
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
+  // table version for compatibility
+  private final HoodieTableVersion tableVersion;
+  // for pending log block check with table version before 8
+  HoodieTimeline commitsTimeline = null;
+  HoodieTimeline completedInstantsTimeline = null;
+  HoodieTimeline inflightInstantsTimeline = null;
 
   protected AbstractHoodieLogRecordReader(HoodieStorage storage, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime,
@@ -172,6 +180,7 @@ public abstract class AbstractHoodieLogRecordReader {
     if (this.preCombineField != null) {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
     }
+    this.tableVersion = tableConfig.getTableVersion();
     this.payloadProps = props;
     this.recordMerger = recordMerger;
     this.totalLogFiles.addAndGet(logFilePaths.size());
@@ -210,6 +219,26 @@ public abstract class AbstractHoodieLogRecordReader {
     this.recordType = recordMerger.getRecordType();
   }
 
+  private HoodieTimeline getOrCreateCompletedInstantsTimeline() {
+    if (this.commitsTimeline == null) {
+      this.commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
+    }
+    if (this.completedInstantsTimeline == null) {
+      this.completedInstantsTimeline = this.commitsTimeline.filterCompletedInstants();
+    }
+    return this.completedInstantsTimeline;
+  }
+
+  private HoodieTimeline getOrCreateInflightInstantsTimeline() {
+    if (this.commitsTimeline == null) {
+      this.commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
+    }
+    if (this.inflightInstantsTimeline == null) {
+      this.inflightInstantsTimeline = this.commitsTimeline.filterInflights();
+    }
+    return this.inflightInstantsTimeline;
+  }
+
   /**
    * @param keySpecOpt specifies target set of keys to be scanned
    * @param skipProcessingBlocks controls, whether (delta) blocks have to actually be processed
@@ -226,7 +255,6 @@ public abstract class AbstractHoodieLogRecordReader {
 
   private void scanInternalV1(Option<KeySpec> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
-    AtomicBoolean blockIdentifiersPresent = new AtomicBoolean(false);
 
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -254,6 +282,13 @@ public abstract class AbstractHoodieLogRecordReader {
         final String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
         totalLogBlocks.incrementAndGet();
         if (logBlock.isDataOrDeleteBlock()) {
+          if (this.tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+            if (!getOrCreateCompletedInstantsTimeline().containsOrBeforeTimelineStarts(instantTime)
+                || getOrCreateInflightInstantsTimeline().containsInstant(instantTime)) {
+              // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
+              continue;
+            }
+          }
           if (compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), GREATER_THAN, this.latestInstantTime)) {
             // Skip processing a data or delete block with the instant time greater than the latest instant time used by this log record reader
             continue;
@@ -445,6 +480,13 @@ public abstract class AbstractHoodieLogRecordReader {
           continue;
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
+          if (this.tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+            if (!getOrCreateCompletedInstantsTimeline().containsOrBeforeTimelineStarts(instantTime)
+                || getOrCreateInflightInstantsTimeline().containsInstant(instantTime)) {
+              // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
+              continue;
+            }
+          }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range
             continue;

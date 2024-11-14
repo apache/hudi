@@ -1054,7 +1054,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
     try {
       readLock.lock();
-      HoodieTableVersion version = metaClient.getTableConfig().getTableVersion();
       List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
       return formattedPartitionList.stream().collect(Collectors.toMap(
           Function.identity(),
@@ -1112,7 +1111,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Stream<FileSlice> getAllLogsMergedFileSliceBeforeOrOn(String partitionStr, String maxInstantTime) {
     try {
       readLock.lock();
-      HoodieTableVersion version = metaClient.getTableConfig().getTableVersion();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
       return fetchAllStoredFileGroups(partition)
