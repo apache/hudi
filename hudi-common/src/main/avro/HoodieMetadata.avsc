@@ -463,15 +463,6 @@
                     "name": "HoodieSecondaryIndexInfo",
                     "fields": [
                         {
-                            "name": "recordKey",
-                            "type": [
-                                "null",
-                                "string"
-                            ],
-                            "default": null,
-                            "doc": "Refers to the record key that this secondary key maps to"
-                        },
-                        {
                             "name": "isDeleted",
                             "type": "boolean",
                             "doc": "True if this entry has been deleted"

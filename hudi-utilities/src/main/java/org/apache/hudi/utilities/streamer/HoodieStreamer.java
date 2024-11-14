@@ -271,8 +271,9 @@ public class HoodieStreamer implements Serializable {
         + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
     public String sourceOrderingField = "ts";
 
-    @Parameter(names = {"--payload-class"}, description = "Deprecated. Use --merge-mode for overwite or event time merging."
-        + " Subclass of HoodieRecordPayload, that works off a GenericRecord. Implement your own, if you want to do something "
+    @Parameter(names = {"--payload-class"}, description = "Deprecated. "
+        + "Use --merge-mode for overwrite with latest or event time merging. "
+        + "Subclass of HoodieRecordPayload, that works off a GenericRecord. Implement your own, if you want to do something "
         + "other than overwriting existing value")
     public String payloadClassName = null;
 

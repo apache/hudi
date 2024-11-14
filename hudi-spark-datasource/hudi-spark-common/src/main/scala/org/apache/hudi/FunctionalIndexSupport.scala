@@ -28,11 +28,10 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.hash.ColumnIndexID
+import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
-
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -61,8 +60,8 @@ class FunctionalIndexSupport(spark: SparkSession,
     lazy val functionalIndexPartitionOpt = getFunctionalIndexPartition(queryFilters)
     if (isIndexAvailable && queryFilters.nonEmpty && functionalIndexPartitionOpt.nonEmpty) {
       val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
-      val indexDf = loadFunctionalIndexDataFrame(functionalIndexPartitionOpt.get, readInMemory)
-      val prunedFileNames = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)._2
+      val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)
+      val indexDf = loadFunctionalIndexDataFrame(functionalIndexPartitionOpt.get, prunedPartitions, readInMemory)
       Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
     } else {
       Option.empty
@@ -100,13 +99,11 @@ class FunctionalIndexSupport(spark: SparkSession,
       checkState(functionToColumnNames.size == 1, "Currently, only one function with functional index in the query is supported")
       val (indexFunction, targetColumnName) = functionToColumnNames.head
       val indexDefinitions = metaClient.getIndexMetadata.get().getIndexDefinitions
-      indexDefinitions.asScala.foreach {
-        case (indexPartition, indexDefinition) =>
-          if (indexDefinition.getIndexFunction.equals(indexFunction) && indexDefinition.getSourceFields.contains(targetColumnName)) {
-            Option.apply(indexPartition)
-          }
+      indexDefinitions.asScala.collectFirst {
+        case (indexPartition, indexDefinition)
+          if indexDefinition.getIndexFunction.equals(indexFunction) && indexDefinition.getSourceFields.contains(targetColumnName) =>
+          indexPartition
       }
-      Option.empty
     } else {
       Option.empty
     }
@@ -137,8 +134,9 @@ class FunctionalIndexSupport(spark: SparkSession,
     }.toMap
   }
 
-  private def loadFunctionalIndexDataFrame(indexPartition: String,
-                                           shouldReadInMemory: Boolean): DataFrame = {
+  def loadFunctionalIndexDataFrame(indexPartition: String,
+                                   prunedPartitions: Set[String],
+                                   shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
       val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
       val indexType = indexDefinition.getIndexType
@@ -147,7 +145,7 @@ class FunctionalIndexSupport(spark: SparkSession,
       checkState(indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS),
         s"Index type $indexType is not supported")
       val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadFunctionalIndexForColumnsInternal(
-        indexDefinition.getSourceFields.asScala.toSeq, indexPartition, shouldReadInMemory)
+        indexDefinition.getSourceFields.asScala.toSeq, prunedPartitions, indexPartition, shouldReadInMemory)
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(JFunction.toJavaSerializableFunction(it => {
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
@@ -169,6 +167,7 @@ class FunctionalIndexSupport(spark: SparkSession,
   }
 
   private def loadFunctionalIndexForColumnsInternal(targetColumns: Seq[String],
+                                                    prunedPartitions: Set[String],
                                                     indexPartition: String,
                                                     shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
     // Read Metadata Table's Functional Index records into [[HoodieData]] container by
@@ -177,8 +176,17 @@ class FunctionalIndexSupport(spark: SparkSession,
     //    - Filtering out nulls
     checkState(targetColumns.nonEmpty)
     val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
+    val keyPrefixes = if (prunedPartitions.nonEmpty) {
+      prunedPartitions.map(partitionPath =>
+        new PartitionIndexID(HoodieTableMetadataUtil.getPartitionIdentifier(partitionPath)).asBase64EncodedString()
+      ).flatMap(encodedPartition => {
+        encodedTargetColumnNames.map(encodedTargetColumn => encodedTargetColumn.concat(encodedPartition))
+      })
+    } else {
+      encodedTargetColumnNames
+    }
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
-      metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, indexPartition, shouldReadInMemory)
+      metadataTable.getRecordsByKeyPrefixes(keyPrefixes.toSeq.asJava, indexPartition, shouldReadInMemory)
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       metadataRecords.map(JFunction.toJavaSerializableFunction(record => {

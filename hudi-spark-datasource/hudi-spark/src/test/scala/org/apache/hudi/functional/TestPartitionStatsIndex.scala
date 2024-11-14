@@ -46,6 +46,7 @@ import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import java.util.concurrent.Executors
 import java.util.stream.Stream
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
@@ -159,23 +160,33 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   def testPartitionStatsWithMultiWriter(tableType: HoodieTableType, useUpsert: Boolean): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
-      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> HoodieFailedWritesCleaningPolicy.LAZY.name,
-      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,
-      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
+      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.LAZY.name,
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> classOf[InProcessLockProvider].getName,
+      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
     )
 
-    doWriteAndValidateDataAndPartitionStats(hudiOpts,
+    val insertRecords: mutable.Buffer[String] =
+      recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
+    doWriteAndValidateDataAndPartitionStats(
+      insertRecords,
+      hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
       validate = false)
 
+    val write1Records: mutable.Buffer[String] = insertRecords
+    val write2Records: mutable.Buffer[String] =
+      if (useUpsert) insertRecords else recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
+
     val executor = Executors.newFixedThreadPool(2)
     implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
-    val function = new Function0[Boolean] {
-      override def apply(): Boolean = {
+    val function = new Function1[mutable.Buffer[String], Boolean] {
+      def apply(records: mutable.Buffer[String]): Boolean = {
         try {
-          doWriteAndValidateDataAndPartitionStats(hudiOpts,
+          doWriteAndValidateDataAndPartitionStats(
+            records,
+            hudiOpts,
             operation = if (useUpsert) UPSERT_OPERATION_OPT_VAL else BULK_INSERT_OPERATION_OPT_VAL,
             saveMode = SaveMode.Append,
             validate = false)
@@ -187,10 +198,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       }
     }
     val f1 = Future[Boolean] {
-      function.apply()
+      function.apply(write1Records)
     }
     val f2 = Future[Boolean] {
-      function.apply()
+      function.apply(write2Records)
     }
 
     Await.result(f1, Duration("5 minutes"))
