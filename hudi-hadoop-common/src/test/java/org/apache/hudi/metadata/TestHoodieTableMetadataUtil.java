@@ -58,6 +58,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -305,5 +306,26 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
       writer.writeWithMetadata(record.getKey(), record, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS);
     }
     writer.close();
+  }
+
+  @Test
+  public void testGetFileGroupIndexFromFileId() {
+    String result = getFileIDForFileGroup(MetadataPartitionType.FILES, 1, "test_partition");
+    assertEquals("files-0001-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.COLUMN_STATS, 2, "stats_partition");
+    assertEquals("col-stats-0002-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.BLOOM_FILTERS, 3, "bloom_partition");
+    assertEquals("bloom-filters-0003-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.RECORD_INDEX, 4, "record_partition");
+    assertEquals("record-index-0004-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.SECONDARY_INDEX, 6, "secondary_index_idx_ts");
+    assertEquals("secondary-index-idx-ts-0006-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.FUNCTIONAL_INDEX, 5, "func_index_ts");
+    assertEquals("func-index-ts-0005-0", result);
   }
 }
