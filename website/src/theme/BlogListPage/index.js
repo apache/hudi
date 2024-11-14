@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Layout from "@theme/Layout";
-import BlogListPaginator from "@theme/BlogListPaginator";
 import BlogTabs from "../../components/BlogTabs";
-import { useLocation, useHistory } from "@docusaurus/router";
+import { useLocation } from "@docusaurus/router";
 import BlogListPageBanner from "../../components/BlogListPageBanner";
 import BlogListPagination from "../../components/BlogListPagination";
 
 function BlogPage(props) {
   const location = useLocation();
-  const history = useHistory();
 
   const [currentPage, setCurrentPage] = useState(1);
   const postsPerPage = 9;
