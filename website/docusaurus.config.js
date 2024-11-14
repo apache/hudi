@@ -1,6 +1,7 @@
 const { themes } = require("prism-react-renderer");
 const versions = require("./versions.json");
 const VersionsArchived = require("./versionsArchived.json");
+const { slackUrl } = require('./constants');
 const allDocHomesPaths = [
   "/docs/",
   "/docs/next/",
@@ -8,8 +9,6 @@ const allDocHomesPaths = [
 ];
 
 /** @type {import('@docusaurus/types').DocusaurusConfig} */
-const slackUrl =
-  "https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g";
 
 module.exports = {
   title: "Apache Hudi",
