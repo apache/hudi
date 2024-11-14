@@ -45,10 +45,10 @@ public class TimelineDTO {
   }
 
   public static HoodieTimeline toTimeline(TimelineDTO dto, HoodieTableMetaClient metaClient) {
-    InstantGenerator instantFactory = metaClient.getInstantGenerator();
+    InstantGenerator instantGenerator = metaClient.getInstantGenerator();
     TimelineFactory factory = metaClient.getTimelineLayout().getTimelineFactory();
     // TODO: For Now, we will assume, only active-timeline will be transferred.
-    return factory.createDefaultTimeline(dto.instants.stream().map(d -> InstantDTO.toInstant(d, instantFactory)),
+    return factory.createDefaultTimeline(dto.instants.stream().map(d -> InstantDTO.toInstant(d, instantGenerator)),
         metaClient.getActiveTimeline()::getInstantDetails);
   }
 }

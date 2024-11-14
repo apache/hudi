@@ -75,8 +75,8 @@ public abstract class TimelineLayout implements Serializable {
    */
   private static class TimelineLayoutV0 extends TimelineLayout {
 
-    private final InstantGenerator instantFactory = new InstantGeneratorV1();
-    private final InstantFileNameGenerator instantFileNameFactory = new InstantFileNameGeneratorV1();
+    private final InstantGenerator instantGenerator = new InstantGeneratorV1();
+    private final InstantFileNameGenerator instantFileNameGenerator = new InstantFileNameGeneratorV1();
     private final TimelineFactory timelineFactory = new TimelineV1Factory(this);
     private final InstantComparator instantComparator = new InstantComparatorV1();
     private final InstantFileNameParser fileNameParser = new InstantFileNameParserV2();
@@ -88,12 +88,12 @@ public abstract class TimelineLayout implements Serializable {
 
     @Override
     public InstantGenerator getInstantGenerator() {
-      return instantFactory;
+      return instantGenerator;
     }
 
     @Override
     public InstantFileNameGenerator getInstantFileNameGenerator() {
-      return instantFileNameFactory;
+      return instantFileNameGenerator;
     }
 
     @Override
@@ -146,8 +146,8 @@ public abstract class TimelineLayout implements Serializable {
    */
   private static class TimelineLayoutV2 extends TimelineLayout {
 
-    private final InstantGenerator instantFactory = new InstantGeneratorV2();
-    private final InstantFileNameGenerator instantFileNameFactory = new InstantFileNameGeneratorV2();
+    private final InstantGenerator instantGenerator = new InstantGeneratorV2();
+    private final InstantFileNameGenerator instantFileNameGenerator = new InstantFileNameGeneratorV2();
     private final TimelineFactory timelineFactory = new TimelineV2Factory(this);
     private final InstantComparator instantComparator = new InstantComparatorV2();
     private final InstantFileNameParser fileNameParser = new InstantFileNameParserV2();
@@ -159,12 +159,12 @@ public abstract class TimelineLayout implements Serializable {
 
     @Override
     public InstantGenerator getInstantGenerator() {
-      return instantFactory;
+      return instantGenerator;
     }
 
     @Override
     public InstantFileNameGenerator getInstantFileNameGenerator() {
-      return instantFileNameFactory;
+      return instantFileNameGenerator;
     }
 
     @Override

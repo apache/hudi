@@ -76,20 +76,20 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
 
   protected TimelineFactory factory;
   protected InstantComparator instantComparator;
-  protected InstantGenerator instantFactory;
+  protected InstantGenerator instantGenerator;
 
   public BaseHoodieTimeline(TimelineLayout layout) {
     this.factory = layout.getTimelineFactory();
     this.instantComparator = layout.getInstantComparator();
-    this.instantFactory = layout.getInstantGenerator();
+    this.instantGenerator = layout.getInstantGenerator();
   }
 
   public BaseHoodieTimeline(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details,
-                            TimelineFactory factory, InstantComparator instantComparator, InstantGenerator instantFactory) {
+                            TimelineFactory factory, InstantComparator instantComparator, InstantGenerator instantGenerator) {
     this.details = details;
     this.factory = factory;
     this.instantComparator = instantComparator;
-    this.instantFactory = instantFactory;
+    this.instantGenerator = instantGenerator;
     setInstants(instants.collect(Collectors.toList()));
   }
 

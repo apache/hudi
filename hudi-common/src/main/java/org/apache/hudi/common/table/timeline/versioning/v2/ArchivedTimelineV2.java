@@ -24,8 +24,6 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -67,7 +65,6 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    */
   private String cursorInstant;
   private final ArchivedTimelineLoader timelineLoader = new ArchivedTimelineLoaderV2();
-  private final InstantGenerator instantFactory = new InstantGeneratorV1();
 
   /**
    * Loads all the archived instants.
@@ -172,7 +169,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     final String action = record.get(ACTION_ARCHIVED_META_FIELD).toString();
     final String completionTime = record.get(COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
     instantDetailsConsumer.ifPresent(consumer -> consumer.accept(instantTime, record));
-    return instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime);
+    return instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime);
   }
 
   @Nullable

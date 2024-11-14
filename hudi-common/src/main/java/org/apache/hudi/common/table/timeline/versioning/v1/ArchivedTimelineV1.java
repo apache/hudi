@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
@@ -55,7 +54,6 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   private HoodieTableMetaClient metaClient;
   private final Map<String, byte[]> readCommits = new HashMap<>();
   private final ArchivedTimelineLoader timelineLoader = new ArchivedTimelineLoaderV1();
-  private final InstantGenerator instantFactory = new InstantGeneratorV1();
 
   private static final Logger LOG = LoggerFactory.getLogger(org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.class);
 
@@ -212,7 +210,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
         return null;
       });
     }
-    return instantFactory.createNewInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
+    return instantGenerator.createNewInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
         instantTime, stateTransitionTime);
   }
 

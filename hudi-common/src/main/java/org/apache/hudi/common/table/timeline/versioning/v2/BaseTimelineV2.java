@@ -100,7 +100,7 @@ public class BaseTimelineV2 extends BaseHoodieTimeline {
     return Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION)
             || s.getAction().equalsIgnoreCase(HoodieTimeline.CLUSTERING_ACTION))
         .getReverseOrderedInstants()
-        .filter(i -> ClusteringUtils.isClusteringInstant(this, i, instantFactory))
+        .filter(i -> ClusteringUtils.isClusteringInstant(this, i, instantGenerator))
         .findFirst());
   }
 
@@ -123,7 +123,7 @@ public class BaseTimelineV2 extends BaseHoodieTimeline {
       clusterStream = pendingClusteringTimeline.getInstantsAsStream();
     }
     return  Option.fromJavaOptional(clusterStream
-        .filter(i -> ClusteringUtils.isClusteringInstant(this, i, instantFactory)).findFirst());
+        .filter(i -> ClusteringUtils.isClusteringInstant(this, i, instantGenerator)).findFirst());
   }
 
   @Override
@@ -144,7 +144,7 @@ public class BaseTimelineV2 extends BaseHoodieTimeline {
           });
           // Filter replace commits down to those that are due to clustering
           this.pendingClusteringInstants = pendingClusterInstants.stream()
-              .filter(instant -> ClusteringUtils.isClusteringInstant(this, instant, instantFactory))
+              .filter(instant -> ClusteringUtils.isClusteringInstant(this, instant, instantGenerator))
               .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
         }
       }

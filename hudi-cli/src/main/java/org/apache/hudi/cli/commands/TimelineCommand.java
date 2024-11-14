@@ -181,14 +181,14 @@ public class TimelineCommand {
 
     final InstantFileNameParser instantFileNameParser = metaClient.getInstantFileNameParser();
     final InstantComparator instantComparator = metaClient.getTimelineLayout().getInstantComparator();
-    final InstantGenerator instantFactory = metaClient.getInstantGenerator();
+    final InstantGenerator instantGenerator = metaClient.getInstantGenerator();
 
     Stream<HoodieInstantWithModTime> instantStream =
         HoodieTableMetaClient.scanFiles(storage, metaPath, path -> {
           // Include only the meta files with extensions that needs to be included
           String extension = instantFileNameParser.getTimelineFileExtension(path.getName());
           return metaClient.getActiveTimeline().getValidExtensionsInActiveTimeline().contains(extension);
-        }).stream().map(storagePathInfo -> new HoodieInstantWithModTime(storagePathInfo, instantFactory, instantComparator));
+        }).stream().map(storagePathInfo -> new HoodieInstantWithModTime(storagePathInfo, instantGenerator, instantComparator));
     instantStream.forEach(instant -> {
       instantMap.computeIfAbsent(instant.requestedTime(), t -> new HashMap<>())
           .put(instant.getState(), instant);
