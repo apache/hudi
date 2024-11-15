@@ -39,7 +39,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -593,10 +592,11 @@ public class HoodieTableMetaClient implements Serializable {
    * TODO(HUDI-8438): remove this method after table service writes the latest table schema
    *   in the commit metadata.
    *
-   * Get timeline that only contains completed instants whose schema attribute in their commit metadata reflects the
-   * latest table schema at the time when they commit.
+   * Get timeline in REVERSE order that only contains completed instants which POTENTIALLY evolve the table schema.
+   * For types of instants that are included and not reflecting table schema at their instant completion time please refer
+   * comments inside the code.
    */
-  public HoodieTimeline getSchemaEvolutionTimeline() {
+  public HoodieTimeline getSchemaEvolutionTimelineInReverseOrder() {
     HoodieActiveTimeline timeline = getActiveTimeline();
     Stream<HoodieInstant> timelineStream = timeline.getInstantsAsStream();
     final Set<String> actions;
@@ -614,14 +614,21 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     // We only care commited instant when it comes to table schema.
-    // For REPLACE_COMMIT_ACTION we need further differentiate ones come from table service clustering and those from
-    // insert overwrite operation.
     return new HoodieDefaultTimeline(
         timelineStream
+            // Only focuses on those who could potentially evolve the table schema. 2 types of instants we need
+            // to further filter out before extracting the table schema:
+            // - REPLACE_COMMIT_ACTION can come from either insert overwrite or clustering table services
+            //   the latter one should be excluded as it may contain stale table schema info.
+            // - There are some other instants with type DELTA_COMMIT_ACTION/COMMIT_ACTION that does not contain
+            //   a valid schema field in their commit metadata.
+            // Since the operations of filtering them out are expensive, we should do on-demand stream based
+            // filtering later.
             .filter(s -> actions.contains(s.getAction()))
             .filter(HoodieInstant::isCompleted)
-            .filter(instant -> !instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
-                || !ClusteringUtils.isClusteringInstant(timeline, instant)),
+            // We reverse the order as the operation against this timeline would be very efficient if
+            // we always start from the tail.
+            .sorted(HoodieInstant.COMPARATOR.reversed()),
         (Function<HoodieInstant, Option<byte[]>> & Serializable) timeline::getInstantDetails);
   }
 

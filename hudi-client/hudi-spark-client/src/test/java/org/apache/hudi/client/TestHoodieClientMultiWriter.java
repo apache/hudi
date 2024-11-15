@@ -24,6 +24,7 @@ import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictReso
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.common.HoodieSchemaNotFoundException;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -190,37 +192,81 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             // committed->|------------------------------------------------------------------- initial commit (optional)
 
             // No schema evolution, no conflict.
-            {true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
-            {false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
+            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
+            {false, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
+            {false, true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
             // No concurrent schema evolution, no conflict.
-            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // If there is a initial commits defining table schema to TRIP_EXAMPLE_SCHEMA.
             // as long as txn 2 stick to that schema, backwards compatibility handles everything.
-            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // In case no initial commits, table schema is not really predefined.
             // It means are effectively having 2 concurrent txn trying to define table schema
             // differently in this case.
-            {false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // Concurrent schema evolution into the same schema does not conflict.
-            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // Concurrent schema evolution into different schemas conflicts.
             // from clustering operation, instead of TRIP_EXAMPLE_SCHEMA_EVOLVED_1 (from commit 2)
-            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
-            {false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {true, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
         };
     return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Injects a new instant with customizable schema in commit metadata
+   * @param timestamp Instant timestamp
+   * @param schemaAttrValue Schema value to set in commit metadata (can be null)
+   */
+  public void injectInstantWithSchema(
+      String timestamp,
+      String action,
+      String schemaAttrValue) throws Exception {
+
+    HoodieInstant instantRequested =
+        new HoodieInstant(HoodieInstant.State.REQUESTED, action, timestamp);
+
+    HoodieInstant instantInflight =
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, action, timestamp);
+
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+
+    // Create requested instant
+    timeline.createNewInstant(instantRequested);
+
+    // Create commit metadata with schema if provided
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.INSERT);
+    if (schemaAttrValue != null) {
+      // Set schema in extra metadata
+      commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaAttrValue);
+    }
+
+    // Transition to inflight with empty commit metadata
+    timeline.transitionRequestedToInflight(instantRequested, Option.empty());
+
+    // Save as complete with commit metadata
+    byte[] commitMetadataBytes = commitMetadata.toJsonString().getBytes();
+    timeline.saveAsComplete(
+        instantInflight,
+        Option.of(commitMetadataBytes));
   }
 
   @ParameterizedTest
   @MethodSource("concurrentAlterSchemaTestDimension")
   void testHoodieClientWithSchemaConflictResolution(
       boolean createInitialCommit,
+      boolean createEmptyInitialCommit,
       HoodieTableType tableType,
       String writerSchema1,
       String writerSchema2,
@@ -254,6 +300,26 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       createCommitWithInserts(writeConfig, client1, "000", nextCommitTime11, 100, true);
       createCommitWithUpserts(writeConfig, client1, nextCommitTime11, Option.empty(), nextCommitTime12, 100);
       totalCommits += 2;
+    }
+
+    if (createEmptyInitialCommit) {
+      // Create an empty commit which does not contain a valid schema, schema conflict resolution should still be able
+      // to handle it properly. This can happen in delta streamer where no data is ingested but empty commit is created
+      // to save the checkpoint.
+      HoodieWriteConfig writeConfig22 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).build();
+      writeConfig22.setSchema("\"null\"");
+      final SparkRDDWriteClient client22 = getHoodieWriteClient(writeConfig22);
+      JavaRDD<HoodieRecord> emptyRDD = jsc.emptyRDD();
+      // Perform upsert with empty RDD
+      client22.startCommitWithTime("0013");
+      JavaRDD<WriteStatus> writeStatusRDD = client22.upsert(emptyRDD, "0013");
+      client22.commit("0013", writeStatusRDD);
+      totalCommits += 1;
+
+      // Validate table schema in the end.
+      TableSchemaResolver r = new TableSchemaResolver(metaClient);
+      // Assert no table schema is defined.
+      assertThrows(HoodieSchemaNotFoundException.class, () -> r.getTableAvroSchema(false));
     }
 
     // Start txn 002 altering table schema
@@ -306,6 +372,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       }
       totalCommits += 1;
     }
+
+    // Inject commit instant that contains no valid schema field in it.
+    String action = COPY_ON_WRITE == tableType ? HoodieTimeline.COMMIT_ACTION : HoodieTimeline.DELTA_COMMIT_ACTION;
+    injectInstantWithSchema("0033", action, null);
+    injectInstantWithSchema("0034", action, "");
+    totalCommits += 2;
 
     Exception e = null;
     try {

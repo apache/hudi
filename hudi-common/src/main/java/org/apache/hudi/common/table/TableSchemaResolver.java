@@ -203,31 +203,48 @@ public class TableSchemaResolver {
   }
 
   private Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
-    Option<Schema> schema =
-        (instantOpt.isPresent()
-            ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
-            : getTableSchemaFromLatestCommitMetadata(includeMetadataFields))
-            .or(() ->
-                metaClient.getTableConfig().getTableCreateSchema()
-                    .map(tableSchema ->
-                        includeMetadataFields
-                            ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
-                            : tableSchema)
-            )
-            .or(() -> {
-              Option<Schema> schemaFromDataFile = getTableAvroSchemaFromDataFileInternal();
-              return includeMetadataFields
-                  ? schemaFromDataFile
-                  : schemaFromDataFile.map(HoodieAvroUtils::removeMetadataFields);
-            });
+    return (instantOpt.isPresent()
+        ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
+        : getTableSchemaFromLatestCommitMetadata(includeMetadataFields))
+        .map(this::handlePartitionColumns)
+        .or(() -> getTableCreateSchemaWithMetadata(includeMetadataFields))
+        .or(() -> {
+          Option<Schema> schemaFromDataFile = getTableAvroSchemaFromDataFileInternal();
+          return (includeMetadataFields
+              ? schemaFromDataFile
+              : schemaFromDataFile.map(HoodieAvroUtils::removeMetadataFields))
+              .map(this::handlePartitionColumns);
+        });
+  }
 
-    // TODO partition columns have to be appended in all read-paths
-    if (metaClient.getTableConfig().shouldDropPartitionColumns() && schema.isPresent()) {
+  /**
+   * Retrieves the table creation schema with metadata fields and partition columns handled.
+   *
+   * @param includeMetadataFields whether to include metadata fields in the schema
+   * @return Option containing the fully processed schema if available, empty Option otherwise
+   */
+  public Option<Schema> getTableCreateSchemaWithMetadata(boolean includeMetadataFields) {
+    return metaClient.getTableConfig().getTableCreateSchema()
+        .map(tableSchema ->
+            includeMetadataFields
+                ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
+                : tableSchema)
+        .map(this::handlePartitionColumns);
+  }
+
+  /**
+   * Handles partition column logic for a given schema.
+   *
+   * @param schema the input schema to process
+   * @return the processed schema with partition columns handled appropriately
+   */
+  private Schema handlePartitionColumns(Schema schema) {
+    if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
       return metaClient.getTableConfig().getPartitionFields()
-          .map(partitionFields -> appendPartitionColumns(schema.get(), Option.ofNullable(partitionFields)))
-          .or(() -> schema);
+          .map(partitionFields -> appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
+          .or(() -> Option.of(schema))
+          .get();
     }
-
     return schema;
   }
 
