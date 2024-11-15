@@ -152,7 +152,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       HoodieJavaRDD.of(inputRDD).persist(config.getTaggedRecordStorageLevel(),
           context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     } else {
-      LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
+      LOG.info("RDD PreppedRecords was persisted at: {}", inputRDD.getStorageLevel());
     }
 
     // Handle records update with clustering
@@ -162,9 +162,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start(); // time taken from dedup -> tag location -> building workload profile
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-    LOG.debug("Input workload profile :" + workloadProfile);
+    LOG.debug("Input workload profile :{}", workloadProfile);
     long sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.endTimer();
-    LOG.info("Source read and index timer " + sourceReadAndIndexDurationMs);
+    LOG.info("Source read and index timer {}", sourceReadAndIndexDurationMs);
 
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
@@ -329,7 +329,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
-      LOG.info("Empty partition with fileId => " + fileId);
+      LOG.info("Empty partition with fileId => {}", fileId);
       return Collections.emptyIterator();
     }
 

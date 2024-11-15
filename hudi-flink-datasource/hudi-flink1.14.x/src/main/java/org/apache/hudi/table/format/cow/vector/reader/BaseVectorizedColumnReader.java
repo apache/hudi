@@ -207,13 +207,13 @@ public abstract class BaseVectorizedColumnReader implements ColumnReader<Writabl
     this.definitionLevelColumn = new ValuesReaderIntIterator(dlReader);
     try {
       BytesInput bytes = page.getBytes();
-      LOG.debug("page size " + bytes.size() + " bytes and " + pageValueCount + " records");
+      LOG.debug("page size {} bytes and {} records", bytes.size(), pageValueCount);
       ByteBufferInputStream in = bytes.toInputStream();
-      LOG.debug("reading repetition levels at " + in.position());
+      LOG.debug("reading repetition levels at {}", in.position());
       rlReader.initFromPage(pageValueCount, in);
-      LOG.debug("reading definition levels at " + in.position());
+      LOG.debug("reading definition levels at {}", in.position());
       dlReader.initFromPage(pageValueCount, in);
-      LOG.debug("reading data at " + in.position());
+      LOG.debug("reading data at {}", in.position());
       initDataReader(page.getValueEncoding(), in, page.getValueCount());
     } catch (IOException e) {
       throw new ParquetDecodingException(

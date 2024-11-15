@@ -96,7 +96,6 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
     val lastInstant = String.format("%03d", new Integer(instantTime.incrementAndGet()))
     if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInstant) < 0) {
-      println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
       metaClient
     }

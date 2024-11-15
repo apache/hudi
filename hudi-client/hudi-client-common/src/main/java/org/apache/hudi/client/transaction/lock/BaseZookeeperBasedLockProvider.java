@@ -119,7 +119,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
         // to avoid failure due to synchronous calls.
       } catch (KeeperException e) {
         if (e.code() == KeeperException.Code.NODEEXISTS) {
-          LOG.debug(String.format("Node already exist for path = %s", path));
+          LOG.debug("Node already exist for path = {}", path);
         } else {
           throw new HoodieLockException("Failed to create zookeeper node", e);
         }

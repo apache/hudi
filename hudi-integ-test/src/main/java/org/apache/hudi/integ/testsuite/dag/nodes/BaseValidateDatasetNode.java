@@ -94,14 +94,14 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
       SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
       // todo: Fix partitioning schemes. For now, assumes data based partitioning.
       String inputPath = context.getHoodieTestSuiteWriter().getCfg().inputBasePath + "/*/*";
-      log.info("Validation using data from input path " + inputPath);
+      log.info("Validation using data from input path {}", inputPath);
       // listing batches to be validated
       String inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
       if (log.isDebugEnabled()) {
         FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
-        log.info("fileStatuses length: " + fileStatuses.length);
+        log.info("fileStatuses length: {}", fileStatuses.length);
         for (FileStatus fileStatus : fileStatuses) {
-          log.debug("Listing all Micro batches to be validated :: " + fileStatus.getPath().toString());
+          log.debug("Listing all Micro batches to be validated :: {}", fileStatus.getPath().toString());
         }
       }
 
@@ -115,7 +115,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         Dataset<Row> exceptHudiDf = trimmedHudiDf.except(inputSnapshotDf);
         long exceptInputCount = exceptInputDf.count();
         long exceptHudiCount = exceptHudiDf.count();
-        log.debug("Except input df count " + exceptInputDf + ", except hudi count " + exceptHudiCount);
+        log.debug("Except input df count {}, except hudi count {}", exceptInputDf, exceptHudiCount);
         if (exceptInputCount != 0 || exceptHudiCount != 0) {
           log.error("Data set validation failed. Total count in hudi " + trimmedHudiDf.count() + ", input df count " + inputSnapshotDf.count()
               + ". InputDf except hudi df = " + exceptInputCount + ", Hudi df except Input df " + exceptHudiCount);
@@ -125,7 +125,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         Dataset<Row> intersectionDf = inputSnapshotDf.intersect(trimmedHudiDf);
         long inputCount = inputSnapshotDf.count();
         long outputCount = trimmedHudiDf.count();
-        log.debug("Input count: " + inputCount + "; output count: " + outputCount);
+        log.debug("Input count: {}; output count: {}", inputCount, outputCount);
         // the intersected df should be same as inputDf. if not, there is some mismatch.
         if (outputCount == 0 || inputCount == 0 || inputSnapshotDf.except(intersectionDf).count() != 0) {
           log.error("Data set validation failed. Total count in hudi " + outputCount + ", input df count " + inputCount);
@@ -158,7 +158,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
           inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
           FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
           for (FileStatus fileStatus : fileStatuses) {
-            log.debug("Micro batch to be deleted " + fileStatus.getPath().toString());
+            log.debug("Micro batch to be deleted {}", fileStatus.getPath());
             fs.delete(fileStatus.getPath(), true);
           }
         }

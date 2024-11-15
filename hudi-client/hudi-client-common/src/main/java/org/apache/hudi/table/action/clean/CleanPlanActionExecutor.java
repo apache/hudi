@@ -192,7 +192,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       // Save to both aux and timeline folder
       try {
         table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
-        LOG.info("Requesting Cleaning with instant time " + cleanInstant);
+        LOG.info("Requesting Cleaning with instant time {}", cleanInstant);
       } catch (IOException e) {
         LOG.error("Got exception when saving cleaner requested file", e);
         throw new HoodieIOException(e.getMessage(), e);

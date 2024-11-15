@@ -127,12 +127,12 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     }
 
     if (LOG.isDebugEnabled()) {
-      LOG.debug("Partitions assigned per file groups :" + fileGroupToPartitions);
+      LOG.debug("Partitions assigned per file groups :{}", fileGroupToPartitions);
       StringBuilder str = new StringBuilder();
       for (int i = 0; i < bucketsFilled.length; i++) {
         str.append("p" + i + " : " + bucketsFilled[i] + ",");
       }
-      LOG.debug("Num buckets assigned per file group :" + str);
+      LOG.debug("Num buckets assigned per file group :{}", str);
     }
   }
 

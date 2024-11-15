@@ -72,7 +72,7 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
       MarkerDirState markerDirState = entry.getValue();
       Option<Integer> fileIndex = markerDirState.getNextFileIndexToUse();
       if (!fileIndex.isPresent()) {
-        LOG.debug("All marker files are busy, skip batch processing of create marker requests in " + markerDir);
+        LOG.debug("All marker files are busy, skip batch processing of create marker requests in {}", markerDir);
         continue;
       }
       List<MarkerCreationFuture> futures = markerDirState.fetchPendingMarkerCreationRequests();

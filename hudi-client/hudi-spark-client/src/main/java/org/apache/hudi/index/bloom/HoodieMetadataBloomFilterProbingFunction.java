@@ -147,8 +147,8 @@ public class HoodieMetadataBloomFilterProbingFunction implements
               }
             });
 
-            LOG.debug(String.format("Total records (%d), bloom filter candidates (%d)",
-                hoodieKeyList.size(), candidateRecordKeys.size()));
+            LOG.debug("Total records ({}), bloom filter candidates ({})",
+                hoodieKeyList.size(), candidateRecordKeys.size());
 
             return Tuple2.apply(new HoodieFileGroupId(partitionPath, fileId), new HoodieBloomFilterProbingResult(candidateRecordKeys));
           })
