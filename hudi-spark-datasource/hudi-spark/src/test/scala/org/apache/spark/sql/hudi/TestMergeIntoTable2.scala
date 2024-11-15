@@ -34,7 +34,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -189,7 +189,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  s_value struct<f0: int, f1: string>,
            |  a_value array<string>,
            |  m_value map<string, string>,
-           |  ts long
+           |  ts int
            | ) using hudi
            | tblproperties (
            |  type = 'mor',
@@ -252,7 +252,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
@@ -340,7 +340,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
@@ -385,7 +385,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
@@ -452,7 +452,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  ID int,
            |  name string,
            |  price double,
-           |  TS long,
+           |  ts int,
            |  DT string
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
@@ -524,7 +524,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  ID int,
            |  NAME string,
            |  price double,
-           |  TS long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | options (
@@ -566,7 +566,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
@@ -613,7 +613,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id2 int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
@@ -658,7 +658,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -696,7 +696,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -736,7 +736,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | create table $tableName (
            |  id int,
            |  name string,
-           |  ts long
+           |  ts int
            | ) using hudi
            | tblproperties (
            |  type = 'cow',
@@ -776,7 +776,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |  id int,
                |  name string,
                |  price double,
-               |  ts long,
+               |  ts int,
                |  dt string
                | ) using hudi
                | tblproperties (
@@ -840,7 +840,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                |  id int,
                |  name string,
                |  price double,
-               |  ts long,
+               |  ts int,
                |  dt string
                | ) using hudi
                | tblproperties (
@@ -906,7 +906,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -955,7 +955,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -985,7 +985,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (

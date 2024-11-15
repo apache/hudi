@@ -31,7 +31,7 @@ class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}'
            | tblproperties (

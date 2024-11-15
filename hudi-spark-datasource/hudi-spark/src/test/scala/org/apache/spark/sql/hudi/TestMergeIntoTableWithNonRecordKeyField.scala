@@ -184,7 +184,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}'
            | tblproperties (
@@ -259,7 +259,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |  id int,
              |  name string,
              |  price double,
-             |  ts long
+             |  ts int
              |) using hudi
              | location '${tmp.getCanonicalPath}'
              | $prekstr
@@ -309,7 +309,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}'
            | tblproperties (

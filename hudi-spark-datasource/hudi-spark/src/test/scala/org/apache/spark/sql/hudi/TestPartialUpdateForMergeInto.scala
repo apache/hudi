@@ -32,7 +32,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
              | id int,
              | name string,
              | price double,
-             | _ts long
+             | _ts int
              |) using hudi
              |tblproperties(
              | type ='$tableType',
@@ -92,7 +92,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          | id int,
          | name string,
          | price double,
-         | _ts long
+         | _ts int
          |) using hudi
          |tblproperties(
          | type = 'cow',
@@ -121,7 +121,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          | id int,
          | name string,
          | price double,
-         | _ts long
+         | _ts int
          |) using hudi
          |tblproperties(
          | type = 'mor',

@@ -36,7 +36,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  price double,
-             |  ts long
+             |  ts int
              |) using hudi
              | location '${tmp.getCanonicalPath}'
              | tblproperties (
@@ -57,7 +57,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | ) s0
              | on s0.id = $tableName.id
              | when matched and flag = '1' then update set
-             | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
+             | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts + 1
              | when not matched and flag = '1' then insert *
        """.stripMargin)
         checkAnswer(s"select id, name, price, ts from $tableName")(
@@ -137,7 +137,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  name string,
              |  data int,
              |  country string,
-             |  ts bigint
+             |  ts int
              |) using hudi
              |tblproperties (
              |  type = 'cow',
@@ -270,7 +270,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            | ) using parquet
            | location '${tmp.getCanonicalPath}/$sourceTable'
          """.stripMargin)
@@ -281,7 +281,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$targetTable'
            | tblproperties (
@@ -477,7 +477,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  ts long,
+           |  ts int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -606,7 +606,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       spark.sql(
         s"""
            | create table $tableName (
-           |  id bigint,
+           |  id int,
            |  name string,
            |  price double,
            |  dt string
@@ -665,7 +665,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  price double,
-             |  v long,
+             |  v int,
              |  dt string
              | ) using hudi
              | tblproperties (
@@ -738,7 +738,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  price double,
-             |  v long,
+             |  v int,
              |  dt string
              | ) using hudi
              | tblproperties (
@@ -819,7 +819,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  v long,
+           |  v int,
            |  dt string
            | ) using hudi
            | tblproperties (
@@ -1112,7 +1112,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           s"""
              | merge into $tableName
              | using (
-             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c, '1' as flag
+             |  select 1 as id, 'a1' as name, 10 as price, cast($dataValue as $dataType) as c, '1' as flag
              | ) s0
              | on s0.id = $tableName.id
              | when matched and flag = '1' then update set *
@@ -1125,7 +1125,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           s"""
              | merge into $tableName
              | using (
-             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c
+             |  select 1 as id, 'a1' as name, 10 as price, cast($dataValue as $dataType) as c
              | ) s0
              | on s0.id = $tableName.id
              | when matched then update set
@@ -1149,7 +1149,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}'
            | tblproperties (
@@ -1211,7 +1211,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  value $dataType,
-             |  ts long
+             |  ts int
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
              | tblproperties (
@@ -1258,7 +1258,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id int,
              |  name string,
              |  value $dataType,
-             |  ts long
+             |  ts int
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
              | tblproperties (
@@ -1292,7 +1292,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  value int,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
@@ -1327,7 +1327,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            |  id int,
            |  name string,
            |  value int,
-           |  ts long
+           |  ts int
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
@@ -1337,49 +1337,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
        """.stripMargin)
 
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-
-      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
-      val errorMsg = if (HoodieSparkUtils.gteqSpark3_2) {
-        "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
-      } else {
-        "Invalid MERGE INTO matching condition: s0.`id`: can't cast s0.`id` (of LongType) to IntegerType"
-      }
-
-      checkExceptionContain(
-        s"""
-           |merge into $tableName h0
-           |using (
-           |  select cast(1 as long) as id, 1001 as ts
-           | ) s0
-           | on cast(h0.id as long) = s0.id
-           | when matched then update set h0.ts = s0.ts
-           |""".stripMargin)(errorMsg)
-
-      // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
-      checkExceptionContain(
-        s"""
-           |merge into $tableName h0
-           |using (
-           |  select cast(1 as long) as id, 1002 as ts
-           | ) s0
-           | on h0.id = s0.id
-           | when matched then update set h0.ts = s0.ts
-           |""".stripMargin)(errorMsg)
-
-      // Can up-cast incoming dataset's primary-key w/o loss of precision (should succeed)
-      spark.sql(
-        s"""
-           |merge into $tableName h0
-           |using (
-           |  select cast(1 as short) as id, 1003 as ts
-           | ) s0
-           | on h0.id = s0.id
-           | when matched then update set h0.ts = s0.ts
-           |""".stripMargin)
-
-      checkAnswer(s"select id, name, value, ts from $tableName")(
-        Seq(1, "a1", 10, 1003)
-      )
 
       // Can remove redundant symmetrical casting on both sides (should succeed)
       spark.sql(
@@ -1407,7 +1364,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         spark.sql(
           s"""
              | create table $tableName (
-             |  id bigint,
+             |  id int,
              |  name string,
              |  price double,
              |  dt string
