@@ -76,6 +76,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -129,7 +130,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.getEnabledPartition
  *
  * @param <I> Type of input for the write client
  */
-public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableMetadataWriter {
+public abstract class HoodieBackedTableMetadataWriter<I,O> implements HoodieTableMetadataWriter {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadataWriter.class);
 
@@ -141,7 +142,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   // Record index has a fixed size schema. This has been calculated based on experiments with default settings
   // for block size (1MB), compression (GZ) and disabling the hudi metadata fields.
   private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
-  private transient BaseHoodieWriteClient<?, I, ?, ?> writeClient;
+  private transient BaseHoodieWriteClient<?, I, ?, O> writeClient;
 
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig dataWriteConfig;
@@ -1370,7 +1371,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
     I preppedRecordInputs = convertHoodieDataToEngineSpecificData(preppedRecords);
 
-    BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
+    BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
     // rollback partially failed writes if any.
     if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites()) {
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
@@ -1404,10 +1405,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     preWrite(instantTime);
     if (isInitializing) {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-      writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
+      writeAndCommitBulkInsert(writeClient, instantTime, preppedRecordInputs, bulkInsertPartitioner);
     } else {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-      writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+      writeAndCommitUpsert(writeClient, instantTime, preppedRecordInputs);
     }
 
     metadataMetaClient.reloadActiveTimeline();
@@ -1415,6 +1416,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata, dataMetaClient.getTableConfig().getMetadataPartitions()));
   }
+
+  protected abstract void writeAndCommitBulkInsert(BaseHoodieWriteClient<?, I, ?, O> writeClient, String instantTime, I preppedRecordInputs, Option<BulkInsertPartitioner> bulkInsertPartitioner);
+
+  protected abstract void writeAndCommitUpsert(BaseHoodieWriteClient<?, I, ?, O> writeClient, String instantTime, I preppedRecordInputs);
 
   /**
    * Allows the implementation to perform any pre-commit operations like transitioning a commit to inflight if required.
@@ -1566,7 +1571,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-      writeClient.compact(compactionInstantTime);
+      HoodieWriteMetadata<O> compactionWriteMetadata = writeClient.compact(compactionInstantTime);
+      writeClient.commitCompaction(compactionInstantTime, compactionWriteMetadata.getCommitMetadata().get(), Option.empty());
     } else if (metadataWriteConfig.isLogCompactionEnabled()) {
       // Schedule and execute log compaction with new instant time.
       final String logCompactionInstantTime = metadataMetaClient.createNewInstantTime(false);
@@ -1574,7 +1580,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
       } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
         LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
-        writeClient.logCompact(logCompactionInstantTime);
+        HoodieWriteMetadata<O> logCompactionWriteMetadata = writeClient.logCompact(logCompactionInstantTime);
+        writeClient.commitLogCompaction(logCompactionInstantTime, logCompactionWriteMetadata.getCommitMetadata().get(), Option.empty());
       }
     }
   }
@@ -1765,12 +1772,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return initialized;
   }
 
-  protected BaseHoodieWriteClient<?, I, ?, ?> getWriteClient() {
+  protected BaseHoodieWriteClient<?, I, ?, O> getWriteClient() {
     if (writeClient == null) {
       writeClient = initializeWriteClient();
     }
     return writeClient;
   }
 
-  protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
+  protected abstract BaseHoodieWriteClient<?, I, ?, O> initializeWriteClient();
 }
