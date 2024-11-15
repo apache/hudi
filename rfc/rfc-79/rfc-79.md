@@ -82,7 +82,9 @@ The table service flow will be updated to check the /.cancel folder during a pre
 
 The below visualization shows the flow for cancellable table service plans (steps that are already in existing table service flow are grey-ed out) 
 
-![cancel table service lifecycle with lock (3)](https://github.com/user-attachments/assets/b882a79d-b582-45f5-874d-57e255d13ff0)
+
+![cancel table service lifecycle with lock (4)](https://github.com/user-attachments/assets/4b419823-76cd-487f-b3aa-95d02a4945b9)
+
 
 Having this new .hoodie/.cancel folder (in addition to just the .aborted state) is needed not only to allow any writer to forcibily block an instant from being comitted, but also to avoid a table service writer attempt having to unecessairly re-attempt execution of the instant if the previous attempt issues a cancellation (but had failed during cancellation). The below visualized scenario shows how this next attempt will "short circut" in this manner. This scenario also includes an example of concurrent writers to show how transaction and heartbeating in the above proposed flow will allow correct behavior even in the face of concurrent writers attempting to execute and/or cancel the instant.
 
@@ -134,9 +136,10 @@ Before users can be allowed to set cancellation policy/flag, the below must all 
 3. The /.hoodie/.cancel metadata should be added & supported
 4. Clean should be updated as per the design proposal
 5. The write conflict detecting check of ingestion (and all other write operations) should be updated to ignore table service plans with cancellation flag set, as per the design proposal
-6. Table service execution flow should be updated as per the design proposal
+6. Table service execution flow should be updated as per the design proposal, just for clustering table service
 
 From here, a user can update the application/orchestration they use for scheduling clustering plans to have cancellation flag/policy enabled, whenever they want their plan to be cancellable (and lower priority with respect to ingestion). Note that it is legal for a dataset to have both cancellable and non-cancellable table service plans.
+Initially rollout/implementaiton should be limited to cluster table service, as clean & compaction are designed to operate on older file versions of file slices, so there may not be a strong justification for allowing those to be cancellabte. If any new table service types are added they can be considered for supporting cancellation functionality.
 
 
 
