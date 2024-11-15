@@ -58,14 +58,6 @@ public class UpgradeDowngrade {
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
-  public HoodieTableMetaClient getMetaClient() {
-    return metaClient;
-  }
-
-  public void setMetaClient(HoodieTableMetaClient metaClient) {
-    this.metaClient = metaClient;
-  }
-
   public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
 
