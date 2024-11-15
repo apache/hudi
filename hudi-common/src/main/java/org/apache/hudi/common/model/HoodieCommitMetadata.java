@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -42,9 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
-import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -494,23 +491,6 @@ public class HoodieCommitMetadata implements Serializable {
     int result = partitionToWriteStats.hashCode();
     result = 31 * result + compacted.hashCode();
     return result;
-  }
-
-  public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
-    try {
-      if (bytes.length == 0) {
-        return clazz.newInstance();
-      }
-      try {
-        return fromJsonString(fromUTF8Bytes(convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class)), clazz);
-      } catch (Exception e) {
-        // fall back to the alternative method (0.x)
-        LOG.warn("Primary method failed; trying alternative deserialization method.", e);
-        return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
-      }
-    } catch (Exception e) {
-      throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);
-    }
   }
 
   @Override

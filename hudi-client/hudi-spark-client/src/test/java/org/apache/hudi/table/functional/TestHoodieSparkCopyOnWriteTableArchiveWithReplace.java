@@ -57,7 +57,7 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
     HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataEnabled).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataEnabled).build())
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
          HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(DEFAULT_PARTITION_PATHS)) {

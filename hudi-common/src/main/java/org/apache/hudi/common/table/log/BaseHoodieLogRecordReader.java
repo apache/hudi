@@ -66,6 +66,8 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.COMMAND_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -250,7 +252,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
         }
         totalLogBlocks.incrementAndGet();
         if (logBlock.isDataOrDeleteBlock()) {
-          if (HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.GREATER_THAN, this.latestInstantTime)) {
+          if (compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), GREATER_THAN, this.latestInstantTime)) {
             // Skip processing a data or delete block with the instant time greater than the latest instant time used by this log record reader
             continue;
           }
@@ -581,7 +583,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
           continue;
         }
         if (logBlock.isDataOrDeleteBlock()
-            && HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.GREATER_THAN, this.latestInstantTime)) {
+            && compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), GREATER_THAN, this.latestInstantTime)) {
           // Skip processing a data or delete block with the instant time greater than the latest instant time used by this log record reader
           continue;
         }

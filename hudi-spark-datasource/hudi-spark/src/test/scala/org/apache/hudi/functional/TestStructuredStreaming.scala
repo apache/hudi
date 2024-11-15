@@ -470,7 +470,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .getTimelineOfActions(CollectionUtils.createSet(instantAction))
       .filterCompletedInstants
       .lastInstant
-      .get.getTimestamp
+      .get.requestedTime
   }
 
   private def streamingWrite(schema: StructType, sourcePath: String, destPath: String, hudiOptions: Map[String, String], checkpoint: String): Unit = {
