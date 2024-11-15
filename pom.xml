@@ -34,6 +34,8 @@
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
 
+  <!-- to trigger CI -->
+
   <modules>
     <module>hudi-common</module>
     <module>hudi-cli</module>
