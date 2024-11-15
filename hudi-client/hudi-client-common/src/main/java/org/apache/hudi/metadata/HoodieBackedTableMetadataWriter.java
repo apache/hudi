@@ -1169,14 +1169,16 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieData<HoodieRecord> deletedRecords = getDeletedSecondaryRecordMapping(engineContext, recordKeySecondaryKeyMap, indexDefinition);
     int parallelism = Math.min(partitionFilePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
 
-    return deletedRecords.union(readSecondaryKeysFromBaseFiles(
+    return readSecondaryKeysFromBaseFiles(
         engineContext,
         partitionFilePairs,
         parallelism,
         this.getClass().getSimpleName(),
         dataMetaClient,
         getEngineType(),
-        indexDefinition));
+        indexDefinition)
+        .union(deletedRecords)
+        .distinctWithKey(HoodieRecord::getKey, parallelism);
   }
 
   /**
