@@ -438,6 +438,14 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * Reload the table config properties.
+   */
+  public synchronized void reloadTableConfig() {
+    this.tableConfig = new HoodieTableConfig(this.storage, metaPath,
+        this.tableConfig.getRecordMergeMode(), this.tableConfig.getKeyGeneratorClassName(), this.tableConfig.getRecordMergeStrategyId());
+  }
+
+  /**
    * Returns next instant time in the correct format. Lock is enabled by default.
    */
   public String createNewInstantTime() {

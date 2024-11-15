@@ -1437,7 +1437,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
 
     if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
-      metaClient = HoodieTableMetaClient.reload(metaClient);
       // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
       List<String> instantsToRollback = tableServiceClient.getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, instantTime);
 
@@ -1450,6 +1449,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper)
           .run(HoodieTableVersion.current(), instantTime.orElse(null));
 
+      metaClient.reloadTableConfig();
       metaClient.reloadActiveTimeline();
     }
   }
