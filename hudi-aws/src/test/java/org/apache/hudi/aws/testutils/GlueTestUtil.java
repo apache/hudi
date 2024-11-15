@@ -18,12 +18,15 @@
 
 package org.apache.hudi.aws.testutils;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
@@ -37,11 +40,11 @@ import org.apache.parquet.schema.MessageTypeParser;
 import software.amazon.awssdk.services.glue.model.Column;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
@@ -112,7 +115,18 @@ public class GlueTestUtil {
 
     String instantTime = "101";
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(false);
-    createMetaFile(basePath, HoodieTimeline.makeCommitFileName(instantTime), commitMetadata);
+    addSchemaToCommitMetadata(commitMetadata, true);
+    createMetaFile(basePath, HoodieTimeline.makeCommitFileName(
+        instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()), commitMetadata);
+  }
+
+  private static Schema getTestDataSchema(boolean isSimpleSchema) throws IOException {
+    return isSimpleSchema ? SchemaTestUtil.getSimpleSchema() : SchemaTestUtil.getEvolvedSchema();
+  }
+
+  private static void addSchemaToCommitMetadata(HoodieCommitMetadata commitMetadata, boolean isSimpleSchema) throws IOException {
+    Schema dataSchema = getTestDataSchema(isSimpleSchema);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, dataSchema.toString());
   }
 
   public static MessageType getSimpleSchema() {
@@ -121,7 +135,7 @@ public class GlueTestUtil {
 
   private static void createMetaFile(String basePath, String fileName, HoodieCommitMetadata metadata)
       throws IOException {
-    byte[] bytes = metadata.toJsonString().getBytes(StandardCharsets.UTF_8);
+    byte[] bytes = serializeCommitMetadata(metadata).get();
     Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
