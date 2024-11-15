@@ -18,6 +18,7 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.http.client.HttpResponseException;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -45,9 +46,11 @@ import java.util.Map;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.BASEPATH_PARAM;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.INIT_TIMELINE;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LAST_INSTANT_TS;
+import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LOAD_PARTITIONS_URL;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.REFRESH_TABLE;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.TIMELINE_HASH;
 import static org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod.POST;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestRequestHandler extends HoodieCommonTestHarness {
@@ -114,5 +117,22 @@ class TestRequestHandler extends HoodieCommonTestHarness {
             TimelineServiceClient.Request.newBuilder(POST, REFRESH_TABLE).addQueryParams(queryParameters).build())
         .getDecodedContent(new TypeReference<Boolean>() {});
     assertTrue(content);
+  }
+
+  @Test
+  void loadPartitionAPI() throws IOException {
+    String[] partitionPaths = {"partition-path"};
+    Map<String, String> queryParameters = new HashMap<>();
+    queryParameters.put(BASEPATH_PARAM, basePath);
+
+    boolean content = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, LOAD_PARTITIONS_URL).addQueryParams(queryParameters)
+                .setBody(OBJECT_MAPPER.writeValueAsString(partitionPaths)).build())
+        .getDecodedContent(new TypeReference<Boolean>() {});
+    assertTrue(content);
+
+    // Test that if a request is made with no partitionPaths in body, then an exception is thrown.
+    assertThrows(HttpResponseException.class, () -> timelineServiceClient.makeRequest(
+          TimelineServiceClient.Request.newBuilder(POST, LOAD_PARTITIONS_URL).addQueryParams(queryParameters).build()));
   }
 }

@@ -34,16 +34,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.CLOSE_TABLE;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.GET_TIMELINE_HASH;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.INIT_TIMELINE;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -104,5 +109,21 @@ class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSystemView 
     view.close();
     // verify request parameters
     verify(timelineServiceClient).makeRequest(argThat(request -> request.getMethod().equals(TimelineServiceClientBase.RequestMethod.POST) && request.getPath().equals(CLOSE_TABLE)));
+  }
+
+  @Test
+  void remoteLoadPartitions() throws Exception {
+    FileSystemViewStorageConfig config = FileSystemViewStorageConfig.newBuilder().build();
+    RemoteHoodieTableFileSystemView view = new RemoteHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), timelineServiceClient, config);
+
+    when(timelineServiceClient.makeRequest(any())).thenReturn(new TimelineServiceClientBase.Response(OBJECT_MAPPER.writeValueAsString("true")));
+    List<String> partitionPath = Collections.singletonList("partition-path");
+    view.loadPartitions(partitionPath);
+
+    ArgumentCaptor<TimelineServiceClientBase.Request> argCaptor = ArgumentCaptor.forClass(TimelineServiceClientBase.Request.class);
+    verify(timelineServiceClient, times(1)).makeRequest(argCaptor.capture());
+    TimelineServiceClientBase.Request request = argCaptor.getValue();
+    assertFalse(request.getBody().isEmpty());
+    assertEquals(OBJECT_MAPPER.writeValueAsString(partitionPath), request.getBody());
   }
 }

@@ -551,9 +551,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   @Override
   public void loadPartitions(List<String> partitionPaths) {
     try {
-      Map<String, String> paramsMap = getParams();
-      paramsMap.put(PARTITIONS_PARAM, OBJECT_MAPPER.writeValueAsString(partitionPaths));
-      executeRequest(LOAD_PARTITIONS_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
+      String body = OBJECT_MAPPER.writeValueAsString(partitionPaths);
+      executeRequest(LOAD_PARTITIONS_URL, getParams(), body, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
