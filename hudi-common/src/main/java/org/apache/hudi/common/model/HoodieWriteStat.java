@@ -19,11 +19,13 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.JsonUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -162,6 +164,8 @@ public class HoodieWriteStat implements Serializable {
   @Nullable
   private RuntimeStats runtimeStats;
 
+  private Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> recordsStats = Option.empty();
+
   public HoodieWriteStat() {
     // called by jackson json lib
   }
@@ -236,6 +240,24 @@ public class HoodieWriteStat implements Serializable {
 
   public String getPath() {
     return path;
+  }
+
+  public void putRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
+    if (!recordsStats.isPresent()) {
+      recordsStats = Option.of(stats);
+    } else {
+      // in case there are multiple log blocks for one write process.
+      recordsStats = Option.of(mergeRecordsStats(recordsStats.get(), stats));
+    }
+  }
+
+  // keep for serialization efficiency
+  public void setRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
+    recordsStats = Option.of(stats);
+  }
+
+  public Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> getColumnStats() {
+    return recordsStats;
   }
 
   @Nullable
@@ -446,5 +468,19 @@ public class HoodieWriteStat implements Serializable {
     public void setTotalCreateTime(long totalCreateTime) {
       this.totalCreateTime = totalCreateTime;
     }
+  }
+
+  private static Map<String, HoodieColumnRangeMetadata<Comparable>> mergeRecordsStats(
+      Map<String, HoodieColumnRangeMetadata<Comparable>> stats1,
+      Map<String, HoodieColumnRangeMetadata<Comparable>> stats2) {
+    Map<String, HoodieColumnRangeMetadata<Comparable>> mergedStats = new HashMap<>(stats1);
+    for (Map.Entry<String, HoodieColumnRangeMetadata<Comparable>> entry : stats2.entrySet()) {
+      final String colName = entry.getKey();
+      final HoodieColumnRangeMetadata<Comparable> metadata = mergedStats.containsKey(colName)
+          ? HoodieColumnRangeMetadata.merge(mergedStats.get(colName), entry.getValue())
+          : entry.getValue();
+      mergedStats.put(colName, metadata);
+    }
+    return mergedStats;
   }
 }

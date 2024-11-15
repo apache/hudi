@@ -107,13 +107,13 @@ public class FlinkDeleteHelper<R> extends
       // filter out non existent keys/records
       List<HoodieRecord<EmptyHoodieRecordPayload>> taggedValidRecords = taggedRecords.stream().filter(HoodieRecord::isCurrentLocationKnown).collect(Collectors.toList());
       if (!taggedValidRecords.isEmpty()) {
-        result = deleteExecutor.execute(taggedValidRecords);
+        result = deleteExecutor.execute(taggedValidRecords, );
         result.setIndexLookupDuration(tagLocationDuration);
       } else {
         // if entire set of keys are non existent
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
-        result.setWriteStatuses(Collections.EMPTY_LIST);
+        result.setDataTableWriteStatuses(Collections.EMPTY_LIST);
         deleteExecutor.commitOnAutoCommit(result);
       }
       return result;

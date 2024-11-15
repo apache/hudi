@@ -106,7 +106,7 @@ public class HoodieDeleteHelper<T, R> extends
         // if entire set of keys are non existent
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
-        result.setWriteStatuses(context.emptyHoodieData());
+        result.setDataTableWriteStatuses(context.emptyHoodieData());
         deleteExecutor.commitOnAutoCommit(result);
       }
       return result;

@@ -99,6 +99,12 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
+  public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
+    return HoodieJavaPairRDD.of(pairRDDData.union(HoodieJavaPairRDD.getJavaPairRDD(other)));
+  }
+
+
+  @Override
   public long count() {
     return pairRDDData.count();
   }

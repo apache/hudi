@@ -86,7 +86,7 @@ public class RunCompactionActionExecutor<T> extends
         : table.getActiveTimeline().filterPendingLogCompactionTimeline();
     compactor.preCompact(table, pendingMajorOrMinorCompactionTimeline, this.operationType, instantTime);
 
-    HoodieWriteMetadata<HoodieData<WriteStatus>> compactionMetadata = new HoodieWriteMetadata<>();
+    HoodieWriteMetadata<HoodieData<WriteStatus>> compactionWriteMetadata = new HoodieWriteMetadata<>();
     try {
       // generate compaction plan
       // should support configurable commit metadata
@@ -110,7 +110,10 @@ public class RunCompactionActionExecutor<T> extends
 
       compactor.maybePersist(statuses, context, config, instantTime);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
-      List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
+
+      // we are triggering the dag here.
+      // thinking if we can keep the RDD<WriteStatus> as is and dereference it in BaseHoodieTableServiceClient just before complete Compaction.
+      /*List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
       for (HoodieWriteStat stat : updateStatusMap) {
         metadata.addWriteStat(stat.getPartitionPath(), stat);
@@ -122,16 +125,19 @@ public class RunCompactionActionExecutor<T> extends
       }
       // Setting operationType, which is compact.
       metadata.setOperationType(operationType);
-      compactionMetadata.setWriteStatuses(statuses);
+      compactionMetadata.setDataTableWriteStatuses(statuses);
       compactionMetadata.setCommitted(false);
       compactionMetadata.setCommitMetadata(Option.of(metadata));
-      compactionMetadata.setWriteStats(updateStatusMap);
+      compactionMetadata.setWriteStats(updateStatusMap);*/
+
+      compactionWriteMetadata.setDataTableWriteStatuses(statuses);
+      compactionWriteMetadata.setCommitted(false);
     } catch (Exception e) {
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
 
     LOG.info("Compaction completed. Instant time: {}.", instantTime);
     metrics.emitCompactionCompleted();
-    return compactionMetadata;
+    return compactionWriteMetadata;
   }
 }

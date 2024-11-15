@@ -88,7 +88,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords) {
+  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, boolean saveWorkloadProfileToInflight) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
 
     List<WriteStatus> writeStatuses = new LinkedList<>();
@@ -112,7 +112,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       List<WriteStatus> statuses,
       HoodieWriteMetadata<List<WriteStatus>> result) {
     // No need to update the index because the update happens before the write.
-    result.setWriteStatuses(statuses);
+    result.setDataTableWriteStatuses(statuses);
     result.setIndexUpdateDuration(Duration.ZERO);
   }
 
@@ -123,12 +123,12 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @Override
   protected void commit(HoodieWriteMetadata<List<WriteStatus>> result) {
-    commit(HoodieListData.eager(result.getWriteStatuses()), result,
-        result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+    commit(HoodieListData.eager(result.getDataTableWriteStatuses()), result,
+        result.getDataTableWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
   }
 
   protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
-    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getDataTableWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         result.getPartitionToReplaceFileIds(),
         extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }

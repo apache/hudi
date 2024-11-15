@@ -53,7 +53,7 @@ public class FlinkPartitionTTLActionExecutor<T> extends BaseFlinkCommitActionExe
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     HoodieWriteMetadata<List<WriteStatus>> emptyResult = new HoodieWriteMetadata<>();
     emptyResult.setPartitionToReplaceFileIds(Collections.emptyMap());
-    emptyResult.setWriteStatuses(Collections.emptyList());
+    emptyResult.setDataTableWriteStatuses(Collections.emptyList());
     try {
       PartitionTTLStrategy strategy = HoodiePartitionTTLStrategyFactory.createStrategy(table, config.getProps(), instantTime);
       List<String> expiredPartitions = strategy.getExpiredPartitionPaths();

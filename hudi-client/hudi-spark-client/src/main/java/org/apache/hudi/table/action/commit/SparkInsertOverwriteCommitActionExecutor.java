@@ -90,7 +90,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
           partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
     } else {
       // dynamic insert overwrite partitions
-      return HoodieJavaPairRDD.getJavaPairRDD(writeMetadata.getWriteStatuses().map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
+      return HoodieJavaPairRDD.getJavaPairRDD(writeMetadata.getDataTableWriteStatuses().map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
           Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
     }
   }

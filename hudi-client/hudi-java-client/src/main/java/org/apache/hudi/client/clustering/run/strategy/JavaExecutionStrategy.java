@@ -88,7 +88,7 @@ public abstract class JavaExecutionStrategy<T>
             Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
             instantTime)));
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-    writeMetadata.setWriteStatuses(HoodieListData.eager(writeStatusList));
+    writeMetadata.setDataTableWriteStatuses(HoodieListData.eager(writeStatusList));
     return writeMetadata;
   }
 

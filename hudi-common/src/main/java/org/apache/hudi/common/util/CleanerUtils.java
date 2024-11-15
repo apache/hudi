@@ -202,18 +202,19 @@ public class CleanerUtils {
    * @param rollbackFailedWritesFunc
    */
   public static void rollbackFailedWrites(HoodieFailedWritesCleaningPolicy cleaningPolicy, String actionType,
-                                          Functions.Function0<Boolean> rollbackFailedWritesFunc) {
+                                          boolean isMetadataTable, Functions.Function0<Boolean> rollbackFailedWritesFunc) {
     switch (actionType) {
       case HoodieTimeline.CLEAN_ACTION:
         if (cleaningPolicy.isEager()) {
           // No need to do any special cleanup for failed operations during clean
           return;
-        } else if (cleaningPolicy.isLazy()) {
+        } else if (cleaningPolicy.isLazy() && !isMetadataTable) {
           LOG.info("Cleaned failed attempts if any");
           // Perform rollback of failed operations for all types of actions during clean
           rollbackFailedWritesFunc.apply();
           return;
         }
+        // even if cleaning policy is lazy, lets not trigger any rollbacks for metadata table.
         // No action needed for cleaning policy NEVER
         break;
       case COMMIT_ACTION:

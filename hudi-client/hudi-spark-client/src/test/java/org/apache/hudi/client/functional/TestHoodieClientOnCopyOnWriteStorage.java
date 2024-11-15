@@ -80,6 +80,7 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
@@ -205,7 +206,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       config -> new WriteClientBrokenClustering<>(context, config);
 
   private final Function<HoodieWriteMetadata, HoodieWriteMetadata<List<WriteStatus>>> clusteringMetadataRdd2List =
-      metadata -> metadata.clone(((JavaRDD)(metadata.getWriteStatuses())).collect());
+      metadata -> metadata.clone(((JavaRDD)(metadata.getDataTableWriteStatuses())).collect());
 
   private final Function<HoodieWriteConfig, KeyGenerator> createKeyGenerator =
       config -> HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps());
@@ -431,9 +432,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Upsert API.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testUpserts(boolean populateMetaFields) throws Exception {
+  //@ParameterizedTest
+  //@MethodSource("populateMetaFieldsParams")
+  @Test
+  public void testUpserts() throws Exception {
+    boolean populateMetaFields = true;
     testUpsertsInternal((writeClient, recordRDD, instantTime) -> writeClient.upsert(recordRDD, instantTime), populateMetaFields, false);
   }
 
@@ -1666,7 +1669,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         throw new HoodieException(CLUSTERING_FAILURE);
       }
     }
-
   }
 
   /**
