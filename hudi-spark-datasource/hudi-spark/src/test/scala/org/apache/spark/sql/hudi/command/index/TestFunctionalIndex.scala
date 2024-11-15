@@ -551,7 +551,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           Seq("ts", null, null, "2020-09-26", "2021-09-26", false), // for file in name=a1
           Seq("ts", null, null, "2022-09-26", "2022-09-26", false), // for file in name=a2
           Seq("price", 10.0, 10.0, null, null, false), // for file in name=a1
-          Seq("price", 10.0, 10.0, null, null, false), // for file in name=a2
+          Seq("price", 10.0, 10.0, null, null, false) // for file in name=a2
         )
 
         // do an update after initializing the index
@@ -577,7 +577,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           Seq("ts", null, null, "2022-09-26", "2022-09-26", false), // for file in name=a2
           Seq("price", 10.0, 10.0, null, null, false), // for file in name=a1
           Seq("price", 5.0, 5.0, null, null, false), // for update of id=1
-          Seq("price", 10.0, 10.0, null, null, false), // for file in name=a2
+          Seq("price", 10.0, 10.0, null, null, false) // for file in name=a2
         )
       }
     }
