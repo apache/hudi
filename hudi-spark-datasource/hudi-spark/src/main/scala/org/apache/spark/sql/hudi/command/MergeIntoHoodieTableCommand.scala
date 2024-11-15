@@ -172,7 +172,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           //
           //       Which (in the current design) could result in a record key of the record being modified,
           //       which is not allowed.
-          if (!resolvesToSourceAttribute(expr)) {
+          if (!resolvesToSourceAttribute(mergeInto.sourceTable, expr)) {
             throw new AnalysisException("Only simple conditions of the form `t.id = s.id` are allowed on the " +
               s"primary-key and partition path column. Found `${attr.sql} = ${expr.sql}`")
           }
@@ -241,36 +241,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * Please check description for [[primaryKeyAttributeToConditionExpression]]
    */
-  private lazy val preCombineAttributeAssociatedExpression: Option[(Attribute, Expression)] = {
-    val resolver = sparkSession.sessionState.analyzer.resolver
+  private lazy val preCombineAttributeAssociatedExpression: Option[(Attribute, Expression)] =
     hoodieCatalogTable.preCombineKey.map { preCombineField =>
-      val targetPreCombineAttribute =
-        mergeInto.targetTable.output
-          .find { attr => resolver(attr.name, preCombineField) }
-          .get
-
-      // To find corresponding "precombine" attribute w/in the [[sourceTable]] we do
-      //    - Check if we can resolve the attribute w/in the source table as is; if unsuccessful, then
-      //    - Check if in any of the update actions, right-hand side of the assignment actually resolves
-      //    to it, in which case we will determine left-hand side expression as the value of "precombine"
-      //    attribute w/in the [[sourceTable]]
-      val sourceExpr = {
-        mergeInto.sourceTable.output.find(attr => resolver(attr.name, preCombineField)) match {
-          case Some(attr) => attr
-          case None =>
-            updatingActions.flatMap(_.assignments).collectFirst {
-              case Assignment(attr: AttributeReference, expr)
-                if resolver(attr.name, preCombineField) && resolvesToSourceAttribute(expr) => expr
-            } getOrElse {
-              throw new AnalysisException(s"Failed to resolve precombine field `${preCombineField}` w/in the source-table output")
-            }
-
-        }
-      }
-
-      (targetPreCombineAttribute, sourceExpr)
+      resolveFieldAssociationsBetweenSourceAndTarget(
+        sparkSession.sessionState.conf.resolver,
+        mergeInto.targetTable,
+        mergeInto.sourceTable,
+        Seq(preCombineField),
+        "precombine field",
+        updatingActions.flatMap(_.assignments)).head
     }
-  }
+
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
@@ -708,16 +689,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     (projectedJoinedDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
   }
 
-  private def resolvesToSourceAttribute(expr: Expression): Boolean = {
-    val sourceTableOutputSet = mergeInto.sourceTable.outputSet
-    expr match {
-      case attr: AttributeReference => sourceTableOutputSet.contains(attr)
-      case MatchCast(attr: AttributeReference, _, _, _) => sourceTableOutputSet.contains(attr)
-
-      case _ => false
-    }
-  }
-
   private def validateInsertingAssignmentExpression(expr: Expression): Unit = {
     val sourceTableOutput = mergeInto.sourceTable.output
     expr.collect { case br: BoundReference => br }
@@ -843,6 +814,61 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         "record key field",
         action.assignments)
       }))
+
+    val insertAssignments = insertActions.flatMap(_.assignments)
+    checkSchemaMergeIntoCompatibility(insertAssignments)
+  }
+
+  /**
+    * Check the merge into schema compatibility between the target table and the source table.
+    * The merge into schema compatibility requires data type matching for the following fields:
+    * 1. Partition key
+    * 2. Primary key
+    * 3. Precombine key
+    *
+    * @param assignments the assignment clause of the insert/update statement for figuring out
+    *                    the mapping between the target table and the source table.
+    */
+  private def checkSchemaMergeIntoCompatibility(assignments: Seq[Assignment]): Unit = {
+    if (assignments.nonEmpty) {
+      // Assert data type matching for partition key
+      val partitionAttributeAssociatedExpression: Array[(Attribute, Expression)] =
+        resolveFieldAssociationsBetweenSourceAndTarget(
+          sparkSession.sessionState.conf.resolver,
+          mergeInto.targetTable,
+          mergeInto.sourceTable,
+          hoodieCatalogTable.partitionFields,
+          "partition key",
+          assignments).toArray
+      partitionAttributeAssociatedExpression.foreach { case (attr, expr) =>
+        validateDataTypes(attr, expr, "Partition key")
+      }
+      val primaryAttributeAssociatedExpression: Array[(Attribute, Expression)] =
+        resolveFieldAssociationsBetweenSourceAndTarget(
+          sparkSession.sessionState.conf.resolver,
+          mergeInto.targetTable,
+          mergeInto.sourceTable,
+          hoodieCatalogTable.primaryKeys,
+          "primary key",
+          assignments).toArray
+      primaryAttributeAssociatedExpression.foreach { case (attr, expr) =>
+        validateDataTypes(attr, expr, "Primary key")
+      }
+      val preCombineAttributeAssociatedExpression: Option[(Attribute, Expression)] =
+        hoodieCatalogTable.preCombineKey.map {
+          preCombineField =>
+            resolveFieldAssociationsBetweenSourceAndTarget(
+              sparkSession.sessionState.conf.resolver,
+              mergeInto.targetTable,
+              mergeInto.sourceTable,
+              Seq(preCombineField),
+              "precombine field",
+              assignments).head
+        }
+      preCombineAttributeAssociatedExpression.foreach { case (attr, expr) =>
+        validateDataTypes(attr, expr, "Precombine field")
+      }
+    }
   }
 
   private def checkUpdatingActions(updateActions: Seq[UpdateAction], props: Map[String, String]): Unit = {
@@ -853,6 +879,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       assert(update.assignments.length <= targetTableSchema.length,
         s"The number of update assignments[${update.assignments.length}] must be less than or equal to the " +
           s"targetTable field size[${targetTableSchema.length}]"))
+
+    val updateAssignments = updateActions.flatMap(_.assignments)
+    checkSchemaMergeIntoCompatibility(updateAssignments)
 
     if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
       // For MOR table, the target table field cannot be the right-value in the update action.
@@ -942,6 +971,77 @@ object MergeIntoHoodieTableCommand {
       }) {
         throw new AnalysisException(s"No matching assignment found for target table $fieldType `$field`")
       }
+    }
+  }
+
+  /**
+   * Generic method to resolve field associations between target and source tables
+   *
+   * @param resolver The resolver to use
+   * @param targetTable The target table of the merge
+   * @param sourceTable The source table of the merge
+   * @param fields The fields from the target table whose association with the source to be resolved
+   * @param fieldType String describing the type of field (for error messages)
+   * @param assignments The assignments clause of the merge into used for resolving the association
+   * @return Sequence of resolved (target table attribute, source table expression)
+   * mapping for target [[fields]].
+   *
+   * @throws AnalysisException if a field cannot be resolved
+   */
+  def resolveFieldAssociationsBetweenSourceAndTarget(resolver: Resolver,
+                                                     targetTable: LogicalPlan,
+                                                     sourceTable: LogicalPlan,
+                                                     fields: Seq[String],
+                                                     fieldType: String,
+                                                     assignments: Seq[Assignment]
+                             ): Seq[(Attribute, Expression)] = {
+    // To find corresponding [[fieldType]] attribute w/in the [[sourceTable]] we do
+    //    - Check if we can resolve the attribute w/in the source table as is;
+    // if unsuccessful, then
+    //    - Check if in any of the assignment actions, if any of the right-hand side expressions
+    // resolves to the source attribute. For example,
+    //        WHEN MATCHED THEN UPDATE SET targetTable.fieldWithTypeX = <expr>
+    // the left-hand side of the assignment is the target table's field, the right-hand side
+    // is the expression that should resolve to the source table's field.
+    fields.map { field =>
+      val targetAttribute = targetTable.output
+        .find(attr => resolver(attr.name, field))
+        .getOrElse(throw new AnalysisException(
+          s"Failed to resolve $fieldType `$field` in target table"))
+
+      val sourceExpr = sourceTable.output
+        .find(attr => resolver(attr.name, field))
+        .getOrElse {
+          assignments.collectFirst {
+            case Assignment(attr: AttributeReference, expr)
+              if resolver(attr.name, field) && resolvesToSourceAttribute(sourceTable, expr) => expr
+          }.getOrElse {
+            throw new AnalysisException(
+              s"Failed to resolve $fieldType `$field` w/in the source-table output")
+          }
+        }
+
+      (targetAttribute, sourceExpr)
+    }
+  }
+
+  def resolvesToSourceAttribute(sourceTable: LogicalPlan, expr: Expression): Boolean = {
+    val sourceTableOutputSet = sourceTable.outputSet
+    expr match {
+      case attr: AttributeReference => sourceTableOutputSet.contains(attr)
+      case MatchCast(attr: AttributeReference, _, _, _) => sourceTableOutputSet.contains(attr)
+
+      case _ => false
+    }
+  }
+
+  def validateDataTypes(attr: Attribute, expr: Expression, columnType: String): Unit = {
+    if (attr.dataType != expr.dataType) {
+      throw new AnalysisException(
+        s"$columnType data type mismatch between source table and target table. " +
+          s"Target table uses ${attr.dataType} for column '${attr.name}', " +
+          s"source table uses ${expr.dataType} for '${expr.sql}'"
+      )
     }
   }
 }
