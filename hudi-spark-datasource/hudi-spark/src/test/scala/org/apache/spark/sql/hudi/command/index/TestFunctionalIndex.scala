@@ -54,7 +54,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.scalatest.Ignore
 
 import java.util.stream.Collectors
-import scala.collection.{JavaConverters, Seq}
+import scala.collection.JavaConverters
 
 @Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {

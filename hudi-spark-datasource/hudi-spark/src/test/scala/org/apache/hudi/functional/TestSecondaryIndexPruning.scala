@@ -51,7 +51,7 @@ import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import org.scalatest.Assertions.{assertResult, assertThrows}
 
 import java.util.concurrent.Executors
-import scala.collection.{JavaConverters, Seq}
+import scala.collection.JavaConverters
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
 
