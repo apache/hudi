@@ -54,7 +54,7 @@ import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGE
 /**
  * Flink hoodie backed table metadata writer.
  */
-public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>> {
+public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> {
   private static final Logger LOG = LoggerFactory.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
@@ -173,12 +173,25 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
+  protected void writeAndCommitBulkInsert(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs,
+                                          Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+    List<WriteStatus> writeStatusJavaRDD = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
+    writeClient.commit(instantTime, writeStatusJavaRDD);
+  }
+
+  @Override
+  protected void writeAndCommitUpsert(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs) {
+    List<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+    writeClient.commit(instantTime, writeStatusJavaRDD);
+  }
+
+  @Override
   public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
     throw new HoodieNotSupportedException("Dropping metadata index not supported for Flink metadata table yet.");
   }
 
   @Override
-  public BaseHoodieWriteClient<?, List<HoodieRecord>, ?, ?> initializeWriteClient() {
+  public BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> initializeWriteClient() {
     return new HoodieFlinkWriteClient(engineContext, metadataWriteConfig);
   }
 
