@@ -109,7 +109,7 @@ public class TestTableSchemaResolver {
     HoodieStorage storage = HoodieTestUtils.getStorage(partitionPath);
     HoodieLogFormat.Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withDeltaCommit("100").withStorage(storage).build();
+            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");

@@ -87,11 +87,11 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public void persistHistorySchemaStr(String instantTime, String historySchemaStr) {
     cleanResidualFiles();
     HoodieActiveTimeline timeline = getMetaClient().getActiveTimeline();
-    HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, SCHEMA_COMMIT_ACTION, instantTime);
+    HoodieInstant hoodieInstant = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, SCHEMA_COMMIT_ACTION, instantTime);
     timeline.createNewInstant(hoodieInstant);
     byte[] writeContent = getUTF8Bytes(historySchemaStr);
     timeline.transitionRequestedToInflight(hoodieInstant, Option.empty());
-    timeline.saveAsComplete(false, new HoodieInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.getTimestamp()), Option.of(writeContent));
+    timeline.saveAsComplete(false, metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.requestedTime()), Option.of(writeContent));
     LOG.info(String.format("persist history schema success on commit time: %s", instantTime));
   }
 
@@ -139,7 +139,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   private List<String> getValidInstants() {
     return getMetaClient().getCommitsTimeline()
-        .filterCompletedInstants().getInstantsAsStream().map(f -> f.getTimestamp()).collect(Collectors.toList());
+        .filterCompletedInstants().getInstantsAsStream().map(f -> f.requestedTime()).collect(Collectors.toList());
   }
 
   @Override
@@ -156,7 +156,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
             .map(file -> file.getPath().getName())
             .filter(Objects::nonNull)
-            .filter(f -> commitList.contains(HoodieInstant.extractTimestamp(f))).sorted().collect(Collectors.toList());
+            .filter(f -> commitList.contains(getMetaClient().getInstantFileNameParser().extractTimestamp(f))).sorted().collect(Collectors.toList());
         if (!validaSchemaFiles.isEmpty()) {
           StoragePath latestFilePath =
               new StoragePath(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));

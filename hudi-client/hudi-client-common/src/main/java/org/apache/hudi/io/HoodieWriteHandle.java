@@ -234,27 +234,28 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return new Schema.Parser().parse(config.getWriteSchema());
   }
 
-  protected HoodieLogFormat.Writer createLogWriter(String deltaCommitTime) {
-    return createLogWriter(deltaCommitTime, null);
+  protected HoodieLogFormat.Writer createLogWriter(String instantTime) {
+    return createLogWriter(instantTime, null);
   }
 
-  protected HoodieLogFormat.Writer createLogWriter(String deltaCommitTime, String fileSuffix) {
+  protected HoodieLogFormat.Writer createLogWriter(String instantTime, String fileSuffix) {
     try {
       return HoodieLogFormat.newWriterBuilder()
           .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
           .withFileId(fileId)
-          .withDeltaCommit(deltaCommitTime)
+          .withInstantTime(instantTime)
           .withFileSize(0L)
           .withSizeThreshold(config.getLogFileMaxSize())
           .withStorage(storage)
-          .withRolloverLogWriteToken(writeToken)
           .withLogWriteToken(writeToken)
           .withFileCreationCallback(getLogCreationCallback())
+          .withTableVersion(config.getWriteVersion())
           .withSuffix(fileSuffix)
-          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+          .build();
     } catch (IOException e) {
       throw new HoodieException("Creating logger writer with fileId: " + fileId + ", "
-          + "delta commit time: " + deltaCommitTime + ", "
+          + "delta commit time: " + instantTime + ", "
           + "file suffix: " + fileSuffix + " error");
     }
   }

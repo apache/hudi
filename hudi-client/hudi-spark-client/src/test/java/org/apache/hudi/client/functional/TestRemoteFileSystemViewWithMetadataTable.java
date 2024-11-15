@@ -72,6 +72,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.view.FileSystemViewStorageConfig.REMOTE_PORT_NUM;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -183,7 +184,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
 
     // For all the file groups compacted by the compaction commit, the file system view
     // should return the latest file slices which is written by the latest commit
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+    HoodieCommitMetadata commitMetadata = COMMIT_METADATA_SER_DE.deserialize(compactionCommit,
         timeline.getInstantDetails(compactionCommit).get(), HoodieCommitMetadata.class);
     List<Pair<String, String>> partitionFileIdPairList =
         commitMetadata.getPartitionToWriteStats().entrySet().stream().flatMap(
@@ -209,7 +210,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
         new RemoteHoodieTableFileSystemView("localhost", timelineServerPort, newMetaClient);
 
     List<TestViewLookUpCallable> callableList = lookupList.stream()
-        .map(pair -> new TestViewLookUpCallable(view, pair, compactionCommit.getTimestamp(), basePathStr))
+        .map(pair -> new TestViewLookUpCallable(view, pair, compactionCommit.requestedTime(), basePathStr))
         .collect(Collectors.toList());
     List<Future<Boolean>> resultList = new ArrayList<>();
 

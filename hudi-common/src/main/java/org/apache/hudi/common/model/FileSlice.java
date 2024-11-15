@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
@@ -150,7 +150,7 @@ public class FileSlice implements Serializable {
    */
   public String getLatestInstantTime() {
     Option<String> latestDeltaCommitTime = getLatestLogFile().map(HoodieLogFile::getDeltaCommitTime);
-    return latestDeltaCommitTime.isPresent() ? HoodieTimeline.maxInstant(latestDeltaCommitTime.get(), getBaseInstantTime()) : getBaseInstantTime();
+    return latestDeltaCommitTime.isPresent() ? InstantComparison.maxInstant(latestDeltaCommitTime.get(), getBaseInstantTime()) : getBaseInstantTime();
   }
 
   /**

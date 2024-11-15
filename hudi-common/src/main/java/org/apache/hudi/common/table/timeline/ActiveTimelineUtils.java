@@ -16,33 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.engine.EngineProperty;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.util.Option;
+public class ActiveTimelineUtils {
 
-import java.util.function.Supplier;
-
-public class DummyTaskContextSupplier extends TaskContextSupplier {
-
-  @Override
-  public Supplier<Integer> getPartitionIdSupplier() {
-    return null;
-  }
-
-  @Override
-  public Supplier<Integer> getStageIdSupplier() {
-    return null;
-  }
-
-  @Override
-  public Supplier<Long> getAttemptIdSupplier() {
-    return null;
-  }
-
-  @Override
-  public Option<String> getProperty(EngineProperty prop) {
-    return null;
-  }
 }

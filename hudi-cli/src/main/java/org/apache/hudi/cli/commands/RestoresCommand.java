@@ -80,10 +80,10 @@ public class RestoresCommand {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     List<HoodieInstant> matchingInstants = activeTimeline.filterCompletedInstants().filter(completed ->
-            completed.getTimestamp().equals(restoreInstant)).getInstants();
+            completed.requestedTime().equals(restoreInstant)).getInstants();
     if (matchingInstants.isEmpty()) {
       matchingInstants = activeTimeline.filterInflights().filter(inflight ->
-              inflight.getTimestamp().equals(restoreInstant)).getInstants();
+              inflight.requestedTime().equals(restoreInstant)).getInstants();
     }
 
     // Assuming a single exact match is found in either completed or inflight instants
@@ -113,15 +113,15 @@ public class RestoresCommand {
                                            HoodieInstant restoreInstant) throws IOException {
     HoodieRestorePlan restorePlan = getRestorePlan(activeTimeline, restoreInstant);
     for (HoodieInstantInfo instantToRollback : restorePlan.getInstantsToRollback()) {
-      Comparable[] dataRow = createDataRow(restoreInstant.getTimestamp(), instantToRollback.getCommitTime(), "",
+      Comparable[] dataRow = createDataRow(restoreInstant.requestedTime(), instantToRollback.getCommitTime(), "",
               restoreInstant.getState());
       rows.add(dataRow);
     }
   }
 
   private HoodieRestorePlan getRestorePlan(HoodieActiveTimeline activeTimeline, HoodieInstant restoreInstant) throws IOException {
-    HoodieInstant instantKey = new HoodieInstant(HoodieInstant.State.REQUESTED, RESTORE_ACTION,
-            restoreInstant.getTimestamp());
+    HoodieInstant instantKey = HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.REQUESTED, RESTORE_ACTION,
+            restoreInstant.requestedTime());
     Option<byte[]> instantDetails = activeTimeline.getInstantDetails(instantKey);
     HoodieRestorePlan restorePlan = TimelineMetadataUtils
             .deserializeAvroMetadata(instantDetails.get(), HoodieRestorePlan.class);

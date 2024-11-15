@@ -21,7 +21,6 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.exception.InvalidHoodiePathException;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -182,7 +181,7 @@ public class HoodieLogFile implements Serializable {
     this.pathInfo = pathInfo;
   }
 
-  public HoodieLogFile rollOver(HoodieStorage storage, String logWriteToken) {
+  public HoodieLogFile rollOver(String logWriteToken) {
     String fileId = getFileId();
     String deltaCommitTime = getDeltaCommitTime();
     StoragePath path = getPath();

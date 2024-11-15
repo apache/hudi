@@ -18,10 +18,10 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.DummyTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -75,7 +75,7 @@ public class TestHoodieAvroParquetWriter {
     StoragePath filePath = new StoragePath(tmpDir.resolve("test.parquet").toAbsolutePath().toString());
 
     try (HoodieAvroParquetWriter writer =
-             new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
+             new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new LocalTaskContextSupplier(), true)) {
       for (GenericRecord record : records) {
         writer.writeAvro((String) record.get("_row_key"), record);
       }

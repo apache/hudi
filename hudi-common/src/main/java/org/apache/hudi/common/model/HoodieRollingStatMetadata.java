@@ -74,10 +74,6 @@ public class HoodieRollingStatMetadata implements Serializable {
     }
   }
 
-  public static HoodieRollingStatMetadata fromBytes(byte[] bytes) throws IOException {
-    return HoodieCommitMetadata.fromBytes(bytes, HoodieRollingStatMetadata.class);
-  }
-
   public String toJsonString() throws IOException {
     if (partitionToRollingStats.containsKey(null)) {
       LOG.info("partition path is null for " + partitionToRollingStats.get(null));

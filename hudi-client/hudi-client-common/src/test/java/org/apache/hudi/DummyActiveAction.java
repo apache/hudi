@@ -25,6 +25,8 @@ import org.apache.hudi.common.util.Option;
 
 import java.util.Collections;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+
 /**
  * Instant triple for testing.
  */
@@ -35,8 +37,8 @@ public class DummyActiveAction extends ActiveAction {
    * Only for testing purpose.
    */
   public DummyActiveAction(HoodieInstant completed, byte[] commitMetadata) {
-    super(new HoodieInstant(HoodieInstant.State.REQUESTED, completed.getAction(), completed.getTimestamp()),
-        new HoodieInstant(HoodieInstant.State.INFLIGHT, completed.getAction(), completed.getTimestamp()),
+    super(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, completed.getAction(), completed.requestedTime()),
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, completed.getAction(), completed.requestedTime()),
         Collections.singletonList(completed));
     this.commitMetadata = commitMetadata;
   }

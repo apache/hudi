@@ -24,7 +24,6 @@ import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.functional.TestBootstrap;
 import org.apache.hudi.storage.StoragePath;
 
@@ -91,7 +90,7 @@ public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
     assertTrue(ShellEvaluationResultUtil.isSuccess(resultForBootstrapRun));
 
     // Connect & check Hudi table exist
-    new TableCommand().connect(tablePath, TimelineLayoutVersion.VERSION_1, false, 2000, 300000, 7,
+    new TableCommand().connect(tablePath, false, 2000, 300000, 7,
         "WAIT_TO_ADJUST_SKEW", 200L, false);
     metaClient = HoodieCLI.getTableMetaClient();
     assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), "Should have 1 commit.");

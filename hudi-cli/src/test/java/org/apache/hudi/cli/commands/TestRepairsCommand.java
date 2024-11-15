@@ -285,7 +285,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       HoodieTestCommitMetadataGenerator.createCommitFile(tablePath, timestamp, conf);
     }
 
-    metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getTimestamp()) % 4 == 0).forEach(hoodieInstant -> {
+    metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.requestedTime()) % 4 == 0).forEach(hoodieInstant -> {
       metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
       if (hoodieInstant.isCompleted()) {
         metaClient.getActiveTimeline().createCompleteInstant(hoodieInstant);
@@ -323,7 +323,6 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
         .setTableName(tableName())
         .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName("org.apache.hudi.common.model.HoodieAvroPayload")
-        .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
@@ -391,7 +390,6 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
         .setTableName(tableName())
         .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName("org.apache.hudi.common.model.HoodieAvroPayload")
-        .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())

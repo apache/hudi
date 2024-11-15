@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hudi.DummyTaskContextSupplier;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 
 import org.junit.jupiter.api.Assertions;
@@ -34,7 +34,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 
 public class TestHoodieJavaEngineContext {
   private HoodieJavaEngineContext context =
-      new HoodieJavaEngineContext(getDefaultStorageConf(), new DummyTaskContextSupplier());
+      new HoodieJavaEngineContext(getDefaultStorageConf(), new LocalTaskContextSupplier());
 
   @Test
   public void testMap() {

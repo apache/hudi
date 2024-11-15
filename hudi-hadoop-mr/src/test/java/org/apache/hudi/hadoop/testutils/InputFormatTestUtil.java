@@ -370,8 +370,7 @@ public class InputFormatTestUtil {
     HoodieLogFormat.Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
             .withFileId(fileId)
-            .withDeltaCommit(baseCommit).withStorage(storage).withLogVersion(logVersion)
-            .withRolloverLogWriteToken("1-0-1")
+            .withInstantTime(baseCommit).withStorage(storage).withLogVersion(logVersion)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
@@ -407,7 +406,7 @@ public class InputFormatTestUtil {
         HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
             .withLogVersion(logVersion)
-            .withRolloverLogWriteToken("1-0-1").withDeltaCommit(newCommit)
+            .withInstantTime(newCommit)
             .withStorage(storage)
             .build();
     List<IndexedRecord> records = new ArrayList<>();
@@ -444,7 +443,7 @@ public class InputFormatTestUtil {
     HoodieLogFormat.Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
-            .withDeltaCommit(baseCommit)
+            .withInstantTime(baseCommit)
             .withLogVersion(logVersion).withStorage(storage).build();
 
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();

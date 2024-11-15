@@ -31,8 +31,8 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -603,7 +603,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
     final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
     try (HTable hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
          BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
-      Long rollbackTime = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
+      Long rollbackTime = TimelineUtils.parseDateFromInstantTime(instantTime).getTime();
       Long currentTime = new Date().getTime();
       Scan scan = new Scan();
       scan.addFamily(SYSTEM_COLUMN_FAMILY);

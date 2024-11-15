@@ -258,11 +258,11 @@ public class HoodieCommonTestHarness {
     Set<String> completedInstants = completedTimeline
         .getInstants()
         .stream()
-        .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+        .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
     List<String> pendingInstants = timeline
         .getInstants()
         .stream()
-        .map(HoodieInstant::getTimestamp)
+        .map(HoodieInstant::requestedTime)
         .filter(t -> !completedInstants.contains(t))
         .collect(Collectors.toList());
     return !pendingInstants.isEmpty();
@@ -314,7 +314,8 @@ public class HoodieCommonTestHarness {
     HoodieLogFormat.Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withSizeThreshold(1024).withFileId(fileId).withDeltaCommit(commitTime)
+            .withSizeThreshold(1024).withFileId(fileId)
+            .withInstantTime(commitTime)
             .withStorage(storage).build();
     if (storage.exists(writer.getLogFile().getPath())) {
       // enable append for reader test.

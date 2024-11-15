@@ -33,7 +33,7 @@ public class SavepointHelpers {
   private static final Logger LOG = LoggerFactory.getLogger(SavepointHelpers.class);
 
   public static void deleteSavepoint(HoodieTable table, String savepointTime) {
-    HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
+    HoodieInstant savePoint = table.getMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {
       LOG.warn("No savepoint present " + savepointTime);
@@ -41,7 +41,8 @@ public class SavepointHelpers {
     }
 
     table.getActiveTimeline().revertToInflight(savePoint);
-    table.getActiveTimeline().deleteInflight(new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, savepointTime));
+    table.getActiveTimeline().deleteInflight(table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION,
+        savepointTime));
     LOG.info("Savepoint " + savepointTime + " deleted");
   }
 
@@ -53,13 +54,13 @@ public class SavepointHelpers {
         .filterCompletedAndCompactionInstants()
         .lastInstant();
     ValidationUtils.checkArgument(lastInstant.isPresent());
-    ValidationUtils.checkArgument(lastInstant.get().getTimestamp().equals(savepointTime),
+    ValidationUtils.checkArgument(lastInstant.get().requestedTime().equals(savepointTime),
         savepointTime + " is not the last commit after restoring to savepoint, last commit was "
-            + lastInstant.get().getTimestamp());
+            + lastInstant.get().requestedTime());
   }
 
   public static void validateSavepointPresence(HoodieTable table, String savepointTime) {
-    HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
+    HoodieInstant savePoint = table.getMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {
       throw new HoodieRollbackException("No savepoint for instantTime " + savepointTime);

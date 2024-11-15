@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.ENCODER;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.STRUCT_TYPE;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.getRandomRows;
@@ -193,7 +194,8 @@ public class TestHoodieDataSourceInternalBatchWrite extends
       dataSourceInternalBatchWrite.commit(commitMessages.toArray(new HoodieWriterCommitMessage[0]));
       metaClient.reloadActiveTimeline();
 
-      Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime, populateMetaFields);
+      Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(),
+          instantTime, populateMetaFields, INSTANT_GENERATOR);
 
       // verify output
       assertOutput(totalInputRows, result, instantTime, Option.empty(), populateMetaFields);
@@ -241,7 +243,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
       metaClient.reloadActiveTimeline();
 
       Dataset<Row> result = HoodieClientTestUtils.readCommit(basePath, sqlContext, metaClient.getCommitTimeline(), instantTime,
-          populateMetaFields);
+          populateMetaFields, INSTANT_GENERATOR);
 
       // verify output
       assertOutput(totalInputRows, result, instantTime, Option.empty(), populateMetaFields);

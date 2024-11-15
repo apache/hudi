@@ -23,7 +23,6 @@ import org.apache.hudi.client.BaseClusterer;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -76,7 +75,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
         LOG.info("Setting pool name for clustering to " + CLUSTERING_POOL_NAME);
         context.setProperty(EngineProperty.CLUSTERING_POOL_NAME, CLUSTERING_POOL_NAME);
         while (!isShutdownRequested()) {
-          final HoodieInstant instant = fetchNextAsyncServiceInstant();
+          final String instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
             LOG.info("Starting clustering for instant " + instant);
             clusteringClient.cluster(instant);

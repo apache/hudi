@@ -41,13 +41,14 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableMetaClient.COMMIT_TIME_KEY;
+
 /**
  * The metadata that goes into the meta file in each partition.
  */
 public class HoodiePartitionMetadata {
 
   public static final String HOODIE_PARTITION_METAFILE_PREFIX = ".hoodie_partition_metadata";
-  public static final String COMMIT_TIME_KEY = "commitTime";
   private static final String PARTITION_DEPTH_KEY = "partitionDepth";
   private static final Logger LOG = LoggerFactory.getLogger(HoodiePartitionMetadata.class);
 

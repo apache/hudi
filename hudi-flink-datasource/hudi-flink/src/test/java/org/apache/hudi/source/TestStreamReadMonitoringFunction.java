@@ -172,7 +172,7 @@ public class TestStreamReadMonitoringFunction {
     conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
     conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
     conf.set(FlinkOptions.READ_COMMITS_LIMIT, 2);
-    conf.set(FlinkOptions.READ_START_COMMIT, String.valueOf((Long.valueOf(firstInstant.getTimestamp()) - 100)));
+    conf.set(FlinkOptions.READ_START_COMMIT, String.valueOf((Long.valueOf(firstInstant.requestedTime()) - 100)));
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
       harness.setup();
@@ -280,9 +280,9 @@ public class TestStreamReadMonitoringFunction {
     List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(instants.size(), is(2));
 
-    String c2 = oriInstants.get(1).getTimestamp();
-    String c3 = oriInstants.get(2).getTimestamp();
-    String c4 = instants.get(1).getTimestamp();
+    String c2 = oriInstants.get(1).requestedTime();
+    String c3 = oriInstants.get(2).requestedTime();
+    String c4 = instants.get(1).requestedTime();
 
     conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
