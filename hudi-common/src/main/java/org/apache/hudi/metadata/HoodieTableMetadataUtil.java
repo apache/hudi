@@ -1666,7 +1666,10 @@ public class HoodieTableMetadataUtil {
    * @param index         Index of the file group within the partition
    * @return The fileID
    */
-  public static String getFileIDForFileGroup(MetadataPartitionType partitionType, int index) {
+  public static String getFileIDForFileGroup(MetadataPartitionType partitionType, int index, String partitionName) {
+    if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) || MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
+      return String.format("%s%04d-%d", partitionName.replaceAll("_", "-").concat("-"), index, 0);
+    }
     return String.format("%s%04d-%d", partitionType.getFileIdPrefix(), index, 0);
   }
 
