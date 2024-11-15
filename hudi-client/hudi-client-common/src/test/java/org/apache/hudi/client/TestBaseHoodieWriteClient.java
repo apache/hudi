@@ -60,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -96,6 +97,43 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     writeClient.close();
     verify(table, never()).getHoodieView();
     verify(tableServiceClient).close();
+  }
+
+  @Test
+  void startCommitWillRollbackFailedWritesInEagerMode() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
+    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
+
+    // mock no inflight restore
+    HoodieTimeline inflightRestoreTimeline = mock(HoodieTimeline.class);
+    when(mockMetaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested()).thenReturn(inflightRestoreTimeline);
+    when(inflightRestoreTimeline.countInstants()).thenReturn(0);
+    // mock no pending compaction
+    when(mockMetaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant()).thenReturn(Option.empty());
+
+    writeClient.startCommit(HoodieActiveTimeline.COMMIT_ACTION, mockMetaClient);
+    verify(tableServiceClient).rollbackFailedWrites(mockMetaClient);
+  }
+
+  @Test
+  void rollbackDelegatesToTableServiceClient() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
+    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
+
+    writeClient.rollbackFailedWrites(mockMetaClient);
+    verify(tableServiceClient).rollbackFailedWrites(mockMetaClient);
   }
 
   private HoodieWriteConfig getHoodieWriteConfigForRemoteView(FileSystemViewStorageType viewStorageType) {
