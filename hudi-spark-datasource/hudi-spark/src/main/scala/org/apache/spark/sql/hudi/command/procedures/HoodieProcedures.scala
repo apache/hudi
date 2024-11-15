@@ -94,6 +94,7 @@ object HoodieProcedures {
       ,(HelpProcedure.NAME, HelpProcedure.builder)
       ,(ArchiveCommitsProcedure.NAME, ArchiveCommitsProcedure.builder)
       ,(RunTTLProcedure.NAME, RunTTLProcedure.builder)
+      ,(TruncateTableProcedure.NAME, TruncateTableProcedure.builder)
     )
   }
 }
