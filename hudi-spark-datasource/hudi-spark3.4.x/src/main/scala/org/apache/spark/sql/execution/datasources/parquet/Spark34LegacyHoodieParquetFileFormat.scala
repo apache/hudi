@@ -174,7 +174,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
         //TODO: HARDCODED TIMELINE OBJECT
-        val layout = TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
+        val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
         val storage = new HoodieHadoopStorage(tablePath, sharedConf)
         InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath, storage,
           if (validCommits == null) "" else validCommits,
