@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -91,6 +92,7 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+// TODO: remove QueryInfo from this test
 public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   private static final Schema GCS_METADATA_SCHEMA = SchemaTestUtil.getSchemaFromResource(
@@ -253,18 +255,34 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
   @ParameterizedTest
   @CsvSource({
-      "1,1#path/to/file2.json,3#path/to/file4.json,1#path/to/file1.json,1",
-      "2,1#path/to/file2.json,3#path/to/file4.json,1#path/to/file1.json,2",
-      "3,3#path/to/file5.json,3#path/to/file5.json,1#path/to/file1.json,3"
+      "0,0,path/to/file2.json,2,path/to/file4.json,0,path/to/file1.json,0",
+      "1,0,path/to/file2.json,2,path/to/file4.json,0,path/to/file1.json,1",
+      "2,2,path/to/file5.json,2,path/to/file5.json,0,path/to/file1.json,2"
   })
-  public void testSplitSnapshotLoad(String snapshotCheckPoint, String exptected1, String exptected2, String exptected3, String exptected4) throws IOException {
+  public void testSplitSnapshotLoad(
+      String snapshotCheckPointOffset,
+      String expected1Offset, String expected1Key,
+      String expected2Offset, String expected2Key,
+      String expected3Offset, String expected3Key,
+      String expected4Offset) throws IOException {
+    List<Pair<String, List<HoodieRecord>>> inserts = new ArrayList<>();
+    inserts.add(writeGcsMetadataRecords("1"));
+    inserts.add(writeGcsMetadataRecords("2"));
+    inserts.add(writeGcsMetadataRecords("3"));
 
-    writeGcsMetadataRecords("1");
-    writeGcsMetadataRecords("2");
-    writeGcsMetadataRecords("3");
+    // get completion time as checkpoint
+    String snapshotCheckPoint = inserts.get(Integer.parseInt(snapshotCheckPointOffset)).getKey();
+
+    // build expected checkpoint
+    // completionTime#key
+    String expected1 = String.format("%s#%s", inserts.get(Integer.parseInt(expected1Offset)).getKey(), expected1Key);
+    String expected2 = String.format("%s#%s", inserts.get(Integer.parseInt(expected2Offset)).getKey(), expected2Key);
+    String expected3 = String.format("%s#%s", inserts.get(Integer.parseInt(expected3Offset)).getKey(), expected3Key);
+    String expected4 = inserts.get(Integer.parseInt(expected4Offset)).getKey(); // when key is empty then the checkpoint only has timestamp
 
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list
+    // Triple(filePath, fileSize, commitTime)
     filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 50L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 50L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip1.json", 50L, "2"));
@@ -284,17 +302,17 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     int sourcePartitions = 2;
     //1. snapshot query, read all records
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50000L, sourcePartitions, bytesPerPartition.get(0)));
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50000L, exptected1, typedProperties);
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50000L, expected1, typedProperties);
     //2. incremental query, as commit is present in timeline
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(10L, sourcePartitions, bytesPerPartition.get(1)));
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(exptected1), 10L, exptected2, typedProperties);
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(expected1), 10L, expected2, typedProperties);
     //3. snapshot query with source limit less than first commit size
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, sourcePartitions, bytesPerPartition.get(2)));
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected3, typedProperties);
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, expected3, typedProperties);
     typedProperties.setProperty("hoodie.streamer.source.cloud.data.ignore.relpath.prefix", "path/to");
     //4. As snapshotQuery will return 1 -> same would be return as nextCheckpoint (dataset is empty due to ignore prefix).
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, sourcePartitions, bytesPerPartition.get(3)));
-    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected4, typedProperties);
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, expected4, typedProperties);
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
     ArgumentCaptor<Integer> argumentCaptorForMetrics = ArgumentCaptor.forClass(Integer.class);
@@ -306,8 +324,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     } else {
       numPartitions = Arrays.asList(23, sourcePartitions);
     }
-    Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
-    Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
+    assertEquals(numPartitions, argumentCaptor.getAllValues());
+    assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
   }
 
   @Test
@@ -325,20 +343,15 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   private void setMockQueryRunner(Dataset<Row> inputDs, Option<String> nextCheckPointOpt) {
-
-    when(queryRunner.run(any(QueryInfo.class), any())).thenAnswer(invocation -> {
-      QueryInfo queryInfo = invocation.getArgument(0);
-      QueryInfo updatedQueryInfo = nextCheckPointOpt.map(nextCheckPoint ->
-              queryInfo.withUpdatedEndInstant(nextCheckPoint))
-          .orElse(queryInfo);
-      if (updatedQueryInfo.isSnapshot()) {
-        return Pair.of(updatedQueryInfo,
-            inputDs.filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                    updatedQueryInfo.getStartInstant()))
-                .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                    updatedQueryInfo.getEndInstant())));
+    when(queryRunner.run(any(QueryContext.class), any(), any(Boolean.class))).thenAnswer(invocation -> {
+      QueryContext queryContext = invocation.getArgument(0);
+      boolean shouldFullScan = invocation.getArgument(2);
+      if (shouldFullScan) {
+        return Pair.of(queryContext.getMaxCompletionTime(),
+            inputDs.filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+                String.join("','", queryContext.getInstantTimeList()))));
       }
-      return Pair.of(updatedQueryInfo, inputDs);
+      return Pair.of(nextCheckPointOpt.orElse(queryContext.getMaxCompletionTime()), inputDs);
     });
   }
 
@@ -426,8 +439,9 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
       List<WriteStatus> statuses = result.collect();
       assertNoWriteErrors(statuses);
-
-      return Pair.of(commitTime, gcsMetadataRecords);
+      metaClient.reloadActiveTimeline();
+      String completionTime = metaClient.getActiveTimeline().getWriteTimeline().getLatestCompletionTime().get();
+      return Pair.of(completionTime, gcsMetadataRecords);
     }
   }
 

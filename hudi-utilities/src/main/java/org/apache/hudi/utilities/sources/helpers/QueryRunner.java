@@ -21,9 +21,11 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
 
@@ -37,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -62,16 +65,17 @@ public class QueryRunner {
   /**
    * This is used to execute queries for cloud stores incremental pipelines.
    * Regular Hudi incremental queries does not take this flow.
-   * @param queryInfo all meta info about the query to be executed.
+   * @param queryContext all meta info about the query to be executed.
    * @return the output of the query as Dataset < Row >.
    */
-  public Pair<QueryInfo, Dataset<Row>> run(QueryInfo queryInfo, Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption) {
-    if (queryInfo.isIncremental()) {
-      return runIncrementalQuery(queryInfo);
-    } else if (queryInfo.isSnapshot()) {
-      return runSnapshotQuery(queryInfo, snapshotLoadQuerySplitterOption);
+  public Pair<String, Dataset<Row>> run(
+      QueryContext queryContext,
+      Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption,
+      boolean shouldFullScan) {
+    if (shouldFullScan) {
+      return runSnapshotQuery(queryContext, snapshotLoadQuerySplitterOption);
     } else {
-      throw new HoodieException("Unknown query type " + queryInfo.getQueryType());
+      return runIncrementalQuery(queryContext);
     }
   }
 
@@ -83,35 +87,51 @@ public class QueryRunner {
     return dataset;
   }
 
-  public Pair<QueryInfo, Dataset<Row>> runIncrementalQuery(QueryInfo queryInfo) {
+  public Pair<String, Dataset<Row>> runIncrementalQuery(QueryContext queryContext) {
     LOG.info("Running incremental query");
-    return Pair.of(queryInfo, sparkSession.read().format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
-        .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getStartInstant())
-        .option(DataSourceReadOptions.END_COMMIT().key(), queryInfo.getEndInstant())
+    String inclusiveStartCompletionTime = queryContext.getInstants().stream()
+        .min(HoodieInstant.COMPLETION_TIME_COMPARATOR)
+        .map(HoodieInstant::getCompletionTime)
+        .get();
+
+    return Pair.of(queryContext.getMaxCompletionTime(), sparkSession.read().format("org.apache.hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+        .option(DataSourceReadOptions.START_COMMIT().key(), inclusiveStartCompletionTime)
+        .option(DataSourceReadOptions.END_COMMIT().key(), queryContext.getMaxCompletionTime())
         .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
             props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                 DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
         .load(sourcePath));
   }
 
-  public Pair<QueryInfo, Dataset<Row>> runSnapshotQuery(QueryInfo queryInfo, Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption) {
+  public Pair<String, Dataset<Row>> runSnapshotQuery(QueryContext queryContext, Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter) {
     LOG.info("Running snapshot query");
-    Dataset<Row> snapshot = sparkSession.read().format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType()).load(sourcePath);
-    QueryInfo snapshotQueryInfo = snapshotLoadQuerySplitterOption
-        .map(snapshotLoadQuerySplitter -> snapshotLoadQuerySplitter.getNextCheckpoint(snapshot, queryInfo, Option.empty()))
-        .orElse(queryInfo);
-    return Pair.of(snapshotQueryInfo, applySnapshotQueryFilters(snapshot, snapshotQueryInfo));
-  }
-
-  public Dataset<Row> applySnapshotQueryFilters(Dataset<Row> snapshot, QueryInfo snapshotQueryInfo) {
-    Dataset<Row> df = snapshot
+    Dataset<Row> snapshot = sparkSession.read()
+        .format("org.apache.hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
+        .load(sourcePath);
+    String endCompletionTime = queryContext.getMaxCompletionTime();
+    Option<String> predicate = Option.empty();
+    List<String> instantTimeList = queryContext.getInstantTimeList();
+    if (snapshotLoadQuerySplitter.isPresent()) {
+      Option<SnapshotLoadQuerySplitter.CheckpointWithPredicates> newCheckpointAndPredicate =
+          snapshotLoadQuerySplitter.get().getNextCheckpointWithPredicates(snapshot, queryContext);
+      if (newCheckpointAndPredicate.isPresent()) {
+        endCompletionTime = newCheckpointAndPredicate.get().getEndCompletionTime();
+        predicate = Option.of(newCheckpointAndPredicate.get().getPredicateFilter());
+        instantTimeList = queryContext.getInstants().stream()
+            .filter(instant -> HoodieTimeline.compareTimestamps(
+                instant.getCompletionTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS,
+                newCheckpointAndPredicate.get().getEndCompletionTime()))
+            .map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toList());
+      }
+    }
+    snapshot = predicate.map(snapshot::filter).orElse(snapshot);
+    snapshot = snapshot
         // add filtering so that only interested records are returned.
-        .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-            snapshotQueryInfo.getStartInstant()))
-        .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-            snapshotQueryInfo.getEndInstant()));
-    return snapshotQueryInfo.getPredicateFilter().map(df::filter).orElse(df);
+        .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+            String.join("','", instantTimeList)));
+    return Pair.of(endCompletionTime, snapshot);
   }
 }

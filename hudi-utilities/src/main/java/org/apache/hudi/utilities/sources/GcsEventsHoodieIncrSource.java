@@ -19,17 +19,16 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectIncrCheckpoint;
-import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
+import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
-import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
@@ -52,8 +51,6 @@ import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_C
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.Type.GCS;
-import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.generateQueryInfo;
-import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMissingCheckpointStrategy;
 
 /**
@@ -165,22 +162,27 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCheckpoint, long sourceLimit) {
     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint = CloudObjectIncrCheckpoint.fromString(lastCheckpoint);
-    HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
 
-    QueryInfo queryInfo = generateQueryInfo(
-        sparkContext, srcPath, numInstantsPerFetch,
-        Option.of(cloudObjectIncrCheckpoint.getCommit()),
-        missingCheckpointStrategy, handlingMode, HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-        CloudObjectsSelectorCommon.GCS_OBJECT_KEY,
-        CloudObjectsSelectorCommon.GCS_OBJECT_SIZE, true,
-        Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
-    LOG.info("Querying GCS with:" + cloudObjectIncrCheckpoint + " and queryInfo:" + queryInfo);
+    IncrementalQueryAnalyzer analyzer =
+        IncrSourceHelper.generateQueryInfo(
+            sparkContext, srcPath, numInstantsPerFetch,
+            Option.of(cloudObjectIncrCheckpoint.getCommit()),
+            missingCheckpointStrategy,  true,
+            Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
+    QueryContext queryContext = analyzer.analyze();
+    LOG.info("Querying GCS with:" + cloudObjectIncrCheckpoint + " and queryContext:" + queryContext);
 
-    if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
-      LOG.info("Source of file names is empty. Returning empty result and endInstant: "
-          + queryInfo.getStartInstant());
-      return Pair.of(Option.empty(), queryInfo.getStartInstant());
+    if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryContext.isEmpty()) {
+      LOG.info("Source of file names is empty. Returning empty result and lastCheckpoint: "
+          + lastCheckpoint.orElse(null));
+      return Pair.of(Option.empty(), lastCheckpoint.orElse(null));
     }
-    return cloudDataFetcher.fetchPartitionedSource(GCS, cloudObjectIncrCheckpoint, this.sourceProfileSupplier, queryRunner.run(queryInfo, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);
+    boolean shouldFullScan =
+        queryContext.getInstantRange().isEmpty()
+            || (missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT
+            && queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(analyzer.getStartCompletionTime().get()));
+    return cloudDataFetcher.fetchPartitionedSource(
+        GCS, cloudObjectIncrCheckpoint, this.sourceProfileSupplier,
+        queryRunner.run(queryContext, snapshotLoadQuerySplitter, shouldFullScan), this.schemaProvider, sourceLimit);
   }
 }
