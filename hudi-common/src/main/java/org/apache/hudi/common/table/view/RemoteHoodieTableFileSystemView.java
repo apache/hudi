@@ -467,10 +467,10 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParams();
     try {
       paramsMap.put(PARTITIONS_PARAM, OBJECT_MAPPER.writeValueAsString(partitionPaths));
-    } catch (JsonProcessingException e) {
+      executeRequest(LOAD_PARTITIONS_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
+    } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
-    loadPartitions(LOAD_PARTITIONS_URL, paramsMap);
   }
 
   private Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations(String requestPath, Map<String, String> paramsMap) {

@@ -446,12 +446,11 @@ public class RequestHandler {
       metricsRegistry.add("LOAD_PARTITIONS", 1);
       String basePath = getBasePathParam(ctx);
       try {
-        List<String> partitionPaths = OBJECT_MAPPER.readValue(ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITIONS_PARAM, String.class)
-            .getOrThrow(e -> new HoodieException("Partitions param is invalid")), LIST_TYPE_REFERENCE);
+        List<String> partitionPaths = OBJECT_MAPPER.readValue(ctx.body(), LIST_TYPE_REFERENCE);
         boolean success = sliceHandler.loadPartitions(basePath, partitionPaths);
         writeValueAsString(ctx, success);
       } catch (IOException e) {
-        throw new HoodieIOException("Failed to parse request parameter", e);
+        throw new HoodieIOException("Failed to parse request body", e);
       }
     }, false));
 
