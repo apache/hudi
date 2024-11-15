@@ -126,6 +126,14 @@ Note that the request_cancel and execute_cancel APIs are responsible for ensurin
 
 Archival will also be updated to delete instants transitioned to .aborted state, since .aborted is a terminal state.
 
+### Summarizing proposed internal timeline/instant format changes
+Taking together all changes to .hoodie & instant files structure discussed above, this RFC will apply the following changes
+
+- To the instant plan metadata, the `cancellable` boolean flag and `cancellation-policy` predicate
+- The list of possible instant transitions for table services will now include `.aborted`
+- The /.cancel folder will be added to .hoodie directory
+
+
 ## Rollout
 This design proposal has one critical drawback:
 * A new state and action type needs to be added to HUDI, requiring updates to all reader/writer logic of the HUDI filesystem view. Readers need to account for skipping aborted plans, and archival should clean up aborted plans and cancel actions accordingly. In addition, it is now possible for an instant to be transitioned to a terminal state (.aborted) without being completed. This can complicate tooling that needs to infer wether an instant is committed.
