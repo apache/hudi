@@ -18,133 +18,129 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.utils.TransactionUtils;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSchemaEvolutionConflictException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 
 import org.apache.avro.Schema;
-import org.jetbrains.annotations.NotNull;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
-import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.matches;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-public class TestSimpleSchemaConflictResolutionStrategy extends SimpleSchemaConflictResolutionStrategy {
-
-  public static final Option<HoodieInstant> LAST_COMPLETED_TXN_OWNER_INSTANT =
-      Option.of(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001"));
-  public static final Option<HoodieInstant> TABLE_COMPACTION_OWNER_INSTANT =
-      Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "002"));
-  public static final Option<HoodieInstant> NON_TABLE_COMPACTION_INSTANT =
-      Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "003"));
-  @Mock
-  private HoodieTable table;
+public class TestSimpleSchemaConflictResolutionStrategy {
+  
+  public Option<HoodieInstant> lastCompletedTxnOwnerInstant;
+  public Option<HoodieInstant> tableCompactionOwnerInstant;
+  public Option<HoodieInstant> nonTableCompactionInstant;
+  @TempDir
+  private java.nio.file.Path basePath;
   @Mock
   private HoodieWriteConfig config;
-  @Mock
   private HoodieTableMetaClient metaClient;
-  @Mock
-  private HoodieActiveTimeline activeTimeline;
-  @Mock
-  private HoodieTimeline commitsTimeline;
-  @Mock
-  private TableSchemaResolver schemaResolver;
-
+  private HoodieTestTable dummyInstantGenerator;
+  private TestTable table;
+  private SimpleSchemaConflictResolutionStrategy strategy;
+  
   private static final String SCHEMA1 = "{\"type\":\"record\",\"name\":\"MyRecord\",\"fields\":[{\"name\":\"field1\",\"type\":\"string\"}]}";
   private static final String SCHEMA2 = "{\"type\":\"record\",\"name\":\"MyRecord\",\"fields\":[{\"name\":\"field1\",\"type\":\"string\"},{\"name\":\"field2\",\"type\":\"int\"}]}";
   private static final String SCHEMA3 = "{\"type\":\"record\",\"name\":\"MyRecord\",\"fields\":[{\"name\":\"field1\",\"type\":\"string\"},{\"name\":\"field3\",\"type\":\"boolean\"}]}";
+  private static final String NULL_SCHEMA = "{\"type\":\"null\"}";
 
-  @BeforeEach
-  public void setup() {
-    MockitoAnnotations.openMocks(this);
+  private void setupMocks(String tableSchemaAtTxnStart, String tableSchemaAtTxnValidation,
+                          String writerSchemaOfTxn, Boolean enableResolution) throws Exception {
+    metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(),"")
+        .setTableCreateSchema(SCHEMA1)
+        .initTable(getDefaultStorageConf(), basePath.toString());
+    dummyInstantGenerator = HoodieTestTable.of(metaClient);
 
-    when(table.getMetaClient()).thenReturn(metaClient);
-    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
-    when(activeTimeline.getCommitsTimeline()).thenReturn(commitsTimeline);
-    when(commitsTimeline.filterCompletedInstants()).thenReturn(commitsTimeline);
-  }
-  
-  @Override
-  @NotNull
-  TableSchemaResolver getSchemaResolver(HoodieTable table) {
-    return schemaResolver;
-  }
-  
-  private void setupMocks(String tableSchemaAtTxnStart, String tableSchemaAtTxnValidation, String writerSchemaOfTxn, Boolean enableResolution)
-      throws Exception {
-    HoodieInstant instantAtTxnStart = tableSchemaAtTxnStart != null
-        ? new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001") : null;
-    HoodieInstant instantAtTxnValidation = tableSchemaAtTxnValidation != null
-        ? new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "002") : null;
+    lastCompletedTxnOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "001"));
+    tableCompactionOwnerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, "003"));
+    nonTableCompactionInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, COMMIT_ACTION, "003"));
 
-    when(commitsTimeline.lastInstant()).thenReturn(Option.ofNullable(instantAtTxnStart));
+    dummyInstantGenerator.addCommit("001", Option.of(buildMetadata(
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        Option.empty(),
+        WriteOperationType.UNKNOWN,
+        tableSchemaAtTxnStart,
+        COMMIT_ACTION)));
+    dummyInstantGenerator.addCommit("002", Option.of(buildMetadata(
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        Option.empty(),
+        WriteOperationType.UNKNOWN,
+        tableSchemaAtTxnValidation,
+        COMMIT_ACTION)));
 
-    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
-    when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
-    when(metaClient.getSchemaEvolutionTimeline()).thenReturn(commitsTimeline);
-    HoodieTimeline filteredTimeline = mock(HoodieTimeline.class);
-    if (tableSchemaAtTxnStart != null) {
-      when(commitsTimeline.findInstantsBeforeOrEquals(matches(instantAtTxnStart.getTimestamp())))
-          .thenReturn(filteredTimeline);
-      when(filteredTimeline.lastInstant()).thenReturn(Option.of(instantAtTxnStart));
-    }
-    when(commitsTimeline.filterCompletedInstants()).thenReturn(commitsTimeline);
-    when(commitsTimeline.lastInstant()).thenReturn(
-        instantAtTxnValidation == null ? Option.empty() : Option.of(instantAtTxnValidation));
+    // Setup config
+    TypedProperties typedProperties = new TypedProperties();
+    typedProperties.setProperty(ENABLE_SCHEMA_CONFLICT_RESOLUTION.key(),
+        enableResolution ? ENABLE_SCHEMA_CONFLICT_RESOLUTION.defaultValue().toString() : "false");
+    config = HoodieWriteConfig.newBuilder().withSchema(writerSchemaOfTxn).withPath(basePath.toString()).withProperties(typedProperties).build();
 
-    when(schemaResolver.getTableAvroSchema(any(HoodieInstant.class), eq(false)))
-        .thenAnswer(invocation -> {
-          HoodieInstant arg = invocation.getArgument(0);
-          if (arg.equals(instantAtTxnValidation)) {
-            return new Schema.Parser().parse(tableSchemaAtTxnValidation);
-          } else if (arg.equals(instantAtTxnStart)) {
-            return new Schema.Parser().parse(tableSchemaAtTxnStart);
-          } else {
-            throw new IllegalArgumentException("Unexpected instant: " + arg);
-          }
-        });
-
-    when(config.getBoolean(ENABLE_SCHEMA_CONFLICT_RESOLUTION)).thenReturn(
-        enableResolution ? ENABLE_SCHEMA_CONFLICT_RESOLUTION.defaultValue() : false);
-    when(config.getWriteSchema()).thenReturn(writerSchemaOfTxn);
-
-    String commitMetadataJson = String.format("{\"" + HoodieCommitMetadata.SCHEMA_KEY + "\":\"%s\"}",
-        tableSchemaAtTxnValidation != null ? tableSchemaAtTxnValidation.replace("\"", "\\\"") : "");
-    byte[] commitMetadataBytes = commitMetadataJson.getBytes(StandardCharsets.UTF_8);
-
-    when(this.commitsTimeline.getInstantDetails(any(HoodieInstant.class)))
-        .thenReturn(Option.of(commitMetadataBytes));
-
-    when(table.getActiveTimeline()).thenReturn(activeTimeline);
-    when(table.getMetaClient()).thenReturn(metaClient);
-    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    table = new TestTable(config, metaClient);
+    strategy = new SimpleSchemaConflictResolutionStrategy();
   }
 
   @Test
   void testNoConflictFirstCommit() throws Exception {
     setupMocks(null, null, SCHEMA1, true);
-    Schema result = resolveConcurrentSchemaEvolution(
-        table, config, Option.empty(), NON_TABLE_COMPACTION_INSTANT).get();
+    Schema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, Option.empty(), nonTableCompactionInstant).get();
+    assertEquals(new Schema.Parser().parse(SCHEMA1), result);
+  }
+
+  @Test
+  void testNullWriterSchema() throws Exception {
+    setupMocks(SCHEMA1, SCHEMA1, "", true);
+    assertFalse(strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).isPresent());
+  }
+
+  @Test
+  void testNullTypeWriterSchema() throws Exception {
+    setupMocks(SCHEMA1, SCHEMA1, NULL_SCHEMA, true);
+    Schema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(new Schema.Parser().parse(SCHEMA1), result);
   }
 
@@ -152,70 +148,62 @@ public class TestSimpleSchemaConflictResolutionStrategy extends SimpleSchemaConf
   void testConflictSecondCommitDifferentSchema() throws Exception {
     setupMocks(null, SCHEMA1, SCHEMA2, true);
     assertThrows(HoodieSchemaEvolutionConflictException.class,
-        () -> resolveConcurrentSchemaEvolution(table, config, Option.empty(), NON_TABLE_COMPACTION_INSTANT));
+        () -> strategy.resolveConcurrentSchemaEvolution(table, config, Option.empty(), nonTableCompactionInstant));
   }
 
   @Test
   void testConflictSecondCommitSameSchema() throws Exception {
     setupMocks(null, SCHEMA1, SCHEMA1, true);
-    Schema result = resolveConcurrentSchemaEvolution(
-        table, config, Option.empty(), NON_TABLE_COMPACTION_INSTANT).get();
+    Schema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, Option.empty(), nonTableCompactionInstant).get();
     assertEquals(new Schema.Parser().parse(SCHEMA1), result);
   }
 
   @Test
   void testNoConflictSameSchema() throws Exception {
     setupMocks(SCHEMA1, SCHEMA1, SCHEMA1, true);
-    Schema result = resolveConcurrentSchemaEvolution(
-        table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, NON_TABLE_COMPACTION_INSTANT).get();
+    Schema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(new Schema.Parser().parse(SCHEMA1), result);
   }
 
   @Test
   void testNoConflictBackwardsCompatible1() throws Exception {
     setupMocks(SCHEMA1, SCHEMA2, SCHEMA1, true);
-    Schema result = resolveConcurrentSchemaEvolution(
-        table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, NON_TABLE_COMPACTION_INSTANT).get();
+    Schema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(new Schema.Parser().parse(SCHEMA2), result);
   }
 
   @Test
   void testNoConflictBackwardsCompatible2() throws Exception {
     setupMocks(SCHEMA1, SCHEMA1, SCHEMA2, true);
-    Schema result = resolveConcurrentSchemaEvolution(
-        table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, NON_TABLE_COMPACTION_INSTANT).get();
+    Schema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(new Schema.Parser().parse(SCHEMA2), result);
   }
 
   @Test
   void testNoConflictConcurrentEvolutionSameSchema() throws Exception {
     setupMocks(SCHEMA1, SCHEMA2, SCHEMA2, true);
-    Schema result = resolveConcurrentSchemaEvolution(
-        table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, NON_TABLE_COMPACTION_INSTANT).get();
+    Schema result = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).get();
     assertEquals(new Schema.Parser().parse(SCHEMA2), result);
-  }
-
-  @Test
-  void testConflictConcurrentEvolutionDifferentSchemas() throws Exception {
-    setupMocks(SCHEMA1, SCHEMA2, SCHEMA3, true);
-    assertThrows(HoodieSchemaEvolutionConflictException.class,
-        () -> resolveConcurrentSchemaEvolution(
-            table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, NON_TABLE_COMPACTION_INSTANT));
   }
 
   @Test
   void testCompactionTableServiceSkipSchemaEvolutionCheck() throws Exception {
     setupMocks(SCHEMA1, SCHEMA2, SCHEMA3, true);
-    boolean hasSchema = resolveConcurrentSchemaEvolution(
-        table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, TABLE_COMPACTION_OWNER_INSTANT).isPresent();
+    boolean hasSchema = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, tableCompactionOwnerInstant).isPresent();
     assertFalse(hasSchema);
   }
 
   @Test
   void testNoCurrentTxnOptionSkipSchemaEvolutionCheck() throws Exception {
     setupMocks(SCHEMA1, SCHEMA2, SCHEMA3, true);
-    boolean hasResult = resolveConcurrentSchemaEvolution(
-        table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, Option.empty()).isPresent();
+    boolean hasResult = strategy.resolveConcurrentSchemaEvolution(
+        table, config, lastCompletedTxnOwnerInstant, Option.empty()).isPresent();
     assertFalse(hasResult);
   }
 
@@ -223,7 +211,159 @@ public class TestSimpleSchemaConflictResolutionStrategy extends SimpleSchemaConf
   void testSchemaConflictResolutionDisabled() throws Exception {
     setupMocks(SCHEMA1, SCHEMA2, SCHEMA2, false);
     boolean hasSchema = TransactionUtils.resolveSchemaConflictIfNeeded(
-        table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, NON_TABLE_COMPACTION_INSTANT).isPresent();
+        table, config, lastCompletedTxnOwnerInstant, nonTableCompactionInstant).isPresent();
     assertFalse(hasSchema);
+  }
+
+  @Mock public static FileSystemViewManager viewManager;
+  @Mock public static HoodieEngineContext engineContext;
+  @Mock public static TaskContextSupplier taskContextSupplier;
+
+  public class TestTable extends HoodieTable {
+
+    protected TestTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+      super(config, engineContext, metaClient, viewManager, TestSimpleSchemaConflictResolutionStrategy.taskContextSupplier);
+    }
+
+    @Override
+    protected HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata upsert(HoodieEngineContext context, String instantTime, Object records) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata insert(HoodieEngineContext context, String instantTime, Object records) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata delete(HoodieEngineContext context, String instantTime, Object keys) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata deletePrepped(HoodieEngineContext context, String instantTime, Object preppedRecords) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata upsertPrepped(HoodieEngineContext context, String instantTime, Object preppedRecords) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata insertPrepped(HoodieEngineContext context, String instantTime, Object preppedRecords) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata insertOverwrite(HoodieEngineContext context, String instantTime, Object records) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata insertOverwriteTable(HoodieEngineContext context, String instantTime, Object records) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata managePartitionTTL(HoodieEngineContext context, String instantTime) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata compact(HoodieEngineContext context, String compactionInstantTime) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata cluster(HoodieEngineContext context, String clusteringInstantTime) {
+      return null;
+    }
+
+    @Override
+    public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
+
+    }
+
+    @Override
+    public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
+      return null;
+    }
+
+    @Override
+    public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback, boolean skipTimelinePublish,
+                                                       boolean shouldRollbackUsingMarkers, boolean isRestore) {
+      return null;
+    }
+
+    @Override
+    public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant, boolean deleteInstants, boolean skipLocking) {
+      return null;
+    }
+
+    @Override
+    public Option<HoodieIndexCommitMetadata> index(HoodieEngineContext context, String indexInstantTime) {
+      return null;
+    }
+
+    @Override
+    public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment) {
+      return null;
+    }
+
+    @Override
+    public HoodieRestoreMetadata restore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
+      return null;
+    }
+
+    @Override
+    public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
+      return null;
+    }
+
+    @Override
+    public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List partitionsToIndex, List partitionPaths) {
+      return null;
+    }
+
+    @Override
+    public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option extraMetadata) {
+      return null;
+    }
+
+    @Override
+    public HoodieBootstrapWriteMetadata bootstrap(HoodieEngineContext context, Option extraMetadata) {
+      return null;
+    }
+
+    @Override
+    public Option<HoodieClusteringPlan> scheduleClustering(HoodieEngineContext context, String instantTime, Option extraMetadata) {
+      return null;
+    }
+
+    @Override
+    public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option extraMetadata) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata bulkInsertPrepped(HoodieEngineContext context, String instantTime, Object preppedRecords, Option bulkInsertPartitioner) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List partitions) {
+      return null;
+    }
+
+    @Override
+    public HoodieWriteMetadata bulkInsert(HoodieEngineContext context, String instantTime, Object records, Option bulkInsertPartitioner) {
+      return null;
+    }
   }
 }

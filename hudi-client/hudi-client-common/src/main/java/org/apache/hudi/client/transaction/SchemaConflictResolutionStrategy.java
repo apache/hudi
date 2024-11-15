@@ -57,7 +57,7 @@ public interface SchemaConflictResolutionStrategy {
       Option<HoodieInstant> currTxnOwnerInstant);
 
   static void throwConcurrentSchemaEvolutionException(
-      Option<Schema> tableSchemaAtTxnStart, Schema tableSchemaAtTxnValidation, Schema writerSchemaOfTxn,
+      Option<Schema> tableSchemaAtTxnStart, Option<Schema> tableSchemaAtTxnValidation, Schema writerSchemaOfTxn,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       Option<HoodieInstant> currTxnOwnerInstant) throws HoodieWriteConflictException {
     String errMsg = String.format(
@@ -66,7 +66,7 @@ public interface SchemaConflictResolutionStrategy {
             + "schema the transaction tries to commit with: %s. lastCompletedTxnOwnerInstant is %s "
             + " and currTxnOwnerInstant is %s.",
         tableSchemaAtTxnStart.isPresent() ? tableSchemaAtTxnStart : "Not exists as no commited txn at that time",
-        tableSchemaAtTxnValidation,
+        tableSchemaAtTxnValidation.isPresent() ? tableSchemaAtTxnValidation : "Not exists",
         writerSchemaOfTxn,
         lastCompletedTxnOwnerInstant.isPresent() ? lastCompletedTxnOwnerInstant : "Not exists",
         currTxnOwnerInstant.isPresent() ? currTxnOwnerInstant : "Not exists");

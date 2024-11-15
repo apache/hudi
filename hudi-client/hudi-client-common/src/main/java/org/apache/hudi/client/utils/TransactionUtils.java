@@ -78,7 +78,7 @@ public class TransactionUtils {
         table.getMetaClient().reloadActiveTimeline();
       }
       Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation =
-        getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
+          getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
       Option<Schema> newTableSchema = resolveSchemaConflictIfNeeded(table, config, lastCompletedTxnOwnerInstant, currentTxnOwnerInstant);
 
