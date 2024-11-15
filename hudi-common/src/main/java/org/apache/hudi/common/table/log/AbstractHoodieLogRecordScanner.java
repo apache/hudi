@@ -87,9 +87,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * <p>
  * This results in two I/O passes over the log file.
  */
-public abstract class AbstractHoodieLogRecordReader {
+public abstract class AbstractHoodieLogRecordScanner {
 
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieLogRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieLogRecordScanner.class);
 
   // Reader schema for the records
   protected final Schema readerSchema;
@@ -150,20 +150,20 @@ public abstract class AbstractHoodieLogRecordReader {
   // table version for compatibility
   private final HoodieTableVersion tableVersion;
   // for pending log block check with table version before 8
-  HoodieTimeline commitsTimeline = null;
-  HoodieTimeline completedInstantsTimeline = null;
-  HoodieTimeline inflightInstantsTimeline = null;
+  private HoodieTimeline commitsTimeline = null;
+  private HoodieTimeline completedInstantsTimeline = null;
+  private HoodieTimeline inflightInstantsTimeline = null;
 
-  protected AbstractHoodieLogRecordReader(HoodieStorage storage, String basePath, List<String> logFilePaths,
-                                          Schema readerSchema, String latestInstantTime,
-                                          boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
-                                          boolean withOperationField, boolean forceFullScan,
-                                          Option<String> partitionNameOverride,
-                                          InternalSchema internalSchema,
-                                          Option<String> keyFieldOverride,
-                                          boolean enableOptimizedLogBlocksScan,
-                                          HoodieRecordMerger recordMerger,
-                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+  protected AbstractHoodieLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths,
+                                           Schema readerSchema, String latestInstantTime,
+                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
+                                           boolean withOperationField, boolean forceFullScan,
+                                           Option<String> partitionNameOverride,
+                                           InternalSchema internalSchema,
+                                           Option<String> keyFieldOverride,
+                                           boolean enableOptimizedLogBlocksScan,
+                                           HoodieRecordMerger recordMerger,
+                                           Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = hoodieTableMetaClientOption.orElseGet(
@@ -615,15 +615,6 @@ public abstract class AbstractHoodieLogRecordReader {
   }
 
   /**
-   * Checks if the current logblock belongs to a later instant.
-   */
-  private boolean isNewInstantBlock(HoodieLogBlock logBlock) {
-    return currentInstantLogBlocks.size() > 0 && currentInstantLogBlocks.peek().getBlockType() != CORRUPT_BLOCK
-        && !logBlock.getLogBlockHeader().get(INSTANT_TIME)
-        .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME));
-  }
-
-  /**
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
    * handle it.
    */
@@ -933,6 +924,6 @@ public abstract class AbstractHoodieLogRecordReader {
       throw new UnsupportedOperationException();
     }
 
-    public abstract AbstractHoodieLogRecordReader build();
+    public abstract AbstractHoodieLogRecordScanner build();
   }
 }

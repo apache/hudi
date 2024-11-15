@@ -75,7 +75,6 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   // Records to delete, sorted based on the record position if writing record position to the log block header
   private DeleteRecord[] recordsToDelete;
 
-  // FIXME-vc: confirm if delete block fields needs to be versioned.
   public HoodieDeleteBlock(List<Pair<DeleteRecord, Long>> recordsToDelete,
                            boolean shouldWriteRecordPositions,
                            Map<HeaderMetadataType, String> header) {

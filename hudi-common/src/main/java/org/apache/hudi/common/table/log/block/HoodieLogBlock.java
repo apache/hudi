@@ -61,7 +61,6 @@ public abstract class HoodieLogBlock {
    * like HoodieLogBlockVersionV1/V2 and implement/override operations there
    * Current log block version is V3.
    */
-  //FIXME-vc: 0.14 onwards is version 3.. thats all we need to support for now. but need abstractions.
   public static int version = 3;
   // Header for each log block
   private final Map<HeaderMetadataType, String> logBlockHeader;

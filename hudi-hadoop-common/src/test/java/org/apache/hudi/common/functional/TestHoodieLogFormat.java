@@ -30,6 +30,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -678,20 +680,43 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testFilteringUncommittedLogBlocksPreTableVersion8(boolean enableOptimizedLogBlocksScan) throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(basePath);
+    metaClient.getTableConfig().setTableVersion(HoodieTableVersion.SIX);
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+    testBasicAppendAndScanMultipleFiles(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, enableOptimizedLogBlocksScan, true);
+  }
+
+  @ParameterizedTest
   @MethodSource("testArguments")
   public void testBasicAppendAndScanMultipleFiles(ExternalSpillableMap.DiskMapType diskMapType,
                                                   boolean isCompressionEnabled,
                                                   boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
+    testBasicAppendAndScanMultipleFiles(diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan, false);
+  }
 
+  private void testBasicAppendAndScanMultipleFiles(ExternalSpillableMap.DiskMapType diskMapType,
+                                                   boolean isCompressionEnabled,
+                                                   boolean enableOptimizedLogBlocksScan,
+                                                   boolean produceUncommittedLogBlocks)
+      throws IOException, URISyntaxException, InterruptedException {
     // Generate 4 delta-log files w/ random records
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> genRecords = testUtil.generateHoodieTestRecords(0, 400);
 
-    Set<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 4, storage);
+    List<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 4, storage, "test-fileid1", "100", "100");
+
+    if (produceUncommittedLogBlocks) {
+      List<IndexedRecord> toBeSkippedRecords = testUtil.generateHoodieTestRecords(0, 200);
+      logFiles.addAll(writeLogFiles(partitionPath, schema, toBeSkippedRecords, 2, storage, "test-fileid1", "100", "150"));
+      FileCreateUtils.createInflightDeltaCommit(basePath, "150", storage);
+    }
 
     FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+
     // scan all log blocks (across multiple log files)
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
@@ -700,7 +725,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             logFiles.stream()
                 .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
         .withReaderSchema(schema)
-        .withLatestInstantTime("100")
+        .withLatestInstantTime("200")
         .withMaxMemorySizeInBytes(10240L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
@@ -716,8 +741,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
     }
 
-    assertEquals(sort(genRecords), sort(scannedRecords),
+    assertEquals(genRecords.size(), scannedRecords.size(),
         "Scanner records count should be the same as appended records");
+    assertEquals(sort(genRecords), sort(scannedRecords),
+        "Scanner records content should be the same as appended records");
     scanner.close();
   }
 
@@ -732,7 +759,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> genRecords = testUtil.generateHoodieTestRecords(0, 300);
 
-    Set<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 3, storage);
+    List<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 3, storage);
 
     FileCreateUtils.createDeltaCommit(basePath, "100", storage);
 
@@ -820,7 +847,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> genRecords = testUtil.generateHoodieTestRecords(0, 300);
 
-    Set<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 3, storage);
+    List<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 3, storage);
 
     FileCreateUtils.createDeltaCommit(basePath, "100", storage);
 

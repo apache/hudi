@@ -269,6 +269,11 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
   }
 
+  public static void createInflightDeltaCommit(String basePath, String instantTime, HoodieStorage storage)
+      throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION, storage);
+  }
+
   public static void createInflightReplaceCommit(String basePath, String instantTime)
       throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);

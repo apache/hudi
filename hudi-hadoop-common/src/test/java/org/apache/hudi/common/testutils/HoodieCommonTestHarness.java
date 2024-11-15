@@ -54,8 +54,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -268,14 +268,14 @@ public class HoodieCommonTestHarness {
     return !pendingInstants.isEmpty();
   }
 
-  protected static Set<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                    Schema schema,
-                                                    List<HoodieRecord> records,
-                                                    int numFiles,
-                                                    HoodieStorage storage,
-                                                    Properties props,
-                                                    String fileId,
-                                                    String commitTime)
+  protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
+                                                     Schema schema,
+                                                     List<HoodieRecord> records,
+                                                     int numFiles,
+                                                     HoodieStorage storage,
+                                                     Properties props,
+                                                     String fileId,
+                                                     String commitTime)
       throws IOException, InterruptedException {
     List<IndexedRecord> indexedRecords = records.stream()
         .map(record -> {
@@ -289,28 +289,27 @@ public class HoodieCommonTestHarness {
         .map(Option::get)
         .map(HoodieRecord::getData)
         .collect(Collectors.toList());
-    return writeLogFiles(partitionPath, schema, indexedRecords, numFiles, false, storage, fileId, commitTime);
+    return writeLogFiles(partitionPath, schema, indexedRecords, numFiles, storage, fileId, commitTime, "100");
   }
 
-  protected static Set<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                    Schema schema,
-                                                    List<IndexedRecord> records,
-                                                    int numFiles,
-                                                    HoodieStorage storage)
+  protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
+                                                     Schema schema,
+                                                     List<IndexedRecord> records,
+                                                     int numFiles,
+                                                     HoodieStorage storage)
       throws IOException, InterruptedException {
-    return writeLogFiles(partitionPath, schema, records, numFiles, false, storage, "test-fileid1", "100");
+    return writeLogFiles(partitionPath, schema, records, numFiles, storage, "test-fileid1", "100", "100");
   }
 
-  protected static Set<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                    Schema schema,
-                                                    List<IndexedRecord> records,
-                                                    int numFiles,
-                                                    boolean enableBlockSequenceNumbers,
-                                                    HoodieStorage storage,
-                                                    String fileId,
-                                                    String commitTime)
+  protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
+                                                     Schema schema,
+                                                     List<IndexedRecord> records,
+                                                     int numFiles,
+                                                     HoodieStorage storage,
+                                                     String fileId,
+                                                     String commitTime,
+                                                     String logBlockInstantTime)
       throws IOException, InterruptedException {
-    int blockSeqNo = 0;
     HoodieLogFormat.Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -323,10 +322,10 @@ public class HoodieCommonTestHarness {
           (FSDataOutputStream) storage.append(writer.getLogFile().getPath()));
     }
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, logBlockInstantTime);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
 
-    Set<HoodieLogFile> logFiles = new HashSet<>();
+    List<HoodieLogFile> logFiles = new ArrayList<>();
 
     // Create log files
     int recordsPerFile = records.size() / numFiles;
