@@ -381,14 +381,13 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
-  protected HoodieTableMetaClient initTableAndGetMetaClient(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
+  protected void doInitTable(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
     // do nothing.
 
     // flink executes the upgrade/downgrade once when initializing the first instant on start up,
     // no need to execute the upgrade/downgrade on each write in streaming.
 
     // flink performs metadata table bootstrap on the coordinator when it starts up.
-    return metaClient;
   }
 
   public void completeTableService(

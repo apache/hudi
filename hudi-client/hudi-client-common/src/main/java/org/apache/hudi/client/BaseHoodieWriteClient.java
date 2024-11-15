@@ -910,13 +910,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
     if (needsUpgradeOrDowngrade(metaClient)) {
-      final HoodieTableMetaClient[] updatedMetaClient = {metaClient};
-      executeUsingTxnManager(Option.empty(), () -> {
-        if (tryUpgrade(updatedMetaClient[0], Option.empty())) {
-          updatedMetaClient[0] = HoodieTableMetaClient.reload(updatedMetaClient[0]);
-        }
-      });
-      metaClient = updatedMetaClient[0];
+      executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
 
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
@@ -949,13 +943,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
     if (needsUpgradeOrDowngrade(metaClient)) {
-      final HoodieTableMetaClient[] updatedMetaClient = {metaClient};
-      executeUsingTxnManager(Option.empty(), () -> {
-        if (tryUpgrade(updatedMetaClient[0], Option.empty())) {
-          updatedMetaClient[0] = HoodieTableMetaClient.reload(updatedMetaClient[0]);
-        }
-      });
-      metaClient = updatedMetaClient[0];
+      // unclear what instant to use, since upgrade does have a given instant.
+      executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
@@ -1266,20 +1255,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metaClient instance of {@link HoodieTableMetaClient}
    * @param instantTime current inflight instant time
    */
-  protected HoodieTableMetaClient initTableAndGetMetaClient(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
+  protected void doInitTable(WriteOperationType operationType, HoodieTableMetaClient metaClient, Option<String> instantTime) {
     Option<HoodieInstant> ownerInstant = Option.empty();
     if (instantTime.isPresent()) {
       ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
     }
-    final HoodieTableMetaClient[] updatedMetaClient = {metaClient};
     executeUsingTxnManager(ownerInstant, () -> {
-      if (tryUpgrade(updatedMetaClient[0], instantTime)) {
-        updatedMetaClient[0] = HoodieTableMetaClient.reload(updatedMetaClient[0]);
-      }
+      tryUpgrade(metaClient, instantTime);
       // TODO: this also does MT table management..
-      initMetadataTable(instantTime, updatedMetaClient[0]);
+      initMetadataTable(instantTime, metaClient);
     });
-    return updatedMetaClient[0];
   }
 
   private void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
@@ -1310,7 +1295,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * operations such as:
    *
    * NOTE: This method is engine-agnostic and SHOULD NOT be overloaded, please check on
-   * {@link #initTableAndGetMetaClient(WriteOperationType, HoodieTableMetaClient, Option)} instead
+   * {@link #doInitTable(WriteOperationType, HoodieTableMetaClient, Option)} instead
    *
    * <ul>
    *   <li>Checking whether upgrade/downgrade is required</li>
@@ -1325,7 +1310,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       setWriteSchemaForDeletes(metaClient);
     }
 
-    metaClient = initTableAndGetMetaClient(operationType, metaClient, instantTime);
+    doInitTable(operationType, metaClient, instantTime);
     HoodieTable table = createTable(config, metaClient);
 
     // Validate table properties
@@ -1447,11 +1432,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
    * @param instantTime instant time of interest if we have one.
    */
-  protected boolean tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
+  protected void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
     UpgradeDowngrade upgradeDowngrade =
         new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
 
-    if (upgradeDowngrade.needsUpgradeOrDowngrade(config.getWriteVersion())) {
+    if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
       // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
       List<String> instantsToRollback = tableServiceClient.getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, instantTime);
 
@@ -1461,10 +1446,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         tableServiceClient.rollbackFailedWrites(pendingRollbacks, true, true);
       }
 
-      upgradeDowngrade.run(HoodieTableVersion.current(), instantTime.orElse(null));
-      return true;
+      new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper)
+          .run(HoodieTableVersion.current(), instantTime.orElse(null));
+
+      metaClient.reloadTableConfig();
+      metaClient.reloadActiveTimeline();
     }
-    return false;
   }
 
   private boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient) {
