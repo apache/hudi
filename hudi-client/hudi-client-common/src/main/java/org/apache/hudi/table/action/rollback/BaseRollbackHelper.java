@@ -21,10 +21,12 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -35,6 +37,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,6 +116,7 @@ public class BaseRollbackHelper implements Serializable {
                                                                     HoodieInstant instantToRollback,
                                                                     List<SerializableHoodieRollbackRequest> rollbackRequests,
                                                                     boolean doDelete, int numPartitions) {
+    final TaskContextSupplier taskContextSupplier = context.getTaskContextSupplier();
     return context.flatMap(rollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
       List<String> filesToBeDeleted = rollbackRequest.getFilesToBeDeleted();
       if (!filesToBeDeleted.isEmpty()) {
@@ -125,12 +129,17 @@ public class BaseRollbackHelper implements Serializable {
         final StoragePath filePath;
         try {
           String fileId = rollbackRequest.getFileId();
+          HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
 
           writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
-              .withDeltaCommit(instantToRollback.requestedTime())
+              .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
+              .withInstantTime(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+                      ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
+                  )
               .withStorage(metaClient.getStorage())
+              .withTableVersion(tableVersion)
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
           // generate metadata
@@ -162,20 +171,19 @@ public class BaseRollbackHelper implements Serializable {
             1L
         );
 
-        return Collections.singletonList(
+        return Stream.of(
                 Pair.of(rollbackRequest.getPartitionPath(),
                     HoodieRollbackStat.newBuilder()
                         .withPartitionPath(rollbackRequest.getPartitionPath())
                         .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                        .build()))
-            .stream();
+                        .build()));
       } else {
-        return Collections.singletonList(
+        // no action needed.
+        return Stream.of(
             Pair.of(rollbackRequest.getPartitionPath(),
                 HoodieRollbackStat.newBuilder()
                     .withPartitionPath(rollbackRequest.getPartitionPath())
-                    .build()))
-            .stream();
+                    .build()));
       }
     }, numPartitions);
   }

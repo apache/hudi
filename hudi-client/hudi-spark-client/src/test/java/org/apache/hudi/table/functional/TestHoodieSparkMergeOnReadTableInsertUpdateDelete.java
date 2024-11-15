@@ -394,11 +394,10 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
               FSUtils.constructAbsolutePath(config.getBasePath(),
                   correctWriteStat.getPartitionPath()))
           .withFileId(correctWriteStat.getFileId())
-          .withDeltaCommit(newCommitTime)
+          .withInstantTime(newCommitTime)
           .withLogVersion(correctLogFile.getLogVersion())
           .withFileSize(0L)
           .withSizeThreshold(config.getLogFileMaxSize()).withStorage(hoodieStorage())
-          .withRolloverLogWriteToken(fakeToken)
           .withLogWriteToken(fakeToken)
           .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
           .withFileCreationCallback(new LogFileCreationCallback() {
