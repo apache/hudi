@@ -129,7 +129,7 @@ Archival will also be updated to delete instants transitioned to .aborted state,
 ### Summarizing proposed internal timeline/instant format changes
 Taking together all changes to .hoodie & instant files structure discussed above, this RFC will apply the following changes
 
-- To the instant plan metadata, the `cancellable` boolean flag and `cancellation-policy` predicate
+- The `cancellable` boolean flag and `cancellation-policy` predicates will be added as optional serialized values to the table service metadata schema (tenatively just for clustering plans)
 - The list of possible instant transitions for table services will now include `.aborted`
 - The /.cancel folder will be added to .hoodie directory
 
