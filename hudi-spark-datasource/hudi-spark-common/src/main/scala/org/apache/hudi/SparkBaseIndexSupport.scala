@@ -30,7 +30,6 @@ import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
-import java.util.Collections
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
@@ -78,29 +77,24 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
   def invalidateCaches(): Unit
 
-  protected def getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
-                                                includeLogFiles: Boolean = false): (Set[String], Set[String]) = {
-    val prunedPartitions = prunedPartitionsAndFileSlices.flatMap{ entry =>
-      if (entry._1.isDefined) {
-        Seq(entry._1.get.path)
-      } else {
-        Seq.empty[String]
-      }
-    }
-    val prunedFiles = prunedPartitionsAndFileSlices
-      .flatMap {
-        case (_, fileSlices) => fileSlices
-      }
-      .flatMap { fileSlice =>
-        val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
-        val logFiles = if (includeLogFiles) {
-          fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toList
-        } else Nil
-        baseFileOption.map(_.getFileName).toList ++ logFiles
-      }
-      .toSet
+  def getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                      includeLogFiles: Boolean = false): (Set[String], Set[String]) = {
+    val (prunedPartitions, prunedFiles) = prunedPartitionsAndFileSlices.foldLeft((Set.empty[String], Set.empty[String])) {
+      case ((partitionSet, fileSet), (partitionPathOpt, fileSlices)) =>
+        val updatedPartitionSet = partitionPathOpt.map(_.path).map(partitionSet + _).getOrElse(partitionSet)
+        val updatedFileSet = fileSlices.foldLeft(fileSet) { (fileAcc, fileSlice) =>
+          val baseFile = Option(fileSlice.getBaseFile.orElse(null)).map(_.getFileName)
+          val logFiles = if (includeLogFiles) {
+            fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toSet
+          } else Set.empty[String]
 
-    (prunedPartitions.toSet, prunedFiles)
+          fileAcc ++ baseFile ++ logFiles
+        }
+
+        (updatedPartitionSet, updatedFileSet)
+    }
+
+    (prunedPartitions, prunedFiles)
   }
 
   protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], prunedFileNames: Set[String]): Set[String] = {
