@@ -174,7 +174,7 @@ public class WriteProfiles {
       HoodieTimeline timeline) {
     try {
       byte[] data = timeline.getInstantDetails(instant).get();
-      TimelineLayout layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion());
+      TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
       return Option.of(layout.getCommitMetadataSerDe().deserialize(instant, data, HoodieCommitMetadata.class));
     } catch (FileNotFoundException fe) {
       // make this fail safe.

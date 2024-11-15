@@ -838,7 +838,7 @@ public class StreamSync implements Serializable, Closeable {
   protected Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
     return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        TimelineLayout layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion());
+        TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
         HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
             .deserialize(instant, timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {

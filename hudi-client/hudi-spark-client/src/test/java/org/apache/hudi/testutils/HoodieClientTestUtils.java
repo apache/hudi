@@ -140,7 +140,7 @@ public class HoodieClientTestUtils {
   private static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
                                                                     List<HoodieInstant> commitsToReturn) throws IOException {
     HashMap<String, String> fileIdToFullPath = new HashMap<>();
-    TimelineLayout layout = TimelineLayout.getLayout(commitTimeline.getTimelineLayoutVersion());
+    TimelineLayout layout = TimelineLayout.fromVersion(commitTimeline.getTimelineLayoutVersion());
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
           layout.getCommitMetadataSerDe().deserialize(commit, commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
@@ -150,8 +150,8 @@ public class HoodieClientTestUtils {
   }
 
   public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
-                                        String instantTime, boolean filterByCommitTime, InstantGenerator instantFactory) {
-    HoodieInstant commitInstant = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime);
+                                        String instantTime, boolean filterByCommitTime, InstantGenerator instantGenerator) {
+    HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
       throw new HoodieException("No commit exists at " + instantTime);
     }

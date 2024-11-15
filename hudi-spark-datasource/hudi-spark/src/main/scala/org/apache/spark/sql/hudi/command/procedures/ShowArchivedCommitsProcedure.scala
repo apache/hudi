@@ -113,7 +113,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     import scala.collection.JavaConverters._
 
     val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
-    val layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion)
+    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = layout.getCommitMetadataSerDe.deserialize(commit, timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
@@ -139,7 +139,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     val commits: util.List[HoodieInstant] = timeline.getCommitsTimeline.filterCompletedInstants
       .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
     val newCommits = new util.ArrayList[HoodieInstant](commits)
-    val layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion)
+    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     Collections.sort(newCommits, layout.getInstantComparator.requestedTimeOrderedComparator.reversed)
     (rows, newCommits)
   }
@@ -147,7 +147,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
   def getCommits(timeline: HoodieTimeline,
                  limit: Int): Seq[Row] = {
     val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
-    val layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion)
+    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = layout.getCommitMetadataSerDe.deserialize(commit, timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])

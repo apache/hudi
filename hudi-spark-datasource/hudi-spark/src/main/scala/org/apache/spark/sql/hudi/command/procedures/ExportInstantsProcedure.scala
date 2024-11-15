@@ -181,9 +181,9 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
     if (!instants.isEmpty) {
       val timeline = metaClient.getActiveTimeline
       val storage = HoodieStorageUtils.getStorage(metaClient.getBasePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
-      val instantFileNameFactory = metaClient.getTimelineLayout.getInstantFileNameGenerator
+      val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator
       for (instant <- instants.asScala) {
-        val localPath = localFolder + StoragePath.SEPARATOR + instantFileNameFactory.getFileName(instant)
+        val localPath = localFolder + StoragePath.SEPARATOR + instantFileNameGenerator.getFileName(instant)
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>
             val metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get)

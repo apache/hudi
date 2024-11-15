@@ -58,10 +58,10 @@ public class TestTimelineLayout  {
         INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "007"),
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "007"));
 
-    List<HoodieInstant> layout0Instants = TimelineLayout.getLayout(new TimelineLayoutVersion(0))
+    List<HoodieInstant> layout0Instants = TimelineLayout.fromVersion(new TimelineLayoutVersion(0))
         .filterHoodieInstants(rawInstants.stream()).collect(Collectors.toList());
     assertEquals(rawInstants, layout0Instants);
-    List<HoodieInstant> layout1Instants = TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
+    List<HoodieInstant> layout1Instants = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
         .filterHoodieInstants(rawInstants.stream()).collect(Collectors.toList());
     assertEquals(7, layout1Instants.size());
     assertTrue(layout1Instants.contains(

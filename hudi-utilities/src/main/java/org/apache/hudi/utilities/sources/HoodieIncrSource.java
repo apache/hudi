@@ -248,7 +248,7 @@ public class HoodieIncrSource extends RowSource {
               String.join("','", instantTimeList)));
     } else {
       // normal incremental query
-      TimelineLayout layout = TimelineLayout.getLayout(queryContext.getActiveTimeline().getTimelineLayoutVersion());
+      TimelineLayout layout = TimelineLayout.fromVersion(queryContext.getActiveTimeline().getTimelineLayoutVersion());
       String inclusiveStartCompletionTime = queryContext.getInstants().stream()
           .min(layout.getInstantComparator().completionTimeOrderedComparator())
           .map(HoodieInstant::getCompletionTime)

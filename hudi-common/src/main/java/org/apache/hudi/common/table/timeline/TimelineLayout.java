@@ -52,7 +52,7 @@ public abstract class TimelineLayout implements Serializable {
     LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_2), new TimelineLayoutV2());
   }
 
-  public static TimelineLayout getLayout(TimelineLayoutVersion version) {
+  public static TimelineLayout fromVersion(TimelineLayoutVersion version) {
     return LAYOUT_MAP.get(version);
   }
 

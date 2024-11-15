@@ -59,7 +59,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
     //TODO: HARDCODED TIMELINE OBJECT
     val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
-    val layout = TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
+    val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
       new HoodieHadoopStorage(tablePath, sharedConf), if (validCommits == null) "" else validCommits,
       layout.getInstantFileNameParser, layout.getCommitMetadataSerDe, layout.getInstantGenerator)

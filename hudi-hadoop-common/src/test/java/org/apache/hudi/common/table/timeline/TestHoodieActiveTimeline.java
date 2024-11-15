@@ -91,36 +91,36 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   @Test
   public void testLoadingInstantsFromFiles() throws IOException {
-    InstantGenerator instantFactory = INSTANT_GENERATOR;
+    InstantGenerator instantGenerator = INSTANT_GENERATOR;
     TimelineFactory timelineFactory = TIMELINE_FACTORY;
-    HoodieInstant instant1 = instantFactory.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
-    HoodieInstant instant2 = instantFactory.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "3");
-    HoodieInstant instant3 = instantFactory.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "5");
-    HoodieInstant instant4 = instantFactory.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "8");
-    HoodieInstant instant1Complete = instantFactory.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
-    HoodieInstant instant2Complete = instantFactory.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "3");
-    HoodieInstant instant3Complete = instantFactory.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "5");
-    HoodieInstant instant4Complete = instantFactory.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "8");
+    HoodieInstant instant1 = instantGenerator.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant2 = instantGenerator.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "3");
+    HoodieInstant instant3 = instantGenerator.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "5");
+    HoodieInstant instant4 = instantGenerator.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "8");
+    HoodieInstant instant1Complete = instantGenerator.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant2Complete = instantGenerator.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "3");
+    HoodieInstant instant3Complete = instantGenerator.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "5");
+    HoodieInstant instant4Complete = instantGenerator.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "8");
 
-    HoodieInstant instant5 = instantFactory.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "9");
+    HoodieInstant instant5 = instantGenerator.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "9");
 
     timeline = timelineFactory.createActiveTimeline(metaClient);
     timeline.createNewInstant(instant1);
     timeline.transitionRequestedToInflight(instant1, Option.empty());
     // Won't lock here since InProcessLockProvider is not in hudi-common
-    timeline.saveAsComplete(instantFactory.createNewInstant(State.INFLIGHT, instant1.getAction(), instant1.requestedTime()),
+    timeline.saveAsComplete(instantGenerator.createNewInstant(State.INFLIGHT, instant1.getAction(), instant1.requestedTime()),
         Option.empty());
     timeline.createNewInstant(instant2);
     timeline.transitionRequestedToInflight(instant2, Option.empty());
-    timeline.saveAsComplete(instantFactory.createNewInstant(State.INFLIGHT, instant2.getAction(), instant2.requestedTime()),
+    timeline.saveAsComplete(instantGenerator.createNewInstant(State.INFLIGHT, instant2.getAction(), instant2.requestedTime()),
         Option.empty());
     timeline.createNewInstant(instant3);
     timeline.transitionRequestedToInflight(instant3, Option.empty());
-    timeline.saveAsComplete(instantFactory.createNewInstant(State.INFLIGHT, instant3.getAction(), instant3.requestedTime()),
+    timeline.saveAsComplete(instantGenerator.createNewInstant(State.INFLIGHT, instant3.getAction(), instant3.requestedTime()),
         Option.empty());
     timeline.createNewInstant(instant4);
     timeline.transitionRequestedToInflight(instant4, Option.empty());
-    timeline.saveAsComplete(instantFactory.createNewInstant(State.INFLIGHT, instant4.getAction(), instant4.requestedTime()),
+    timeline.saveAsComplete(instantGenerator.createNewInstant(State.INFLIGHT, instant4.getAction(), instant4.requestedTime()),
         Option.empty());
     timeline.createNewInstant(instant5);
     timeline = timeline.reload();

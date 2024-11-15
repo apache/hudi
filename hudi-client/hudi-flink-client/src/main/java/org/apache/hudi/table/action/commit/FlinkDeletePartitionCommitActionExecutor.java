@@ -81,7 +81,7 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
       HoodieInstant dropPartitionsInstant =
           instantGenerator.createNewInstant(REQUESTED, REPLACE_COMMIT_ACTION, instantTime);
       if (!table.getStorage().exists(new StoragePath(
-          table.getMetaClient().getMetaPath(), instantFileNameFactory.getFileName(dropPartitionsInstant)))) {
+          table.getMetaClient().getMetaPath(), instantFileNameGenerator.getFileName(dropPartitionsInstant)))) {
         HoodieRequestedReplaceMetadata requestedReplaceMetadata =
             HoodieRequestedReplaceMetadata.newBuilder()
                 .setOperationType(WriteOperationType.DELETE_PARTITION.name())

@@ -375,8 +375,8 @@ public class TimelineCommand {
 
     private final long modificationTimeMs;
 
-    public HoodieInstantWithModTime(StoragePathInfo pathInfo, InstantGenerator instantFactory, InstantComparator instantComparator) {
-      this(instantFactory.createNewInstant(pathInfo), pathInfo, instantComparator.requestedTimeOrderedComparator());
+    public HoodieInstantWithModTime(StoragePathInfo pathInfo, InstantGenerator instantGenerator, InstantComparator instantComparator) {
+      this(instantGenerator.createNewInstant(pathInfo), pathInfo, instantComparator.requestedTimeOrderedComparator());
     }
 
     public HoodieInstantWithModTime(HoodieInstant instant, StoragePathInfo pathInfo, Comparator<HoodieInstant> comparator) {

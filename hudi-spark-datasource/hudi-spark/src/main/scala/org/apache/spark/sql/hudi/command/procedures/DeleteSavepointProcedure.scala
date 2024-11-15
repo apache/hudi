@@ -64,8 +64,8 @@ class DeleteSavepointProcedure extends BaseProcedure with ProcedureBuilder with 
     var result = true
     var currentInstant = ""
     for (it <- instantTimes) {
-      val instantFactory = metaClient.getTimelineLayout.getInstantGenerator
-      val savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, it)
+      val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator
+      val savePoint = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, it)
       currentInstant = it
       if (!completedInstants.containsInstant(savePoint)) {
         throw new HoodieException("Commit " + it + " not found in Commits " + completedInstants)

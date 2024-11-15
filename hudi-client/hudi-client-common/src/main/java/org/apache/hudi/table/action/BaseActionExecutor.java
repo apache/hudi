@@ -51,7 +51,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
   protected final HoodieTable<T, I, K, O> table;
   protected final InstantGenerator instantGenerator;
   protected final InstantFileNameParser instantFileNameParser;
-  protected final InstantFileNameGenerator instantFileNameFactory;
+  protected final InstantFileNameGenerator instantFileNameGenerator;
   protected final String instantTime;
 
   public BaseActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
@@ -60,7 +60,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     this.config = config;
     this.table = table;
     this.instantGenerator = table.getInstantGenerator();
-    this.instantFileNameFactory = table.getInstantFileNameGenerator();
+    this.instantFileNameGenerator = table.getInstantFileNameGenerator();
     this.instantFileNameParser = table.getInstantFileNameParser();
     this.instantTime = instantTime;
   }

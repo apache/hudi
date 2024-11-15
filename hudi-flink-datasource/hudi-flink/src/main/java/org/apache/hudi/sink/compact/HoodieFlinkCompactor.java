@@ -270,8 +270,8 @@ public class HoodieFlinkCompactor {
         return;
       }
 
-      InstantGenerator instantFactory = table.getInstantGenerator();
-      List<HoodieInstant> instants = compactionInstantTimes.stream().map(instantFactory::getCompactionRequestedInstant).collect(Collectors.toList());
+      InstantGenerator instantGenerator = table.getInstantGenerator();
+      List<HoodieInstant> instants = compactionInstantTimes.stream().map(instantGenerator::getCompactionRequestedInstant).collect(Collectors.toList());
 
       int totalOperations = Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum());
 

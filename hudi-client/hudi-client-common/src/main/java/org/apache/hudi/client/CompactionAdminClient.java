@@ -108,7 +108,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionPlan(String compactionInstant, boolean skipValidation,
       int parallelism, boolean dryRun) throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    InstantFileNameGenerator instantFileNameFactory = metaClient.getInstantFileNameGenerator();
+    InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     // Only if all operations are successfully executed
     if (!dryRun) {
       // Overwrite compaction request with empty compaction operations
@@ -122,7 +122,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       // TODO: Add a rollback instant but for compaction
       HoodieInstant instant = metaClient.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
       boolean deleted = metaClient.getStorage().deleteFile(
-          new StoragePath(metaClient.getMetaPath(), instantFileNameFactory.getFileName(instant)));
+          new StoragePath(metaClient.getMetaPath(), instantFileNameGenerator.getFileName(instant)));
       ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
     }
     return new ArrayList<>();
@@ -141,7 +141,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionFileId(HoodieFileGroupId fgId, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    InstantFileNameGenerator instantFileNameFactory = metaClient.getInstantFileNameGenerator();
+    InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
 
     if (!dryRun) {
       // Ready to remove this file-Id from compaction request
@@ -159,7 +159,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           HoodieCompactionPlan.newBuilder().setOperations(newOps).setExtraMetadata(plan.getExtraMetadata()).build();
       HoodieInstant inflight =
           metaClient.createNewInstant(State.INFLIGHT, COMPACTION_ACTION, compactionOperationWithInstant.getLeft());
-      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), instantFileNameFactory.getFileName(inflight));
+      StoragePath inflightPath = new StoragePath(metaClient.getMetaPath(), instantFileNameGenerator.getFileName(inflight));
       if (metaClient.getStorage().exists(inflightPath)) {
         // revert if in inflight state
         metaClient.getActiveTimeline().revertInstantFromInflightToRequested(inflight);

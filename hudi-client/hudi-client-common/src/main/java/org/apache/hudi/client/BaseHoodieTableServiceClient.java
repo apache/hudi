@@ -225,8 +225,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
 
     HoodieTimeline pendingLogCompactionTimeline = table.getActiveTimeline().filterPendingLogCompactionTimeline();
-    InstantGenerator instantFactory = table.getMetaClient().getInstantGenerator();
-    HoodieInstant inflightInstant = instantFactory.getLogCompactionInflightInstant(logCompactionInstantTime);
+    InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
+    HoodieInstant inflightInstant = instantGenerator.getLogCompactionInflightInstant(logCompactionInstantTime);
     if (pendingLogCompactionTimeline.containsInstant(inflightInstant)) {
       LOG.info("Found Log compaction inflight file. Rolling back the commit and exiting.");
       table.rollbackInflightLogCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
@@ -301,8 +301,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
     HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf());
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
-    InstantGenerator instantFactory = table.getMetaClient().getInstantGenerator();
-    HoodieInstant inflightInstant = instantFactory.getCompactionInflightInstant(compactionInstantTime);
+    InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
+    HoodieInstant inflightInstant = instantGenerator.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
       table.getMetaClient().reloadActiveTimeline();
@@ -335,8 +335,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     handleWriteErrors(writeStats, TableServiceType.COMPACT);
-    InstantGenerator instantFactory = table.getMetaClient().getInstantGenerator();
-    final HoodieInstant compactionInstant = instantFactory.getCompactionInflightInstant(compactionCommitTime);
+    InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
+    final HoodieInstant compactionInstant = instantGenerator.getCompactionInflightInstant(compactionCommitTime);
     try {
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
@@ -634,7 +634,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
                                              TableServiceType tableServiceType) {
     // A lock is required to guard against race conditions between an ongoing writer and scheduling a table service.
     HoodieTableConfig tableConfig = HoodieTableConfig.loadFromHoodieProps(storage, config.getBasePath());
-    InstantGenerator instantGenerator = TimelineLayout.getLayout(tableConfig.getTableVersion().getTimelineLayoutVersion()).getInstantGenerator();
+    InstantGenerator instantGenerator = TimelineLayout.fromVersion(tableConfig.getTableVersion().getTimelineLayoutVersion()).getInstantGenerator();
     final Option<HoodieInstant> inflightInstant = Option.of(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
         tableServiceType.getAction(), instantTime));
     try {
@@ -904,9 +904,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         String instantToRollback = rollbackPlan.getInstantToRollback().getCommitTime();
         if (ignoreCompactionAndClusteringInstants) {
           if (!HoodieTimeline.COMPACTION_ACTION.equals(action)) {
-            InstantGenerator instantFactory = metaClient.getInstantGenerator();
+            InstantGenerator instantGenerator = metaClient.getInstantGenerator();
             boolean isClustering = ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(),
-                instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, action, instantToRollback), instantFactory);
+                instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, action, instantToRollback), instantGenerator);
             if (!isClustering) {
               infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
             }

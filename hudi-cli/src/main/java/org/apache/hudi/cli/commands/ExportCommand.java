@@ -195,10 +195,10 @@ public class ExportCommand {
     }
 
     final HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-    final InstantFileNameGenerator instantFileNameFactory = metaClient.getInstantFileNameGenerator();
+    final InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     final HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     for (HoodieInstant instant : instants) {
-      String localPath = localFolder + StoragePath.SEPARATOR + instantFileNameFactory.getFileName(instant);
+      String localPath = localFolder + StoragePath.SEPARATOR + instantFileNameGenerator.getFileName(instant);
 
       byte[] data = null;
       switch (instant.getAction()) {

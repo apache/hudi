@@ -169,7 +169,7 @@ public class TimelineUtils {
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
           try {
-            CommitMetadataSerDe metadataSerDe = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion()).getCommitMetadataSerDe();
+            CommitMetadataSerDe metadataSerDe = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion()).getCommitMetadataSerDe();
             HoodieCommitMetadata commitMetadata = metadataSerDe.deserialize(s, timeline.getInstantDetails(s).get(), HoodieCommitMetadata.class);
             return commitMetadata.getPartitionToWriteStats().keySet().stream();
           } catch (IOException e) {
@@ -337,7 +337,7 @@ public class TimelineUtils {
     if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) {
       return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
     } else {
-      CommitMetadataSerDe metadataSerDe = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion()).getCommitMetadataSerDe();
+      CommitMetadataSerDe metadataSerDe = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion()).getCommitMetadataSerDe();
       return metadataSerDe.deserialize(instant, data, HoodieCommitMetadata.class);
     }
   }

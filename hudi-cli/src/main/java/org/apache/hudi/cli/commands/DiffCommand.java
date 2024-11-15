@@ -111,7 +111,7 @@ public class DiffCommand {
 
   private String printDiffWithMetadata(HoodieTimeline timeline, Integer limit, String sortByField, boolean descending, boolean headerOnly, String tempTableName, String diffEntity,
                                        BiFunction<HoodieWriteStat, String, Boolean> diffEntityChecker) throws IOException {
-    TimelineLayout layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion());
+    TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
     List<Comparable[]> rows = new ArrayList<>();
     InstantComparator instantComparator = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantComparator();
     List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()

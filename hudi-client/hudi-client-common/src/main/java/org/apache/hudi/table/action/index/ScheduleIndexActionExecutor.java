@@ -89,7 +89,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     validateBeforeScheduling();
     // make sure that it is idempotent, check with previously pending index operations.
     Set<String> indexesInflightOrCompleted = getInflightAndCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
-    InstantGenerator instantFactory = table.getMetaClient().getInstantGenerator();
+    InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
 
     Set<String> requestedPartitions = partitionIndexTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedPartitions.addAll(partitionPaths);
@@ -104,7 +104,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     }
     List<MetadataPartitionType> finalPartitionsToIndex = partitionIndexTypes.stream()
         .filter(p -> requestedPartitions.contains(p.getPartitionPath())).collect(Collectors.toList());
-    final HoodieInstant indexInstant = instantFactory.getIndexRequestedInstant(instantTime);
+    final HoodieInstant indexInstant = instantGenerator.getIndexRequestedInstant(instantTime);
     try {
       this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
       // get last completed instant

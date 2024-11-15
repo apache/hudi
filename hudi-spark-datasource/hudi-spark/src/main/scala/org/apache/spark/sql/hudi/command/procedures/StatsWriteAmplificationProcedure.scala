@@ -52,7 +52,7 @@ class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuild
     val df = new DecimalFormat("#.00")
     var totalRecordsUpserted = 0L
     var totalRecordsWritten = 0L
-    val layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion)
+    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     timeline.getInstants.iterator.asScala.foreach(
       instantTime => {
         var waf = "0"

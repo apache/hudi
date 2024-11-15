@@ -24,6 +24,6 @@ import org.apache.hudi.common.table.timeline.versioning.v2.TimelineV2Factory;
 public class DefaultTimelineFactory extends TimelineV2Factory {
 
   public DefaultTimelineFactory() {
-    super(TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
+    super(TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
   }
 }

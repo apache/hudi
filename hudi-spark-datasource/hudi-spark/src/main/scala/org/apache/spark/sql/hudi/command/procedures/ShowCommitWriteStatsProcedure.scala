@@ -82,12 +82,12 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
   override def build: Procedure = new ShowCommitWriteStatsProcedure()
 
   private def getCommitForInstant(metaClient: HoodieTableMetaClient, timeline: HoodieTimeline, instantTime: String): Option[HoodieInstant] = {
-    val instantFactory = metaClient.getTimelineLayout.getInstantGenerator
+    val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator
     val instants: util.List[HoodieInstant] = util.Arrays.asList(
-      instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime),
-      instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
-      instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLUSTERING_ACTION, instantTime),
-      instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime))
+      instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime),
+      instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
+      instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLUSTERING_ACTION, instantTime),
+      instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime))
 
     val hoodieInstant: Option[HoodieInstant] = instants.asScala.find((i: HoodieInstant) => timeline.containsInstant(i))
     hoodieInstant
@@ -99,7 +99,7 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
         Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
           classOf[HoodieReplaceCommitMetadata]))
       } else {
-        val layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion)
+        val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
         Option(layout.getCommitMetadataSerDe.deserialize(hoodieInstant.get, timeline.getInstantDetails(hoodieInstant.get).get,
           classOf[HoodieCommitMetadata]))
       }

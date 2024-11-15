@@ -36,7 +36,7 @@ import java.util.stream.Stream;
 public class BaseTimelineV1 extends BaseHoodieTimeline {
 
   public BaseTimelineV1(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
-    this(instants, details, TimelineLayout.getLayout(TimelineLayoutVersion.LAYOUT_VERSION_1));
+    this(instants, details, TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_1));
   }
 
   private BaseTimelineV1(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details, TimelineLayout layout) {
@@ -50,7 +50,7 @@ public class BaseTimelineV1 extends BaseHoodieTimeline {
    */
   @Deprecated
   public BaseTimelineV1() {
-    super(TimelineLayout.getLayout(TimelineLayoutVersion.LAYOUT_VERSION_1));
+    super(TimelineLayout.fromVersion(TimelineLayoutVersion.LAYOUT_VERSION_1));
   }
 
   @Override

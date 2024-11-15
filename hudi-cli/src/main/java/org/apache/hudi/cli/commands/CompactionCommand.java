@@ -124,10 +124,10 @@ public class CompactionCommand {
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
-    InstantGenerator instantFactory = client.getInstantGenerator();
+    InstantGenerator instantGenerator = client.getInstantGenerator();
     HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
         activeTimeline.readCompactionPlanAsBytes(
-            instantFactory.getCompactionRequestedInstant(compactionInstantTime)).get());
+            instantGenerator.getCompactionRequestedInstant(compactionInstantTime)).get());
 
     return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
   }
@@ -382,21 +382,21 @@ public class CompactionCommand {
    */
   private HoodieCompactionPlan readCompactionPlanForActiveTimeline(HoodieActiveTimeline activeTimeline,
                                                                    HoodieInstant instant) {
-    InstantGenerator instantFactory = HoodieCLI.getTableMetaClient().getInstantGenerator();
+    InstantGenerator instantGenerator = HoodieCLI.getTableMetaClient().getInstantGenerator();
     try {
       if (!HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
           return TimelineMetadataUtils.deserializeCompactionPlan(
               activeTimeline.readCompactionPlanAsBytes(
-                  instantFactory.getCompactionRequestedInstant(instant.requestedTime())).get());
+                  instantGenerator.getCompactionRequestedInstant(instant.requestedTime())).get());
         } catch (HoodieIOException ioe) {
           // SKIP
           return null;
         }
       } else {
         return TimelineMetadataUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
-            instantFactory.getCompactionRequestedInstant(instant.requestedTime())).get());
+            instantGenerator.getCompactionRequestedInstant(instant.requestedTime())).get());
       }
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);

@@ -277,16 +277,16 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   protected Object castInsertFirstBatch(HoodieWriteConfig writeConfig, BaseHoodieWriteClient client, String newCommitTime,
                                         String initCommitTime, int numRecordsInThisCommit,
                                         Function3<Object, BaseHoodieWriteClient, Object, String> writeFn, boolean isPreppedAPI,
-                                        boolean assertForCommit, int expRecordsInThisCommit, InstantGenerator instantFactory) throws Exception {
+                                        boolean assertForCommit, int expRecordsInThisCommit, InstantGenerator instantGenerator) throws Exception {
     return castInsertFirstBatch(writeConfig, client, newCommitTime, initCommitTime, numRecordsInThisCommit, writeFn,
-        isPreppedAPI, assertForCommit, expRecordsInThisCommit, true, instantFactory);
+        isPreppedAPI, assertForCommit, expRecordsInThisCommit, true, instantGenerator);
   }
 
   protected Object castInsertFirstBatch(HoodieWriteConfig writeConfig, BaseHoodieWriteClient client, String newCommitTime,
                                         String initCommitTime, int numRecordsInThisCommit,
                                         Function3<Object, BaseHoodieWriteClient, Object, String> writeFn, boolean isPreppedAPI,
                                         boolean assertForCommit, int expRecordsInThisCommit,
-                                        boolean filterForCommitTimeWithAssert, InstantGenerator instantFactory) throws Exception {
+                                        boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator) throws Exception {
     return null; // override in subclasses if needed
   }
 
@@ -295,9 +295,9 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                   Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
                                   Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
                                   boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords,
-                                  int expTotalCommits, boolean doCommit, InstantGenerator instantFactory) throws Exception {
+                                  int expTotalCommits, boolean doCommit, InstantGenerator instantGenerator) throws Exception {
     return castWriteBatch(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
-        writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, doCommit, true, instantFactory);
+        writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, doCommit, true, instantGenerator);
   }
 
   protected Object castWriteBatch(BaseHoodieWriteClient client, String newCommitTime, String prevCommitTime,
@@ -305,7 +305,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                   Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
                                   Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
                                   boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit,
-                                  boolean filterForCommitTimeWithAssert, InstantGenerator instantFactory) throws Exception {
+                                  boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator) throws Exception {
     return null; // override in subclasses if needed
   }
 
@@ -313,21 +313,21 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                    Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
                                    Function3<Object, BaseHoodieWriteClient, Object, String> writeFn, boolean isPreppedAPI,
                                    boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits,
-                                   boolean filterForCommitTimeWithAssert, InstantGenerator instantFactory) throws Exception {
+                                   boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator) throws Exception {
     return null; // override in subclasses if needed
   }
 
   protected Object castDeleteBatch(HoodieWriteConfig writeConfig, BaseHoodieWriteClient client, String newCommitTime, String prevCommitTime,
                                    String initCommitTime, int numRecordsInThisCommit, boolean isPreppedAPI, boolean assertForCommit,
-                                   int expRecordsInThisCommit, int expTotalRecords, TimelineFactory timelineFactory, InstantGenerator instantFactory) throws Exception {
+                                   int expRecordsInThisCommit, int expTotalRecords, TimelineFactory timelineFactory, InstantGenerator instantGenerator) throws Exception {
     return castDeleteBatch(writeConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit, isPreppedAPI,
-        assertForCommit, expRecordsInThisCommit, expTotalRecords, true, timelineFactory, instantFactory);
+        assertForCommit, expRecordsInThisCommit, expTotalRecords, true, timelineFactory, instantGenerator);
   }
 
   protected Object castDeleteBatch(HoodieWriteConfig writeConfig, BaseHoodieWriteClient client, String newCommitTime,
                                    String prevCommitTime, String initCommitTime, int numRecordsInThisCommit, boolean isPreppedAPI,
                                    boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, boolean filterForCommitTimeWithAssert,
-                                   TimelineFactory timelineFactory, InstantGenerator instantFactory) throws Exception {
+                                   TimelineFactory timelineFactory, InstantGenerator instantGenerator) throws Exception {
     return null; // override in subclasses if needed
   }
 
@@ -1052,14 +1052,14 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    * @throws Exception in case of failure
    */
   protected void testAutoCommit(Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
-                              boolean isPrepped, boolean populateMetaFields, InstantGenerator instantFactory) throws Exception {
+                              boolean isPrepped, boolean populateMetaFields, InstantGenerator instantGenerator) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false); // Set autoCommit false
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     try (BaseHoodieWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
       String prevCommitTime = "000";
       String newCommitTime = "001";
       int numRecords = 200;
-      Object result = castInsertFirstBatch(cfgBuilder.build(), client, newCommitTime, prevCommitTime, numRecords, writeFn, isPrepped, false, numRecords, instantFactory);
+      Object result = castInsertFirstBatch(cfgBuilder.build(), client, newCommitTime, prevCommitTime, numRecords, writeFn, isPrepped, false, numRecords, instantGenerator);
       assertFalse(testTable.commitExists(newCommitTime), "If Autocommit is false, then commit should not be made automatically");
       assertTrue(client.commit(newCommitTime, result), "Commit should succeed");
       assertTrue(testTable.commitExists(newCommitTime), "After explicit commit, commit file should be created");
@@ -1072,7 +1072,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    *
    * @throws Exception
    */
-  protected void testDeletesForInsertsInSameBatch(InstantGenerator instantFactory) throws Exception {
+  protected void testDeletesForInsertsInSameBatch(InstantGenerator instantGenerator) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY);
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     BaseHoodieWriteClient client = getHoodieWriteClient(cfgBuilder.build());
@@ -1094,7 +1094,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         };
 
     castWriteBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, -1, recordGenFunction,
-        BaseHoodieWriteClient::upsert, true, 150, 150, 1, false, true, instantFactory);
+        BaseHoodieWriteClient::upsert, true, 150, 150, 1, false, true, instantGenerator);
   }
 
   /**
@@ -1102,7 +1102,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    *
    * @throws Exception in case of error
    */
-  protected void testHoodieConcatHandle(boolean populateMetaFields, boolean isPrepped, InstantGenerator instantFactory) throws Exception {
+  protected void testHoodieConcatHandle(boolean populateMetaFields, boolean isPrepped, InstantGenerator instantGenerator) throws Exception {
     metaClient = createMetaClient(basePath);
     // Force using older timeline layout
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
@@ -1121,7 +1121,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     String initCommitTime = "000";
     int numRecords = 200;
     castInsertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, BaseHoodieWriteClient::insert,
-        isPrepped, true, numRecords, populateMetaFields, instantFactory);
+        isPrepped, true, numRecords, populateMetaFields, instantGenerator);
 
     // Write 2 (updates)
     String prevCommitTime = newCommitTime;
@@ -1133,10 +1133,10 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         generateWrapRecordsFn(isPrepped, hoodieWriteConfig, dataGen::generateUniqueUpdates);
 
     castWriteBatch(client, newCommitTime, prevCommitTime, Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, recordGenFunction,
-        BaseHoodieWriteClient::insert, true, numRecords, 300, 2, false, populateMetaFields, instantFactory);
+        BaseHoodieWriteClient::insert, true, numRecords, 300, 2, false, populateMetaFields, instantGenerator);
   }
 
-  protected void testHoodieConcatHandleOnDupInserts(boolean isPrepped, InstantGenerator instantFactory) throws Exception {
+  protected void testHoodieConcatHandleOnDupInserts(boolean isPrepped, InstantGenerator instantGenerator) throws Exception {
     HoodieWriteConfig config = getConfigBuilder()
         .withMergeAllowDuplicateOnInserts(true)
         .build();
@@ -1148,7 +1148,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     String newCommitTime = "001";
     int firstInsertRecords = 50;
     castInsertFirstBatch(config, client, newCommitTime, initCommitTime, firstInsertRecords, BaseHoodieWriteClient::insert,
-        isPrepped, true, firstInsertRecords, config.populateMetaFields(), instantFactory);
+        isPrepped, true, firstInsertRecords, config.populateMetaFields(), instantGenerator);
 
     // Write 2 (updates with duplicates)
     String prevCommitTime = newCommitTime;
@@ -1161,7 +1161,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     castWriteBatch(client, newCommitTime, prevCommitTime, Option.of(commitTimesBetweenPrevAndNew), initCommitTime,
         secondInsertRecords, recordGenFunction, BaseHoodieWriteClient::insert, true, secondInsertRecords,
-        firstInsertRecords + secondInsertRecords, 2, false, config.populateMetaFields(), instantFactory);
+        firstInsertRecords + secondInsertRecords, 2, false, config.populateMetaFields(), instantGenerator);
   }
 
   /**

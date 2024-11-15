@@ -957,7 +957,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * if the partition path in the plan matches with the given partition path.
    */
   private static void deletePendingIndexingInstant(HoodieTableMetaClient metaClient, String partitionPath) {
-    InstantGenerator instantFactory = metaClient.getInstantGenerator();
+    InstantGenerator instantGenerator = metaClient.getInstantGenerator();
     metaClient.reloadActiveTimeline().filterPendingIndexTimeline().getInstantsAsStream().filter(instant -> REQUESTED.equals(instant.getState()))
         .forEach(instant -> {
           try {
@@ -965,7 +965,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             if (indexPlan.getIndexPartitionInfos().stream()
                 .anyMatch(indexPartitionInfo -> indexPartitionInfo.getMetadataPartitionPath().equals(partitionPath))) {
               metaClient.getActiveTimeline().deleteInstantFileIfExists(instant);
-              metaClient.getActiveTimeline().deleteInstantFileIfExists(instantFactory.getIndexInflightInstant(instant.requestedTime()));
+              metaClient.getActiveTimeline().deleteInstantFileIfExists(instantGenerator.getIndexInflightInstant(instant.requestedTime()));
             }
           } catch (IOException e) {
             LOG.error("Failed to delete the instant file corresponding to {}", instant);
@@ -1232,9 +1232,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     dataMetaClient.reloadActiveTimeline();
 
     // Fetch the commit to restore to (savepointed commit time)
-    InstantGenerator dataInstantFactory = dataMetaClient.getInstantGenerator();
-    HoodieInstant restoreInstant = dataInstantFactory.createNewInstant(REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
-    HoodieInstant requested = dataInstantFactory.getRestoreRequestedInstant(restoreInstant);
+    InstantGenerator datainstantGenerator = dataMetaClient.getInstantGenerator();
+    HoodieInstant restoreInstant = datainstantGenerator.createNewInstant(REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
+    HoodieInstant requested = datainstantGenerator.getRestoreRequestedInstant(restoreInstant);
     HoodieRestorePlan restorePlan = null;
     try {
       restorePlan = TimelineMetadataUtils.deserializeAvroMetadata(

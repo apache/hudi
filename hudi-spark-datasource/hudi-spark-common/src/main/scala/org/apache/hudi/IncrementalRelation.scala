@@ -186,9 +186,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
         }
       }
       // pass internalSchema to hadoopConf, so it can be used in executors.
-      val instantFileNameFactory = metaClient.getTimelineLayout.getInstantFileNameGenerator;
+      val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator;
       val validCommits = metaClient
-        .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(a => instantFileNameFactory.getFileName(a.asInstanceOf[HoodieInstant])).mkString(",")
+        .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(a => instantFileNameGenerator.getFileName(a.asInstanceOf[HoodieInstant])).mkString(",")
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)

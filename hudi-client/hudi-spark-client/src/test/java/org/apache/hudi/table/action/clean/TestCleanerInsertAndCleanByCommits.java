@@ -211,7 +211,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
     // the latest version before earliestCommitToRetain, which is also kept from cleaning.
     // The timeline of commits is traversed in reverse order to achieve this.
     for (HoodieInstant instant : commitsTimeline.getReverseOrderedInstants().collect(Collectors.toList())) {
-      TimelineLayout layout = TimelineLayout.getLayout(commitsTimeline.getTimelineLayoutVersion());
+      TimelineLayout layout = TimelineLayout.fromVersion(commitsTimeline.getTimelineLayoutVersion());
       List<HoodieWriteStat> hoodieWriteStatList = commitWriteStatsMap.computeIfAbsent(instant.requestedTime(), newInstant -> {
         try {
           HoodieInstant instant1 = timeline.filter(inst -> inst.requestedTime().equals(newInstant))

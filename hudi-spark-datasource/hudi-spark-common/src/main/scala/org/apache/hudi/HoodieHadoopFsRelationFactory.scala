@@ -138,8 +138,8 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   }
 
   protected lazy val validCommits: String = if (internalSchemaOpt.nonEmpty) {
-    val instantFileNameFactory = metaClient.getTimelineLayout.getInstantFileNameGenerator
-    timeline.getInstants.iterator.asScala.map(instant => instantFileNameFactory.getFileName(instant)).mkString(",")
+    val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator
+    timeline.getInstants.iterator.asScala.map(instant => instantFileNameGenerator.getFileName(instant)).mkString(",")
   } else {
     ""
   }

@@ -178,7 +178,7 @@ public class HoodieTableMetaClient implements Serializable {
               + ") than the one passed in config (" + layoutVersion.get() + ")");
     }
     this.timelineLayoutVersion = layoutVersion.orElseGet(() -> tableConfig.getTimelineLayoutVersion().get());
-    this.timelineLayout = TimelineLayout.getLayout(timelineLayoutVersion);
+    this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
     LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
@@ -709,17 +709,17 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(StoragePath timelinePath, Set<String> includedExtensions,
                                                               boolean applyLayoutVersionFilters) throws IOException {
-    final InstantGenerator instantFactory = timelineLayout.getInstantGenerator();
+    final InstantGenerator instantGenerator = timelineLayout.getInstantGenerator();
     Stream<HoodieInstant> instantStream =
         HoodieTableMetaClient
             .scanFiles(getStorage(), timelinePath, path -> {
               // Include only the meta files with extensions that needs to be included
               String extension = timelineLayout.getInstantFileNameParser().getTimelineFileExtension(path.getName());
               return includedExtensions.contains(extension);
-            }).stream().map(instantFactory::createNewInstant);
+            }).stream().map(instantGenerator::createNewInstant);
 
     if (applyLayoutVersionFilters) {
-      instantStream = TimelineLayout.getLayout(getTimelineLayoutVersion()).filterHoodieInstants(instantStream);
+      instantStream = TimelineLayout.fromVersion(getTimelineLayoutVersion()).filterHoodieInstants(instantStream);
     }
     return instantStream.sorted().collect(Collectors.toList());
   }

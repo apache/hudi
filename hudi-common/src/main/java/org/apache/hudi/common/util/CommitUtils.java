@@ -127,7 +127,7 @@ public class CommitUtils {
 
   public static Option<HoodieCommitMetadata> buildMetadataFromInstant(HoodieTimeline timeline, HoodieInstant instant) {
     try {
-      TimelineLayout layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion());
+      TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
       HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe().deserialize(instant,
           timeline.getInstantDetails(instant).get(),
           HoodieCommitMetadata.class);
@@ -181,7 +181,7 @@ public class CommitUtils {
    */
   public static Option<String> getValidCheckpointForCurrentWriter(HoodieTimeline timeline, String checkpointKey,
                                                                   String keyToLookup) {
-    TimelineLayout layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion());
+    TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
     return (Option<String>) timeline.getWriteTimeline().filterCompletedInstants().getReverseOrderedInstants()
         .map(instant -> {
           try {

@@ -74,7 +74,7 @@ public class StatsCommand {
 
     List<Comparable[]> rows = new ArrayList<>();
     DecimalFormat df = new DecimalFormat("#.00");
-    TimelineLayout layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion());
+    TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
     for (HoodieInstant instantTime : timeline.getInstants()) {
       String waf = "0";
       HoodieCommitMetadata commit = layout.getCommitMetadataSerDe().deserialize(instantTime, activeTimeline.getInstantDetails(instantTime).get(),

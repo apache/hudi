@@ -63,9 +63,9 @@ public class CompactHelpers<T, I, K, O> {
   public HoodieCommitMetadata createCompactionMetadata(
       HoodieTable table, String compactionInstantTime, HoodieData<WriteStatus> writeStatuses,
       String schema) throws IOException {
-    InstantGenerator instantFactory = table.getInstantGenerator();
+    InstantGenerator instantGenerator = table.getInstantGenerator();
     byte[] planBytes = table.getActiveTimeline().readCompactionPlanAsBytes(
-        instantFactory.getCompactionRequestedInstant(compactionInstantTime)).get();
+        instantGenerator.getCompactionRequestedInstant(compactionInstantTime)).get();
     HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(planBytes);
     List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat).collectAsList();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
@@ -83,10 +83,10 @@ public class CompactHelpers<T, I, K, O> {
   public void completeInflightCompaction(HoodieTable table, String compactionCommitTime, HoodieCommitMetadata commitMetadata) {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
-      InstantGenerator instantFactory = table.getInstantGenerator();
+      InstantGenerator instantGenerator = table.getInstantGenerator();
       // Callers should already guarantee the lock.
       activeTimeline.transitionCompactionInflightToComplete(false,
-          instantFactory.getCompactionInflightInstant(compactionCommitTime),
+          instantGenerator.getCompactionInflightInstant(compactionCommitTime),
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(
@@ -98,9 +98,9 @@ public class CompactHelpers<T, I, K, O> {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
       // Callers should already guarantee the lock.
-      InstantGenerator instantFactory = table.getInstantGenerator();
+      InstantGenerator instantGenerator = table.getInstantGenerator();
       activeTimeline.transitionLogCompactionInflightToComplete(false,
-          instantFactory.getLogCompactionInflightInstant(logCompactionCommitTime),
+          instantGenerator.getLogCompactionInflightInstant(logCompactionCommitTime),
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(

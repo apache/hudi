@@ -87,9 +87,9 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
                         instantTime: String,
                         limit: Int): Seq[Row] = {
     val rows = new util.ArrayList[Row]
-    val instantFactory = metaClient.getTimelineLayout.getInstantGenerator
+    val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator
     val metadata = TimelineMetadataUtils.deserializeAvroMetadata(activeTimeline.getInstantDetails(
-      instantFactory.createNewInstant(State.COMPLETED, ROLLBACK_ACTION, instantTime)).get, classOf[HoodieRollbackMetadata])
+      instantGenerator.createNewInstant(State.COMPLETED, ROLLBACK_ACTION, instantTime)).get, classOf[HoodieRollbackMetadata])
 
     metadata.getPartitionMetadata.asScala.toMap.iterator.foreach(entry => Stream
       .concat(entry._2.getSuccessDeleteFiles.asScala.map(f => (f, true)),

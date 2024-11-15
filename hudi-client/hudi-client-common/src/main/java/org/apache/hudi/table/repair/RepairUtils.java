@@ -91,7 +91,7 @@ public final class RepairUtils {
     switch (instant.getAction()) {
       case COMMIT_ACTION:
       case DELTA_COMMIT_ACTION:
-        TimelineLayout layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion());
+        TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
         final HoodieCommitMetadata commitMetadata =
             layout.getCommitMetadataSerDe().deserialize(instant,
                 timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);

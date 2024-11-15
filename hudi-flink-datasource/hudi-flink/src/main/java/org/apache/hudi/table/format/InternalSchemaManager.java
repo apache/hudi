@@ -61,7 +61,7 @@ public class InternalSchemaManager implements Serializable {
   private static final long serialVersionUID = 1L;
 
   public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, InternalSchema.getEmptyInternalSchema(), null, null,
-      TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
+      TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
 
   private final Configuration conf;
   private final InternalSchema querySchema;
