@@ -49,7 +49,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              |  id int,
              |  name string,
              |  price double,
-             |  ts long
+             |  ts int
              |) using hudi
              | location '$tablePath'
              | tblproperties (
