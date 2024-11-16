@@ -1031,6 +1031,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (metadataWriterOpt.isPresent()) {
         try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
           metadataWriter.dropMetadataPartitions(metadataPartitions);
+          metadataPartitions.forEach(partition -> table.getMetaClient().deleteIndexDefinition(partition));
         } catch (Exception e) {
           if (e instanceof HoodieException) {
             throw (HoodieException) e;

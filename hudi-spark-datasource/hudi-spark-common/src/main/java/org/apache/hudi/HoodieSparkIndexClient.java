@@ -82,8 +82,10 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
   @Override
   public void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) {
-    indexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + indexName : PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX + indexName;
-    if (indexExists(metaClient, indexName)) {
+    String hoodieIndexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
+        ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + indexName
+        : PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX + indexName;
+    if (indexExists(metaClient, hoodieIndexName)) {
       throw new HoodieMetadataIndexException("Index already exists: " + indexName);
     }
     checkArgument(columns.size() == 1, "Only one column can be indexed for functional or secondary index.");
@@ -94,19 +96,19 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
     if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
         || !metaClient.getIndexMetadata().isPresent()
-        || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexName)) {
+        || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(hoodieIndexName)) {
       LOG.info("Index definition is not present. Registering the index first");
-      register(metaClient, indexName, indexType, columns, options);
+      register(metaClient, hoodieIndexName, indexType, columns, options);
     }
 
     ValidationUtils.checkState(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
 
-    LOG.info("Creating index {} of using {}", indexName, indexType);
-    HoodieIndexDefinition functionalIndexDefinition = metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName);
+    LOG.info("Creating index {} of using {}", hoodieIndexName, indexType);
+    HoodieIndexDefinition functionalIndexDefinition = metaClient.getIndexMetadata().get().getIndexDefinitions().get(hoodieIndexName);
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinition)), toScalaOption(Option.empty()))) {
       // generate index plan
-      Option<String> indexInstantTime = doSchedule(writeClient, metaClient, indexName);
+      Option<String> indexInstantTime = doSchedule(writeClient, metaClient, hoodieIndexName);
       if (indexInstantTime.isPresent()) {
         // build index
         writeClient.index(indexInstantTime.get());
