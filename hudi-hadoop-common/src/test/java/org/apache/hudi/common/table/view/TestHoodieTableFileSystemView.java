@@ -788,6 +788,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("configParams")
   public void testGetLatestFileSlicesIncludingInflight(boolean preTableVersion8) throws Exception {
+    initMetaClient(preTableVersion8);
     String partitionPath = "2016/05/01";
     new File(basePath + "/" + partitionPath).mkdirs();
     String fileId = UUID.randomUUID().toString();
@@ -1721,6 +1722,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testPendingCompactionWithDuplicateFileIdsAcrossPartitions(boolean preTableVersion8) throws Exception {
+    initMetaClient(preTableVersion8);
     // Put some files in the partition
     String partitionPath1 = "2016/05/01";
     String partitionPath2 = "2016/05/02";
