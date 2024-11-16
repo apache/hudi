@@ -171,6 +171,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     try {
       String latestValidFilePath = baseFileToMerge.getFileName();
       writeStatus.getStat().setPrevCommit(baseFileToMerge.getCommitTime());
+      writeStatus.getStat().setPrevBaseFile(latestValidFilePath);
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
           new StoragePath(config.getBasePath()),

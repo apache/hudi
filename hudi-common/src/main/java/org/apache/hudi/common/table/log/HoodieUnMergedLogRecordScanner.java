@@ -33,7 +33,10 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -42,6 +45,7 @@ import java.util.stream.Collectors;
 public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScanner {
 
   private final LogRecordScannerCallback callback;
+  private final Set<String> deletedRecordKeys = new HashSet<>();
 
   private HoodieUnMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean reverseReader, int bufferSize,
@@ -83,7 +87,12 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
 
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
-    // no - op
+    deletedRecordKeys.add(deleteRecord.getRecordKey());
+  }
+
+  @Override
+  public Set<String> getDeletedRecordKeys() {
+    return deletedRecordKeys;
   }
 
   /**

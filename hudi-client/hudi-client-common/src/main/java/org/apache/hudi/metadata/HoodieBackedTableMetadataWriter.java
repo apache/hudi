@@ -1056,14 +1056,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient,
               enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
-              dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(), dataWriteConfig.getMetadataConfig());
+              dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(), dataWriteConfig.getWritesFileIdEncoding(),
+              dataWriteConfig.getMetadataConfig());
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
       if (dataWriteConfig.isRecordIndexEnabled()) {
-        HoodieData<HoodieRecord> updatesFromWriteStatuses = getRecordIndexUpserts(writeStatus);
-        HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(updatesFromWriteStatuses, commitMetadata);
-        partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), updatesFromWriteStatuses.union(additionalUpdates));
+        HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()), commitMetadata);
+        partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()).union(additionalUpdates));
       }
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
       updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, writeStatus);
@@ -1080,7 +1080,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient,
               enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
-              dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(), dataWriteConfig.getMetadataConfig());
+              dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
+              dataWriteConfig.getWritesFileIdEncoding(), dataWriteConfig.getMetadataConfig());
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(records, commitMetadata);
       partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), records.union(additionalUpdates));
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
@@ -1665,51 +1666,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         }
       }
     }
-  }
-
-  /**
-   * Return records that represent upserts to the record index due to write operation on the dataset.
-   *
-   * @param writeStatuses {@code WriteStatus} from the write operation
-   */
-  private HoodieData<HoodieRecord> getRecordIndexUpserts(HoodieData<WriteStatus> writeStatuses) {
-    return writeStatuses.flatMap(writeStatus -> {
-      List<HoodieRecord> recordList = new LinkedList<>();
-      for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
-        if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
-          if (recordDelegate.getIgnoreIndexUpdate()) {
-            continue;
-          }
-          HoodieRecord hoodieRecord;
-          Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
-          if (newLocation.isPresent()) {
-            if (recordDelegate.getCurrentLocation().isPresent()) {
-              // This is an update, no need to update index if the location has not changed
-              // newLocation should have the same fileID as currentLocation. The instantTimes differ as newLocation's
-              // instantTime refers to the current commit which was completed.
-              if (!recordDelegate.getCurrentLocation().get().getFileId().equals(newLocation.get().getFileId())) {
-                final String msg = String.format("Detected update in location of record with key %s from %s to %s. The fileID should not change.",
-                    recordDelegate, recordDelegate.getCurrentLocation().get(), newLocation.get());
-                LOG.error(msg);
-                throw new HoodieMetadataException(msg);
-              }
-              // for updates, we can skip updating RLI partition in MDT
-            } else {
-              // Insert new record case
-              hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
-                  recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
-                  newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
-              recordList.add(hoodieRecord);
-            }
-          } else {
-            // Delete existing index for a deleted record
-            hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());
-            recordList.add(hoodieRecord);
-          }
-        }
-      }
-      return recordList.iterator();
-    });
   }
 
   private HoodieData<HoodieRecord> getRecordIndexReplacedRecords(HoodieReplaceCommitMetadata replaceCommitMetadata) {
