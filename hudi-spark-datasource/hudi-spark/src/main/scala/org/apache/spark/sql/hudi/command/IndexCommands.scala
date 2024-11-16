@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.exception.HoodieIndexException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -104,16 +105,19 @@ case class ShowIndexesCommand(table: CatalogTable,
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val metaClient = createHoodieTableMetaClient(table.identifier, sparkSession)
     // need to ensure that the index name is for a valid partition type
-    val indexMetadataOpt = metaClient.getIndexMetadata
-    if (indexMetadataOpt.isPresent) {
-      val indexDefinitions = indexMetadataOpt.get.getIndexDefinitions.values().asScala
-      indexDefinitions.map(i =>
-        {
-          Row(i.getIndexName, i.getIndexType.toLowerCase, i.getSourceFields.asScala.mkString(","))
-        }).toSeq
-    } else {
-      Seq.empty[Row]
-    }
+    metaClient.getTableConfig.getMetadataPartitions.asScala.map(
+      partition => {
+        if (MetadataPartitionType.isMultiModalIndexPartition(partition)) {
+          val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(partition)
+          Row(partition, indexDefinition.getIndexType.toLowerCase, indexDefinition.getSourceFields.asScala.mkString(","))
+        } else if (!partition.equals(MetadataPartitionType.FILES.getPartitionPath)) {
+          Row(partition, partition, "")
+        } else {
+          Row.empty
+        }
+      }
+    ).filter(row => row.length != 0)
+     .toSeq
   }
 }
 

@@ -81,11 +81,14 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-          checkAnswer(s"show indexes from default.$tableName")()
+          checkAnswer(s"show indexes from default.$tableName")(
+            Seq("record_index", "record_index", "")
+          )
 
           spark.sql(s"create index idx_name on $tableName using secondary_index(name)")
           checkAnswer(s"show indexes from default.$tableName")(
-            Seq("secondary_index_idx_name", "secondary_index", "name")
+            Seq("secondary_index_idx_name", "secondary_index", "name"),
+            Seq("record_index", "record_index", "")
           )
 
           spark.sql(s"create index idx_price on $tableName using secondary_index(price)")
@@ -97,13 +100,15 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           // Both indexes should be shown
           checkAnswer(s"show indexes from $tableName")(
             Seq("secondary_index_idx_name", "secondary_index", "name"),
-            Seq("secondary_index_idx_price", "secondary_index", "price")
+            Seq("secondary_index_idx_price", "secondary_index", "price"),
+            Seq("record_index", "record_index", "")
           )
 
           checkAnswer(s"drop index idx_name on $tableName")()
           // show index shows only one index after dropping
           checkAnswer(s"show indexes from $tableName")(
-            Seq("secondary_index_idx_price", "secondary_index", "price")
+            Seq("secondary_index_idx_price", "secondary_index", "price"),
+            Seq("record_index", "record_index", "")
           )
 
           // can not drop already dropped index
@@ -113,12 +118,15 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           // drop index should work now
           checkAnswer(s"drop index idx_name on $tableName")()
           checkAnswer(s"show indexes from $tableName")(
-            Seq("secondary_index_idx_price", "secondary_index", "price")
+            Seq("secondary_index_idx_price", "secondary_index", "price"),
+            Seq("record_index", "record_index", "")
           )
 
           // Drop the second index and show index should show no index
           checkAnswer(s"drop index idx_price on $tableName")()
-          checkAnswer(s"show indexes from $tableName")()
+          checkAnswer(s"show indexes from $tableName")(
+            Seq("record_index", "record_index", "")
+          )
 
           checkException(s"drop index idx_price on $tableName")("Index does not exist: idx_price")
 

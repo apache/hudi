@@ -312,6 +312,11 @@ public enum MetadataPartitionType {
     }
   }
 
+  public static boolean isMultiModalIndexPartition(String metadataPartitionPath) {
+    return metadataPartitionPath.startsWith(SECONDARY_INDEX.getPartitionPath())
+        || metadataPartitionPath.startsWith(FUNCTIONAL_INDEX.getPartitionPath());
+  }
+
   // Partition path in metadata table.
   private final String partitionPath;
   // FileId prefix used for all file groups in this partition.
