@@ -685,7 +685,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(basePath);
     metaClient.getTableConfig().setTableVersion(HoodieTableVersion.SIX);
     HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
-    testBasicAppendAndScanMultipleFiles(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, enableOptimizedLogBlocksScan, true);
+    testBasicAppendAndScanMultipleFiles(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, enableOptimizedLogBlocksScan, true, true);
   }
 
   @ParameterizedTest
@@ -694,13 +694,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                   boolean isCompressionEnabled,
                                                   boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
-    testBasicAppendAndScanMultipleFiles(diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan, false);
+    testBasicAppendAndScanMultipleFiles(diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan, false, false);
   }
 
   private void testBasicAppendAndScanMultipleFiles(ExternalSpillableMap.DiskMapType diskMapType,
                                                    boolean isCompressionEnabled,
                                                    boolean enableOptimizedLogBlocksScan,
-                                                   boolean produceUncommittedLogBlocks)
+                                                   boolean produceUncommittedLogBlocks,
+                                                   boolean preTableVersion8)
       throws IOException, URISyntaxException, InterruptedException {
     // Generate 4 delta-log files w/ random records
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
@@ -715,7 +716,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       FileCreateUtils.createInflightDeltaCommit(basePath, "150", storage);
     }
 
-    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
+    FileCreateUtils.createDeltaCommit(basePath, "100", storage, preTableVersion8);
 
     // scan all log blocks (across multiple log files)
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()

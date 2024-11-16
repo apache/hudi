@@ -125,6 +125,11 @@ public class FileCreateUtils {
 
   private static void createMetaFile(String basePath, String instantTime, String suffix,
                                      HoodieStorage storage) throws IOException {
+    createMetaFile(basePath, instantTime, suffix, storage, false);
+  }
+
+  private static void createMetaFile(String basePath, String instantTime, String suffix,
+                                     HoodieStorage storage, boolean preTableVersion8) throws IOException {
     StoragePath parentPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     if (!storage.exists(parentPath)) {
       storage.create(parentPath).close();
@@ -138,7 +143,7 @@ public class FileCreateUtils {
       }
     } else {
       String instantTimeWithCompletionTime =
-          instantTime + "_" + InProcessTimeGenerator.createNewInstantTime();
+          preTableVersion8 ? instantTime : instantTime + "_" + InProcessTimeGenerator.createNewInstantTime();
       storage.create(new StoragePath(parentPath, instantTimeWithCompletionTime + suffix))
           .close();
     }
@@ -257,6 +262,11 @@ public class FileCreateUtils {
   public static void createDeltaCommit(String basePath, String instantTime,
                                        HoodieStorage storage) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, storage);
+  }
+
+  public static void createDeltaCommit(String basePath, String instantTime,
+                                       HoodieStorage storage, boolean preTableVersion8) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, storage, preTableVersion8);
   }
 
   public static void createRequestedDeltaCommit(String basePath, String instantTime)
