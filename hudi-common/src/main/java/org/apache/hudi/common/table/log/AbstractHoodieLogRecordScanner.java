@@ -659,6 +659,10 @@ public abstract class AbstractHoodieLogRecordScanner {
    */
   protected abstract void processNextDeletedRecord(DeleteRecord deleteRecord);
 
+  public Set<String> getDeletedRecordKeys() {
+    throw new HoodieException("Inherited class needs to override to provide a concrete implementation");
+  }
+
   /**
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
