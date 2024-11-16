@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -148,6 +149,14 @@ public class HoodieCommonTestHarness {
       initPath();
     }
     metaClient = HoodieTestUtils.init(basePath, getTableType());
+  }
+
+  protected void initMetaClient(boolean preTableVersion8) throws IOException {
+    if (basePath == null) {
+      initPath();
+    }
+    metaClient = HoodieTestUtils.init(basePath, getTableType(), "", false, null, "datestr",
+        preTableVersion8 ? Option.of(HoodieTableVersion.SIX) : Option.of(HoodieTableVersion.current()));
   }
 
   protected void cleanMetaClient() {

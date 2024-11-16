@@ -862,8 +862,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
                                                           boolean testBootstrap,
                                                           boolean preTableVersion8) throws Exception {
 
+    initMetaClient(preTableVersion8);
     if (testBootstrap) {
-      metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, testBootstrap);
+      metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, testBootstrap, null, "datestr",
+          preTableVersion8 ? Option.of(HoodieTableVersion.SIX) : Option.of(HoodieTableVersion.current()));
     }
     metaClient.getTableConfig().setTableVersion(preTableVersion8 ? HoodieTableVersion.SIX : HoodieTableVersion.current());
 
@@ -1012,6 +1014,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(!skipCreatingDataFile ? instantTime1 : deltaInstantTime1, fileSlice.getBaseInstantTime(),
         "Base Instant of penultimate file-slice must be base instant");
     List<HoodieLogFile> logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
+    //FIXME-vc: real issue here.. the files written after pending compaction are getting filtered out.
     assertEquals(4, logFiles.size(), "Log files must include those after compaction request");
     assertEquals(fileName4, logFiles.get(0).getFileName(), "Log File Order check");
     assertEquals(fileName3, logFiles.get(1).getFileName(), "Log File Order check");
