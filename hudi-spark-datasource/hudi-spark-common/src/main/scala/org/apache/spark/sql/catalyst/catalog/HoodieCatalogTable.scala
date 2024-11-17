@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
+import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceReadOptions}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils
@@ -70,6 +70,12 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
    * properties defined in catalog.
    */
   val catalogProperties: Map[String, String] = HoodieOptionConfig.makeOptionsCaseInsensitive(table.storage.properties ++ table.properties)
+
+  /**
+   * timestamp for table version in catalog
+   */
+  protected lazy val specifiedQueryTimestamp: String =
+    catalogProperties.getOrElse(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, null)
 
   /**
    * hoodie table's location.
@@ -330,7 +336,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
 
   private def loadTableSchemaByMetaClient(): Option[StructType] = {
     val resolver = spark.sessionState.conf.resolver
-    try getTableSqlSchema(metaClient, includeMetadataFields = true).map(originSchema => {
+    try getTableSqlSchema(metaClient, includeMetadataFields = true, specifiedQueryTimestamp).map(originSchema => {
       // Load table schema from meta on filesystem, and fill in 'comment'
       // information from Spark catalog.
       // Hoodie newly added columns are positioned after partition columns,

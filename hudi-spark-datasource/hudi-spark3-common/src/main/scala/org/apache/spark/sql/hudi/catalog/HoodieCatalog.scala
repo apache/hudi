@@ -28,8 +28,9 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.spark.sql.HoodieSpark3CatalogUtils.MatchBucketTransform
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
@@ -49,6 +50,7 @@ import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 
 import java.net.URI
 import java.util
+import java.util.concurrent.TimeUnit
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -150,6 +152,72 @@ class HoodieCatalog extends DelegatingCatalogExtension
         }
 
       case t => t
+    }
+  }
+
+  override def loadTable(ident: Identifier, timestamp: Long): Table = {
+    super.loadTable(ident) match {
+      case V1Table(catalogTable0) if sparkAdapter.isHoodieTable(catalogTable0) =>
+
+        // spark passes microseconds
+        val milliseconds = TimeUnit.MICROSECONDS.toMillis(timestamp)
+        val targetTimestamp = HoodieInstantTimeGenerator.formatMillis(milliseconds)
+
+        constructTable(ident, catalogTable0, targetTimestamp)
+
+      case t => t
+    }
+  }
+
+  override def loadTable(ident: Identifier, version: String): Table = {
+    super.loadTable(ident) match {
+      case V1Table(catalogTable0) if sparkAdapter.isHoodieTable(catalogTable0) =>
+
+        if (!HoodieInstantTimeGenerator.isValidInstantTime(version)) {
+          throw new AnalysisException(s"invalid snapshot id: $version")
+        }
+
+        constructTable(ident, catalogTable0, version);
+
+      case t => t
+    }
+  }
+
+  private def constructTable(ident: Identifier,
+                             catalogTable0: CatalogTable,
+                             timestampAsOf: String): Table = {
+    val catalogTable = catalogTable0.comment match {
+      case Some(v) =>
+        val newProps = catalogTable0.storage.properties + (
+          TableCatalog.PROP_COMMENT -> v,
+          DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestampAsOf
+        )
+        catalogTable0.copy(storage = catalogTable0.storage.copy(properties = newProps))
+      case _ =>
+        val newProps = catalogTable0.properties +
+          (DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestampAsOf)
+        catalogTable0.copy(storage = catalogTable0.storage.copy(properties = newProps))
+    }
+
+    val v2Table = HoodieInternalV2Table(
+      spark = spark,
+      path = catalogTable.location.toString,
+      catalogTable = Some(catalogTable),
+      tableIdentifier = Some(ident.toString))
+
+    val schemaEvolutionEnabled = ProvidesHoodieConfig.isSchemaEvolutionEnabled(spark)
+
+    // NOTE: PLEASE READ CAREFULLY
+    //
+    // Since Hudi relations don't currently implement DS V2 Read API, we by default fallback to V1 here.
+    // Such fallback will have considerable performance impact, therefore it's only performed in cases
+    // where V2 API have to be used. Currently only such use-case is using of Schema Evolution feature
+    //
+    // Check out HUDI-4178 for more details
+    if (schemaEvolutionEnabled) {
+      v2Table
+    } else {
+      v2Table.v1TableWrapper
     }
   }
 

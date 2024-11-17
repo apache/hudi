@@ -56,9 +56,10 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   })
 
   def getTableSqlSchema(metaClient: HoodieTableMetaClient,
-                        includeMetadataFields: Boolean = false): Option[StructType] = {
+                        includeMetadataFields: Boolean = false,
+                        timeStamp: String = null): Option[StructType] = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val avroSchema = try Some(schemaResolver.getTableAvroSchema(includeMetadataFields))
+    val avroSchema = try Some(schemaResolver.getTableAvroSchema(timeStamp, includeMetadataFields))
     catch {
       case _: Throwable => None
     }

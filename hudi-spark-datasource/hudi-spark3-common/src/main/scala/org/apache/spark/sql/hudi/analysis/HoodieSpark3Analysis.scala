@@ -17,14 +17,14 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
+import org.apache.hudi.{DefaultSource, SparkAdapterSupport}
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logcal.{HoodieFileSystemViewTableValuedFunction, HoodieFileSystemViewTableValuedFunctionOptionsParser, HoodieMetadataTableValuedFunction, HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser, HoodieTimelineTableValuedFunction, HoodieTimelineTableValuedFunctionOptionsParser}
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.execution.command.DescribeTableCommand
-import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
@@ -57,27 +57,6 @@ case class HoodieSpark3ResolveReferences(spark: SparkSession) extends Rule[Logic
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
-    case TimeTravelRelation(ResolvesToHudiTable(table), timestamp, version) =>
-      if (timestamp.isEmpty && version.nonEmpty) {
-        throw new AnalysisException("Version expression is not supported for time travel")
-      }
-
-      val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
-      val dataSource =
-        DataSource(
-          spark,
-          userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
-          partitionColumns = table.partitionColumnNames,
-          bucketSpec = table.bucketSpec,
-          className = table.provider.get,
-          options = table.storage.properties ++ pathOption ++ Map(
-            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString()),
-          catalogTable = Some(table))
-
-      val relation = dataSource.resolveRelation(checkFilesExist = false)
-
-      LogicalRelation(relation, table)
-
     case HoodieQuery(args) =>
       val (tableName, opts) = HoodieQuery.parseOptions(args)
 

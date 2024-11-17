@@ -88,6 +88,18 @@ public class HoodieInstantTimeGenerator {
     });
   }
 
+  public static String formatMillis(long milliseconds) {
+    String formatCommitTime;
+    Date date = new Date(milliseconds);
+    if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
+      formatCommitTime = date.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
+          .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
+    } else {
+      formatCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(date));
+    }
+    return formatCommitTime;
+  }
+
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     try {
       String timestampInMillis = fixInstantTimeCompatibility(timestamp);

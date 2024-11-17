@@ -153,6 +153,23 @@ public class TableSchemaResolver {
   /**
    * Fetches tables schema in Avro format as of the given instant
    *
+   * @param timestamp as of which table's schema will be fetched
+   */
+  public Schema getTableAvroSchema(String timestamp, boolean includeMetadataFields) throws Exception {
+    if (timestamp == null) {
+      return getTableAvroSchema(includeMetadataFields);
+    }
+    Option<HoodieInstant> instant = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsBeforeOrEquals(timestamp)
+        .lastInstant();
+    return getTableAvroSchemaInternal(includeMetadataFields, instant)
+        .orElseThrow(schemaNotFoundError());
+  }
+
+  /**
+   * Fetches tables schema in Avro format as of the given instant
+   *
    * @param instant as of which table's schema will be fetched
    */
   public Schema getTableAvroSchema(HoodieInstant instant, boolean includeMetadataFields) throws Exception {
