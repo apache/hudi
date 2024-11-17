@@ -60,11 +60,12 @@ public class BaseFileUtils {
                                                                                    String instantTime,
                                                                                    HoodieStorage storage) throws IOException {
     String partition = writeStat.getPartitionPath();
-    String latestFileName = writeStat.getPath().substring(writeStat.getPath().lastIndexOf("/") + 1);
+    String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
     String previousFileName = writeStat.getPrevBaseFile();
     String fileId = FSUtils.getFileId(latestFileName);
     Set<String> recordKeysFromLatestBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, latestFileName);
     if (writeStat.getNumDeletes() == 0) { // if there are no deletes, reading only the file added as part of current commit metadata would suffice.
+      // this means that both inserts and updates from latest base file might result in RLI records.
       return new ArrayList(recordKeysFromLatestBaseFile).stream().map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate((String) recordKey, partition, fileId,
           instantTime, writesFileIdEncoding)).iterator();
     } else {
@@ -81,8 +82,9 @@ public class BaseFileUtils {
           .filter(recordKey -> {
             // new inserts
             return !recordKeysFromPreviousBaseFile.contains(recordKey);
-          }).map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
-              instantTime, writesFileIdEncoding)).collect(toList()));
+          }).map(recordKey ->
+              HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
+                  instantTime, writesFileIdEncoding)).collect(toList()));
       return toReturn.iterator();
     }
   }

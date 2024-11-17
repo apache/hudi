@@ -791,10 +791,9 @@ public class HoodieTableMetadataUtil {
       });
       Option<String> latestCommitTimestamp = Option.empty();
       Option<Schema> writerSchemaOpt = Option.empty();
-      if (anyLogFilesWithDeleteBlocks) {
-        // if we have a log file w/ pure deletes.
-       latestCommitTimestamp = Option.of(dataTableMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().getCompletionTime());
-       writerSchemaOpt = tryResolveSchemaForTable(dataTableMetaClient);
+      if (anyLogFilesWithDeleteBlocks) { // if we have a log file w/ pure deletes.
+        latestCommitTimestamp = Option.of(dataTableMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime());
+        writerSchemaOpt = tryResolveSchemaForTable(dataTableMetaClient);
       }
       int maxBufferSize = metadataConfig.getMaxReaderBufferSize();
       StorageConfiguration storageConfiguration = dataTableMetaClient.getStorageConf();
@@ -805,8 +804,8 @@ public class HoodieTableMetadataUtil {
             HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
             // handle base files
             if (writeStat.getPath().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-                return BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage);
-              } else {
+              return BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage);
+            } else {
               // for logs, we only need to process delete blocks for RLI
               if (writeStat.getNumInserts() == 0 && writeStat.getNumUpdateWrites() == 0 && writeStat.getNumDeletes() > 0) {
                 Set<String> deletedRecordKeys = getDeletedRecordKeys(dataTableMetaClient.getBasePath().toString() + "/" + writeStat.getPath(), dataTableMetaClient,
@@ -1405,7 +1404,6 @@ public class HoodieTableMetadataUtil {
           .withLatestInstantTime(latestCommitTimestamp)
           .withReaderSchema(writerSchemaOpt.get())
           .withTableMetaClient(datasetMetaClient)
-          .withLogRecordScannerCallback(records::add)
           .build();
       scanner.scan();
       // HoodieUnMergedLogRecordScanner will expose deleted record keys
