@@ -75,8 +75,8 @@ case class DropIndexCommand(table: CatalogTable,
     val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
     // need to ensure that the index name is for a valid partition type
     val indexMetadataOpt = metaClient.getIndexMetadata
-    if (indexMetadataOpt.isEmpty && !ignoreIfNotExists) {
-      throw new HoodieIndexException(String.format("Index does not exist: %s", indexName))
+    if (metaClient.getTableConfig.getMetadataPartitions.contains(indexName)) {
+      HoodieSparkIndexClient.getInstance(sparkSession).drop(metaClient, indexName, ignoreIfNotExists)
     } else if (indexMetadataOpt.isPresent) {
       val indexMetadata = indexMetadataOpt.get
       val indexDefinitions = indexMetadata.getIndexDefinitions.values().stream()
@@ -86,6 +86,8 @@ case class DropIndexCommand(table: CatalogTable,
         throw new HoodieIndexException(String.format("Index does not exist: %s", indexName))
       }
       indexDefinitions.forEach(definition => HoodieSparkIndexClient.getInstance(sparkSession).drop(metaClient, definition.getIndexName, ignoreIfNotExists))
+    } else if (!ignoreIfNotExists) {
+      throw new HoodieIndexException(String.format("Index does not exist: %s", indexName))
     }
 
     // Invalidate cached table for queries do not access related table
@@ -107,7 +109,7 @@ case class ShowIndexesCommand(table: CatalogTable,
     // need to ensure that the index name is for a valid partition type
     metaClient.getTableConfig.getMetadataPartitions.asScala.map(
       partition => {
-        if (MetadataPartitionType.isMultiModalIndexPartition(partition)) {
+        if (MetadataPartitionType.isGenericIndex(partition)) {
           val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(partition)
           Row(partition, indexDefinition.getIndexType.toLowerCase, indexDefinition.getSourceFields.asScala.mkString(","))
         } else if (!partition.equals(MetadataPartitionType.FILES.getPartitionPath)) {

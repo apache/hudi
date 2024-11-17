@@ -312,7 +312,7 @@ public enum MetadataPartitionType {
     }
   }
 
-  public static boolean isMultiModalIndexPartition(String metadataPartitionPath) {
+  public static boolean isGenericIndex(String metadataPartitionPath) {
     return metadataPartitionPath.startsWith(SECONDARY_INDEX.getPartitionPath())
         || metadataPartitionPath.startsWith(FUNCTIONAL_INDEX.getPartitionPath());
   }

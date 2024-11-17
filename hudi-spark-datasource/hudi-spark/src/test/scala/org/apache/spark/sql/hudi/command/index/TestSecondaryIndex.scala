@@ -123,10 +123,21 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           )
 
           // Drop the second index and show index should show no index
+          // Try a partial delete scenario where table config does not have the partition path
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(HoodieTestUtils.getDefaultStorageConf)
+            .build()
+          val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.values().stream().findFirst().get()
+          metaClient.getTableConfig.setMetadataPartitionState(metaClient, indexDefinition.getIndexName, false)
           checkAnswer(s"drop index idx_price on $tableName")()
           checkAnswer(s"show indexes from $tableName")(
             Seq("record_index", "record_index", "")
           )
+
+          // Drop the record index and show index should show no index
+          checkAnswer(s"drop index record_index on $tableName")()
+          checkAnswer(s"show indexes from $tableName")()
 
           checkException(s"drop index idx_price on $tableName")("Index does not exist: idx_price")
 
