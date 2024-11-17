@@ -110,7 +110,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
   private Writer openWriter() {
     try {
       if (this.writer == null) {
-        return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent()).withDeltaCommit("")
+        return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent()).withInstantTime("")
             .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
             .withStorage(metaClient.getStorage()).build();
       } else {

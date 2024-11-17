@@ -85,7 +85,15 @@ public enum HoodieTableVersion {
         .orElseThrow(() -> new HoodieException("Unknown table firstReleaseVersion:" + releaseVersion));
   }
 
+  public boolean greaterThanOrEquals(HoodieTableVersion other) {
+    return greaterThan(other) || this.versionCode == other.versionCode;
+  }
+
   public boolean greaterThan(HoodieTableVersion other) {
     return this.versionCode > other.versionCode;
+  }
+
+  public boolean lesserThan(HoodieTableVersion other) {
+    return this.versionCode < other.versionCode;
   }
 }

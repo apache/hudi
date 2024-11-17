@@ -129,7 +129,12 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable, String keyGenerator,
-                                             String partitionFieldConfigValue) throws IOException {
+                                           String partitionFieldConfigValue) throws IOException {
+    return init(basePath, tableType, bootstrapBasePath, bootstrapIndexEnable, keyGenerator, partitionFieldConfigValue, Option.empty());
+  }
+
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable, String keyGenerator,
+                                           String partitionFieldConfigValue, Option<HoodieTableVersion> tableVersionOption) throws IOException {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
     props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), bootstrapIndexEnable);
@@ -139,6 +144,11 @@ public class HoodieTestUtils {
     if (keyGenerator != null && !keyGenerator.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
       props.put("hoodie.datasource.write.partitionpath.field", partitionFieldConfigValue);
       props.put(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFieldConfigValue);
+    }
+    if (tableVersionOption.isPresent()) {
+      HoodieTableVersion tableVersion = tableVersionOption.get();
+      props.put("hoodie.table.version", Integer.valueOf(tableVersion.versionCode()).toString());
+      props.put("hoodie.timeline.layout.version", tableVersion.getTimelineLayoutVersion().getVersion());
     }
     return init(getDefaultStorageConf(), basePath, tableType, props);
   }
