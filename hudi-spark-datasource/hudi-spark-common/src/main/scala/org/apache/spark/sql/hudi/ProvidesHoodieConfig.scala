@@ -107,6 +107,7 @@ trait ProvidesHoodieConfig extends Logging {
       // Validate duplicate key for inserts to COW table when using strict insert mode.
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
+      // this changed.
       classOf[DefaultHoodieRecordPayload].getCanonicalName
     }
   }
