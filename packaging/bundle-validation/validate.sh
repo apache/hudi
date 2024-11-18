@@ -280,17 +280,12 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
-if [[ $SPARK_HOME == *"spark-3.5"* ]]
-then
-  echo "::warning::validate.sh validating utilities bundle"
-  test_utilities_bundle $JARS_DIR/utilities.jar
-  if [ "$?" -ne 0 ]; then
-      exit 1
-  fi
-  echo "::warning::validate.sh done validating utilities bundle"
-else
-  echo "::warning::validate.sh skip validating utilities bundle for non-spark3.5 build"
+echo "::warning::validate.sh validating utilities bundle"
+test_utilities_bundle $JARS_DIR/utilities.jar
+if [ "$?" -ne 0 ]; then
+    exit 1
 fi
+echo "::warning::validate.sh done validating utilities bundle"
 
 echo "::warning::validate.sh validating utilities slim bundle"
 test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark.jar
