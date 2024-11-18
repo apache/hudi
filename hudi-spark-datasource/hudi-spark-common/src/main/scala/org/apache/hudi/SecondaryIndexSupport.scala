@@ -98,7 +98,7 @@ class SecondaryIndexSupport(spark: SparkSession,
 
   /**
    * Returns the configured secondary key for the table
-   * TODO: Handle multiple secondary indexes (similar to functional index)
+   * TODO: [HUDI-8302] Handle multiple secondary indexes (similar to functional index)
    */
   private def getSecondaryKeyConfig(queryReferencedColumns: Seq[String],
                                     metaClient: HoodieTableMetaClient): Option[(String, String)] = {

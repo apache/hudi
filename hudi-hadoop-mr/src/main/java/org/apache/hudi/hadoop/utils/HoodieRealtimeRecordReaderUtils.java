@@ -216,7 +216,7 @@ public class HoodieRealtimeRecordReaderUtils {
         }
         return new ArrayWritable(Writable.class, recordValues);
       case ENUM:
-        return new Text(value.toString());
+        return new BytesWritable(value.toString().getBytes());
       case ARRAY:
         GenericArray arrayValue = (GenericArray) value;
         Writable[] arrayValues = new Writable[arrayValue.size()];

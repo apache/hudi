@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -31,11 +32,13 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -48,6 +51,7 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -63,6 +67,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -80,9 +86,11 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
 public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctionalTestHarness {
@@ -206,6 +214,98 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     checkWrittenData(result, 1);
   }
 
+  // Validate that multiple writers will only produce base files for bulk insert
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testMultiBaseFile(boolean bulkInsertFirst) throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfig(true);
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+    // there should only be a single filegroup, so we will verify that it is consistent
+    String fileID = null;
+
+    // if there is not a bulk insert first, then we will write to log files for a filegroup
+    // without a base file. Having a base file adds the possibility of small file handling
+    // which we want to ensure doesn't happen.
+    if (bulkInsertFirst) {
+      SparkRDDWriteClient client0 = getHoodieWriteClient(config);
+      List<String> dataset0 = Collections.singletonList("id0,Danny,0,0,par1");
+      String insertTime0 = client0.createNewInstantTime();
+      List<WriteStatus> writeStatuses0 = writeData(client0, insertTime0, dataset0, false, WriteOperationType.BULK_INSERT, true);
+      client0.commitStats(
+          insertTime0,
+          context().parallelize(writeStatuses0, 1),
+          writeStatuses0.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+          Option.empty(),
+          metaClient.getCommitActionType());
+      for (WriteStatus status : writeStatuses0) {
+        if (fileID == null) {
+          fileID = status.getFileId();
+        } else {
+          assertEquals(fileID, status.getFileId());
+        }
+        assertFalse(FSUtils.isLogFile(new StoragePath(status.getStat().getPath()).getName()));
+      }
+      client0.close();
+    }
+
+    SparkRDDWriteClient client1 = getHoodieWriteClient(config);
+    List<String> dataset1 = Collections.singletonList("id1,Danny,22,1,par1");
+    String insertTime1 = client1.createNewInstantTime();
+    List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT, true);
+    for (WriteStatus status : writeStatuses1) {
+      if (fileID == null) {
+        fileID = status.getFileId();
+      } else {
+        assertEquals(fileID, status.getFileId());
+      }
+      assertTrue(FSUtils.isLogFile(new StoragePath(status.getStat().getPath()).getName()));
+    }
+
+    SparkRDDWriteClient client2 = getHoodieWriteClient(config);
+    List<String> dataset2 = Collections.singletonList("id1,Danny,23,2,par1");
+    String insertTime2 = client2.createNewInstantTime();
+    List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.UPSERT, true);
+    for (WriteStatus status : writeStatuses2) {
+      assertEquals(fileID, status.getFileId());
+      assertTrue(FSUtils.isLogFile(new StoragePath(status.getStat().getPath()).getName()));
+    }
+
+    // step to commit the 1st txn
+    client1.commitStats(
+        insertTime1,
+        context().parallelize(writeStatuses1, 1),
+        writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    // step to commit the 2nd txn
+    client2.commitStats(
+        insertTime2,
+        context().parallelize(writeStatuses2, 1),
+        writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    client1.close();
+    client2.close();
+
+    metaClient.reloadActiveTimeline();
+    List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
+    if (bulkInsertFirst) {
+      assertEquals(3, instants.size());
+      // check that bulk insert finished before the upsert started
+      assertTrue(Long.parseLong(instants.get(0).getCompletionTime()) < Long.parseLong(instants.get(1).requestedTime()));
+      // check that the upserts overlapped in time
+      assertTrue(Long.parseLong(instants.get(1).getCompletionTime()) > Long.parseLong(instants.get(2).requestedTime()));
+      assertTrue(Long.parseLong(instants.get(2).getCompletionTime()) > Long.parseLong(instants.get(1).requestedTime()));
+    } else {
+      assertEquals(2, instants.size());
+      // check that the upserts overlapped in time
+      assertTrue(Long.parseLong(instants.get(0).getCompletionTime()) > Long.parseLong(instants.get(1).requestedTime()));
+      assertTrue(Long.parseLong(instants.get(1).getCompletionTime()) > Long.parseLong(instants.get(0).requestedTime()));
+    }
+  }
+
   // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
   //      |----------- txn1 -----------|
   //                       |----- txn2 ------|
@@ -277,6 +377,14 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
   }
 
   private HoodieWriteConfig createHoodieWriteConfig() {
+    return createHoodieWriteConfig(false);
+  }
+
+  private HoodieWriteConfig createHoodieWriteConfig(boolean fullUpdate) {
+    String payloadClassName = PartialUpdateAvroPayload.class.getName();
+    if (fullUpdate) {
+      payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
+    }
     Properties props = getPropertiesForKeyGen(true);
     props.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     String basePath = basePath();
@@ -286,9 +394,10 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         .withSchema(jsonSchema)
         .withParallelism(2, 2)
         .withAutoCommit(false)
+        .withRecordMergeMode(RecordMergeMode.CUSTOM)
         .withPayloadConfig(
             HoodiePayloadConfig.newBuilder()
-                .withPayloadClass(PartialUpdateAvroPayload.class.getName())
+                .withPayloadClass(payloadClassName)
                 .withPayloadOrderingField("ts")
                 .build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -393,10 +502,15 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     return record;
   }
 
-  private List<HoodieRecord> str2HoodieRecord(List<String> records) {
+  private List<HoodieRecord> str2HoodieRecord(List<String> records, boolean fullUpdate) {
     return records.stream().map(recordStr -> {
       GenericRecord record = str2GenericRecord(recordStr);
-      PartialUpdateAvroPayload payload = new PartialUpdateAvroPayload(record, (Long) record.get("ts"));
+      OverwriteWithLatestAvroPayload payload;
+      if (fullUpdate) {
+        payload = new OverwriteWithLatestAvroPayload(record, (Long) record.get("ts"));
+      } else {
+        payload = new PartialUpdateAvroPayload(record, (Long) record.get("ts"));
+      }
       return new HoodieAvroRecord<>(new HoodieKey((String) record.get("id"), (String) record.get("part")), payload);
     }).collect(Collectors.toList());
   }
@@ -407,7 +521,17 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
       List<String> records,
       boolean doCommit,
       WriteOperationType operationType) {
-    List<HoodieRecord> recordList = str2HoodieRecord(records);
+    return writeData(client, instant, records, doCommit, operationType, false);
+  }
+
+  private List<WriteStatus> writeData(
+      SparkRDDWriteClient client,
+      String instant,
+      List<String> records,
+      boolean doCommit,
+      WriteOperationType operationType,
+      boolean fullUpdate) {
+    List<HoodieRecord> recordList = str2HoodieRecord(records, fullUpdate);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(recordList, 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     client.startCommitWithTime(instant);

@@ -19,6 +19,7 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -80,8 +81,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
 
-  public HoodieHiveSyncClient(HiveSyncConfig config) {
-    super(config);
+  public HoodieHiveSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
     this.config = config;
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
 
@@ -355,7 +356,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
-    if (getActiveTimeline().getInstantsAsStream().noneMatch(i -> i.getTimestamp().equals(timeStamp))) {
+    if (getActiveTimeline().getInstantsAsStream().noneMatch(i -> i.requestedTime().equals(timeStamp))) {
       throw new HoodieHiveSyncException(
           "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
     }
@@ -402,7 +403,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   public void updateLastCommitTimeSynced(String tableName) {
     // Set the last commit time and commit completion from the TBLproperties
     HoodieTimeline activeTimeline = getActiveTimeline();
-    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
+    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::requestedTime);
     Option<String> lastCommitCompletionSynced = activeTimeline
         .getInstantsOrderedByCompletionTime()
         .skip(activeTimeline.countInstants() - 1)

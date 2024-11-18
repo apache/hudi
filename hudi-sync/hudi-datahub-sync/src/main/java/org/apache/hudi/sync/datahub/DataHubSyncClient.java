@@ -65,8 +65,8 @@ public class DataHubSyncClient extends HoodieSyncClient {
   private final DatasetUrn datasetUrn;
   private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
 
-  public DataHubSyncClient(DataHubSyncConfig config) {
-    super(config);
+  public DataHubSyncClient(DataHubSyncConfig config, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
     this.config = config;
     this.datasetUrn = config.datasetIdentifier.getDatasetUrn();
   }
@@ -78,7 +78,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, getActiveTimeline().lastInstant().get().getTimestamp()));
+    updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, getActiveTimeline().lastInstant().get().requestedTime()));
   }
 
   @Override

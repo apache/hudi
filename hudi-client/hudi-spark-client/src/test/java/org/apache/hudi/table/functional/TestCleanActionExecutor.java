@@ -39,14 +39,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -59,11 +58,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 /**
@@ -71,11 +74,11 @@ import static org.mockito.Mockito.when;
  */
 public class TestCleanActionExecutor {
 
-  private static final StorageConfiguration<Configuration> CONF = getDefaultStorageConf();
+  private static final StorageConfiguration<?> CONF = getDefaultStorageConf();
   private final HoodieEngineContext context = new HoodieLocalEngineContext(CONF);
   private final HoodieTable<?, ?, ?, ?> mockHoodieTable = mock(HoodieTable.class);
   private HoodieTableMetaClient metaClient;
-  private FileSystem fs;
+  private HoodieStorage storage;
 
   private static String PARTITION1 = "partition1";
 
@@ -88,12 +91,9 @@ public class TestCleanActionExecutor {
     when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    HoodieStorage storage = mock(HoodieStorage.class);
+    storage = spy(HoodieStorageUtils.getStorage(CONF));
     when(metaClient.getStorage()).thenReturn(storage);
     when(mockHoodieTable.getStorage()).thenReturn(storage);
-    fs = mock(FileSystem.class);
-    when(storage.getFileSystem()).thenReturn(fs);
-    when(fs.getConf()).thenReturn(CONF.unwrap());
   }
 
   @ParameterizedTest
@@ -102,23 +102,26 @@ public class TestCleanActionExecutor {
     HoodieWriteConfig config = getCleanByCommitsConfig();
     String fileGroup = UUID.randomUUID() + "-0";
     HoodieBaseFile baseFile = new HoodieBaseFile(String.format("/tmp/base/%s_1-0-1_%s.parquet", fileGroup, "001"));
-    FileSystem localFs = new Path(baseFile.getPath()).getFileSystem(CONF.unwrap());
-    Path filePath = new Path(baseFile.getPath());
-    localFs.create(filePath);
+    HoodieStorage localStorage = HoodieStorageUtils.getStorage(baseFile.getPath(), CONF);
+    StoragePath filePath = new StoragePath(baseFile.getPath());
+
     if (failureType == CleanFailureType.TRUE_ON_DELETE) {
-      when(fs.delete(filePath, false)).thenReturn(true);
+      when(storage.deleteFile(filePath)).thenReturn(true);
     } else if (failureType == CleanFailureType.FALSE_ON_DELETE_IS_EXISTS_FALSE) {
-      when(fs.delete(filePath, false)).thenReturn(false);
-      when(fs.exists(filePath)).thenReturn(false);
+      when(storage.deleteFile(filePath)).thenReturn(false);
+      when(storage.exists(filePath)).thenReturn(false);
     } else if (failureType == CleanFailureType.FALSE_ON_DELETE_IS_EXISTS_TRUE) {
-      when(fs.delete(filePath, false)).thenReturn(false);
-      when(fs.exists(filePath)).thenReturn(true);
+      when(storage.deleteFile(filePath)).thenReturn(false);
+      when(storage.exists(filePath)).thenReturn(true);
     } else if (failureType == CleanFailureType.FILE_NOT_FOUND_EXC_ON_DELETE) {
-      when(fs.delete(filePath, false)).thenThrow(new FileNotFoundException("throwing file not found exception"));
+      when(storage.deleteFile(filePath)).thenThrow(new FileNotFoundException("throwing file not found exception"));
     } else {
       // run time exception
-      when(fs.delete(filePath, false)).thenThrow(new RuntimeException("throwing run time exception"));
+      when(storage.deleteFile(filePath)).thenThrow(new RuntimeException("throwing run time exception"));
     }
+    // we have to create the actual file after setting up mock logic for storage
+    // otherwise the file created would be deleted when setting up because storage is a spy
+    localStorage.create(filePath);
 
     Map<String, List<HoodieCleanFileInfo>> partitionCleanFileInfoMap = new HashMap<>();
     List<HoodieCleanFileInfo> cleanFileInfos = Collections.singletonList(new HoodieCleanFileInfo(baseFile.getPath(), false));
@@ -130,7 +133,7 @@ public class TestCleanActionExecutor {
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
     when(mockHoodieTable.getActiveTimeline()).thenReturn(activeTimeline);
-    HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "002");
+    HoodieInstant cleanInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, "002");
     HoodieActiveTimeline cleanTimeline = mock(HoodieActiveTimeline.class);
     when(activeTimeline.getCleanerTimeline()).thenReturn(cleanTimeline);
     when(cleanTimeline.getInstants()).thenReturn(Collections.singletonList(cleanInstant));
@@ -138,10 +141,13 @@ public class TestCleanActionExecutor {
     when(activeTimeline.readCleanerInfoAsBytes(cleanInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
 
     when(mockHoodieTable.getCleanTimeline()).thenReturn(cleanTimeline);
+    when(mockHoodieTable.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
+    when(mockHoodieTable.getInstantFileNameGenerator()).thenReturn(INSTANT_FILE_NAME_GENERATOR);
+    when(mockHoodieTable.getInstantFileNameParser()).thenReturn(INSTANT_FILE_NAME_PARSER);
     HoodieTimeline inflightsAndRequestedTimeline = mock(HoodieTimeline.class);
     when(cleanTimeline.filterInflightsAndRequested()).thenReturn(inflightsAndRequestedTimeline);
     when(inflightsAndRequestedTimeline.getInstants()).thenReturn(Collections.singletonList(cleanInstant));
-    when(activeTimeline.transitionCleanRequestedToInflight(any(), any())).thenReturn(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "002"));
+    when(activeTimeline.transitionCleanRequestedToInflight(any(), any())).thenReturn(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "002"));
     when(mockHoodieTable.getMetadataWriter("002")).thenReturn(Option.empty());
 
     CleanActionExecutor cleanActionExecutor = new CleanActionExecutor(context, config, mockHoodieTable, "002");
@@ -165,7 +171,7 @@ public class TestCleanActionExecutor {
     });
   }
 
-  private void assertCleanExecutionSuccess(CleanActionExecutor cleanActionExecutor, Path filePath) {
+  private void assertCleanExecutionSuccess(CleanActionExecutor cleanActionExecutor, StoragePath filePath) {
     HoodieCleanMetadata cleanMetadata = cleanActionExecutor.execute();
     assertTrue(cleanMetadata.getPartitionMetadata().containsKey(PARTITION1));
     HoodieCleanPartitionMetadata cleanPartitionMetadata = cleanMetadata.getPartitionMetadata().get(PARTITION1);

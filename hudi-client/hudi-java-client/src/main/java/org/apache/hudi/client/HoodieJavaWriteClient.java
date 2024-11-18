@@ -94,12 +94,12 @@ public class HoodieJavaWriteClient<T> extends
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config) {
-    return HoodieJavaTable.create(config, context);
+    return createTableAndValidate(config, HoodieJavaTable::create);
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    return HoodieJavaTable.create(config, context, metaClient);
+    return createTableAndValidate(config, metaClient, HoodieJavaTable::create);
   }
 
   @Override
@@ -172,7 +172,7 @@ public class HoodieJavaWriteClient<T> extends
   public void transitionInflight(String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     metaClient.getActiveTimeline().transitionRequestedToInflight(
-        new HoodieInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
+        metaClient.createNewInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
         Option.empty(), config.shouldAllowMultiWriteOnSameInstant());
   }
 

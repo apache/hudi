@@ -87,8 +87,8 @@ public class QueryRunner {
     LOG.info("Running incremental query");
     return Pair.of(queryInfo, sparkSession.read().format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryInfo.getPreviousInstant())
-        .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryInfo.getEndInstant())
+        .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getStartInstant())
+        .option(DataSourceReadOptions.END_COMMIT().key(), queryInfo.getEndInstant())
         .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
             props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                 DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
@@ -106,11 +106,12 @@ public class QueryRunner {
   }
 
   public Dataset<Row> applySnapshotQueryFilters(Dataset<Row> snapshot, QueryInfo snapshotQueryInfo) {
-    return snapshot
+    Dataset<Row> df = snapshot
         // add filtering so that only interested records are returned.
         .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             snapshotQueryInfo.getStartInstant()))
         .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             snapshotQueryInfo.getEndInstant()));
+    return snapshotQueryInfo.getPredicateFilter().map(df::filter).orElse(df);
   }
 }

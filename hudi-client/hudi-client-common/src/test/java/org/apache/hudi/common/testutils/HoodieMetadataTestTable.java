@@ -41,6 +41,7 @@ import java.util.Map;
 
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 
 /**
  * {@link HoodieTestTable} impl used for testing metadata. This class does synchronous updates to HoodieTableMetadataWriter if non null.
@@ -65,7 +66,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
                                    HoodieTableMetadataWriter writer,
                                    Option<HoodieEngineContext> context) {
     testTableState = HoodieTestTableState.of();
-    return new HoodieMetadataTestTable(metaClient.getBasePath().toString(), metaClient.getRawHoodieStorage(),
+    return new HoodieMetadataTestTable(metaClient.getBasePath().toString(), metaClient.getRawStorage(),
         metaClient,
         writer, context);
   }
@@ -96,9 +97,9 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     // DT should be committed after MDT.
     if (!createInflightCommit) {
       if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-        createCommit(basePath, commitTime, Option.of(commitMetadata));
+        createCommit(COMMIT_METADATA_SER_DE, basePath, commitTime, Option.of(commitMetadata));
       } else {
-        createDeltaCommit(basePath, commitTime, commitMetadata);
+        createDeltaCommit(COMMIT_METADATA_SER_DE, basePath, commitTime, commitMetadata);
       }
       this.inflightCommits().remove(commitTime);
     }

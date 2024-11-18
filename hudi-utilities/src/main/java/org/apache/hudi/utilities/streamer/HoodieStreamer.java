@@ -31,23 +31,22 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -152,6 +151,11 @@ public class HoodieStreamer implements Serializable {
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
+    Triple<RecordMergeMode, String, String> mergingConfigs =
+        HoodieTableConfig.inferCorrectMergingBehavior(cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId);
+    cfg.recordMergeMode = mergingConfigs.getLeft();
+    cfg.payloadClassName = mergingConfigs.getMiddle();
+    cfg.recordMergeStrategyId = mergingConfigs.getRight();
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
@@ -189,6 +193,10 @@ public class HoodieStreamer implements Serializable {
     if (cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       // Explicitly set the table type
       hoodieConfig.setValue(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    }
+    if (!hoodieConfig.contains(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES)
+        && !StringUtils.isNullOrEmpty(cfg.recordMergeImplClasses)) {
+      hoodieConfig.setValue(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), cfg.recordMergeImplClasses);
     }
 
     return hoodieConfig.getProps(true);
@@ -261,9 +269,21 @@ public class HoodieStreamer implements Serializable {
         + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
     public String sourceOrderingField = "ts";
 
-    @Parameter(names = {"--payload-class"}, description = "subclass of HoodieRecordPayload, that works off "
-        + "a GenericRecord. Implement your own, if you want to do something other than overwriting existing value")
-    public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
+    @Parameter(names = {"--payload-class"}, description = "Deprecated. "
+        + "Use --merge-mode for overwrite with latest or event time merging. "
+        + "Subclass of HoodieRecordPayload, that works off a GenericRecord. Implement your own, if you want to do something "
+        + "other than overwriting existing value")
+    public String payloadClassName = null;
+
+    @Parameter(names = {"--merge-mode", "--record-merge-mode"}, description = "mode to merge records with")
+    public RecordMergeMode recordMergeMode = null;
+    
+    @Parameter(names = {"--merge-strategy-id", "--record-merge-strategy-id"}, description = "only set this if you are using custom merge mode")
+    public String recordMergeStrategyId = null;
+
+    @Parameter(names = {"--merge-impl-classes", "--record-merge-custom-implementation-classes"},
+        description = "Comma separated list of classes that implement the record merger strategy")
+    public String recordMergeImplClasses = null;
 
     @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"
         + ".SchemaProvider to attach schemas to input & target table data, built in options: "
@@ -434,6 +454,11 @@ public class HoodieStreamer implements Serializable {
         + " committed checkpoint, and rely on other configs to pick the starting offsets).")
     public String ignoreCheckpoint = null;
 
+    @Parameter(names = {"--spark-app-name"},
+            description = "spark app name to use while creating spark context."
+                    + " If not defined then defaults to streamer-{cfg.targetTableName}.")
+    public String sparkAppName = "";
+
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
@@ -593,10 +618,16 @@ public class HoodieStreamer implements Serializable {
     final Config cfg = getConfig(args);
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc = null;
-    if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
-      jssc = UtilHelpers.buildSparkContext("streamer-" + cfg.targetTableName, additionalSparkConfigs);
+    String sparkAppName;
+    if (!StringUtils.isNullOrEmpty(cfg.sparkAppName)) {
+      sparkAppName = cfg.sparkAppName;
     } else {
-      jssc = UtilHelpers.buildSparkContext("streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
+      sparkAppName = "streamer-" + cfg.targetTableName;
+    }
+    if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
+      jssc = UtilHelpers.buildSparkContext(sparkAppName, additionalSparkConfigs);
+    } else {
+      jssc = UtilHelpers.buildSparkContext(sparkAppName, cfg.sparkMaster, additionalSparkConfigs);
     }
     if (cfg.enableHiveSync) {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
@@ -789,8 +820,7 @@ public class HoodieStreamer implements Serializable {
               Option<Pair<Option<String>, JavaRDD<WriteStatus>>> scheduledCompactionInstantAndRDD = Option.ofNullable(streamSync.syncOnce());
               if (scheduledCompactionInstantAndRDD.isPresent() && scheduledCompactionInstantAndRDD.get().getLeft().isPresent()) {
                 LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstantAndRDD.get().getLeft() + ")");
-                asyncCompactService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED,
-                    HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstantAndRDD.get().getLeft().get()));
+                asyncCompactService.get().enqueuePendingAsyncServiceInstant(scheduledCompactionInstantAndRDD.get().getLeft().get());
                 asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
                 if (asyncCompactService.get().hasError()) {
                   error = true;
@@ -801,7 +831,7 @@ public class HoodieStreamer implements Serializable {
                 Option<String> clusteringInstant = streamSync.getClusteringInstantOpt();
                 if (clusteringInstant.isPresent()) {
                   LOG.info("Scheduled async clustering for instant: " + clusteringInstant.get());
-                  asyncClusteringService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusteringInstant.get()));
+                  asyncClusteringService.get().enqueuePendingAsyncServiceInstant(clusteringInstant.get());
                   asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingClustering);
                   if (asyncClusteringService.get().hasError()) {
                     error = true;
@@ -901,7 +931,7 @@ public class HoodieStreamer implements Serializable {
               .setConf(HadoopFSUtils.getStorageConfWithCopy(hoodieSparkContext.hadoopConfiguration()))
               .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
-          pending.forEach(hoodieInstant -> asyncCompactService.get().enqueuePendingAsyncServiceInstant(hoodieInstant));
+          pending.forEach(hoodieInstant -> asyncCompactService.get().enqueuePendingAsyncServiceInstant(hoodieInstant.requestedTime()));
           asyncCompactService.get().start(error -> true);
           try {
             asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
@@ -925,7 +955,7 @@ public class HoodieStreamer implements Serializable {
               .setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = ClusteringUtils.getPendingClusteringInstantTimes(meta);
           LOG.info(format("Found %d pending clustering instants ", pending.size()));
-          pending.forEach(hoodieInstant -> asyncClusteringService.get().enqueuePendingAsyncServiceInstant(hoodieInstant));
+          pending.forEach(hoodieInstant -> asyncClusteringService.get().enqueuePendingAsyncServiceInstant(hoodieInstant.requestedTime()));
           asyncClusteringService.get().start(error -> true);
           try {
             asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingClustering);

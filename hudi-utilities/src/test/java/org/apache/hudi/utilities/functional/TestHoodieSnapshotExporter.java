@@ -91,7 +91,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     targetPath = Paths.get(basePath(), "target").toString();
     storage = HoodieStorageUtils.getStorage(basePath(), HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()));
 
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)

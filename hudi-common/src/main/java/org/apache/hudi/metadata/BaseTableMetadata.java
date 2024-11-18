@@ -328,27 +328,22 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         dataMetaClient.getTableConfig().getMetadataPartitions().contains(partitionName),
         "Secondary index is not initialized in MDT for: " + partitionName);
     // Fetch secondary-index records
-    Map<String, List<HoodieRecord<HoodieMetadataPayload>>> secondaryKeyRecords = getSecondaryIndexRecords(secondaryKeys, partitionName);
+    Map<String, Set<String>> secondaryKeyRecords = getSecondaryIndexRecords(secondaryKeys, partitionName);
     // Now collect the record-keys and fetch the RLI records
     List<String> recordKeys = new ArrayList<>();
-    secondaryKeyRecords.forEach((key, records) -> records.forEach(record -> {
-      if (!record.getData().isDeleted()) {
-        recordKeys.add(record.getData().getRecordKeyFromSecondaryIndex());
-      }
-    }));
-
+    secondaryKeyRecords.values().forEach(recordKeys::addAll);
     return readRecordIndex(recordKeys);
   }
 
   /**
    * Returns a map of (record-key -> secondary-key) for the provided record keys.
    */
-  public Map<String, String> getSecondaryKeys(List<String> recordKeys) {
+  public Map<String, String> getSecondaryKeys(List<String> recordKeys, String secondaryIndexName) {
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.SECONDARY_INDEX),
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().getMetadataPartitions().contains(secondaryIndexName),
         "Secondary index is not initialized in MDT");
-    return getSecondaryKeysForRecordKeys(recordKeys, MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+    return getSecondaryKeysForRecordKeys(recordKeys, secondaryIndexName);
   }
 
   /**
@@ -467,9 +462,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected abstract Map<String, String> getSecondaryKeysForRecordKeys(List<String> recordKeys, String partitionName);
 
   /**
-   * Returns a map of (record-key -> list-of-secondary-index-records) for the provided secondary keys.
+   * Returns a map of (secondary-key -> set-of-record-keys) for the provided secondary keys.
    */
-  protected abstract Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getSecondaryIndexRecords(List<String> keys, String partitionName);
+  public abstract Map<String, Set<String>> getSecondaryIndexRecords(List<String> keys, String partitionName);
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;
@@ -481,7 +476,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
   protected String getLatestDataInstantTime() {
     return dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant()
-        .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
+        .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
   }
 
   public boolean isMetadataTableInitialized() {

@@ -71,8 +71,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.source.FileIndex.metadataConfig;
 import static org.apache.hudi.util.StreamerUtil.isValidFile;
+import static org.apache.hudi.util.StreamerUtil.metadataConfig;
 
 /**
  * The operator to load index from existing hoodieTable.
@@ -209,7 +209,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
       Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
 
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
-          .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
+          .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().requestedTime())
           .collect(toList());
 
       for (FileSlice fileSlice : fileSlices) {
@@ -240,7 +240,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
             .map(logFile -> logFile.getPath().toString())
             .collect(toList());
 
-        try (HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(logPaths, schema, latestCommitTime.get().getTimestamp(),
+        try (HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(logPaths, schema, latestCommitTime.get().requestedTime(),
             writeConfig, hadoopConf)) {
           for (String recordKey : scanner.getRecords().keySet()) {
             output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(new HoodieKey(recordKey, partitionPath), fileSlice))));

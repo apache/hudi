@@ -20,7 +20,9 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieTable;
 
 import java.util.Collections;
 import java.util.Map;
@@ -35,6 +37,8 @@ public class SevenToSixDowngradeHandler implements DowngradeHandler {
 
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SIX, table.getMetaClient());
     return Collections.emptyMap();
   }
 }

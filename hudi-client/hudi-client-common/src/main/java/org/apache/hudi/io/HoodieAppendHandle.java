@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -56,12 +57,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,7 +155,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
-    this.shouldWriteRecordPositions = config.shouldWriteRecordPositions();
+    this.shouldWriteRecordPositions = config.shouldWriteRecordPositions()
+        // record positions supported only from table version 8
+        && config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -164,38 +165,61 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier);
   }
 
-  private void init(HoodieRecord record) {
-    if (!doInit) {
-      return;
-    }
-
-    String prevCommit = instantTime;
+  private void populateWriteStat(HoodieRecord record, HoodieDeltaWriteStat deltaWriteStat) {
+    HoodieTableVersion tableVersion = hoodieTable.version();
+    String prevCommit;
     String baseFile = "";
     List<String> logFiles = new ArrayList<>();
-    if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
-      // the cdc reader needs the base file metadata to have deterministic update sequence.
+
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      // table versions 8 and greater.
+      prevCommit = instantTime;
+      if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
+        // the cdc reader needs the base file metadata to have deterministic update sequence.
+        TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
+        Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+        if (fileSlice.isPresent()) {
+          prevCommit = fileSlice.get().getBaseInstantTime();
+          baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
+          logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
+        }
+      }
+    } else {
+      // older table versions.
       TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
       Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
       if (fileSlice.isPresent()) {
         prevCommit = fileSlice.get().getBaseInstantTime();
         baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
         logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
+      } else {
+        // Set the base commit time as the current instantTime for new inserts into log files
+        // Handle log file only case. This is necessary for the concurrent clustering and writer case (e.g., consistent hashing bucket index).
+        // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute
+        prevCommit = getInstantTimeForLogFile(record);
+        // This means there is no base data file, start appending to a new log file
+        LOG.info("New file group from append handle for partition {}", partitionPath);
       }
     }
 
+    deltaWriteStat.setPrevCommit(prevCommit);
+    deltaWriteStat.setBaseFile(baseFile);
+    deltaWriteStat.setLogFiles(logFiles);
+  }
+
+  private void init(HoodieRecord record) {
+    if (!doInit) {
+      return;
+    }
     // Prepare the first write status
     HoodieDeltaWriteStat deltaWriteStat = new HoodieDeltaWriteStat();
     writeStatus.setStat(deltaWriteStat);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
-    averageRecordSize = sizeEstimator.sizeEstimate(record);
-
-    deltaWriteStat.setPrevCommit(prevCommit);
     deltaWriteStat.setPartitionPath(partitionPath);
     deltaWriteStat.setFileId(fileId);
-    deltaWriteStat.setBaseFile(baseFile);
-    deltaWriteStat.setLogFiles(logFiles);
-
+    populateWriteStat(record, deltaWriteStat);
+    averageRecordSize = sizeEstimator.sizeEstimate(record);
     try {
       // Save hoodie partition meta in the partition path
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
@@ -204,12 +228,14 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave();
 
-      this.writer = createLogWriter(getFileInstant(record));
+      String instantTime = config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
+          ? getInstantTimeForLogFile(record) : deltaWriteStat.getPrevCommit();
+      this.writer = createLogWriter(instantTime);
     } catch (Exception e) {
       LOG.error("Error in update task at commit " + instantTime, e);
       writeStatus.setGlobalError(e);
       throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
-          + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePath() + "/" + partitionPath, e);
+          + instantTime + " on storage path " + hoodieTable.getMetaClient().getBasePath() + "/" + partitionPath, e);
     }
     doInit = false;
   }
@@ -217,7 +243,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   /**
    * Returns the instant time to use in the log file name.
    */
-  private String getFileInstant(HoodieRecord<?> record) {
+  private String getInstantTimeForLogFile(HoodieRecord<?> record) {
     if (config.isConsistentHashingEnabled()) {
       // Handle log file only case. This is necessary for the concurrent clustering and writer case (e.g., consistent hashing bucket index).
       // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute
@@ -329,9 +355,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private String makeFilePath(HoodieLogFile logFile) {
-    return partitionPath.length() == 0
-        ? new Path(logFile.getFileName()).toString()
-        : new Path(partitionPath, logFile.getFileName()).toString();
+    return partitionPath.isEmpty()
+        ? new StoragePath(logFile.getFileName()).toString()
+        : new StoragePath(partitionPath, logFile.getFileName()).toString();
   }
 
   private void resetWriteCounts() {
@@ -456,7 +482,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
-      if (recordList.size() > 0) {
+      if (!recordList.isEmpty()) {
         String keyField = config.populateMetaFields()
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
@@ -465,12 +491,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             getUpdatedHeader(header, config), keyField));
       }
 
-      if (appendDeleteBlocks && recordsToDeleteWithPositions.size() > 0) {
+      if (appendDeleteBlocks && !recordsToDeleteWithPositions.isEmpty()) {
         blocks.add(new HoodieDeleteBlock(recordsToDeleteWithPositions, shouldWriteRecordPositions,
             getUpdatedHeader(header, config)));
       }
 
-      if (blocks.size() > 0) {
+      if (!blocks.isEmpty()) {
         AppendResult appendResult = writer.appendBlocks(blocks);
         processAppendResult(appendResult, recordList);
         recordList.clear();
@@ -525,7 +551,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // TODO we can actually deduce file size purely from AppendResult (based on offset and size
       //      of the appended block)
       for (WriteStatus status : statuses) {
-        long logFileSize = HadoopFSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
+        long logFileSize = storage.getPathInfo(
+            new StoragePath(config.getBasePath(), status.getStat().getPath()))
+            .getLength();
         status.getStat().setFileSizeInBytes(logFileSize);
       }
 

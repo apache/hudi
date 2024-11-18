@@ -59,13 +59,13 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
     HoodieTableMetaClient metaClient = table.getMetaClient();
 
     // re-create marker files if any partial timeline server based markers are found
-    HoodieTimeline inflightTimeline = metaClient.getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
+    HoodieTimeline inflightTimeline = metaClient.getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction();
     List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant inflightInstant : commits) {
       // Converts the markers in new format to old format of direct markers
       try {
         convertToDirectMarkers(
-            inflightInstant.getTimestamp(), table, context, config.getMarkersDeleteParallelism());
+            inflightInstant.requestedTime(), table, context, config.getMarkersDeleteParallelism());
       } catch (IOException e) {
         throw new HoodieException("Converting marker files to DIRECT style failed during downgrade", e);
       }

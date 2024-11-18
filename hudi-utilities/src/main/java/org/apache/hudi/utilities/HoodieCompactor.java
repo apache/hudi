@@ -73,7 +73,7 @@ public class HoodieCompactor {
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
       // add default lock config options if MDT is enabled.
-      UtilHelpers.addLockOptions(cfg.basePath, this.props);
+      UtilHelpers.addLockOptions(cfg.basePath, this.metaClient.getBasePath().toUri().getScheme(),  this.props);
     }
   }
 
@@ -261,7 +261,7 @@ public class HoodieCompactor {
         metaClient = HoodieTableMetaClient.reload(metaClient);
         Option<HoodieInstant> firstCompactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
         if (firstCompactionInstant.isPresent()) {
-          cfg.compactionInstantTime = firstCompactionInstant.get().getTimestamp();
+          cfg.compactionInstantTime = firstCompactionInstant.get().requestedTime();
           LOG.info("Found the earliest scheduled compaction instant which will be executed: "
               + cfg.compactionInstantTime);
         } else {

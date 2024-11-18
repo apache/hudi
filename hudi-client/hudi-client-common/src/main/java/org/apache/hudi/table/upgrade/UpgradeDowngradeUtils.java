@@ -22,11 +22,14 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -74,10 +77,12 @@ public class UpgradeDowngradeUtils {
    */
   public static void syncCompactionRequestedFileToAuxiliaryFolder(HoodieTable table) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    HoodieTimeline compactionTimeline = new HoodieActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
+    TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
+    InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
+    HoodieTimeline compactionTimeline = timelineFactory.createActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     compactionTimeline.getInstantsAsStream().forEach(instant -> {
-      String fileName = instant.getFileName();
+      String fileName = instantFileNameGenerator.getFileName(instant);
       try {
         if (!metaClient.getStorage().exists(new StoragePath(metaClient.getMetaAuxiliaryPath(), fileName))) {
           FileIOUtils.copy(metaClient.getStorage(),
@@ -88,5 +93,21 @@ public class UpgradeDowngradeUtils {
         throw new HoodieIOException(e.getMessage(), e);
       }
     });
+  }
+
+  static void updateMetadataTableVersion(HoodieEngineContext context, HoodieTableVersion toVersion, HoodieTableMetaClient dataMetaClient) throws HoodieIOException {
+    try {
+      StoragePath metadataBasePath = new StoragePath(dataMetaClient.getBasePath(), HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
+      if (dataMetaClient.getStorage().exists(metadataBasePath)) {
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+            .setConf(context.getStorageConf().newInstance())
+            .setBasePath(metadataBasePath)
+            .build();
+        metaClient.getTableConfig().setTableVersion(toVersion);
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Error while updating metadata table version", e);
+    }
   }
 }

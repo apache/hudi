@@ -29,9 +29,9 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGeneratorType;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
@@ -123,7 +123,6 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
 
     // Check default values
     assertFalse(conf.isConsistencyCheckEnabled());
-    assertEquals(new Integer(1), HoodieCLI.layoutVersion.getVersion());
     assertEquals(TimeGeneratorType.valueOf("WAIT_TO_ADJUST_SKEW"), timeGeneratorConfig.getTimeGeneratorType());
   }
 
@@ -158,13 +157,14 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   public void testCreateWithSpecifiedValues() {
     // Test create with specified values
     Object result = shell.evaluate(() -> "create --path " + tablePath + " --tableName " + tableName
-            + " --tableType MERGE_ON_READ --archiveLogFolder archive");
+            + " --tableType MERGE_ON_READ --archiveLogFolder archive --tableVersion 6");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
     assertEquals("Metadata for table " + tableName + " loaded", result.toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     assertEquals(metaPath + StoragePath.SEPARATOR + "archive", client.getArchivePath());
     assertEquals(tablePath, client.getBasePath().toString());
     assertEquals(metaPath, client.getMetaPath().toString());
+    assertEquals(HoodieTableVersion.SIX, client.getTableConfig().getTableVersion());
     assertEquals(HoodieTableType.MERGE_ON_READ, client.getTableType());
   }
 
@@ -237,7 +237,8 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     HoodieCLI.conf = storageConf();
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", HoodieTableVersion.current().versionCode(),
+        "org.apache.hudi.common.model.HoodieAvroPayload");
 
     String schemaStr = "{\n"
         + "         \"type\" : \"record\",\n"

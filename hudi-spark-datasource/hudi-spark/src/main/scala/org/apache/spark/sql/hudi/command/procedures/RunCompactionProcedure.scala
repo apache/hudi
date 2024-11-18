@@ -85,16 +85,9 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    if (metaClient.getTableConfig.isMetadataTableAvailable) {
-      if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
-        confs = confs ++ HoodieCLIUtils.getLockOptions(basePath)
-        logInfo("Auto config filesystem lock provider for metadata table")
-      }
-    }
-
     val pendingCompactionInstants = metaClient.getActiveTimeline.getWriteTimeline.getInstants.iterator().asScala
       .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
-      .map(_.getTimestamp)
+      .map(_.requestedTime)
       .toSeq.sortBy(f => f)
 
     var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
@@ -104,6 +97,12 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
+
+      if (metaClient.getTableConfig.isMetadataTableAvailable) {
+        if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+          confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
+        }
+      }
 
       if (operation.isSchedule) {
         val instantTime = client.createNewInstantTime()
@@ -126,15 +125,15 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       }
 
       val compactionInstants = metaClient.reloadActiveTimeline().getInstantsAsStream.iterator().asScala
-        .filter(instant => filteredPendingCompactionInstants.contains(instant.getTimestamp))
+        .filter(instant => filteredPendingCompactionInstants.contains(instant.requestedTime))
         .toSeq
-        .sortBy(p => p.getTimestamp)
+        .sortBy(p => p.requestedTime)
         .reverse
 
       compactionInstants.map(instant =>
-        (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp))
+        (instant, CompactionUtils.getCompactionPlan(metaClient, instant.requestedTime))
       ).map { case (instant, plan) =>
-        Row(instant.getTimestamp, plan.getOperations.size(), instant.getState.name())
+        Row(instant.requestedTime, plan.getOperations.size(), instant.getState.name())
       }
     } finally {
       if (client != null) {

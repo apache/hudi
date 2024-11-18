@@ -115,21 +115,21 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
                                                                    final Reporter reporter) throws IOException {
     HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
-    if (shouldUseFilegroupReader(job)) {
+    if (shouldUseFilegroupReader(job, split)) {
       try {
         if (!(split instanceof FileSplit) || !checkIfHudiTable(split, job)) {
           return super.getRecordReader(split, job, reporter);
         }
         if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-          return new HoodieFileGroupReaderBasedRecordReader((s, j, r) -> {
+          return new HoodieFileGroupReaderBasedRecordReader((s, j) -> {
             try {
-              return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), s, j, r);
+              return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), s, j, reporter);
             } catch (InterruptedException e) {
               throw new RuntimeException(e);
             }
-          }, split, job, reporter);
+          }, split, job);
         } else {
-          return new HoodieFileGroupReaderBasedRecordReader(super::getRecordReader, split, job, reporter);
+          return new HoodieFileGroupReaderBasedRecordReader((s, j) -> super.getRecordReader(s, j, reporter), split, job);
         }
       } catch (final IOException e) {
         throw new RuntimeException("Cannot create a RecordReaderWrapper", e);

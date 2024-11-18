@@ -25,10 +25,10 @@ import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -45,6 +45,7 @@ import org.springframework.shell.Shell;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -71,7 +72,8 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     // Create table and connect
     new TableCommand().createTable(
         tablePath, "test_table", HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", HoodieTableVersion.current().versionCode(),
+        "org.apache.hudi.common.model.HoodieAvroPayload");
   }
 
   /**
@@ -138,7 +140,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
 
     // 103 instant had rollback
     assertFalse(timeline.getCommitAndReplaceTimeline().containsInstant(
-        new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
   }
 
   /**
@@ -183,9 +185,9 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
 
     // 103 and 104 instant had rollback
     assertFalse(timeline.getCommitAndReplaceTimeline().containsInstant(
-        new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "103")));
     assertFalse(timeline.getCommitAndReplaceTimeline().containsInstant(
-        new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "104")));
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "104")));
   }
 
   /**
@@ -224,6 +226,6 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     assertEquals(1, timeline.getSavePointTimeline().countInstants(), "There should 1 instants.");
 
     // after delete, 100 instant should not exist.
-    assertFalse(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepoint1)));
+    assertFalse(timeline.containsInstant(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepoint1)));
   }
 }

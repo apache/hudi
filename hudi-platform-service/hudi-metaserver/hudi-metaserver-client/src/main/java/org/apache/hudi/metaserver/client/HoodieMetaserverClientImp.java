@@ -20,6 +20,7 @@ package org.apache.hudi.metaserver.client;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.RetryHelper;
@@ -38,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -55,6 +57,7 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
   private boolean isLocal;
   private ThriftHoodieMetaserver.Iface client;
   private TTransport transport;
+  private DefaultInstantGenerator instantGenerator = new DefaultInstantGenerator();
 
   public HoodieMetaserverClientImp(HoodieMetaserverConfig config) {
     this.config = config;
@@ -109,7 +112,8 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
   @Override
   public List<HoodieInstant> listInstants(String db, String tb, int commitNum) {
     return exceptionWrapper(() -> this.client.listInstants(db, tb, commitNum).stream()
-        .map(EntityConversions::fromTHoodieInstant)
+        .map(instant -> EntityConversions.fromTHoodieInstant(instant, instantGenerator))
+        .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed())
         .collect(Collectors.toList())).get();
   }
 

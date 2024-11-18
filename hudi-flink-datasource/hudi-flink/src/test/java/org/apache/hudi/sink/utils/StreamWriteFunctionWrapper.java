@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.CollectOutputAdapter;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -147,12 +148,13 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       bootstrapOperator = new BootstrapOperator<>(conf);
-      CollectorOutput<HoodieRecord<?>> output = new CollectorOutput<>();
+      CollectOutputAdapter<HoodieRecord<?>> output = new CollectOutputAdapter<>();
       bootstrapOperator.setup(streamTask, streamConfig, output);
       bootstrapOperator.initializeState(this.stateInitializationContext);
 
       Collector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
       for (HoodieRecord<?> bootstrapRecord : output.getRecords()) {
+        stateInitializationContext.getKeyedStateStore().setCurrentKey(bootstrapRecord.getRecordKey());
         bucketAssignerFunction.processElement(bootstrapRecord, null, collector);
         bucketAssignFunctionContext.setCurrentKey(bootstrapRecord.getRecordKey());
       }
@@ -169,6 +171,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void invoke(I record) throws Exception {
     HoodieRecord<?> hoodieRecord = toHoodieFunction.map((RowData) record);
+    stateInitializationContext.getKeyedStateStore().setCurrentKey(hoodieRecord.getRecordKey());
     ScalaCollector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
     bucketAssignerFunction.processElement(hoodieRecord, null, collector);
     bucketAssignFunctionContext.setCurrentKey(hoodieRecord.getRecordKey());
@@ -196,7 +199,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     bucketAssignerFunction.snapshotState(null);
 
     writeFunction.snapshotState(new MockFunctionSnapshotContext(checkpointId));
-    stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
+    stateInitializationContext.checkpointBegin(checkpointId);
   }
 
   public void endInput() {
@@ -204,7 +207,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void checkpointComplete(long checkpointId) {
-    stateInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
+    stateInitializationContext.checkpointSuccess(checkpointId);
     coordinator.notifyCheckpointComplete(checkpointId);
     this.bucketAssignerFunction.notifyCheckpointComplete(checkpointId);
     if (asyncCompaction) {

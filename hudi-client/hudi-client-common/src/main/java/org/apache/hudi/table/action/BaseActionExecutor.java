@@ -25,10 +25,16 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
@@ -43,7 +49,9 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
   protected final HoodieWriteConfig config;
 
   protected final HoodieTable<T, I, K, O> table;
-
+  protected final InstantGenerator instantGenerator;
+  protected final InstantFileNameParser instantFileNameParser;
+  protected final InstantFileNameGenerator instantFileNameGenerator;
   protected final String instantTime;
 
   public BaseActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
@@ -51,6 +59,9 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     this.storageConf = context.getStorageConf();
     this.config = config;
     this.table = table;
+    this.instantGenerator = table.getInstantGenerator();
+    this.instantFileNameGenerator = table.getInstantFileNameGenerator();
+    this.instantFileNameParser = table.getInstantFileNameParser();
     this.instantTime = instantTime;
   }
 
@@ -62,6 +73,13 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    * @param metadata commit metadata of interest.
    */
   protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String actionType) {
+    // Recreate MDT for insert_overwrite_table operation.
+    if (table.getConfig().isMetadataTableEnabled()
+        && WriteOperationType.INSERT_OVERWRITE_TABLE == metadata.getOperationType()) {
+      HoodieTableMetadataUtil.deleteMetadataTable(table.getMetaClient(), table.getContext(), false);
+    }
+
+    // MDT should be recreated if it has been deleted for insert_overwrite_table operation.
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
@@ -122,6 +140,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+        dropIndexOnRestore();
         metadataWriter.update(metadata, instantTime);
       } catch (Exception e) {
         if (e instanceof HoodieException) {
@@ -129,6 +148,18 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
         } else {
           throw new HoodieException("Failed to apply restore to metadata", e);
         }
+      }
+    }
+  }
+
+  /**
+   * Drop metadata partition, for restore operation for certain metadata partitions.
+   */
+  protected final void dropIndexOnRestore() {
+    for (String partitionPath : table.getMetaClient().getTableConfig().getMetadataPartitions()) {
+      if (MetadataPartitionType.shouldDeletePartitionOnRestore(partitionPath)) {
+        // setting backup to true as this delete is part of restore operation
+        HoodieTableMetadataUtil.deleteMetadataTablePartition(table.getMetaClient(), context, partitionPath, true);
       }
     }
   }

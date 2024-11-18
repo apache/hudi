@@ -35,31 +35,18 @@ import scala.collection.JavaConverters
 class TestHoodieSparkUtils {
 
   @ParameterizedTest
-  @ValueSource(strings = Array("2.4.4", "3.3.0", "3.3.2", "3.4.0", "3.5.0"))
+  @ValueSource(strings = Array("3.3.0", "3.3.2", "3.4.0", "3.5.0"))
   def testSparkVersionCheckers(sparkVersion: String): Unit = {
     val vsMock = new SparkVersionsSupport {
       override def getSparkVersion: String = sparkVersion
     }
 
     sparkVersion match {
-      case "2.4.4" =>
-        assertTrue(vsMock.isSpark2)
-
-        assertFalse(vsMock.isSpark3)
-        assertFalse(vsMock.isSpark3_3)
-        assertFalse(vsMock.isSpark3_4)
-        assertFalse(vsMock.isSpark3_5)
-        assertFalse(vsMock.gteqSpark3_3)
-        assertFalse(vsMock.gteqSpark3_3_2)
-        assertFalse(vsMock.gteqSpark3_4)
-        assertFalse(vsMock.gteqSpark3_5)
-
       case "3.3.0" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_3)
         assertTrue(vsMock.gteqSpark3_3)
 
-        assertFalse(vsMock.isSpark2)
         assertFalse(vsMock.isSpark3_4)
         assertFalse(vsMock.isSpark3_5)
         assertFalse(vsMock.gteqSpark3_3_2)
@@ -73,7 +60,6 @@ class TestHoodieSparkUtils {
         assertTrue(vsMock.gteqSpark3_3_2)
 
 
-        assertFalse(vsMock.isSpark2)
         assertFalse(vsMock.isSpark3_4)
         assertFalse(vsMock.isSpark3_5)
         assertFalse(vsMock.gteqSpark3_4)
@@ -86,7 +72,6 @@ class TestHoodieSparkUtils {
         assertTrue(vsMock.gteqSpark3_3_2)
         assertTrue(vsMock.gteqSpark3_4)
 
-        assertFalse(vsMock.isSpark2)
         assertFalse(vsMock.isSpark3_3)
         assertFalse(vsMock.isSpark3_5)
 
@@ -98,7 +83,6 @@ class TestHoodieSparkUtils {
         assertTrue(vsMock.gteqSpark3_4)
         assertTrue(vsMock.gteqSpark3_5)
 
-        assertFalse(vsMock.isSpark2)
         assertFalse(vsMock.isSpark3_3)
         assertFalse(vsMock.isSpark3_4)
     }
@@ -212,7 +196,7 @@ class TestHoodieSparkUtils {
     } catch {
       case e: Exception =>
         if (HoodieSparkUtils.gteqSpark3_3) {
-          assertTrue(e.getMessage.contains("null value for (non-nullable) string at test_struct_name.nullableInnerStruct[nullableInnerStruct].new_nested_col"))
+          assertTrue(e.getMessage.contains("Field nullableInnerStruct.new_nested_col has no default value and is non-nullable"))
         } else {
           assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
         }

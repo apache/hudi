@@ -30,14 +30,18 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
+
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PARQUET_VECTORIZED_READER_ENABLED
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
@@ -83,8 +87,33 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       supportBatchCalled = true
       supportBatchResult = !isMOR && !isIncremental && !isBootstrap && super.supportBatch(sparkSession, schema)
     }
-    sparkSession.conf.set(PARQUET_VECTORIZED_READER_ENABLED.key, supportBatchResult)
     supportBatchResult
+  }
+
+  //for partition columns that we read from the file, we don't want them to be constant column vectors so we
+  //modify the vector types in this scenario
+  override def vectorTypes(requiredSchema: StructType,
+                           partitionSchema: StructType,
+                           sqlConf: SQLConf): Option[Seq[String]] = {
+    val originalVectorTypes = super.vectorTypes(requiredSchema, partitionSchema, sqlConf)
+    if (mandatoryFields.isEmpty) {
+      originalVectorTypes
+    } else {
+      val regularVectorType = if (!sqlConf.offHeapColumnVectorEnabled) {
+        classOf[OnHeapColumnVector].getName
+      } else {
+        classOf[OffHeapColumnVector].getName
+      }
+      originalVectorTypes.map {
+        o: Seq[String] => o.zipWithIndex.map(a => {
+          if (a._2 >= requiredSchema.length && mandatoryFields.contains(partitionSchema.fields(a._2 - requiredSchema.length).name)) {
+            regularVectorType
+          } else {
+            a._1
+          }
+        })
+      }
+    }
   }
 
   private lazy val internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema] = if (tableSchema.internalSchema.isEmpty) {
@@ -104,22 +133,25 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    //dataSchema is not always right due to spark bugs
-    val partitionColumns = partitionSchema.fieldNames
-    val preCombineField = options.getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key, "")
-    val dataSchema = StructType(tableSchema.structTypeSchema.fields.filter(f => !partitionColumns.contains(f.name)
-      || preCombineField.equals(f.name)))
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
     setSchemaEvolutionConfigs(augmentedStorageConf)
-    val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
+    val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
+
+    // The schema of the partition cols we want to append the value instead of reading from the file
+    val remainingPartitionSchema = StructType(remainingPartitionSchemaArr)
+
+    // index positions of the remainingPartitionSchema fields in partitionSchema
+    val fixedPartitionIndexes = fixedPartitionIndexesArr.toSet
+
+    // schema that we want fg reader to output to us
+    val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
+    val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
     val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportBatchResult,
       spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
-    val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
-    val broadcastedRequestedSchema =  spark.sparkContext.broadcast(requestedAvroSchema)
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
     (file: PartitionedFile) => {
@@ -142,8 +174,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 tableState.tablePath,
                 tableState.latestCommitTimestamp.get,
                 fileSlice,
-                broadcastedDataSchema.value,
-                broadcastedRequestedSchema.value,
+                dataAvroSchema,
+                requestedAvroSchema,
                 internalSchemaOpt,
                 metaClient,
                 props,
@@ -154,18 +186,23 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(
                 reader.getClosableIterator,
-                requiredSchema,
-                partitionSchema,
+                requestedSchema,
+                remainingPartitionSchema,
                 outputSchema,
-                fileSliceMapping.getPartitionValues)
+                fileSliceMapping.getPartitionValues,
+                fixedPartitionIndexes)
 
-            case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+            case _ =>
+              readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+                requiredSchema, partitionSchema, outputSchema, filters, storageConf)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
           buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, parquetFileReader.value, storageConf, fileIndexProps, requiredSchema)
 
-        case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+        case _ =>
+          readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+            requiredSchema, partitionSchema, outputSchema, filters, storageConf)
       }
     }
   }
@@ -177,11 +214,11 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     }
   }
 
-  protected def buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping,
-                                       parquetFileReader: SparkParquetReader,
-                                       storageConf: StorageConfiguration[Configuration],
-                                       props: TypedProperties,
-                                       requiredSchema: StructType): Iterator[InternalRow] = {
+  private def buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping,
+                                     parquetFileReader: SparkParquetReader,
+                                     storageConf: StorageConfiguration[Configuration],
+                                     props: TypedProperties,
+                                     requiredSchema: StructType): Iterator[InternalRow] = {
     val fileSplits = hoodiePartitionCDCFileGroupSliceMapping.getFileSplits().toArray
     val cdcFileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
     props.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, tableName)
@@ -204,13 +241,22 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                         inputSchema: StructType,
                                         partitionSchema: StructType,
                                         to: StructType,
-                                        partitionValues: InternalRow): Iterator[InternalRow] = {
+                                        partitionValues: InternalRow,
+                                        fixedPartitionIndexes: Set[Int]): Iterator[InternalRow] = {
     if (partitionSchema.isEmpty) {
+      //'inputSchema' and 'to' should be the same so the projection will just be an identity func
       projectSchema(iter, inputSchema, to)
     } else {
+      val fixedPartitionValues = if (partitionSchema.length == partitionValues.numFields) {
+        //need to append all of the partition fields
+        partitionValues
+      } else {
+        //some partition fields read from file, some were not
+        getFixedPartitionValues(partitionValues, partitionSchema, fixedPartitionIndexes)
+      }
       val unsafeProjection = generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
       val joinedRow = new JoinedRow()
-      makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(joinedRow(d, partitionValues)))
+      makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(joinedRow(d, fixedPartitionValues)))
     }
   }
 
@@ -221,8 +267,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(d))
   }
 
-  def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
-                                                  mappingFunction: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
+  private def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+                                                          mappingFunction: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
     new Iterator[InternalRow] with Closeable {
       override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext
 
@@ -230,5 +276,44 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
       override def close(): Unit = closeableFileGroupRecordIterator.close()
     }
+  }
+
+  private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkParquetReader, requestedSchema: StructType,
+                           remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchema: StructType,
+                           partitionSchema: StructType, outputSchema: StructType, filters: Seq[Filter],
+                           storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+    if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
+      //none of partition fields are read from the file, so the reader will do the appending for us
+      parquetFileReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+    } else if (remainingPartitionSchema.fields.length == 0) {
+      //we read all of the partition fields from the file
+      val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
+      //we need to modify the partitioned file so that the partition values are empty
+      val modifiedFile = pfileUtils.createPartitionedFile(InternalRow.empty, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+      //and we pass an empty schema for the partition schema
+      parquetFileReader.read(modifiedFile, outputSchema, new StructType(), internalSchemaOpt, filters, storageConf)
+    } else {
+      //need to do an additional projection here. The case in mind is that partition schema is "a,b,c" mandatoryFields is "a,c",
+      //then we will read (dataSchema + a + c) and append b. So the final schema will be (data schema + a + c +b)
+      //but expected output is (data schema + a + b + c)
+      val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
+      val partitionValues = getFixedPartitionValues(file.partitionValues, partitionSchema, fixedPartitionIndexes)
+      val modifiedFile = pfileUtils.createPartitionedFile(partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+      val iter = parquetFileReader.read(modifiedFile, requestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf)
+      projectIter(iter, StructType(requestedSchema.fields ++ remainingPartitionSchema.fields), outputSchema)
+    }
+  }
+
+  private def projectIter(iter: Iterator[Any], from: StructType, to: StructType): Iterator[InternalRow] = {
+    val unsafeProjection = generateUnsafeProjection(from, to)
+    val batchProjection = ColumnarBatchUtils.generateProjection(from, to)
+    iter.map {
+      case ir: InternalRow => unsafeProjection(ir)
+      case cb: ColumnarBatch => batchProjection(cb)
+    }.asInstanceOf[Iterator[InternalRow]]
+  }
+
+  private def getFixedPartitionValues(allPartitionValues: InternalRow, partitionSchema: StructType, fixedPartitionIndexes: Set[Int]): InternalRow = {
+    InternalRow.fromSeq(allPartitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
   }
 }

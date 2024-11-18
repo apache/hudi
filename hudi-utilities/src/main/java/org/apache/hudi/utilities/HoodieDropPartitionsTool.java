@@ -23,10 +23,10 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -62,6 +62,7 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 /**
+ * TODO: [HUDI-8294]
  * A tool with spark-submit to drop Hudi table partitions.
  *
  * <p>
@@ -297,7 +298,7 @@ public class HoodieDropPartitionsTool implements Serializable {
         TimeGenerator timeGenerator = TimeGenerators
             .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(cfg.basePath),
                 HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
-        cfg.instantTime = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
+        cfg.instantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
       }
       LOG.info(cfg.toString());
 
@@ -323,6 +324,7 @@ public class HoodieDropPartitionsTool implements Serializable {
   public void dryRun() {
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
+      client.validateAgainstTableProperties(table.getMetaClient().getTableConfig(), client.getConfig());
       List<String> parts = Arrays.asList(cfg.partitions.split(","));
       Map<String, List<String>> partitionToReplaceFileIds = jsc.parallelize(parts, parts.size()).distinct()
           .mapToPair(partitionPath -> new Tuple2<>(partitionPath, table.getSliceView().getLatestFileSlices(partitionPath).map(fg -> fg.getFileId()).distinct().collect(Collectors.toList())))

@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
@@ -61,6 +61,7 @@ public class GlueTestUtil {
   public static FileSystem fileSystem;
   private static HiveSyncConfig hiveSyncConfig;
   private static Configuration hadoopConf;
+  private static HoodieTableMetaClient metaClient;
 
   public static void setUp() throws IOException {
     basePath = Files.createTempDirectory("glueClientTest" + Instant.now().toEpochMilli()).toUri().toString();
@@ -103,7 +104,7 @@ public class GlueTestUtil {
     if (fileSystem.exists(path)) {
       fileSystem.delete(path, true);
     }
-    HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -111,7 +112,7 @@ public class GlueTestUtil {
 
     String instantTime = "101";
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(false);
-    createMetaFile(basePath, HoodieTimeline.makeCommitFileName(instantTime), commitMetadata);
+    createMetaFile(basePath, new DefaultInstantFileNameGenerator().makeCommitFileName(instantTime), commitMetadata);
   }
 
   public static MessageType getSimpleSchema() {
@@ -129,5 +130,9 @@ public class GlueTestUtil {
 
   public static Column getColumn(String name, String type, String comment) {
     return Column.builder().name(name).type(type).comment(comment).build();
+  }
+
+  public static HoodieTableMetaClient getMetaClient() {
+    return metaClient;
   }
 }

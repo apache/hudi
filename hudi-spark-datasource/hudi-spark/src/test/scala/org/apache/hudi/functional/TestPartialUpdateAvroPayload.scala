@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
-import org.apache.hudi.common.config.HoodieReaderConfig
+import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
@@ -88,6 +88,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.PartialUpdateAvroPayload")
+      .option(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
       .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -121,6 +122,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
       .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.PartialUpdateAvroPayload")
+      .option(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
       .mode(SaveMode.Append)
       .save(basePath)
 

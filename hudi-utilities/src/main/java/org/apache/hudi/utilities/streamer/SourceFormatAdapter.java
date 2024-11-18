@@ -34,6 +34,7 @@ import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
+import org.apache.hudi.utilities.sources.helpers.RowConverter;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import com.google.protobuf.Message;
@@ -122,6 +123,21 @@ public class SourceFormatAdapter implements Closeable {
         errorTableWriter.get().addErrorEvents(javaRDD.filter(x -> x.isRight()).map(x ->
             new ErrorEvent<>(x.right().get(), ErrorEvent.ErrorReason.JSON_AVRO_DESERIALIZATION_FAILURE)));
         return javaRDD.filter(x -> x.isLeft()).map(x -> x.left().get());
+      } else {
+        return rdd.map(convertor::fromJson);
+      }
+    }).orElse(null);
+  }
+
+  private JavaRDD<Row> transformJsonToRowRdd(InputBatch<JavaRDD<String>> inputBatch) {
+    MercifulJsonConverter.clearCache(inputBatch.getSchemaProvider().getSourceSchema().getFullName());
+    RowConverter convertor = new RowConverter(inputBatch.getSchemaProvider().getSourceSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask());
+    return inputBatch.getBatch().map(rdd -> {
+      if (errorTableWriter.isPresent()) {
+        JavaRDD<Either<Row, String>> javaRDD = rdd.map(convertor::fromJsonToRowWithError);
+        errorTableWriter.get().addErrorEvents(javaRDD.filter(Either::isRight).map(x ->
+            new ErrorEvent<>(x.right().get(), ErrorEvent.ErrorReason.JSON_ROW_DESERIALIZATION_FAILURE)));
+        return javaRDD.filter(Either::isLeft).map(x -> x.left().get());
       } else {
         return rdd.map(convertor::fromJson);
       }
@@ -221,14 +237,20 @@ public class SourceFormatAdapter implements Closeable {
         return avroDataInRowFormat(r);
       }
       case JSON: {
-        if (isFieldNameSanitizingEnabled()) {
-          //leverage the json -> avro sanitizing. TODO([HUDI-5829]) Optimize by sanitizing during direct conversion
-          InputBatch<JavaRDD<GenericRecord>> r = fetchNewDataInAvroFormat(lastCkptStr, sourceLimit);
-          return avroDataInRowFormat(r);
-
-        }
         InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
+
+        if (isFieldNameSanitizingEnabled()) {
+          StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
+          JavaRDD<Row> rowRDD = transformJsonToRowRdd(r);
+          if (rowRDD != null) {
+            Dataset<Row> rowDataset = source.getSparkSession().createDataFrame(rowRDD, dataType);
+            return new InputBatch<>(Option.of(rowDataset), r.getCheckpointForNextBatch(), r.getSchemaProvider());
+          } else {
+            return new InputBatch<>(Option.empty(), r.getCheckpointForNextBatch(), r.getSchemaProvider());
+          }
+        }
+
         if (errorTableWriter.isPresent()) {
           // if error table writer is enabled, during spark read `columnNameOfCorruptRecord` option is configured.
           // Any records which spark is unable to read successfully are transferred to the column

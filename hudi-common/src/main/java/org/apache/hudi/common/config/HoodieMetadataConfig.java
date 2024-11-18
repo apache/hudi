@@ -316,6 +316,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
+  public static final ConfigProperty<Boolean> FUNCTIONAL_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".index.functional.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable functional index within the Metadata Table. Note that this config is to enable/disable all functional indexes. "
+          + "To enable or disable each functional index individually, users still need to use CREATE/DROP INDEX SQL commands.");
+
   public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.functional.file.group.count")
       .defaultValue(2)
@@ -332,7 +339,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable aggregating stats for each column at the storage partition level.");
 
@@ -492,6 +499,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean shouldAutoInitialize() {
     return getBoolean(AUTO_INITIALIZE);
+  }
+
+  public boolean isFunctionalIndexEnabled() {
+    return getBooleanOrDefault(FUNCTIONAL_INDEX_ENABLE_PROP);
   }
 
   public int getFunctionalIndexFileGroupCount() {

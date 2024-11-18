@@ -48,7 +48,7 @@ public class UpgradeOrDowngradeCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     String toVersionName = getHoodieTableVersionName(toVersion, true);
-    sparkLauncher.addAppArgs(SparkCommand.UPGRADE.toString(), master, sparkMemory, HoodieCLI.basePath, toVersionName);
+    SparkMain.addAppArgs(sparkLauncher, SparkCommand.UPGRADE, master, sparkMemory, HoodieCLI.basePath, toVersionName);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -71,7 +71,7 @@ public class UpgradeOrDowngradeCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     String toVersionName = getHoodieTableVersionName(toVersion, false);
-    sparkLauncher.addAppArgs(SparkCommand.DOWNGRADE.toString(), master, sparkMemory, HoodieCLI.basePath, toVersionName);
+    SparkMain.addAppArgs(sparkLauncher, SparkCommand.DOWNGRADE, master, sparkMemory, HoodieCLI.basePath, toVersionName);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -89,7 +89,7 @@ public class UpgradeOrDowngradeCommand {
 
     try {
       int versionCode = Integer.parseInt(versionOption);
-      return HoodieTableVersion.versionFromCode(versionCode).name();
+      return HoodieTableVersion.fromVersionCode(versionCode).name();
     } catch (NumberFormatException e) {
       // The version option from the CLI is not a number, returns the original String
       return versionOption;

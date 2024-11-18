@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -46,6 +45,7 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.compact.strategy.PartitionRegexBasedCompactionStrategy;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import com.codahale.metrics.Counter;
@@ -53,12 +53,19 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -174,7 +181,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // create one inflight instance.
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
-      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
+      metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_GENERATOR.createNewInstant(State.REQUESTED,
           HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
       // create one compaction instance before exist inflight instance.
@@ -202,7 +209,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // commit 3 (inflight)
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
-      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
+      metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_GENERATOR.createNewInstant(State.REQUESTED,
           HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
       // check that compaction will not be scheduled
@@ -275,6 +282,64 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         assertEquals(i / 2 + 1, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
         assertEquals(i / 2 + 1, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
       }
+    }
+  }
+
+  private static Stream<Arguments> regexTestParameters() {
+    Object[][] data = new Object[][] {
+        {
+          ".*", Arrays.asList("2015/03/16", "2015/03/17", "2016/03/15")
+        },
+        {
+          "2017/.*/.*", Collections.emptyList()
+        },
+        {
+          "2015/03/.*", Arrays.asList("2015/03/16", "2015/03/17")
+        },
+        {
+          "2016/.*/.*", Arrays.asList("2016/03/15")
+        }
+    };
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  @ParameterizedTest
+  @MethodSource("regexTestParameters")
+  public void testCompactionSpecifyPartition(String regex, List<String> expectedCompactedPartition) throws Exception {
+    HoodieCompactionConfig.Builder builder = HoodieCompactionConfig.newBuilder()
+        .withCompactionStrategy(new PartitionRegexBasedCompactionStrategy()).withMaxNumDeltaCommitsBeforeCompaction(1);
+    builder.withCompactionSpecifyPartitionPathRegex(regex);
+    HoodieWriteConfig config = getConfigBuilder()
+        .withCompactionConfig(builder.build())
+        .withMetricsConfig(getMetricsConfig()).build();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      String newCommitTime = "100";
+      writeClient.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      writeClient.insert(recordsRDD, newCommitTime).collect();
+
+      // update 1 time
+      newCommitTime = "101";
+      updateRecords(config, newCommitTime, records);
+      assertLogFilesNumEqualsTo(config, 1);
+
+      // schedule compaction
+      boolean scheduled = writeClient.scheduleCompactionAtInstant("102", Option.empty());
+      if (expectedCompactedPartition.isEmpty()) {
+        assertFalse(scheduled);
+        return;
+      }
+
+      HoodieWriteMetadata result = compact(writeClient, "102");
+
+      assertTrue(result.getWriteStats().isPresent());
+      List<HoodieWriteStat> stats = (List<HoodieWriteStat>) result.getWriteStats().get();
+      assertEquals(expectedCompactedPartition.size(), stats.size());
+      expectedCompactedPartition.forEach(expectedPartition -> {
+        assertTrue(stats.stream().anyMatch(stat -> stat.getPartitionPath().contentEquals(expectedPartition)));
+      });
     }
   }
 

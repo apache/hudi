@@ -81,7 +81,7 @@ public class HoodieTableConfigUtils {
    */
   public static HoodieTableVersion getTableVersion(HoodieConfig config) {
     return HoodieConfig.contains(HoodieTableConfig.VERSION, config)
-        ? HoodieTableVersion.versionFromCode(config.getInt(HoodieTableConfig.VERSION))
+        ? HoodieTableVersion.fromVersionCode(config.getInt(HoodieTableConfig.VERSION))
         : HoodieTableConfig.VERSION.defaultValue();
   }
 }

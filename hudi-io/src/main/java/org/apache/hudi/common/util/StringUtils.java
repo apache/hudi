@@ -25,6 +25,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -88,6 +89,12 @@ public class StringUtils {
       return null;
     }
     return String.join(separator, list.toArray(new String[0]));
+  }
+
+  public static <K, V> String join(final Map<K, V> map) {
+    return map.entrySet().stream()
+        .map(e -> e.getKey() + "=" + e.getValue())
+        .collect(Collectors.joining(", ", "{", "}"));
   }
 
   public static String toHexString(byte[] bytes) {
@@ -335,28 +342,28 @@ public class StringUtils {
    *
    * @param a         The first string
    * @param b         The second string
-   * @param threshold The maximum byte length
+   * @param byteLengthThreshold The maximum byte length
    */
-  public static String concatenateWithThreshold(String a, String b, int threshold) {
+  public static String concatenateWithThreshold(String a, String b, int byteLengthThreshold) {
     // Convert both strings to byte arrays in UTF-8 encoding
     byte[] bytesA = getUTF8Bytes(a);
     byte[] bytesB = getUTF8Bytes(b);
-    if (bytesB.length > threshold) {
+    if (bytesB.length > byteLengthThreshold) {
       throw new IllegalArgumentException(String.format(
           "Length of the Second string to concatenate exceeds the threshold (%d > %d)",
-          bytesB.length, threshold));
+          bytesB.length, byteLengthThreshold));
     }
 
     // Calculate total bytes
     int totalBytes = bytesA.length + bytesB.length;
 
     // If total bytes is within the threshold, return concatenated string
-    if (totalBytes <= threshold) {
+    if (totalBytes <= byteLengthThreshold) {
       return a + b;
     }
 
     // Calculate the maximum bytes 'a' can take
-    int bestLength = getBestLength(a, threshold - bytesB.length);
+    int bestLength = getBestLength(a, byteLengthThreshold - bytesB.length);
 
     // Concatenate the valid substring of 'a' with 'b'
     return a.substring(0, bestLength) + b;

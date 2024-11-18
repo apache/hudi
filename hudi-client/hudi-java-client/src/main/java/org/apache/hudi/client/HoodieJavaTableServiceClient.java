@@ -49,7 +49,7 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
   protected void validateClusteringCommit(HoodieWriteMetadata<List<WriteStatus>> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {
     if (clusteringMetadata.getWriteStatuses().isEmpty()) {
       HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
-              table.getMetaClient(), ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime, table.getActiveTimeline()).get())
+              table.getMetaClient(), ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime, table.getActiveTimeline(), table.getInstantGenerator()).get())
           .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
               "Unable to read clustering plan for instant: " + clusteringCommitTime));
       throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + clusteringCommitTime
@@ -70,7 +70,7 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
   }
 
   @Override
-  protected HoodieTable<?, List<HoodieRecord<T>>, ?, List<WriteStatus>> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf) {
-    return HoodieJavaTable.create(config, context);
+  protected HoodieTable<?, List<HoodieRecord<T>>, ?, List<WriteStatus>> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf, boolean skipValidation) {
+    return createTableAndValidate(config, HoodieJavaTable::create, skipValidation);
   }
 }

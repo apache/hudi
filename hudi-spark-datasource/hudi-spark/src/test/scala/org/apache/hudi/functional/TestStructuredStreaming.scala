@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
@@ -24,28 +25,27 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
+import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
+import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
 
 /**
  * Basic tests on the spark datasource for structured streaming sink
@@ -145,10 +145,9 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       // wait for spark streaming to process one microbatch
       val currNumCommits = waitTillAtleastNCommits(storage, destPath, 1, 120, 5)
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, destPath, "000"))
-      val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, destPath)
+      val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, destPath)
       // Read RO View
-      val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
-        .load(destPath + "/*/*/*/*")
+      val hoodieROViewDF1 = spark.read.format("org.apache.hudi").load(destPath)
       assert(hoodieROViewDF1.count() == 100)
 
       inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
@@ -163,10 +162,14 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       } else {
         HoodieDataSourceHelpers.latestCommit(storage, destPath)
       }
+      val commitCompletionTime2 = if (tableType == HoodieTableType.MERGE_ON_READ) {
+        DataSourceTestUtils.latestDeltaCommitCompletionTime(storage, destPath)
+      } else {
+        DataSourceTestUtils.latestCommitCompletionTime(storage, destPath)
+      }
       assertEquals(numExpectedCommits, HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").size())
       // Read RO View
-      val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
-        .load(destPath + "/*/*/*/*")
+      val hoodieROViewDF2 = spark.read.format("org.apache.hudi").load(destPath)
       assertEquals(100, hoodieROViewDF2.count()) // still 100, since we only updated
 
       // Read Incremental View
@@ -174,8 +177,8 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       val firstCommit = HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").get(0)
       val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-        .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
+        .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime1)
+        .option(DataSourceReadOptions.END_COMMIT.key, commitCompletionTime1)
         .load(destPath)
       assertEquals(100, hoodieIncViewDF1.count())
       // 100 initial inserts must be pulled
@@ -186,7 +189,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       // pull the latest commit
       val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime1)
+        .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime2)
         .load(destPath)
 
       assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled
@@ -417,8 +420,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 0)
 
       // Validate data after clustering
-      val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
-        .load(destPath + "/*/*/*/*")
+      val hoodieROViewDF2 = spark.read.format("org.apache.hudi").load(destPath)
       assertEquals(200, hoodieROViewDF2.count())
       val countsPerCommit = hoodieROViewDF2.groupBy("_hoodie_commit_time").count().collect()
       assertEquals(2, countsPerCommit.length)
@@ -468,7 +470,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .getTimelineOfActions(CollectionUtils.createSet(instantAction))
       .filterCompletedInstants
       .lastInstant
-      .get.getTimestamp
+      .get.requestedTime
   }
 
   private def streamingWrite(schema: StructType, sourcePath: String, destPath: String, hudiOptions: Map[String, String], checkpoint: String): Unit = {

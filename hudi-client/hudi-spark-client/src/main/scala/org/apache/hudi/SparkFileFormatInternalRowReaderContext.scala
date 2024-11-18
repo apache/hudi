@@ -20,30 +20,33 @@
 package org.apache.hudi
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
+import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator}
+import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
 
 import org.apache.avro.Schema
-import org.apache.avro.generic.IndexedRecord
+import org.apache.avro.Schema.Type
+import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.HoodieInternalRowUtils
-import org.apache.spark.sql.avro.HoodieAvroDeserializer
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.mutable
 
@@ -67,6 +70,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
+  private val serializerMap: mutable.Map[Schema, HoodieAvroSerializer] = mutable.Map()
   private lazy val allFilters = filters ++ requiredFilters
 
   override def supportsParquetRowIndex: Boolean = {
@@ -85,17 +89,8 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
-      val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
-      new CloseableMappingIterator[InternalRow, UnsafeRow](
-        new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-          .asInstanceOf[HoodieSparkParquetReader].getInternalRowIterator(dataSchema, requiredSchema),
-        new java.util.function.Function[InternalRow, UnsafeRow] {
-          override def apply(data: InternalRow): UnsafeRow = {
-            // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
-            //       it to [[UnsafeRow]] holding just raw bytes
-            projection.apply(data)
-          }
-        }).asInstanceOf[ClosableIterator[InternalRow]]
+      new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
+        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(structType).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
@@ -132,6 +127,14 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       sparkAdapter.createAvroDeserializer(schema, structType)
     })
     deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
+  }
+
+  override def convertToAvroRecord(record: InternalRow, schema: Schema): GenericRecord = {
+    val structType = HoodieInternalRowUtils.getCachedSchema(schema)
+    val serializer = serializerMap.getOrElseUpdate(schema, {
+      sparkAdapter.createAvroSerializer(structType, schema, isNullable(schema))
+    })
+    serializer.serialize(record).asInstanceOf[GenericRecord]
   }
 
   /**
@@ -258,6 +261,45 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
           dataFileIterator.close()
         }
       }.asInstanceOf[ClosableIterator[InternalRow]]
+    }
+  }
+
+  override def castValue(value: Comparable[_], newType: Schema.Type): Comparable[_] = {
+    value match {
+      case v: Integer => newType match {
+        case Type.INT => v
+        case Type.LONG => v.longValue()
+        case Type.FLOAT => v.floatValue()
+        case Type.DOUBLE => v.doubleValue()
+        case Type.STRING => UTF8String.fromString(v.toString)
+        case x => throw new UnsupportedOperationException(s"Cast from Integer to $x is not supported")
+      }
+      case v: java.lang.Long => newType match {
+        case Type.LONG => v
+        case Type.FLOAT => v.floatValue()
+        case Type.DOUBLE => v.doubleValue()
+        case Type.STRING => UTF8String.fromString(v.toString)
+        case x => throw new UnsupportedOperationException(s"Cast from Long to $x is not supported")
+      }
+      case v: java.lang.Float => newType match {
+        case Type.FLOAT => v
+        case Type.DOUBLE => v.doubleValue()
+        case Type.STRING => UTF8String.fromString(v.toString)
+        case x => throw new UnsupportedOperationException(s"Cast from Float to $x is not supported")
+      }
+      case v: java.lang.Double => newType match {
+        case Type.DOUBLE => v
+        case Type.STRING => UTF8String.fromString(v.toString)
+        case x => throw new UnsupportedOperationException(s"Cast from Double to $x is not supported")
+      }
+      case v: String => newType match {
+        case Type.STRING => UTF8String.fromString(v)
+        case x => throw new UnsupportedOperationException(s"Cast from String to $x is not supported")
+      }
+      case v: UTF8String => newType match {
+        case Type.STRING => v
+        case x => throw new UnsupportedOperationException(s"Cast from String to $x is not supported")
+      }
     }
   }
 }

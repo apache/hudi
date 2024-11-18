@@ -21,17 +21,19 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, TypedProperties}
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, WriteOperationType}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, RecordMergeMode, TypedProperties}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
+import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -48,6 +50,7 @@ import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -80,6 +83,7 @@ trait ProvidesHoodieConfig extends Logging {
     val overridingOpts = Map[String, String](
       "path" -> hoodieCatalogTable.tableLocation,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
+      DATABASE_NAME.key -> hoodieCatalogTable.table.database,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
       PRECOMBINE_FIELD.key -> preCombineField,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
@@ -191,7 +195,8 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineField = combinedOpts.getOrElse(PRECOMBINE_FIELD.key, "")
+    val preCombineField = combinedOpts.getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key,
+      combinedOpts.getOrElse(PRECOMBINE_FIELD.key, ""))
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
     val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
@@ -273,7 +278,7 @@ trait ProvidesHoodieConfig extends Logging {
     // w/o specifying any value for insert dup policy, legacy configs will be honored. But on all other cases (i.e when neither of the configs is set,
     // or when both configs are set, or when only insert dup policy is set), we honor insert dup policy and ignore the insert mode.
     val useLegacyInsertDropDupFlow = insertModeSet && !insertDupPolicySet
-    val payloadClassName = if (useLegacyInsertDropDupFlow) {
+    val deducedPayloadClassName = if (useLegacyInsertDropDupFlow) {
       deducePayloadClassNameLegacy(operation, tableType, insertMode)
     } else {
       if (insertDupPolicy == FAIL_INSERT_DUP_POLICY) {
@@ -283,8 +288,23 @@ trait ProvidesHoodieConfig extends Logging {
       }
     }
 
+    val (recordMergeMode, recordMergeStrategy) = if (deducedPayloadClassName.equals(classOf[ValidateDuplicateKeyPayload].getCanonicalName)) {
+      (RecordMergeMode.CUSTOM.name(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)
+    } else {
+      (RecordMergeMode.EVENT_TIME_ORDERING.name(), HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID)
+    }
+
+    if (tableConfig.getPayloadClass.equals(classOf[DefaultHoodieRecordPayload].getCanonicalName) &&
+        tableConfig.getRecordMergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING)) {
+      tableConfig.clearValue(HoodieTableConfig.PAYLOAD_CLASS_NAME)
+      tableConfig.clearValue(HoodieTableConfig.RECORD_MERGE_MODE)
+      tableConfig.clearValue(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID)
+    }
+
     val defaultOpts = Map(
-      PAYLOAD_CLASS_NAME.key -> payloadClassName,
+      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> deducedPayloadClassName,
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key -> recordMergeMode,
+      DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key() -> recordMergeStrategy,
       // NOTE: By default insert would try to do deduplication in case that pre-combine column is specified
       //       for the table
       HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(combineBeforeInsert),
@@ -310,6 +330,7 @@ trait ProvidesHoodieConfig extends Logging {
     val overridingOpts = extraOptions ++ Map(
       "path" -> path,
       TABLE_TYPE.key -> tableType,
+      DATABASE_NAME.key -> hoodieCatalogTable.table.database,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
       OPERATION.key -> operation,
       HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
@@ -404,6 +425,7 @@ trait ProvidesHoodieConfig extends Logging {
     val overridingOpts = Map(
       "path" -> hoodieCatalogTable.tableLocation,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
+      DATABASE_NAME.key -> hoodieCatalogTable.table.database,
       TABLE_TYPE.key -> hoodieCatalogTable.tableTypeName,
       OPERATION.key -> DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL,
       PARTITIONS_TO_DELETE.key -> partitionsToDrop,
@@ -453,6 +475,7 @@ trait ProvidesHoodieConfig extends Logging {
       "path" -> path,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
       TBL_NAME.key -> tableConfig.getTableName,
+      DATABASE_NAME.key -> hoodieCatalogTable.table.database,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
       OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
@@ -555,12 +578,11 @@ object ProvidesHoodieConfig {
       val keyGenClass = ReflectionUtils.getClass(tableConfigKeyGeneratorClassName)
       if (classOf[CustomKeyGenerator].equals(keyGenClass)
         || classOf[CustomAvroKeyGenerator].equals(keyGenClass)) {
-        // For custom key generator, we have to take the write config value from
-        // "hoodie.datasource.write.partitionpath.field" which contains the key generator
-        // type, whereas the table config only contains the prtition field names without
-        // key generator types.
+        val partitionFieldWithKeyGenType = HoodieTableConfig.getPartitionFieldPropForKeyGenerator(catalogTable.tableConfig).orElse("")
         if (writeConfigPartitionField.isDefined) {
           writeConfigPartitionField.get
+        } else if (StringUtils.nonEmpty(partitionFieldWithKeyGenType)) {
+          partitionFieldWithKeyGenType
         } else {
           log.warn("Write config \"hoodie.datasource.write.partitionpath.field\" is not set for "
             + "custom key generator. This may fail the write operation.")

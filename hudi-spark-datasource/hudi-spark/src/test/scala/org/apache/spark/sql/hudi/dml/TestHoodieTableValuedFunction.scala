@@ -18,8 +18,12 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
+import org.apache.hudi.metadata.MetadataPartitionType
+import org.apache.hudi.testutils.DataSourceTestUtils
+
 import org.apache.spark.sql.functions.{col, from_json}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -126,7 +130,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | """.stripMargin
           )
 
-          val firstInstant = spark.sql(s"select min(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
+          val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
 
           checkAnswer(
             s"""select id,
@@ -147,6 +151,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | values (1, 'a1_1', 10, 1100), (2, 'a2_2', 20, 1100), (3, 'a3_3', 30, 1100)
                | """.stripMargin
           )
+          val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
           val secondInstant = spark.sql(s"select max(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
 
           checkAnswer(
@@ -157,7 +162,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |from hudi_table_changes(
                |'$identifier',
                |'latest_state',
-               |'$firstInstant')
+               |'$secondCompletionTime')
                |""".stripMargin
           )(
             Seq(1, "a1_1", 10.0, 1100),
@@ -181,8 +186,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | from hudi_table_changes(
                | '$identifier',
                | 'latest_state',
-               | '$firstInstant',
-               | '$secondInstant')
+               | '$secondCompletionTime',
+               | '$secondCompletionTime')
                | """.stripMargin
           )(
             Seq(1, "a1_1", 10.0, 1100),
@@ -599,22 +604,22 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val result2DF = spark.sql(
-            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=1"
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.ALL_PARTITIONS.getRecordType}"
           )
           assert(result2DF.count() == 1)
 
           val result3DF = spark.sql(
-            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=2"
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.FILES.getRecordType}"
           )
           assert(result3DF.count() == 3)
 
           val result4DF = spark.sql(
-            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=3 or type=6"
+            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.COLUMN_STATS.getRecordType}"
           )
-          assert(result4DF.count() == 6)
+          assert(result4DF.count() == 3)
 
           val result5DF = spark.sql(
-            s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=5"
+            s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.RECORD_INDEX.getRecordType}"
           )
           assert(result5DF.count() == 3)
 
@@ -622,6 +627,12 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             s"select type, key, BloomFilterMetadata from hudi_metadata('$identifier') where BloomFilterMetadata is not null"
           )
           assert(result6DF.count() == 0)
+
+          // no partition stats by default
+          val result7DF = spark.sql(
+            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}"
+          )
+          assert(result7DF.count() == 0)
         }
       }
     }
@@ -664,25 +675,25 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val result2DF = spark.sql(
-            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=1"
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.ALL_PARTITIONS.getRecordType}"
           )
           assert(result2DF.count() == 1)
 
           val result3DF = spark.sql(
-            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=2"
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.FILES.getRecordType}"
           )
           assert(result3DF.count() == 3)
 
           val result4DF = spark.sql(
-            s"select * from hudi_metadata('$identifier') where type=3"
+            s"select * from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}"
           )
           assert(result4DF.count() == 3)
-          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=3")(
+          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
             Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000),
             Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000),
             Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000)
           )
-          checkAnswer(s"select key, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=3")(
+          checkAnswer(s"select key, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
             Seq(getPartitionStatsIndexKey("ts=10", "price"), 2000),
             Seq(getPartitionStatsIndexKey("ts=20", "price"), 3000),
             Seq(getPartitionStatsIndexKey("ts=30", "price"), 4000)

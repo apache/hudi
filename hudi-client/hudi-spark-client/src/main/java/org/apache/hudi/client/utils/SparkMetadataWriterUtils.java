@@ -19,245 +19,209 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
+import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.functional.HoodieFunctionalIndex;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.api.java.function.FlatMapGroupsFunction;
+import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.functions;
-import org.apache.spark.sql.sources.BaseRelation;
+import org.apache.spark.sql.types.StructType;
+import org.jetbrains.annotations.NotNull;
 
-import javax.annotation.Nullable;
-
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
+import scala.Function1;
+
+import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_DFS_STREAM_BUFFER_SIZE;
+import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createBloomFilterMetadataRecord;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createColumnStatsRecords;
+import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
  * Utility methods for writing metadata for functional index.
  */
 public class SparkMetadataWriterUtils {
 
-  /**
-   * Configs required to load records from paths as a dataframe
-   */
-  private static final String QUERY_TYPE_CONFIG = "hoodie.datasource.query.type";
-  private static final String QUERY_TYPE_SNAPSHOT = "snapshot";
-  private static final String READ_PATHS_CONFIG = "hoodie.datasource.read.paths";
-  private static final String GLOB_PATHS_CONFIG = "glob.paths";
+  public static Column[] getFunctionalIndexColumns() {
+    return new Column[] {
+        functions.col(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION),
+        functions.col(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_PATH),
+        functions.col(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE)
+    };
+  }
 
-  public static HoodieJavaRDD<HoodieRecord> getFunctionalIndexRecordsUsingColumnStats(
-      HoodieTableMetaClient metaClient,
-      int parallelism,
-      Schema readerSchema,
-      FileSlice fileSlice,
-      String basePath,
-      String partition,
-      HoodieFunctionalIndex<Column, Column> functionalIndex,
-      String columnToIndex,
-      SQLContext sqlContext,
-      HoodieSparkEngineContext sparkEngineContext) {
-    List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>();
-    if (fileSlice.getBaseFile().isPresent()) {
-      HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
-      String filename = baseFile.getFileName();
-      long fileSize = baseFile.getFileSize();
-      Path baseFilePath = filePath(basePath, partition, filename);
-      buildColumnRangeMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, columnRangeMetadataList, fileSize, baseFilePath);
+  public static String[] getFunctionalIndexColumnNames() {
+    return new String[] {
+        HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION,
+        HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_PATH,
+        HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE
+    };
+  }
+
+  @NotNull
+  public static List<Row> getRowsWithFunctionalIndexMetadata(List<Row> rowsForFilePath, String partition, String filePath, long fileSize) {
+    return rowsForFilePath.stream().map(row -> {
+      scala.collection.immutable.Seq<Object> indexMetadata = JavaScalaConverters.convertJavaListToScalaList(Arrays.asList(partition, filePath, fileSize));
+      Row functionalIndexRow = Row.fromSeq(indexMetadata);
+      List<Row> rows = new ArrayList<>(2);
+      rows.add(row);
+      rows.add(functionalIndexRow);
+      scala.collection.immutable.Seq<Row> rowSeq = JavaScalaConverters.convertJavaListToScalaList(rows);
+      return Row.merge(rowSeq);
+    }).collect(Collectors.toList());
+  }
+
+  public static HoodieData<HoodieRecord> getFunctionalIndexRecordsUsingColumnStats(Dataset<Row> dataset,
+                                                                                   HoodieFunctionalIndex<Column, Column> functionalIndex,
+                                                                                   String columnToIndex) {
+    // Aggregate col stats related data for the column to index
+    Dataset<Row> columnRangeMetadataDataset = dataset
+        .select(columnToIndex, SparkMetadataWriterUtils.getFunctionalIndexColumnNames())
+        .groupBy(SparkMetadataWriterUtils.getFunctionalIndexColumns())
+        .agg(functions.count(functions.when(functions.col(columnToIndex).isNull(), 1)).alias("nullCount"),
+            functions.min(columnToIndex).alias("minValue"),
+            functions.max(columnToIndex).alias("maxValue"),
+            functions.count(columnToIndex).alias("valueCount"));
+    // Generate column stat records using the aggregated data
+    return HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD()).flatMap((SerializableFunction<Row, Iterator<HoodieRecord>>)
+        row -> {
+          int baseAggregatePosition = SparkMetadataWriterUtils.getFunctionalIndexColumnNames().length;
+          long nullCount = row.getLong(baseAggregatePosition);
+          Comparable minValue = (Comparable) row.get(baseAggregatePosition + 1);
+          Comparable maxValue = (Comparable) row.get(baseAggregatePosition + 2);
+          long valueCount = row.getLong(baseAggregatePosition + 3);
+
+          String partitionName = row.getString(0);
+          String filePath = row.getString(1);
+          long totalFileSize = row.getLong(2);
+          // Total uncompressed size is harder to get directly. This is just an approximation to maintain the order.
+          long totalUncompressedSize = totalFileSize * 2;
+
+          HoodieColumnRangeMetadata<Comparable> rangeMetadata = HoodieColumnRangeMetadata.create(
+              filePath,
+              columnToIndex,
+              minValue,
+              maxValue,
+              nullCount,
+              valueCount,
+              totalFileSize,
+              totalUncompressedSize
+          );
+          return createColumnStatsRecords(partitionName, Collections.singletonList(rangeMetadata), false, functionalIndex.getIndexName(),
+              COLUMN_STATS.getRecordType()).collect(Collectors.toList()).iterator();
+        });
+  }
+
+  public static HoodieData<HoodieRecord> getFunctionalIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex,
+                                                                                   HoodieWriteConfig metadataWriteConfig, String instantTime) {
+    // Group data using functional index metadata and then create bloom filter on the group
+    Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getFunctionalIndexColumnNames())
+        // row.get(0) refers to partition path value and row.get(1) refers to file name.
+        .groupByKey((MapFunction<Row, Pair>) row -> Pair.of(row.getString(0), row.getString(1)), Encoders.kryo(Pair.class))
+        .flatMapGroups((FlatMapGroupsFunction<Pair, Row, HoodieRecord>)  ((pair, iterator) -> {
+          String partition = pair.getLeft().toString();
+          String fileName = pair.getRight().toString();
+          BloomFilter bloomFilter = HoodieFileWriterFactory.createBloomFilter(metadataWriteConfig);
+          iterator.forEachRemaining(row -> {
+            byte[] key = row.getAs(columnToIndex).toString().getBytes();
+            bloomFilter.add(key);
+          });
+          ByteBuffer bloomByteBuffer = ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString()));
+          HoodieRecord bloomFilterRecord = createBloomFilterMetadataRecord(partition, fileName, instantTime, metadataWriteConfig.getBloomFilterType(), bloomByteBuffer, false);
+          return Collections.singletonList(bloomFilterRecord).iterator();
+        }), Encoders.kryo(HoodieRecord.class));
+    return HoodieJavaRDD.of(bloomFilterRecords.javaRDD());
+  }
+
+  public static List<Row> readRecordsAsRows(StoragePath[] paths, SQLContext sqlContext,
+                                            HoodieTableMetaClient metaClient, Schema schema,
+                                            HoodieWriteConfig dataWriteConfig, boolean isBaseFile) {
+    List<HoodieRecord> records = isBaseFile ? getBaseFileRecords(new HoodieBaseFile(paths[0].toString()), metaClient, schema)
+        : getUnmergedLogFileRecords(Arrays.stream(paths).map(StoragePath::toString).collect(Collectors.toList()), metaClient, schema);
+    return toRows(records, schema, dataWriteConfig, sqlContext, paths[0].toString());
+  }
+
+  private static List<HoodieRecord> getUnmergedLogFileRecords(List<String> logFilePaths, HoodieTableMetaClient metaClient, Schema readerSchema) {
+    List<HoodieRecord> records = new ArrayList<>();
+    HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
+        .withStorage(metaClient.getStorage())
+        .withBasePath(metaClient.getBasePath())
+        .withLogFilePaths(logFilePaths)
+        .withBufferSize(MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
+        .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
+        .withReaderSchema(readerSchema)
+        .withTableMetaClient(metaClient)
+        .withLogRecordScannerCallback(records::add)
+        .build();
+    scanner.scan(false);
+    return records;
+  }
+
+  private static List<HoodieRecord> getBaseFileRecords(HoodieBaseFile baseFile, HoodieTableMetaClient metaClient, Schema readerSchema) {
+    List<HoodieRecord> records = new ArrayList<>();
+    HoodieRecordMerger recordMerger =
+        HoodieRecordUtils.createRecordMerger(metaClient.getBasePath().toString(), EngineType.SPARK, Collections.emptyList(),
+            metaClient.getTableConfig().getRecordMergeStrategyId());
+    try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType())
+        .getFileReader(getReaderConfigs(metaClient.getStorageConf()), baseFile.getStoragePath())) {
+      baseFileReader.getRecordIterator(readerSchema).forEachRemaining((record) -> records.add((HoodieRecord) record));
+      return records;
+    } catch (IOException e) {
+      throw new HoodieIOException("Error reading base file " + baseFile.getFileName(), e);
     }
-    // Handle log files
-    fileSlice.getLogFiles().forEach(logFile -> {
-      String fileName = logFile.getFileName();
-      Path logFilePath = filePath(basePath, partition, fileName);
-      long fileSize = logFile.getFileSize();
-      buildColumnRangeMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, columnRangeMetadataList, fileSize, logFilePath);
-    });
-    return HoodieJavaRDD.of(createColumnStatsRecords(partition, columnRangeMetadataList, false).collect(Collectors.toList()), sparkEngineContext, parallelism);
   }
 
-  public static HoodieJavaRDD<HoodieRecord> getFunctionalIndexRecordsUsingBloomFilter(
-      HoodieTableMetaClient metaClient,
-      int parallelism,
-      Schema readerSchema,
-      FileSlice fileSlice,
-      String basePath,
-      String partition,
-      HoodieFunctionalIndex<Column, Column> functionalIndex,
-      String columnToIndex,
-      SQLContext sqlContext,
-      HoodieSparkEngineContext sparkEngineContext,
-      HoodieWriteConfig metadataWriteConfig) {
-    List<HoodieRecord> bloomFilterMetadataList = new ArrayList<>();
-    if (fileSlice.getBaseFile().isPresent()) {
-      HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
-      String filename = baseFile.getFileName();
-      Path baseFilePath = filePath(basePath, partition, filename);
-      buildBloomFilterMetadata(
-          metaClient,
-          readerSchema,
-          functionalIndex,
-          columnToIndex,
-          sqlContext,
-          bloomFilterMetadataList,
-          baseFilePath,
-          metadataWriteConfig,
-          partition,
-          baseFile.getCommitTime());
-    }
-    // Handle log files
-    fileSlice.getLogFiles().forEach(logFile -> {
-      String fileName = logFile.getFileName();
-      Path logFilePath = filePath(basePath, partition, fileName);
-      buildBloomFilterMetadata(
-          metaClient,
-          readerSchema,
-          functionalIndex,
-          columnToIndex,
-          sqlContext,
-          bloomFilterMetadataList,
-          logFilePath,
-          metadataWriteConfig,
-          partition,
-          logFile.getDeltaCommitTime());
-    });
-    return HoodieJavaRDD.of(bloomFilterMetadataList, sparkEngineContext, parallelism);
-  }
-
-  private static void buildColumnRangeMetadata(
-      HoodieTableMetaClient metaClient,
-      Schema readerSchema,
-      HoodieFunctionalIndex<Column, Column> functionalIndex,
-      String columnToIndex,
-      SQLContext sqlContext,
-      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
-      long fileSize,
-      Path filePath) {
-    Dataset<Row> fileDf = readRecordsAsRow(
-        new StoragePath[] {convertToStoragePath(filePath)},
-        sqlContext,
-        metaClient,
-        readerSchema);
-    Column indexedColumn = functionalIndex.apply(Arrays.asList(fileDf.col(columnToIndex)));
-    fileDf = fileDf.withColumn(columnToIndex, indexedColumn);
-    HoodieColumnRangeMetadata<Comparable> columnRangeMetadata =
-        computeColumnRangeMetadata(fileDf, columnToIndex, filePath.toString(), fileSize);
-    columnRangeMetadataList.add(columnRangeMetadata);
-  }
-
-  private static void buildBloomFilterMetadata(
-      HoodieTableMetaClient metaClient,
-      Schema readerSchema,
-      HoodieFunctionalIndex<Column, Column> functionalIndex,
-      String columnToIndex,
-      SQLContext sqlContext,
-      List<HoodieRecord> bloomFilterMetadataList,
-      Path filePath,
-      HoodieWriteConfig writeConfig,
-      String partitionName,
-      String instantTime) {
-    Dataset<Row> fileDf =
-        readRecordsAsRow(new StoragePath[] {convertToStoragePath(filePath)},
-            sqlContext, metaClient, readerSchema);
-    Column indexedColumn = functionalIndex.apply(Arrays.asList(fileDf.col(columnToIndex)));
-    fileDf = fileDf.withColumn(columnToIndex, indexedColumn);
-    BloomFilter bloomFilter = HoodieFileWriterFactory.createBloomFilter(writeConfig);
-    fileDf.foreach(row -> {
-      byte[] key = row.getAs(columnToIndex).toString().getBytes();
-      bloomFilter.add(key);
-    });
-    ByteBuffer bloomByteBuffer = ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString()));
-    bloomFilterMetadataList.add(createBloomFilterMetadataRecord(
-        partitionName, filePath.toString(), instantTime, writeConfig.getBloomFilterType(),
-        bloomByteBuffer, false));
-  }
-
-  private static Dataset<Row> readRecordsAsRow(StoragePath[] paths, SQLContext sqlContext,
-                                               HoodieTableMetaClient metaClient, Schema schema) {
-    String readPathString =
-        String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
-    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
-    HashMap<String, String> params = new HashMap<>();
-    params.put(QUERY_TYPE_CONFIG, QUERY_TYPE_SNAPSHOT);
-    params.put(READ_PATHS_CONFIG, readPathString);
-    // Building HoodieFileIndex needs this param to decide query path
-    params.put(GLOB_PATHS_CONFIG, globPathString);
-    // Let Hudi relations to fetch the schema from the table itself
-    BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()
-        .createRelation(sqlContext, metaClient, schema, paths, params);
-
-    return dropMetaFields(sqlContext.baseRelationToDataFrame(relation));
-  }
-
-  private static <T extends Comparable<T>> HoodieColumnRangeMetadata<Comparable> computeColumnRangeMetadata(Dataset<Row> rowDataset,
-                                                                                                            String columnName,
-                                                                                                            String filePath,
-                                                                                                            long fileSize) {
-    long totalSize = fileSize;
-    // Get nullCount, minValue, and maxValue
-    Dataset<Row> aggregated = rowDataset.agg(
-        functions.count(functions.when(functions.col(columnName).isNull(), 1)).alias("nullCount"),
-        functions.min(columnName).alias("minValue"),
-        functions.max(columnName).alias("maxValue"),
-        functions.count(columnName).alias("valueCount")
-    );
-
-    Row result = aggregated.collectAsList().get(0);
-    long nullCount = result.getLong(0);
-    @Nullable T minValue = (T) result.get(1);
-    @Nullable T maxValue = (T) result.get(2);
-    long valueCount = result.getLong(3);
-
-    // Total uncompressed size is harder to get directly. This is just an approximation to maintain the order.
-    long totalUncompressedSize = totalSize * 2;
-
-    return HoodieColumnRangeMetadata.<Comparable>create(
-        filePath,
-        columnName,
-        minValue,
-        maxValue,
-        nullCount,
-        valueCount,
-        totalSize,
-        totalUncompressedSize
-    );
-  }
-
-  private static Dataset<Row> dropMetaFields(Dataset<Row> df) {
-    return df.select(
-        Arrays.stream(df.columns())
-            .filter(c -> !HOODIE_META_COLUMNS.contains(c))
-            .map(df::col).toArray(Column[]::new));
-  }
-
-  private static Path filePath(String basePath, String partition, String filename) {
-    if (partition.isEmpty()) {
-      return new Path(basePath, filename);
-    } else {
-      return new Path(basePath, partition + StoragePath.SEPARATOR + filename);
-    }
+  private static List<Row> toRows(List<HoodieRecord> records, Schema schema, HoodieWriteConfig dataWriteConfig, SQLContext sqlContext, String path) {
+    StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    Function1<GenericRecord, Row> converterToRow = AvroConversionUtils.createConverterToRow(schema, structType);
+    List<Row> avroRecords = records.stream()
+        .map(r -> {
+          try {
+            return (GenericRecord) (r.getData() instanceof GenericRecord ? r.getData()
+                : ((HoodieRecordPayload) r.getData()).getInsertValue(schema, dataWriteConfig.getProps()).get());
+          } catch (IOException e) {
+            throw new HoodieIOException("Could not fetch record payload");
+          }
+        })
+        .map(converterToRow::apply)
+        .collect(Collectors.toList());
+    return avroRecords;
   }
 }
