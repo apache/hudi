@@ -1408,7 +1408,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Called after each write, to release any resources used.
    */
   protected void releaseResources(String instantTime) {
-    // do nothing here
+    // stop heartbeat for instant
+    heartbeatClient.stop(instantTime);
   }
 
   @Override
