@@ -93,7 +93,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits,
-      includedInstantTimeSet = Option(includedCommits.map(_.getTimestamp).toSet))
+      includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet))
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -103,7 +103,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       val fileSlices = if (fullTableScan) {
         listLatestFileSlices(Seq(), partitionFilters, dataFilters)
       } else {
-        val latestCommit = includedCommits.last.getTimestamp
+        val latestCommit = includedCommits.last.requestedTime
 
         val fsView = new HoodieTableFileSystemView(
           metaClient, timeline, affectedFilesInCommits)
@@ -126,7 +126,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       val fileSlices = if (fullTableScan) {
         listLatestFileSlices(Seq(), partitionFilters, dataFilters)
       } else {
-        val latestCommit = includedCommits.last.getTimestamp
+        val latestCommit = includedCommits.last.requestedTime
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
@@ -220,7 +220,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val incrementalSpanRecordFilters: Seq[Filter] = {
     val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
 
-    val timeStamps = includedCommits.map(_.getTimestamp).toArray[Any]
+    val timeStamps = includedCommits.map(_.requestedTime).toArray[Any]
     val inFilter = In(HoodieRecord.COMMIT_TIME_METADATA_FIELD, timeStamps)
 
     Seq(isNotNullFilter, inFilter)

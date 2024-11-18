@@ -21,11 +21,19 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
+import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
+import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -44,6 +52,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
@@ -72,20 +81,43 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
     List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
     if (!instants.isEmpty()) {
+      InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
+      CommitMetadataSerDeV2 commitMetadataSerDeV2 = new CommitMetadataSerDeV2();
+      CommitMetadataSerDeV1 commitMetadataSerDeV1 = new CommitMetadataSerDeV1();
+      ActiveTimelineV1 activeTimelineV1 = new ActiveTimelineV1(metaClient);
+      String tmpFilePrefix = "temp_commit_file_for_eight_to_seven_downgrade_";
       context.map(instants, instant -> {
-        if (instant.getFileName().contains(UNDERSCORE)) {
+        String fileName = instantFileNameGenerator.getFileName(instant);
+        if (fileName.contains(UNDERSCORE)) {
           try {
             // Rename the metadata file name from the ${instant_time}_${completion_time}.action[.state] format in version 1.x to the ${instant_time}.action[.state] format in version 0.x.
-            StoragePath fromPath = new StoragePath(metaClient.getMetaPath(), instant.getFileName());
-            StoragePath toPath = new StoragePath(metaClient.getMetaPath(), instant.getFileName().replaceAll(UNDERSCORE + "\\d+", ""));
-            boolean success = metaClient.getStorage().rename(fromPath, toPath);
+            StoragePath fromPath = new StoragePath(metaClient.getMetaPath(), fileName);
+            StoragePath toPath = new StoragePath(metaClient.getMetaPath(), fileName.replaceAll(UNDERSCORE + "\\d+", ""));
+            boolean success = true;
+            if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
+              HoodieCommitMetadata commitMetadata =
+                  commitMetadataSerDeV2.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+              Option<byte[]> data = commitMetadataSerDeV1.serialize(commitMetadata);
+              // Create a temporary file to store the json metadata.
+              String tmpFileName = tmpFilePrefix + UUID.randomUUID() + ".json";
+              StoragePath tmpPath = new StoragePath(metaClient.getTempFolderPath(), tmpFileName);
+              String tmpPathStr = tmpPath.toUri().toString();
+              activeTimelineV1.createFileInMetaPath(tmpPathStr, data, true);
+              // Note. this is a 2 step. First we create the V1 commit file and then delete file. If it fails in the middle, rerunning downgrade will be idempotent.
+              metaClient.getStorage().deleteFile(toPath); // First delete if it was created by previous failed downgrade.
+              success = metaClient.getStorage().rename(tmpPath, toPath);
+              metaClient.getStorage().deleteFile(fromPath);
+            } else {
+              success = metaClient.getStorage().rename(fromPath, toPath);
+            }
             // TODO: We need to rename the action-related part of the metadata file name here when we bring separate action name for clustering/compaction in 1.x as well.
             if (!success) {
               throw new HoodieIOException("an error that occurred while renaming " + fromPath + " to: " + toPath);
             }
             return true;
           } catch (IOException e) {
-            LOG.warn("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
+            LOG.error("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
+            throw new HoodieException(e);
           }
         }
         return false;

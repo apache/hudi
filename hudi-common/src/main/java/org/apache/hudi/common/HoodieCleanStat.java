@@ -186,7 +186,7 @@ public class HoodieCleanStat implements Serializable {
 
     public Builder withEarliestCommitRetained(Option<HoodieInstant> earliestCommitToRetain) {
       this.earliestCommitToRetain =
-          (earliestCommitToRetain.isPresent()) ? earliestCommitToRetain.get().getTimestamp() : "";
+          (earliestCommitToRetain.isPresent()) ? earliestCommitToRetain.get().requestedTime() : "";
       return this;
     }
 

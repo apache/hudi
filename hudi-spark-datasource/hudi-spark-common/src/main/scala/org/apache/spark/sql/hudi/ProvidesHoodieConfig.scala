@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMer
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
+import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
@@ -82,6 +83,7 @@ trait ProvidesHoodieConfig extends Logging {
     val overridingOpts = Map[String, String](
       "path" -> hoodieCatalogTable.tableLocation,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
+      DATABASE_NAME.key -> hoodieCatalogTable.table.database,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
       PRECOMBINE_FIELD.key -> preCombineField,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
@@ -328,6 +330,7 @@ trait ProvidesHoodieConfig extends Logging {
     val overridingOpts = extraOptions ++ Map(
       "path" -> path,
       TABLE_TYPE.key -> tableType,
+      DATABASE_NAME.key -> hoodieCatalogTable.table.database,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
       OPERATION.key -> operation,
       HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
@@ -422,6 +425,7 @@ trait ProvidesHoodieConfig extends Logging {
     val overridingOpts = Map(
       "path" -> hoodieCatalogTable.tableLocation,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
+      DATABASE_NAME.key -> hoodieCatalogTable.table.database,
       TABLE_TYPE.key -> hoodieCatalogTable.tableTypeName,
       OPERATION.key -> DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL,
       PARTITIONS_TO_DELETE.key -> partitionsToDrop,
@@ -471,6 +475,7 @@ trait ProvidesHoodieConfig extends Logging {
       "path" -> path,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
       TBL_NAME.key -> tableConfig.getTableName,
+      DATABASE_NAME.key -> hoodieCatalogTable.table.database,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
       OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,

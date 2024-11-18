@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 /**
  * A scanner used to scan hoodie unmerged log records.
  */
-public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReader {
+public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScanner {
 
   private final LogRecordScannerCallback callback;
 
@@ -98,7 +98,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   /**
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
-  public static class Builder extends AbstractHoodieLogRecordReader.Builder {
+  public static class Builder extends AbstractHoodieLogRecordScanner.Builder {
     private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;

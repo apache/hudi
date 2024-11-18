@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.client.timeline.ActiveActionWithDetails;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -86,7 +86,7 @@ public class LegacyArchivedMetaEntryReader {
    * Reads the avro record for instant and details.
    */
   private Pair<HoodieInstant, Option<byte[]>> readInstant(GenericRecord record) {
-    final String instantTime = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
+    final String instantTime = record.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
     final String stateTransitionTime = (String) record.get(STATE_TRANSITION_TIME);
     final Option<byte[]> details = getMetadataKey(action).map(key -> {
@@ -100,7 +100,8 @@ public class LegacyArchivedMetaEntryReader {
       }
       return null;
     });
-    HoodieInstant instant = new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
+    InstantGenerator instantGenerator = metaClient.getInstantGenerator();
+    HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
         instantTime, stateTransitionTime);
     return Pair.of(instant,details);
   }
@@ -165,13 +166,13 @@ public class LegacyArchivedMetaEntryReader {
           String lastInstantTime = null;
           if (nextInstantAndDetail != null) {
             instantAndDetails.add(nextInstantAndDetail);
-            lastInstantTime = nextInstantAndDetail.getKey().getTimestamp();
+            lastInstantTime = nextInstantAndDetail.getKey().requestedTime();
             nextInstantAndDetail = null;
           }
           while (itr.hasNext()) {
             HoodieRecord<IndexedRecord> record = itr.next();
             Pair<HoodieInstant, Option<byte[]>> instantAndDetail = readInstant((GenericRecord) record.getData());
-            String instantTime = instantAndDetail.getKey().getTimestamp();
+            String instantTime = instantAndDetail.getKey().requestedTime();
             if (filter == null || filter.isInRange(instantTime)) {
               if (lastInstantTime == null) {
                 instantAndDetails.add(instantAndDetail);

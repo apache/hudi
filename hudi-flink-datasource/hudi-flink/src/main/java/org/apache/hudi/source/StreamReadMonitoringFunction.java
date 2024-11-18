@@ -19,6 +19,7 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -214,8 +215,10 @@ public class StreamReadMonitoringFunction
     }
     IncrementalInputSplits.Result result =
         incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled);
-    if (result.isEmpty()) {
+
+    if (result.isEmpty() && StringUtils.isNullOrEmpty(result.getEndInstant())) {
       // no new instants, returns early
+      LOG.warn("Result is empty, do not update issuedInstant.");
       return;
     }
 
@@ -282,4 +285,9 @@ public class StreamReadMonitoringFunction
     readMetrics = new FlinkStreamReadMetrics(metrics);
     readMetrics.registerMetrics();
   }
+
+  public String getIssuedOffset() {
+    return issuedOffset;
+  }
+
 }

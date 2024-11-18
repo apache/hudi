@@ -46,6 +46,7 @@ import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import java.util.concurrent.Executors
 import java.util.stream.Stream
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
@@ -159,23 +160,33 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   def testPartitionStatsWithMultiWriter(tableType: HoodieTableType, useUpsert: Boolean): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
-      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> HoodieFailedWritesCleaningPolicy.LAZY.name,
-      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,
-      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
+      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.LAZY.name,
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> classOf[InProcessLockProvider].getName,
+      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
     )
 
-    doWriteAndValidateDataAndPartitionStats(hudiOpts,
+    val insertRecords: mutable.Buffer[String] =
+      recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
+    doWriteAndValidateDataAndPartitionStats(
+      insertRecords,
+      hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
       validate = false)
 
+    val write1Records: mutable.Buffer[String] = insertRecords
+    val write2Records: mutable.Buffer[String] =
+      if (useUpsert) insertRecords else recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
+
     val executor = Executors.newFixedThreadPool(2)
     implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
-    val function = new Function0[Boolean] {
-      override def apply(): Boolean = {
+    val function = new Function1[mutable.Buffer[String], Boolean] {
+      def apply(records: mutable.Buffer[String]): Boolean = {
         try {
-          doWriteAndValidateDataAndPartitionStats(hudiOpts,
+          doWriteAndValidateDataAndPartitionStats(
+            records,
+            hudiOpts,
             operation = if (useUpsert) UPSERT_OPERATION_OPT_VAL else BULK_INSERT_OPERATION_OPT_VAL,
             saveMode = SaveMode.Append,
             validate = false)
@@ -187,10 +198,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       }
     }
     val f1 = Future[Boolean] {
-      function.apply()
+      function.apply(write1Records)
     }
     val f2 = Future[Boolean] {
-      function.apply()
+      function.apply(write2Records)
     }
 
     Await.result(f1, Duration("5 minutes"))
@@ -310,7 +321,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     doWriteAndValidateDataAndPartitionStats(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(getLatestClusteringInstant.get().getTimestamp.compareTo(lastClusteringInstant.get().getTimestamp) > 0)
+    assertTrue(getLatestClusteringInstant.get().requestedTime.compareTo(lastClusteringInstant.get().requestedTime) > 0)
     assertEquals(getLatestClusteringInstant, metaClient.getActiveTimeline.lastInstant())
     // We are validating rollback of a DT clustering instant here
     rollbackLastInstant(hudiOpts)
@@ -347,9 +358,9 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath))
     // Do a savepoint
     val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts))
-    writeClient.savepoint(firstCompletedInstant.get().getTimestamp, "testUser", "savepoint to first commit")
-    val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
-    assertEquals(firstCompletedInstant.get().getTimestamp, savepointTimestamp)
+    writeClient.savepoint(firstCompletedInstant.get().requestedTime, "testUser", "savepoint to first commit")
+    val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().requestedTime
+    assertEquals(firstCompletedInstant.get().requestedTime, savepointTimestamp)
     // Restore to savepoint
     writeClient.restoreToSavepoint(savepointTimestamp)
     // verify restore completed
@@ -394,11 +405,11 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
       val lastCompactionInstant = compactionTimeline
         .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-          HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+          metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
             .getOperationType == WriteOperationType.COMPACT))
         .lastInstant()
       val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.PARTITION_STATS.getPartitionPath)
-        .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+        .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().requestedTime)))
         .findAny()
       assertTrue(compactionBaseFile.isPresent)
     } finally {
@@ -439,7 +450,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().requestedTime)
       .values()
       .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
         (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
