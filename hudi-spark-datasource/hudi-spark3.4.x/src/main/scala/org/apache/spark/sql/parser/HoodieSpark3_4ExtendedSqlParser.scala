@@ -120,11 +120,7 @@ class HoodieSpark3_4ExtendedSqlParser(session: SparkSession, delegate: ParserInt
 
   private def isHoodieCommand(sqlText: String): Boolean = {
     val normalized = sqlText.toLowerCase(Locale.ROOT).trim().replaceAll("\\s+", " ")
-    normalized.contains("system_time as of") ||
-      normalized.contains("timestamp as of") ||
-      normalized.contains("system_version as of") ||
-      normalized.contains("version as of") ||
-      normalized.contains("create index") ||
+    normalized.contains("create index") ||
       normalized.contains("drop index") ||
       normalized.contains("show indexes") ||
       normalized.contains("refresh index")
