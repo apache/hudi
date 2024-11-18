@@ -1070,12 +1070,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), updatesFromWriteStatuses.union(additionalUpdates));
       }
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
-      WriteOperationType operationType = commitMetadata.getOperationType();
-      if (operationType.isOverwriteOrDeletePartition()) {
-        throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
-      } else {
-        updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, writeStatus);
-      }
+      updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, writeStatus);
       return partitionToRecordMap;
     });
     closeInternal();
@@ -1139,8 +1134,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap, HoodieData<WriteStatus> writeStatus) {
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
-    if (commitMetadata.getOperationType() == WriteOperationType.COMPACT
-        || commitMetadata.getOperationType() == WriteOperationType.CLUSTER) {
+    WriteOperationType operationType = commitMetadata.getOperationType();
+    if (operationType.isOverwriteOrDeletePartition()) {
+      throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
+    } else if (operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.CLUSTER) {
       return;
     }
 
