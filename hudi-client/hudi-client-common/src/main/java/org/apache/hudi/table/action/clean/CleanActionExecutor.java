@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.injection.ErrorInjectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
@@ -55,6 +56,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_CLEANING_AFTER_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_CLEANING_BEFORE_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.MDT_CLEANING;
 
 public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
 
@@ -231,7 +235,19 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       if (!skipLocking) {
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
+      if (config.getBasePath().contains(".hoodie/metadata")) {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(
+            MDT_CLEANING, "Fail metadata table cleaning " + instantTime);
+      } else {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(
+            DT_CLEANING_BEFORE_MDT, "Fail data table cleaning before applying to MDT " + instantTime);
+      }
       writeTableMetadata(metadata, inflightInstant.getTimestamp());
+      if (!config.getBasePath().contains(".hoodie/metadata")) {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(DT_CLEANING_AFTER_MDT,
+            "Fail data table cleaning after applying to MDT, but before completing in DT "
+                + instantTime);
+      }
       table.getActiveTimeline().transitionCleanInflightToComplete(false,
           inflightInstant, TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");

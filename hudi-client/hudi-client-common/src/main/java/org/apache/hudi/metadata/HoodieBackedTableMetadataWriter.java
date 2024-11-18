@@ -62,6 +62,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.injection.ErrorInjectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -104,6 +105,9 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.getIndexInflightInstant;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.MDT_AFTER_COMPACTION;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.MDT_BEFORE_ARCHIVAL;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.MDT_BEFORE_CLEANING;
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -936,6 +940,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }, fileGroupFileIds.size());
   }
 
+  @Override
   public void dropMetadataPartitions(List<String> metadataPartitions) throws IOException {
     for (String partitionPath : metadataPartitions) {
       // first update table config
@@ -1011,6 +1016,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return getEnabledPartitionTypes().stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
   }
 
+  @Override
   public void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos, String instantTime) throws IOException {
     if (indexPartitionInfos.isEmpty()) {
       LOG.warn("No partition to index in the plan");
@@ -1512,6 +1518,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         LOG.info("Latest deltacommit time found is {}, running compaction operations.", latestDeltacommitTime);
         compactIfNecessary(writeClient);
       }
+      ErrorInjectionUtils.maybeInjectErrorByKillingJVM(MDT_BEFORE_ARCHIVAL,
+          "Fail metadata table just before archival " + inFlightInstantTimestamp);
       writeClient.archive();
       LOG.info("All the table services operations on MDT completed successfully");
     } catch (Exception e) {
@@ -1567,6 +1575,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
       writeClient.compact(compactionInstantTime);
+      ErrorInjectionUtils.maybeInjectErrorByKillingJVM(MDT_AFTER_COMPACTION,
+          "Fail metadata table just after compaction " + compactionInstantTime);
     } else if (metadataWriteConfig.isLogCompactionEnabled()) {
       // Schedule and execute log compaction with new instant time.
       final String logCompactionInstantTime = metadataMetaClient.createNewInstantTime(false);
@@ -1593,6 +1603,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // 3 is a value that I think is enough for metadata table reader.
       return;
     }
+
+    ErrorInjectionUtils.maybeInjectErrorByKillingJVM(MDT_BEFORE_CLEANING,
+        "Fail metadata table just before cleaning");
     // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
@@ -1761,6 +1774,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
+  @Override
   public boolean isInitialized() {
     return initialized;
   }

@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.injection.ErrorInjectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
@@ -51,6 +52,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_ROLLBACK_AFTER_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_ROLLBACK_BEFORE_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.MDT_ROLLBACK;
 
 public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
 
@@ -245,6 +250,13 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
 
+      if (config.getBasePath().contains(".hoodie/metadata")) {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(MDT_ROLLBACK, "Fail metadata rollback for " + instantToRollback.toString());
+      } else {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(DT_ROLLBACK_BEFORE_MDT,
+            "Fail data table rollback just before writing to MDT " + instantToRollback.toString());
+      }
+
       // If publish the rollback to the timeline, we first write the rollback metadata to metadata table
       // Then transition the inflight rollback to completed state.
       if (!skipTimelinePublish) {
@@ -253,6 +265,12 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
 
       // Then we delete the inflight instant in the data table timeline if enabled
       deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
+
+      if (!config.getBasePath().contains(".hoodie/metadata")) {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(DT_ROLLBACK_AFTER_MDT,
+            "Fail data table rollback after writing to MDT, before completing in DT "
+                + instantToRollback.toString());
+      }
 
       // If publish the rollback to the timeline, we finally transition the inflight rollback
       // to complete in the data table timeline

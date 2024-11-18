@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.injection.ErrorInjectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
@@ -57,6 +58,10 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_AFTER_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_WRITE_BEFORE_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.MDT_PRE_COMMIT;
 
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
@@ -283,11 +288,23 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * @param writeStatuses Write statuses of the commit
    */
   protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
+    if (config.getBasePath().contains(".hoodie/metadata")) {
+      ErrorInjectionUtils.maybeInjectErrorByKillingJVM(MDT_PRE_COMMIT, "Fail metadata table commit for " + instantTime);
+    } else {
+      ErrorInjectionUtils.maybeInjectErrorByKillingJVM(
+          DT_WRITE_BEFORE_MDT, "Fail before metadata table commit/services " + instantTime);
+    }
+
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         metadataWriter.updateFromWriteStatuses(metadata, writeStatuses, instantTime);
+        if (!config.getBasePath().contains(".hoodie/metadata")) {
+          ErrorInjectionUtils.maybeInjectErrorByKillingJVM(
+              DT_AFTER_MDT,
+              "Fail after metadata table commit/services before data table commit " + instantTime);
+        }
       } catch (Exception e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;

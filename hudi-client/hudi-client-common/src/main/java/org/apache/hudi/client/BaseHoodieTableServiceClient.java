@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.injection.ErrorInjectionUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -88,6 +89,12 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_CLUSTERING_AFTER_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_CLUSTERING_BEFORE_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_COMPACTION_AFTER_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_COMPACTION_BEFORE_MDT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.MDT_CLUSTERING;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.MDT_COMPACTION;
 import static org.apache.hudi.metadata.HoodieTableMetadata.isMetadataTable;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
 
@@ -327,12 +334,26 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     handleWriteErrors(writeStats, TableServiceType.COMPACT);
     final HoodieInstant compactionInstant = HoodieTimeline.getCompactionInflightInstant(compactionCommitTime);
     try {
+      if (!basePath.contains(".hoodie/metadata")) {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(DT_COMPACTION_BEFORE_MDT,
+            "Fail data table compaction before applying to MDT " + compactionCommitTime);
+      }
+
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       writeTableMetadata(table, compactionCommitTime, metadata, context.emptyHoodieData());
       LOG.info("Committing Compaction {}", compactionCommitTime);
       LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
+
+      if (basePath.contains(".hoodie/metadata")) {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(MDT_COMPACTION,
+            "Fail metadata table compaction " + compactionCommitTime);
+      } else {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(DT_COMPACTION_AFTER_MDT,
+            "Fail data table compaction after applying to MDT, but before completing in DT " + compactionCommitTime);
+      }
+
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
@@ -518,6 +539,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime, table.getActiveTimeline()).get();
     try {
+      if (!basePath.contains(".hoodie/metadata")) {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(DT_CLUSTERING_BEFORE_MDT,
+            "Fail data table clustering before applying to MDT " + clusteringCommitTime);
+      }
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
 
       finalizeWrite(table, clusteringCommitTime, writeStats);
@@ -531,6 +556,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
       LOG.info("Committing Clustering {}", clusteringCommitTime);
       LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, metadata);
+
+      if (basePath.contains(".hoodie/metadata")) {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(MDT_CLUSTERING, "Fail metadata table clustering " + clusteringCommitTime);
+      } else {
+        ErrorInjectionUtils.maybeInjectErrorByKillingJVM(DT_CLUSTERING_AFTER_MDT,
+            "Fail data table clustering after applying to MDT, but before completing in DT " + clusteringCommitTime);
+      }
 
       ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(false, clusteringInstant, serializeCommitMetadata(metadata), table.getActiveTimeline());
     } catch (Exception e) {

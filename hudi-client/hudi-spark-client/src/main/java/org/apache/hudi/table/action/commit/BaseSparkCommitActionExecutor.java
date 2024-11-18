@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.injection.ErrorInjectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -76,6 +77,8 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.DT_WRITE_BEFORE_COMMIT;
+import static org.apache.hudi.common.util.injection.ErrorInjectionCategory.MDT_WRITE_BEFORE_COMMIT;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 public abstract class BaseSparkCommitActionExecutor<T> extends
@@ -269,6 +272,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected void updateIndexAndCommitIfNeeded(HoodieData<WriteStatus> writeStatusRDD, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     updateIndex(writeStatusRDD, result);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
+    if (config.getBasePath().contains(".hoodie/metadata")) {
+      ErrorInjectionUtils.maybeInjectErrorByKillingJVM(MDT_WRITE_BEFORE_COMMIT, "Fail metadata table writing before commit " + instantTime);
+    } else {
+      ErrorInjectionUtils.maybeInjectErrorByKillingJVM(DT_WRITE_BEFORE_COMMIT, "Fail data table writing before commit " + instantTime);
+    }
     commitOnAutoCommit(result);
   }
 
