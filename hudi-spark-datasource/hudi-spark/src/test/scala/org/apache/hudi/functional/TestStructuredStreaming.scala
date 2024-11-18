@@ -48,7 +48,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 
 /**
- * Basic tests on the spark datasource for structured streaming sink
+ * Basic tests on the spark datasource for structured streaming sink.
  */
 class TestStructuredStreaming extends HoodieSparkClientTestBase {
   private val log = LoggerFactory.getLogger(getClass)
