@@ -71,12 +71,12 @@ public class TransactionUtils {
     WriteOperationType operationType = thisCommitMetadata.map(HoodieCommitMetadata::getOperationType).orElse(null);
     if (config.needResolveWriteConflict(operationType)) {
       // deal with pendingInstants
-      Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
-
-      ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
       if (reloadActiveTimeline) {
         table.getMetaClient().reloadActiveTimeline();
       }
+      Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
+      ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
+
       Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(
           table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
               completedInstantsDuringCurrentWriteOperation);
@@ -146,12 +146,17 @@ public class TransactionUtils {
         .collect(Collectors.toSet());
   }
 
+  /**
+   * Helper to find the instants that completed during this operation.
+   * @param metaClient client that was created or refreshed within the transaction
+   * @param pendingInstants pending instants to compare
+   * @return instants that completed during this operation
+   */
   public static Stream<HoodieInstant> getCompletedInstantsDuringCurrentWriteOperation(HoodieTableMetaClient metaClient, Set<String> pendingInstants) {
     // deal with pendingInstants
     // some pending instants maybe finished during current write operation,
     // we should check the conflict of those pending operation
     return metaClient
-        .reloadActiveTimeline()
         .getCommitsTimeline()
         .filterCompletedInstants()
         .getInstantsAsStream()
