@@ -22,6 +22,7 @@ package org.apache.spark.sql.hudi.command.index
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, INSERT_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
@@ -31,6 +32,7 @@ import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertTrue
+
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
 
@@ -308,6 +310,50 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         validateSecondaryIndex(basePath, tableName, nonDeletedKeys)
         validateSecondaryIndex(basePath, tableName, finalUpdateKeys)
         dataGen.close()
+      }
+    }
+  }
+
+  test("Test Secondary Index With Overwrite and Delete Partition") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        Seq(
+          WriteOperationType.INSERT_OVERWRITE.value(),
+          WriteOperationType.INSERT_OVERWRITE_TABLE.value(),
+          WriteOperationType.DELETE_PARTITION.value()
+        ).foreach { operationType =>
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          // Step 1: Initial Insertion of Records
+          val dataGen = new HoodieTestDataGenerator()
+          val initialRecords = recordsToStrings(dataGen.generateInserts(getInstantTime, 50, true)).asScala
+          val initialDf = spark.read.json(spark.sparkContext.parallelize(initialRecords.toSeq, 2))
+          val hudiOpts = commonOpts ++ Map(TABLE_TYPE.key -> "MERGE_ON_READ", HoodieWriteConfig.TBL_NAME.key -> tableName)
+          initialDf.write.format("hudi")
+            .options(hudiOpts)
+            .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)
+            .mode(SaveMode.Overwrite)
+            .save(basePath)
+
+          // Step 2: Create table and secondary index on 'rider' column
+          spark.sql(s"CREATE TABLE $tableName USING hudi LOCATION '$basePath'")
+          spark.sql(s"create index idx_rider on $tableName using secondary_index(rider)")
+
+          // Verify initial state of secondary index
+          val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
+          validateSecondaryIndex(basePath, tableName, initialKeys)
+
+          // Step 3: Perform Update Operations on Subset of Records
+          val records = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
+          val df = spark.read.json(spark.sparkContext.parallelize(records.toSeq, 2))
+          // Verify secondary index update fails
+          checkException(() => df.write.format("hudi")
+            .options(hudiOpts)
+            .option(OPERATION.key, operationType)
+            .mode(SaveMode.Append)
+            .save(basePath)) (
+            "Can not perform operation " + WriteOperationType.fromValue(operationType) + " on secondary index")
+        }
       }
     }
   }

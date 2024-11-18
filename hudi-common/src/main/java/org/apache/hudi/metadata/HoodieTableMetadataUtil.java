@@ -172,6 +172,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
   public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
+  public static final String PARTITION_NAME_FUNCTIONAL_INDEX = "func_index";
   public static final String PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX = "func_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";

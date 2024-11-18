@@ -1070,7 +1070,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), updatesFromWriteStatuses.union(additionalUpdates));
       }
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
-      updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, writeStatus);
+      WriteOperationType operationType = commitMetadata.getOperationType();
+      if (operationType.isOverwriteOrDeletePartition()) {
+        throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
+      } else {
+        updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, writeStatus);
+      }
       return partitionToRecordMap;
     });
     closeInternal();
