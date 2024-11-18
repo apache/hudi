@@ -22,7 +22,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -36,11 +35,6 @@ public class InstantGeneratorV1 implements InstantGenerator {
       Pattern.compile("^(\\d+)(\\.\\w+)(\\.\\D+)?$");
 
   private static final String DELIMITER = ".";
-
-  @Override
-  public TimelineLayoutVersion getLayoutVersion() {
-    return TimelineLayoutVersion.LAYOUT_VERSION_1;
-  }
 
   @Override
   public HoodieInstant createNewInstant(HoodieInstant.State state, String action, String timestamp) {
