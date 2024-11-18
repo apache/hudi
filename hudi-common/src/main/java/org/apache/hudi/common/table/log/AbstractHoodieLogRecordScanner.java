@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -108,6 +109,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   protected final String preCombineField;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
+  protected final RecordMergeMode mergeMode;
   private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
@@ -154,16 +156,17 @@ public abstract class AbstractHoodieLogRecordScanner {
   private HoodieTimeline completedInstantsTimeline = null;
   private HoodieTimeline inflightInstantsTimeline = null;
 
-  protected AbstractHoodieLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths,
-                                           Schema readerSchema, String latestInstantTime,
-                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
-                                           boolean withOperationField, boolean forceFullScan,
-                                           Option<String> partitionNameOverride,
-                                           InternalSchema internalSchema,
-                                           Option<String> keyFieldOverride,
-                                           boolean enableOptimizedLogBlocksScan,
-                                           HoodieRecordMerger recordMerger,
-                                           Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+  protected AbstractHoodieLogRecordReader(HoodieStorage storage, String basePath, List<String> logFilePaths,
+                                          Schema readerSchema, String latestInstantTime,
+                                          boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
+                                          boolean withOperationField, boolean forceFullScan,
+                                          Option<String> partitionNameOverride,
+                                          InternalSchema internalSchema,
+                                          Option<String> keyFieldOverride,
+                                          boolean enableOptimizedLogBlocksScan,
+                                          HoodieRecordMerger recordMerger,
+                                          RecordMergeMode mergeMode,
+                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = hoodieTableMetaClientOption.orElseGet(
@@ -182,6 +185,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.tableVersion = tableConfig.getTableVersion();
     this.payloadProps = props;
     this.recordMerger = recordMerger;
+    this.mergeMode = mergeMode;
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
@@ -889,6 +893,10 @@ public abstract class AbstractHoodieLogRecordScanner {
     }
 
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withMergeMode(RecordMergeMode mergeMode) {
       throw new UnsupportedOperationException();
     }
 

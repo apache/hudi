@@ -207,6 +207,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withPartition(operation.getPartitionPath())
         .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
+        .withMergeMode(config.getRecordMergeMode())
         .withTableMetaClient(metaClient)
         .build();
 

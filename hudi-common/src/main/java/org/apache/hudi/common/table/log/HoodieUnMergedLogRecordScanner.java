@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -47,9 +48,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
                                          String latestInstantTime, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, Option<InstantRange> instantRange, InternalSchema internalSchema,
                                          boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
-                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+                                         RecordMergeMode mergeMode, Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange,
-        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger,
+        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger, mergeMode,
          hoodieTableMetaClientOption);
     this.callback = callback;
   }
@@ -112,6 +113,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     private LogRecordScannerCallback callback;
     private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
+    private RecordMergeMode mergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
     private HoodieTableMetaClient hoodieTableMetaClient;
 
     public Builder withStorage(HoodieStorage storage) {
@@ -186,6 +188,12 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     }
 
     @Override
+    public Builder withMergeMode(RecordMergeMode mergeMode) {
+      this.mergeMode = mergeMode;
+      return this;
+    }
+
+    @Override
     public HoodieUnMergedLogRecordScanner.Builder withTableMetaClient(
         HoodieTableMetaClient hoodieTableMetaClient) {
       this.hoodieTableMetaClient = hoodieTableMetaClient;
@@ -198,7 +206,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
 
       return new HoodieUnMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
           latestInstantTime, reverseReader, bufferSize, callback, instantRange,
-          internalSchema, enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient));
+          internalSchema, enableOptimizedLogBlocksScan, recordMerger, mergeMode, Option.ofNullable(hoodieTableMetaClient));
     }
   }
 }

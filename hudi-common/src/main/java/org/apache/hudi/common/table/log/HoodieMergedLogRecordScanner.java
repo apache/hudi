@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -101,11 +102,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
                                          Option<String> partitionName,
                                          InternalSchema internalSchema,
                                          Option<String> keyFieldOverride,
-                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                         boolean enableOptimizedLogBlocksScan,
+                                         HoodieRecordMerger recordMerger,
+                                         RecordMergeMode mergeMode,
                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
-        hoodieTableMetaClientOption);
+        mergeMode, hoodieTableMetaClientOption);
     try {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
@@ -242,17 +245,25 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     String key = newRecord.getRecordKey();
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
-      // Merge and store the combined record
-      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
-          newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
-      // If pre-combine returns existing record, no need to update it
-      if (combinedRecord.getData() != prevRecord.getData()) {
-        HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
+      switch (mergeMode) {
+        case OVERWRITE_WITH_LATEST:
+          records.put(key, newRecord);
+          break;
+        case EVENT_TIME_ORDERING:
+        case CUSTOM:
+        default:
+          // Merge and store the combined record
+          HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
+              newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
+          // If pre-combine returns existing record, no need to update it
+          if (combinedRecord.getData() != prevRecord.getData()) {
+            HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
 
-        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-        //       it since these records will be put into records(Map).
-        records.put(key, latestHoodieRecord.copy());
+            // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+            //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+            //       it since these records will be put into records(Map).
+            records.put(key, latestHoodieRecord.copy());
+          }
       }
     } else {
       // Put the record as is
@@ -342,6 +353,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
+    private RecordMergeMode mergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
     protected HoodieTableMetaClient hoodieTableMetaClient;
 
     @Override
@@ -449,6 +461,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       return this;
     }
 
+    @Override
+    public Builder withMergeMode(RecordMergeMode mergeMode) {
+      this.mergeMode = mergeMode;
+      return this;
+    }
+
     public Builder withKeyFieldOverride(String keyFieldOverride) {
       this.keyFieldOverride = requireNonNull(keyFieldOverride);
       return this;
@@ -478,7 +496,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
           Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
-          Option.ofNullable(hoodieTableMetaClient));
+          mergeMode, Option.ofNullable(hoodieTableMetaClient));
     }
   }
 }
