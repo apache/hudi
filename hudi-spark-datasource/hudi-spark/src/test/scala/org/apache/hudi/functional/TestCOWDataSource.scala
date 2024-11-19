@@ -1948,7 +1948,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
 
     val fileStatuses = storage.listDirectEntries(
-      new StoragePath(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME),
+      new StoragePath(basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME
+        + StoragePath.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME),
       new StoragePathFilter {
         override def accept(path: StoragePath): Boolean = {
           path.getName.endsWith(HoodieTimeline.COMMIT_ACTION)
