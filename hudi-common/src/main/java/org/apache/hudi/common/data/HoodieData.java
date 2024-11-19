@@ -233,7 +233,7 @@ public interface HoodieData<T> extends Serializable {
     private final String basePath;
     private final String instantTime;
 
-    private HoodieDataCacheKey(String basePath, String instantTime) {
+    public HoodieDataCacheKey(String basePath, String instantTime) {
       this.basePath = basePath;
       this.instantTime = instantTime;
     }

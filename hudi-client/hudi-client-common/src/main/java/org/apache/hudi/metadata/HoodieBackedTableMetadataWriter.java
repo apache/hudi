@@ -28,9 +28,11 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -108,6 +110,8 @@ import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWr
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordKeyInfo;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.generateRLIRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForFunctionalIndex;
@@ -602,7 +606,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         this.getClass().getSimpleName(),
         dataMetaClient,
         getEngineType(),
-        indexDefinition);
+        indexDefinition,
+        dataMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime());
 
     // Initialize the file groups - using the same estimation logic as that of record index
     final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, records.count(),
@@ -1061,11 +1066,26 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
       if (dataWriteConfig.isRecordIndexEnabled()) {
-        HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()), commitMetadata);
+        int parallelism = Math.max(1, Math.min(commitMetadata.getWriteStats().size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism()));
+        boolean isSecondaryIndexEnabled = dataMetaClient.getTableConfig().getMetadataPartitions()
+            .stream().anyMatch(partition -> partition.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX));
+        // get info about every record key for impacted file groups so that we can use that to generate RLI and optionally SI records.
+        HoodiePairData<Pair<String, String>, PerFileGroupRecordKeyInfos> recordKeyInfoPairs = convertMetadataToRecordKeyInfo(engineContext, commitMetadata, dataWriteConfig.getMetadataConfig(),
+            dataMetaClient, isSecondaryIndexEnabled, parallelism);
+
+        recordKeyInfoPairs.persist("MEMORY_AND_DISK_SER", engineContext, HoodieData.HoodieDataCacheKey.of(dataWriteConfig.getBasePath(), instantTime));
+        // this will get cleaned up when metadata commit completes.
+        engineContext.putCachedDataIds(HoodieData.HoodieDataCacheKey.of(metadataWriteConfig.getBasePath(), instantTime), recordKeyInfoPairs.getId());
+
+        HoodieData<HoodieRecord> rliRecords = generateRLIRecords(engineContext, recordKeyInfoPairs, commitMetadata.getWriteStats(), instantTime,
+            dataWriteConfig.getWritesFileIdEncoding(), parallelism);
+        partitionToRecordMap.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), rliRecords);
+        HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(rliRecords, commitMetadata);
         partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()).union(additionalUpdates));
+        // prepare secondary index records.
+        updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, recordKeyInfoPairs);
       }
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
-      updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, writeStatus);
       return partitionToRecordMap;
     });
     closeInternal();
@@ -1127,7 +1147,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return getFunctionalIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime);
   }
 
-  private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap, HoodieData<WriteStatus> writeStatus) {
+  private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap,
+                                             HoodiePairData<Pair<String, String>, PerFileGroupRecordKeyInfos> recordKeyInfoPairs) {
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
     if (commitMetadata.getOperationType() == WriteOperationType.COMPACT
@@ -1141,7 +1162,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .forEach(partition -> {
           HoodieData<HoodieRecord> secondaryIndexRecords;
           try {
-            secondaryIndexRecords = getSecondaryIndexUpdates(commitMetadata, partition, writeStatus);
+            secondaryIndexRecords = getSecondaryIndexUpdates(commitMetadata, partition, recordKeyInfoPairs);
           } catch (Exception e) {
             throw new HoodieMetadataException("Failed to get secondary index updates for partition " + partition, e);
           }
@@ -1149,20 +1170,21 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         });
   }
 
-  private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, HoodieData<WriteStatus> writeStatus) throws Exception {
+  private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition,
+                                                            HoodiePairData<Pair<String, String>, PerFileGroupRecordKeyInfos> recordKeyInfoPairs) throws Exception {
     List<Pair<String, Pair<String, List<String>>>> partitionFilePairs = getPartitionFilePairs(commitMetadata);
     // Build a list of keys that need to be removed. A 'delete' record will be emitted into the respective FileGroup of
     // the secondary index partition for each of these keys. For a commit which is deleting/updating a lot of records, this
     // operation is going to be expensive (in CPU, memory and IO)
-    List<String> keysToRemove = new ArrayList<>();
-    writeStatus.collectAsList().forEach(status -> {
-      status.getWrittenRecordDelegates().forEach(recordDelegate -> {
-        // Consider those keys which were either updated or deleted in this commit
-        if (!recordDelegate.getNewLocation().isPresent() || (recordDelegate.getCurrentLocation().isPresent() && recordDelegate.getNewLocation().isPresent())) {
-          keysToRemove.add(recordDelegate.getRecordKey());
-        }
-      });
-    });
+
+    List<String> keysToRemove = recordKeyInfoPairs
+        .map((SerializableFunction<Pair<Pair<String, String>, PerFileGroupRecordKeyInfos>, PerFileGroupRecordKeyInfos>) v1
+            -> v1.getValue())
+        .filter((SerializableFunction<PerFileGroupRecordKeyInfos, Boolean>) v1 -> !v1.isPureInserts())
+        .flatMap((SerializableFunction<PerFileGroupRecordKeyInfos, Iterator<String>>) v1
+            -> v1.getRecordKeyInfoList().stream().filter(recordKeyInfo -> recordKeyInfo.getRecordStatus() != RecordKeyInfo.RecordStatus.INSERT) //filter for records that are not deleted or updated.
+            .map(RecordKeyInfo::getRecordKey).iterator()).collectAsList();
+
     HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
     // Fetch the secondary keys that each of the record keys ('keysToRemove') maps to
     // This is obtained by scanning the entire secondary index partition in the metadata table
