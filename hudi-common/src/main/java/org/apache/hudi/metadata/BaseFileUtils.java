@@ -33,59 +33,83 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.stream.Collectors.toList;
 
 public class BaseFileUtils {
+
+  public static PerFileGroupRecordKeyInfos generateRLIMetadataHoodieRecordsForBaseFile(String basePath,
+                                                                                HoodieWriteStat writeStat,
+                                                                                HoodieStorage storage) throws IOException {
+    return generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, storage, false);
+  }
 
   /**
    * Generates RLI Metadata records for base files.
    * If base file is a added to a new file group, all record keys are treated as inserts.
    * If a base file is added to an existing file group, we read previous base file in addition to the latest base file of interest. Find deleted records and generate RLI Metadata records
    * for the same in addition to new insert records.
-   * @param basePath base path of the table.
+   *
+   * @param basePath  base path of the table.
    * @param writeStat {@link HoodieWriteStat} of interest.
-   * @param writesFileIdEncoding fileID encoding for the table.
-   * @param instantTime instant time of interest.
-   * @param storage instance of {@link HoodieStorage}.
+   * @param storage   instance of {@link HoodieStorage}.
    * @return Iterator of {@link HoodieRecord}s for RLI Metadata partition.
    * @throws IOException
    */
-  public static Iterator<HoodieRecord> generateRLIMetadataHoodieRecordsForBaseFile(String basePath,
-                                                                                   HoodieWriteStat writeStat,
-                                                                                   Integer writesFileIdEncoding,
-                                                                                   String instantTime,
-                                                                                   HoodieStorage storage) throws IOException {
+  public static PerFileGroupRecordKeyInfos generateRLIMetadataHoodieRecordsForBaseFile(String basePath,
+                                                                                               HoodieWriteStat writeStat,
+                                                                                               HoodieStorage storage,
+                                                                                               boolean bothRLIAndSIEnabled) throws IOException {
     String partition = writeStat.getPartitionPath();
     String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
     String previousFileName = writeStat.getPrevBaseFile();
     String fileId = FSUtils.getFileId(latestFileName);
     Set<String> recordKeysFromLatestBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, latestFileName);
-    if (writeStat.getNumDeletes() == 0) { // if there are no deletes, reading only the file added as part of current commit metadata would suffice.
+    if (writeStat.getNumDeletes() == 0 && !bothRLIAndSIEnabled) { // if there are no deletes, reading only the file added as part of current commit metadata would suffice.
       // this means that both inserts and updates from latest base file might result in RLI records.
-      return new ArrayList(recordKeysFromLatestBaseFile).stream().map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate((String) recordKey, partition, fileId,
-          instantTime, writesFileIdEncoding)).iterator();
+      return new PerFileGroupRecordKeyInfos(true, (List<RecordKeyInfo>) new ArrayList(recordKeysFromLatestBaseFile).stream()
+          .map(recordKey -> new RecordKeyInfo((String) recordKey, RecordKeyInfo.RecordStatus.INSERT, partition, fileId)).collect(toList()));
     } else {
-      // read from previous base file and find difference to also generate delete records.
-      // we will return new inserts and deletes from this code block
-      Set<String> recordKeysFromPreviousBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, previousFileName);
-      List<HoodieRecord> toReturn = recordKeysFromPreviousBaseFile.stream()
-          .filter(recordKey -> {
-            // deleted record
-            return !recordKeysFromLatestBaseFile.contains(recordKey);
-          }).map(recordKey -> HoodieMetadataPayload.createRecordIndexDelete(recordKey)).collect(toList());
+      if (previousFileName == null) {
+        // all records are inserts
+        return new PerFileGroupRecordKeyInfos(true, (List<RecordKeyInfo>) new ArrayList(recordKeysFromLatestBaseFile).stream()
+            .map(recordKey -> new RecordKeyInfo((String) recordKey, RecordKeyInfo.RecordStatus.INSERT, partition, fileId)).collect(toList()));
+      } else {
+        // read from previous base file and find difference to also generate delete records.
+        // we will return new inserts and deletes from this code block
+        Set<String> recordKeysFromPreviousBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, previousFileName);
+        AtomicBoolean pureInserts = new AtomicBoolean(true);
+        List<RecordKeyInfo> toReturn = recordKeysFromPreviousBaseFile.stream()
+            .filter(recordKey -> {
+              // deleted record
+              return !recordKeysFromLatestBaseFile.contains(recordKey);
+            }).map(recordKey -> {
+              pureInserts.set(false);
+              return new RecordKeyInfo(recordKey, RecordKeyInfo.RecordStatus.DELETE, partition, fileId);
+            }).collect(toList());
 
-      toReturn.addAll(recordKeysFromLatestBaseFile.stream()
-          .filter(recordKey -> {
-            // new inserts
-            return !recordKeysFromPreviousBaseFile.contains(recordKey);
-          }).map(recordKey ->
-              HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
-                  instantTime, writesFileIdEncoding)).collect(toList()));
-      return toReturn.iterator();
+        if (!bothRLIAndSIEnabled) {
+          // when only RLI is enabled, we only care about new inserts
+          toReturn.addAll(recordKeysFromLatestBaseFile.stream()
+              .filter(recordKey -> {
+                // new inserts
+                return !recordKeysFromPreviousBaseFile.contains(recordKey);
+              }).map(recordKey -> new RecordKeyInfo((String) recordKey, RecordKeyInfo.RecordStatus.INSERT, partition, fileId)).collect(toList()));
+        } else {
+          // we need info about both inserts and updates if both rli and si are enabled
+          toReturn.addAll(recordKeysFromLatestBaseFile.stream().map(recordKey -> {
+            if (recordKeysFromPreviousBaseFile.contains(recordKey)) {
+              pureInserts.set(false); // updates
+            }
+            return new RecordKeyInfo((String) recordKey,
+                !recordKeysFromPreviousBaseFile.contains(recordKey) ? RecordKeyInfo.RecordStatus.INSERT : RecordKeyInfo.RecordStatus.UPDATE, partition, fileId);
+          }).collect(toList()));
+        }
+        return new PerFileGroupRecordKeyInfos(pureInserts.get(), toReturn);
+      }
     }
   }
 
@@ -94,4 +118,5 @@ public class BaseFileUtils {
     FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET);
     return fileFormatUtils.readRowKeys(storage, dataFilePath);
   }
+
 }

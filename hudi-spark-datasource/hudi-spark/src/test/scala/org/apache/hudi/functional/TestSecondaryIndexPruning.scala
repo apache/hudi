@@ -1101,13 +1101,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false))
 
       // update the secondary index by delete.
-      spark.sql(s"delete from $tableName where record_key_col = 'row3'")
+      spark.sql(s"delete from $tableName where record_key_col = 'row1'")
       confirmLastCommitType(ActionType.replacecommit)
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false),
         Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
-        Seq(s"fgh${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
-        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+        Seq(s"fgh${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false)
       )
     }
   }

@@ -22,7 +22,6 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -32,7 +31,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.BaseFileUtils;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.RecordKeyInfo;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -89,12 +88,12 @@ public class TestRLIRecordGeneration extends HoodieClientTestBase {
             fileIdToFileNameMapping1.put(writeStatFileId, writeStatus.getStat().getPath().substring(writeStatus.getStat().getPath().lastIndexOf("/") + 1));
           }
 
-          Iterator<HoodieRecord> rliRecordsItr = BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
-              writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage());
+          Iterator<RecordKeyInfo> rliRecordsItr = BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
+              writeStatus.getStat(), metaClient.getStorage()).getRecordKeyInfoList().iterator();
           while (rliRecordsItr.hasNext()) {
-            HoodieRecord rliRecord = rliRecordsItr.next();
+            RecordKeyInfo rliRecord = rliRecordsItr.next();
             String key = rliRecord.getRecordKey();
-            String partition = ((HoodieMetadataPayload) rliRecord.getData()).getRecordGlobalLocation().getPartitionPath();
+            String partition = rliRecord.getPartition();
             recordKeyToPartitionMapping1.put(key, partition);
           }
         } catch (IOException e) {
@@ -154,12 +153,10 @@ public class TestRLIRecordGeneration extends HoodieClientTestBase {
 
         compactionWriteStats.forEach(writeStat -> {
           try {
-            Iterator<HoodieRecord> rliRecordsItr = BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStat,
-                writeConfig.getWritesFileIdEncoding(), finalCommitTime3, metaClient.getStorage());
-            while (rliRecordsItr.hasNext()) {
-              HoodieRecord rliRecord = rliRecordsItr.next();
+            for (RecordKeyInfo rliRecord : BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStat,
+                metaClient.getStorage()).getRecordKeyInfoList()) {
               String key = rliRecord.getRecordKey();
-              if (rliRecord.getData() instanceof EmptyHoodieRecordPayload) {
+              if (rliRecord.getRecordStatus() == RecordKeyInfo.RecordStatus.DELETE) {
                 actualRLIDeletes.add(key);
               }
             }
@@ -188,12 +185,13 @@ public class TestRLIRecordGeneration extends HoodieClientTestBase {
         String writeStatFileId = writeStatus.getFileId();
         assertEquals(writeStatus.getStat().getPrevBaseFile(), fileIdToFileNameMapping.get(writeStatFileId));
 
-        Iterator<HoodieRecord> rliRecordsItr = BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStatus.getStat(),
-            writeConfig.getWritesFileIdEncoding(), commitTime, metaClient.getStorage());
+        Iterator<RecordKeyInfo> rliRecordsItr =
+            BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStatus.getStat(), metaClient.getStorage())
+                .getRecordKeyInfoList().iterator();
         while (rliRecordsItr.hasNext()) {
-          HoodieRecord rliRecord = rliRecordsItr.next();
+          RecordKeyInfo rliRecord = rliRecordsItr.next();
           String key = rliRecord.getRecordKey();
-          if (rliRecord.getData() instanceof EmptyHoodieRecordPayload) {
+          if (rliRecord.getRecordStatus() == RecordKeyInfo.RecordStatus.DELETE) {
             actualRLIDeletes.add(key);
           } else {
             actualRLIInserts.add(key);
