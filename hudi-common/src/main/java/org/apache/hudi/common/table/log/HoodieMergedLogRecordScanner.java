@@ -445,7 +445,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
 
     @Override
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
-      this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger);
+      this.recordMerger = recordMerger;
       return this;
     }
 
