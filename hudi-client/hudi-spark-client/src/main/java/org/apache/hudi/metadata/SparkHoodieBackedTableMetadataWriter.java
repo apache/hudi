@@ -191,18 +191,18 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
           String partition = entry.getKey();
           Pair<String, Long> filePathSizePair = entry.getValue();
           String filePath = filePathSizePair.getKey();
+          String relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(filePath));
           long fileSize = filePathSizePair.getValue();
           List<Row> rowsForFilePath = readRecordsAsRows(new StoragePath[] {new StoragePath(filePath)}, sqlContext, metaClient, readerSchema, dataWriteConfig,
               FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1))));
-          //FIXME-vc: this may OOM. since its not done lazily.
-          List<Row> rowsWithIndexMetadata = SparkMetadataWriterUtils.getRowsWithFunctionalIndexMetadata(rowsForFilePath, partition, filePath, fileSize);
+          List<Row> rowsWithIndexMetadata = SparkMetadataWriterUtils.getRowsWithFunctionalIndexMetadata(rowsForFilePath, partition, relativeFilePath, fileSize);
           return rowsWithIndexMetadata.iterator();
         });
 
     // Generate dataset with functional index metadata
     StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema)
         .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION, DataTypes.StringType, false, Metadata.empty()))
-        .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_PATH, DataTypes.StringType, false, Metadata.empty()))
+        .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_RELATIVE_FILE_PATH, DataTypes.StringType, false, Metadata.empty()))
         .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE, DataTypes.LongType, false, Metadata.empty()));
     Dataset<Row> rowDataset = sparkEngineContext.getSqlContext().createDataFrame(HoodieJavaRDD.getJavaRDD(rowData).rdd(), structType);
 

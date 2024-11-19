@@ -1289,8 +1289,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |    hoodie.metadata.enable = 'true',
            |    hoodie.metadata.record.index.enable = 'true',
            |    hoodie.datasource.write.recordkey.field = 'id',
-           |    hoodie.enable.data.skipping = 'true',
-           |    hoodie.metadata.record.index.enable='true'
+           |    hoodie.enable.data.skipping = 'true'
            | )
            | PARTITIONED BY (city, state)
            | location '$basePath'
