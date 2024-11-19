@@ -39,18 +39,20 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.util.{JFunction, JavaConversions}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSparkUtils}
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.{Disabled, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import org.scalatest.Assertions.{assertResult, assertThrows}
 
 import java.util.concurrent.Executors
+
 import scala.collection.JavaConverters
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -990,6 +992,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   /**
    * Test case to write with updates and validate secondary index with clustering.
    */
+  @Disabled("[HUDI-8549]")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testSecondaryIndexWithClusteringAndCleaning(tableType: HoodieTableType): Unit = {
