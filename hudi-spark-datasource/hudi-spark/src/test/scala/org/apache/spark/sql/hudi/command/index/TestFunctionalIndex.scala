@@ -56,7 +56,6 @@ import org.scalatest.Ignore
 import java.util.stream.Collectors
 import scala.collection.JavaConverters
 
-@Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
@@ -686,10 +685,8 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                  | $partitionByClause
                  | location '$basePath'
        """.stripMargin)
-            if (tableType == "mor") {
-              spark.sql("set hoodie.compact.inline=true")
-              spark.sql("set hoodie.compact.inline.max.delta.commits=2")
-            }
+
+            setCompactionConfigs(tableType)
             if (!isPartitioned) {
               // setting this for non-partitioned table to ensure multiple file groups are created
               spark.sql(s"set ${HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()}=0")
@@ -757,6 +754,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           val tableName = generateTableName + s"_init_$tableType$isPartitioned"
           val partitionByClause = if (isPartitioned) "partitioned by(price)" else ""
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          setCompactionConfigs(tableType)
           spark.sql(
             s"""
                |create table $tableName (
@@ -774,7 +772,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                | location '$basePath'
        """.stripMargin)
 
-          writeRecordsAndValidateFunctionalIndex(tableName, basePath, "update", isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = false)
+          writeRecordsAndValidateFunctionalIndex(tableName, basePath, isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = false)
         }
       }
     }
@@ -788,6 +786,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           val tableName = generateTableName + s"_rollback_$tableType$isPartitioned"
           val partitionByClause = if (isPartitioned) "partitioned by(price)" else ""
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          setCompactionConfigs(tableType)
           spark.sql(
             s"""
                |create table $tableName (
@@ -805,9 +804,16 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                | location '$basePath'
        """.stripMargin)
 
-          writeRecordsAndValidateFunctionalIndex(tableName, basePath, "update", isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = true)
+          writeRecordsAndValidateFunctionalIndex(tableName, basePath, isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = true)
         }
       }
+    }
+  }
+
+  private def setCompactionConfigs(tableType: String): Unit = {
+    spark.sql(s"set hoodie.compact.inline= ${if (tableType == "mor") "true" else "false"}")
+    if (tableType == "mor") {
+      spark.sql("set hoodie.compact.inline.max.delta.commits=2")
     }
   }
 
@@ -816,12 +822,10 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
    */
   private def writeRecordsAndValidateFunctionalIndex(tableName: String,
                                                      basePath: String,
-                                                     operationType: String,
                                                      isDelete: Boolean,
                                                      shouldCompact: Boolean,
                                                      shouldCluster: Boolean,
-                                                     shouldRollback: Boolean,
-                                                     shouldValidate: Boolean = true): Unit = {
+                                                     shouldRollback: Boolean): Unit = {
     // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2020-09-26
     spark.sql(s"insert into $tableName values(1, 'a1', 1601098924, 10)")
     // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2021-09-26

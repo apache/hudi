@@ -95,6 +95,14 @@ public class SparkMetadataWriterUtils {
     };
   }
 
+  public static String[] getFunctionalIndexColumnNames2() {
+    return new String[] {
+        HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION,
+        "_hoodie_file_name",
+        HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE
+    };
+  }
+
   @NotNull
   public static List<Row> getRowsWithFunctionalIndexMetadata(List<Row> rowsForFilePath, String partition, String filePath, long fileSize) {
     return rowsForFilePath.stream().map(row -> {
@@ -151,10 +159,16 @@ public class SparkMetadataWriterUtils {
 
   public static HoodieData<HoodieRecord> getFunctionalIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex,
                                                                                    HoodieWriteConfig metadataWriteConfig, String instantTime) {
+
+    dataset.cache();
+    Object rows1 = dataset.collect();
+    Object rows2 = dataset.select(columnToIndex, SparkMetadataWriterUtils.getFunctionalIndexColumnNames2()).collect();
+
     // Group data using functional index metadata and then create bloom filter on the group
-    Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getFunctionalIndexColumnNames())
-        // row.get(0) refers to partition path value and row.get(1) refers to file name.
-        .groupByKey((MapFunction<Row, Pair>) row -> Pair.of(row.getString(0), row.getString(1)), Encoders.kryo(Pair.class))
+    Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getFunctionalIndexColumnNames2())
+        // row.get(1) refers to partition path value and row.get(2) refers to file name.
+        // FIXME-vc: is there a concern on memmory usage here? reduceByKey vs groupByKey
+        .groupByKey((MapFunction<Row, Pair>) row -> Pair.of(row.getString(1), row.getString(2)), Encoders.kryo(Pair.class))
         .flatMapGroups((FlatMapGroupsFunction<Pair, Row, HoodieRecord>)  ((pair, iterator) -> {
           String partition = pair.getLeft().toString();
           String fileName = pair.getRight().toString();

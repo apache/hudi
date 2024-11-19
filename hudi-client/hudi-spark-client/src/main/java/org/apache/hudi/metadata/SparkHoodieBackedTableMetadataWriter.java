@@ -194,6 +194,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
           long fileSize = filePathSizePair.getValue();
           List<Row> rowsForFilePath = readRecordsAsRows(new StoragePath[] {new StoragePath(filePath)}, sqlContext, metaClient, readerSchema, dataWriteConfig,
               FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1))));
+          //FIXME-vc: this may OOM. since its not done lazily.
           List<Row> rowsWithIndexMetadata = SparkMetadataWriterUtils.getRowsWithFunctionalIndexMetadata(rowsForFilePath, partition, filePath, fileSize);
           return rowsWithIndexMetadata.iterator();
         });
