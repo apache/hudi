@@ -256,7 +256,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
       if (validateColumnStatsManually) {
         // TODO(HUDI-4557): support validation of column stats of avro log files
-        // Collect Column Stats manually (reading individual Parquet files)
+        // Collect Column Stats manually (reading individual Parquet files).
         val manualColStatsTableDF =
         buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
