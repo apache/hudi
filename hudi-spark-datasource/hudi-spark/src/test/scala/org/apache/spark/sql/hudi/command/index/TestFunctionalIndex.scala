@@ -249,8 +249,9 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
           assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
 
-          // Verify one can create more than one functional index
-          createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(func='identity')"
+          // Verify one can create more than one functional index. When function is not provided,
+          // default identity function is used
+          createIndexSql = s"create index name_lower on $tableName using column_stats(ts)"
           spark.sql(createIndexSql)
           metaClient = createMetaClient(spark, basePath)
           functionalIndexMetadata = metaClient.getIndexMetadata.get()

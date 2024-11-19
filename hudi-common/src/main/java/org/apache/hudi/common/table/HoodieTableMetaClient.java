@@ -90,6 +90,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.index.functional.HoodieFunctionalIndex.SPARK_IDENTITY;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
@@ -218,7 +219,7 @@ public class HoodieTableMetaClient implements Serializable {
         "Index metadata is already present");
     String indexMetaPath = getIndexDefinitionPath();
     List<String> columnNames = new ArrayList<>(columns.keySet());
-    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, indexType, options.get("func"), columnNames, options);
+    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, indexType, options.getOrDefault("func", SPARK_IDENTITY), columnNames, options);
     if (indexMetadataOpt.isPresent()) {
       indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
     } else {
