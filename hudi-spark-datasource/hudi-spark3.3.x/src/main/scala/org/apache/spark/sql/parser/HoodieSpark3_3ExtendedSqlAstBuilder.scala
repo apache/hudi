@@ -32,10 +32,10 @@ import scala.collection.JavaConverters._
 
 /**
  * The AstBuilder for HoodieSqlParser to parser the AST tree to Logical Plan.
- * Here we only do the parser for the extended sql syntax. e.g MergeInto. For
+ * Here we only do the parser for the extended sql syntax. e.g Create Index. For
  * other sql syntax we use the delegate sql parser which is the SparkSqlParser.
  */
-class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterface)
+class HoodieSpark3_3ExtendedSqlAstBuilder()
   extends HoodieSqlBaseBaseVisitor[AnyRef] with Logging {
 
   protected def typedVisit[T](ctx: ParseTree): T = {

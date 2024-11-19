@@ -39,7 +39,7 @@ class HoodieSpark3_3ExtendedSqlParser(session: SparkSession, delegate: ParserInt
   extends HoodieExtendedParserInterface with Logging {
 
   private lazy val conf = session.sqlContext.conf
-  private lazy val builder = new HoodieSpark3_3ExtendedSqlAstBuilder(conf, delegate)
+  private lazy val builder = new HoodieSpark3_3ExtendedSqlAstBuilder()
   private val substitutor = new VariableSubstitution
 
   override def parsePlan(sqlText: String): LogicalPlan = {
