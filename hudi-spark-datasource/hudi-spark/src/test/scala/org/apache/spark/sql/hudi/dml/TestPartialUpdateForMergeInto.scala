@@ -45,33 +45,49 @@ import scala.collection.JavaConverters._
 class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test partial update with COW and Avro log format") {
-    testPartialUpdate("cow", "avro")
+    testPartialUpdate("cow", "avro", hasPreCombineField = false)
   }
 
-  test("Test partial update with MOR and Avro log format") {
-    testPartialUpdate("mor", "avro")
+  test("Test partial update with MOR and Avro log format, no preCombine field") {
+    testPartialUpdate("mor", "avro", hasPreCombineField = false)
   }
 
-  test("Test partial update with MOR and Parquet log format") {
-    testPartialUpdate("mor", "parquet")
+  test("Test partial update with MOR and Avro log format, with preCombine field") {
+    testPartialUpdate("mor", "avro", hasPreCombineField = true)
+  }
+
+  test("Test partial update with MOR and Parquet log format, no preCombine field") {
+    testPartialUpdate("mor", "parquet", hasPreCombineField = false)
+  }
+
+  test("Test partial update with MOR and Parquet log format, with preCombine field") {
+    testPartialUpdate("mor", "parquet", hasPreCombineField = true)
   }
 
   test("Test partial update and insert with COW and Avro log format") {
-    testPartialUpdateWithInserts("cow", "avro")
+    testPartialUpdateWithInserts("cow", "avro", hasPreCombineField = false)
   }
 
-  test("Test partial update and insert with MOR and Avro log format") {
-    testPartialUpdateWithInserts("mor", "avro")
+  test("Test partial update and insert with MOR and Avro log format, no preCombine field") {
+    testPartialUpdateWithInserts("mor", "avro", hasPreCombineField = false)
   }
 
-  test("Test partial update and insert with MOR and Parquet log format") {
-    testPartialUpdateWithInserts("mor", "parquet")
+  test("Test partial update and insert with MOR and Avro log format, with preCombine field") {
+    testPartialUpdateWithInserts("mor", "avro", hasPreCombineField = true)
+  }
+
+  test("Test partial update and insert with MOR and Parquet log format, no preCombine field") {
+    testPartialUpdateWithInserts("mor", "parquet", hasPreCombineField = false)
+  }
+
+  test("Test partial update and insert with MOR and Parquet log format, with preCombine field") {
+    testPartialUpdateWithInserts("mor", "parquet", hasPreCombineField = true)
   }
 
   test("Test partial update with schema on read enabled") {
     withSQLConf(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key() -> "true") {
       try {
-        testPartialUpdate("mor", "parquet")
+        testPartialUpdate("mor", "parquet", hasPreCombineField = true)
         fail("Expected exception to be thrown")
       } catch {
         case t: Throwable => assertTrue(t.isInstanceOf[HoodieNotSupportedException])
@@ -258,7 +274,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
   }
 
   def testPartialUpdate(tableType: String,
-                        logDataBlockFormat: String): Unit = {
+                        logDataBlockFormat: String,
+                        hasPreCombineField: Boolean): Unit = {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
@@ -267,6 +284,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
       spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
 
+      val preCombineProp = if (hasPreCombineField) ", preCombineField = '_ts'" else ""
       // Create a table with five data fields
       spark.sql(
         s"""
@@ -279,8 +297,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            |) using hudi
            |tblproperties(
            | type ='$tableType',
-           | primaryKey = 'id',
-           | preCombineField = '_ts'
+           | primaryKey = 'id'
+           | $preCombineProp
            |)
            |location '$basePath'
         """.stripMargin)
@@ -428,7 +446,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
   }
 
   def testPartialUpdateWithInserts(tableType: String,
-                                   logDataBlockFormat: String): Unit = {
+                                   logDataBlockFormat: String,
+                                   hasPreCombineField: Boolean): Unit = {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
@@ -437,6 +456,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
       spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
 
+      val preCombineProp = if (hasPreCombineField) ", preCombineField = '_ts'" else ""
       // Create a table with five data fields
       spark.sql(
         s"""
@@ -449,8 +469,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            |) using hudi
            |tblproperties(
            | type ='$tableType',
-           | primaryKey = 'id',
-           | preCombineField = '_ts'
+           | primaryKey = 'id'
+           | $preCombineProp
            |)
            |location '$basePath'
         """.stripMargin)
