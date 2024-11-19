@@ -84,8 +84,8 @@ public class HoodieDataQualityValidator implements Serializable {
     @Parameter(names = {"--fields-to-validate", "-ftv"}, description = "Ordering field config", required = false)
     public String fieldsToValidate = null;
 
-    @Parameter(names = {"--use-overwrite-with-latest", "-uowl"}, description = "User overwrite with latest to find reduce final values " +
-        "from input data", required = false)
+    @Parameter(names = {"--use-overwrite-with-latest", "-uowl"}, description = "User overwrite with latest to find reduce final values "
+        + "from input data", required = false)
     public Boolean useOverwriteWithLatest = false;
 
     @Parameter(names = {"--ordering-field-config", "-of"}, description = "Ordering field config", required = false)
@@ -94,8 +94,8 @@ public class HoodieDataQualityValidator implements Serializable {
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for valuation", required = false)
     public int parallelism = 10;
 
-    @Parameter(names = {"--log-records", "-lr"}, description = "Log records" +
-        "from input data", required = false)
+    @Parameter(names = {"--log-records", "-lr"}, description = "Log records"
+        + "from input data", required = false)
     public Boolean logRecords = false;
 
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
@@ -185,7 +185,7 @@ public class HoodieDataQualityValidator implements Serializable {
     List<String> fieldsToValidate = Arrays.asList(cfg.fieldsToValidate.split(","));
     Dataset<Row> expectedDf = cfg.useOverwriteWithLatest ? getInputDfBasedOnLatestValue(cfg.recordKeyField, cfg.partitionPathField,
         "rider", spark, cfg.sourcePath,
-        fieldsToValidate): getInputDfBasedOnOrderingValue(cfg.recordKeyField, cfg.partitionPathField,
+        fieldsToValidate) : getInputDfBasedOnOrderingValue(cfg.recordKeyField, cfg.partitionPathField,
         cfg.orderingFieldConfig, spark, cfg.sourcePath,
         fieldsToValidate);
     Dataset<Row> hudiDf = getDatasetToValidate(spark, cfg.basePath, fieldsToValidate,
@@ -195,13 +195,19 @@ public class HoodieDataQualityValidator implements Serializable {
     Dataset<Row> exceptHudiDf = hudiDf.except(expectedDf);
     long exceptInputCount = exceptInputDf.count();
     long exceptHudiCount = exceptHudiDf.count();
-    LOG.info("Except input df count " + exceptInputDf + ", except hudi count " + exceptHudiCount +", total records found " + expectedDf.count());
+    LOG.info("Except input df count " + exceptInputDf + ", except hudi count " + exceptHudiCount + ", total records found " + expectedDf.count());
     if (exceptInputCount != 0 || exceptHudiCount != 0) {
       if (cfg.logRecords) {
         LOG.info("Logging Source except hudi df ");
-        expectedDf.except(hudiDf).sort(cfg.partitionPathField, cfg.recordKeyField).collectAsList().forEach(row -> LOG.info("   " + row.toString()));
+        List<Row> rows = expectedDf.except(hudiDf).sort(cfg.recordKeyField, cfg.partitionPathField).collectAsList();
+        for (Row r : rows) {
+          LOG.error("--->" + r.toString());
+        }
         LOG.info("Logging Hudi except input data ");
-        hudiDf.except(expectedDf).sort(cfg.partitionPathField, cfg.recordKeyField).collectAsList().forEach(row -> LOG.info("   " + row.toString()));
+        rows = hudiDf.except(expectedDf).sort(cfg.recordKeyField, cfg.partitionPathField).collectAsList();
+        for (Row r : rows) {
+          LOG.error("--->" + r.toString());
+        }
       }
       LOG.error("Data set validation failed. Total count in hudi " + expectedDf.count() + ", input df count " + hudiDf.count()
           + ". InputDf except hudi df = " + exceptInputCount + ", Hudi df except Input df " + exceptHudiCount);
