@@ -427,7 +427,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     List<HoodieRecord> initialInsertRecords = dataGen.generateInserts(commit1, initialInserts);
 
-    Helpers.saveParquetToDFS(Helpers.toGenericRecords(initialInsertRecords), new Path(basePath+"/0/inputdata.parquet"));
+    Helpers.saveParquetToDFS(Helpers.toGenericRecords(initialInsertRecords), new Path(basePath + "/0/inputdata.parquet"));
 
     for (int i = 1; i < 10; i++) {
       String commit = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
@@ -438,7 +438,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       allRecords.addAll(updates);
       allRecords.addAll(dataGen.generateInserts(commit, recurrentInserts));
       allGenRecs.addAll(Helpers.toGenericRecords(allRecords));
-      Helpers.saveParquetToDFS(allGenRecs, new Path(basePath+"/"+i+"/inputdata.parquet"));
+      Helpers.saveParquetToDFS(allGenRecs, new Path(basePath + "/" + i + "/inputdata.parquet"));
     }
   }
 
