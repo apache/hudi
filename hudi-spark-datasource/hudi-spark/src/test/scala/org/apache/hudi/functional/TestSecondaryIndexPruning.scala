@@ -986,7 +986,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
   }
 
-
   /**
    * Test case to write with updates and validate secondary index with clustering.
    */
@@ -1112,6 +1111,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
   }
 
+
+
   private def confirmLastCommitType(actionType: ActionType): Unit = {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val instants = metaClient.getActiveTimeline.getInstants
@@ -1197,13 +1198,169 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
   }
 
+  @Test
+  def testBloomFiltersIndexWithChanges(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      val tableName = "test_bloom_filters_index_with_changes"
+      val hudiOpts = commonOpts ++ Map(
+        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      val sqlTableType = "cow"
+
+      spark.sql(
+        s"""
+           CREATE TABLE $tableName (
+           |    ts BIGINT,
+           |    id STRING,
+           |    rider STRING,
+           |    driver STRING,
+           |    fare DOUBLE,
+           |    city STRING,
+           |    state STRING
+           |) USING HUDI
+           |options(
+           |    primaryKey ='id',
+           |    type = '$sqlTableType',
+           |    hoodie.metadata.enable = 'true',
+           |    hoodie.datasource.write.recordkey.field = 'id',
+           |    hoodie.enable.data.skipping = 'true'
+           |)
+           |PARTITIONED BY (state)
+           |location '$basePath'
+       """.stripMargin)
+
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql("set hoodie.enable.data.skipping=true")
+      spark.sql("set hoodie.metadata.enable=true")
+
+      spark.sql(s"""
+           |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
+           |  (1695159649,'trip1','rider-A','driver-K',19.10,'san_francisco','california'),
+           |  (1695414531,'trip6','rider-C','driver-K',17.14,'san_diego','california'),
+           |  (1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas'),
+           |  (1695516137,'trip4','rider-F','driver-P',34.15,'houston','texas')
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
+           |  (1695091554,'trip2','rider-C','driver-M',27.70,'sunnyvale','california'),
+           |  (1699349649,'trip5','rider-A','driver-Q',3.32,'san_diego','texas')
+           |""".stripMargin)
+
+      spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(numHashFunctions=1, fpp=0.00000000001)")
+
+      checkAnswer(s"select id, rider from $tableName where city = 'sunnyvale'")(
+        Seq("trip2", "rider-C")
+      )
+
+      if (true) {
+        val a = 1;
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testUpdatesReInsertsDeletes(hoodieTableType: HoodieTableType): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      val tableType = hoodieTableType.name()
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts ++ Map(
+        DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
+      val tableName = s"test_updates_reinserts_deletes_$sqlTableType"
+
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |    ts BIGINT,
+           |    id STRING,
+           |    rider STRING,
+           |    driver STRING,
+           |    fare DOUBLE,
+           |    city STRING,
+           |    state STRING
+           |) USING HUDI
+           | options(
+           |    primaryKey ='id',
+           |    type = '$sqlTableType',
+           |    hoodie.metadata.enable = 'true',
+           |    hoodie.metadata.record.index.enable = 'true',
+           |    hoodie.datasource.write.recordkey.field = 'id',
+           |    hoodie.enable.data.skipping = 'true',
+           |    hoodie.metadata.record.index.enable='true'
+           | )
+           | PARTITIONED BY (city, state)
+           | location '$basePath'
+           |""".stripMargin)
+
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql("set hoodie.enable.data.skipping=true")
+      spark.sql("set hoodie.metadata.enable=true")
+
+      spark.sql(
+        s"""|INSERT INTO $tableName(ts, id, rider, driver, fare, city, state) VALUES
+            |    (1695159649,'trip1','rider-A','driver-K',19.10,'san_francisco','california'),
+            |    (1695091554,'trip2','rider-C','driver-M',27.70,'sunnyvale','california'),
+            |    (1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas'),
+            |    (1695516137,'trip4','rider-F','driver-P',34.15,'houston','texas');
+            |    """.stripMargin)
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName;")(
+        Seq(1695159649, "trip1", "rider-A", "driver-K", 19.10, "san_francisco", "california"),
+        Seq(1695091554, "trip2", "rider-C", "driver-M", 27.70, "sunnyvale", "california"),
+        Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas"),
+        Seq(1695516137, "trip4", "rider-F", "driver-P", 34.15, "houston", "texas"))
+
+      spark.sql(s"create index idx_rider_$tableName ON $tableName USING secondary_index(rider)")
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where rider = 'rider-E'")(
+        Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas"))
+
+      spark.sql(s"create index idx_driver_$tableName ON $tableName USING secondary_index(driver)")
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where driver = 'driver-P'")(
+        Seq(1695516137, "trip4", "rider-F", "driver-P", 34.15, "houston", "texas")
+      )
+
+      // update such that there are two rider-E records
+      spark.sql(s"update $tableName set rider = 'rider-E' where rider = 'rider-F'")
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where rider = 'rider-E'")(
+        Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas"),
+        Seq(1695516137, "trip4", "rider-E", "driver-P", 34.15, "houston", "texas")
+      )
+
+      // delete one of those records
+      spark.sql(s"delete from $tableName where id = 'trip4'")
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where rider = 'rider-E'")(
+        Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas")
+      )
+
+      // reinsert a rider-E record  while changing driver value as well.
+      spark.sql(s"insert into $tableName values(1695516137,'trip4','rider-G','driver-Q',34.15,'houston','texas')")
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where driver = 'driver-Q';")(
+        Seq(1695516137, "trip4", "rider-G", "driver-Q", 34.15, "houston", "texas")
+      )
+
+      // update two other records to rider-E as well.
+      spark.sql(s"update $tableName set rider = 'rider-E' where rider in ('rider-C','rider-G');")
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where rider = 'rider-E'")(
+        Seq(1695091554, "trip2", "rider-E", "driver-M", 27.70, "sunnyvale", "california"),
+        Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas"),
+        Seq(1695516137, "trip4", "rider-E", "driver-Q", 34.15, "houston", "texas")
+      )
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where driver = 'driver-Q'")(
+        Seq(1695516137, "trip4", "rider-E", "driver-Q", 34.15, "houston", "texas")
+      )
+    }
+  }
+
   private def checkAnswer(query: String)(expects: Seq[Any]*): Unit = {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(query).collect().sortBy(_.toString()))
   }
 
-  private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String, nonExistantKey: String = ""): Unit = {
+  private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String, nonExistentKey: String = ""): Unit = {
     mergedDfList = mergedDfList :+ spark.read.format("hudi").options(hudiOpts).load(basePath).repartition(1).cache()
-    val secondaryKey = mergedDfList.last.limit(2).collect().filter(row => !row.getAs(columnName).toString.equals(nonExistantKey))
+    val secondaryKey = mergedDfList.last.limit(2).collect().filter(row => !row.getAs(columnName).toString.equals(nonExistentKey))
       .map(row => row.getAs(columnName).toString).head
     val dataFilter = EqualTo(attribute(columnName), Literal(secondaryKey))
     verifyFilePruning(hudiOpts, dataFilter)
