@@ -20,18 +20,18 @@ package org.apache.hudi.aws.transaction.lock;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import org.apache.hudi.common.util.StringUtils;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import static org.apache.hudi.common.util.StringUtils.concatenateWithThreshold;
-import static org.apache.hudi.config.DynamoDbBasedLockConfig.MAX_PARTITION_KEY_SIZE_BYTE;
+import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 
 /**
  * A DynamoDB based lock.
@@ -42,6 +42,8 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.MAX_PARTITION_KEY_S
 public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBasedLockProviderBase {
   protected static final Logger LOG = LoggerFactory.getLogger(DynamoDBBasedImplicitPartitionKeyLockProvider.class);
 
+  private final String hudiTableBasePath;
+
   public DynamoDBBasedImplicitPartitionKeyLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     this(lockConfiguration, conf, null);
   }
@@ -49,19 +51,24 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
   public DynamoDBBasedImplicitPartitionKeyLockProvider(
       final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, DynamoDbClient dynamoDB) {
     super(lockConfiguration, conf, dynamoDB);
-  }
-
-  public static String generatePartitionKey(String basePath, String tableName) {
-    String hashPart = '-' + HashID.generateXXHashAsString(basePath, HashID.Size.BITS_64);
-    String partitionKey = concatenateWithThreshold(tableName, hashPart, MAX_PARTITION_KEY_SIZE_BYTE);
-    LOG.info(String.format("Partition key for base path %s is %s", basePath, partitionKey));
-    return partitionKey;
+    hudiTableBasePath = s3aToS3(lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key()));
   }
 
   @Override
   public String getDynamoDBPartitionKey(LockConfiguration lockConfiguration) {
-    String hudiTableBasePath = lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key());
-    String hudiTableName = lockConfiguration.getConfig().getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
-    return generatePartitionKey(hudiTableBasePath, hudiTableName);
+    // Ensure consistent format for S3 URI.
+    String hudiTableBasePathNormalized = s3aToS3(lockConfiguration.getConfig().getString(
+        HoodieCommonConfig.BASE_PATH.key()));
+    String partitionKey = HashID.generateXXHashAsString(hudiTableBasePathNormalized, HashID.Size.BITS_64);
+    LOG.info(String.format("The DynamoDB partition key of the lock provider for the base path %s is %s",
+        hudiTableBasePathNormalized, partitionKey));
+    return partitionKey;
+  }
+
+  @Override
+  protected String generateLogSuffixString() {
+    return StringUtils.join("DynamoDb table = ", tableName,
+        ", partition key = ", dynamoDBPartitionKey,
+        ", hudi table base path = ", hudiTableBasePath);
   }
 }

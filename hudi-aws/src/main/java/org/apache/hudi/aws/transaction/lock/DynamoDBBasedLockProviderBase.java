@@ -74,7 +74,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
   protected final DynamoDbBasedLockConfig dynamoDbBasedLockConfig;
   protected final AmazonDynamoDBLockClient client;
   protected final String tableName;
-  private final String dynamoDBPartitionKey;
+  protected final String dynamoDBPartitionKey;
   protected volatile LockItem lock;
 
   protected DynamoDBBasedLockProviderBase(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, DynamoDbClient dynamoDB) {
@@ -216,7 +216,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
     LOG.info("Created dynamoDB table " + tableName);
   }
 
-  private String generateLogSuffixString() {
+  protected String generateLogSuffixString() {
     return StringUtils.join("DynamoDb table = ", tableName, ", partition key = ", dynamoDBPartitionKey);
   }
 
