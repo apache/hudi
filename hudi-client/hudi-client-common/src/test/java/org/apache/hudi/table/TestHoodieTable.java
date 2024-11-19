@@ -30,6 +30,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -39,10 +40,14 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
+import org.apache.hudi.table.storage.HoodieStorageLayout;
+
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -53,7 +58,9 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 class TestHoodieTable extends HoodieCommonTestHarness {
@@ -95,6 +102,48 @@ class TestHoodieTable extends HoodieCommonTestHarness {
       Arguments.of(true, false, false),
       Arguments.of(false, false, false)
     );
+  }
+
+  @Test
+  void getIndexReturnsCachedInstance() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
+
+    HoodieIndex<?, ?> index = hoodieTable.getIndex();
+    assertSame(index, hoodieTable.getIndex());
+  }
+
+  @Test
+  void getStorageLayoutReturnsCachedInstance() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
+
+    HoodieStorageLayout storageLayout = hoodieTable.getStorageLayout();
+    assertSame(storageLayout, hoodieTable.getStorageLayout());
+  }
+
+  @Test
+  void testGetEngineContext() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
+
+    // before serialization, context is the same one that is passed in
+    assertSame(context, hoodieTable.getContext());
+    // after serialization, we expect a local context to be made
+    HoodieTable deserializedTable = SerializationUtils.deserialize(SerializationUtils.serialize(hoodieTable));
+    assertTrue(deserializedTable.getContext() instanceof HoodieLocalEngineContext);
   }
 
   private static class TestBaseHoodieTable extends HoodieTable {

@@ -34,7 +34,6 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.timeline.TimestampUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -133,11 +132,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
-  protected final HoodieIndex<?, ?> index;
-  private SerializableConfiguration hadoopConfiguration;
+  protected transient HoodieIndex<?, ?> index;
   protected final TaskContextSupplier taskContextSupplier;
   private transient HoodieTableMetadata metadata;
-  private final HoodieStorageLayout storageLayout;
+  private transient HoodieStorageLayout storageLayout;
   private final boolean isMetadataTable;
 
   private transient FileSystemViewManager viewManager;
@@ -145,12 +143,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
-    this.hadoopConfiguration = context.getHadoopConf();
     this.context = context;
     this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
     this.metaClient = metaClient;
-    this.index = getIndex(config, context);
-    this.storageLayout = getStorageLayout(config);
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
@@ -159,10 +154,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
-
-  protected HoodieStorageLayout getStorageLayout(HoodieWriteConfig config) {
-    return HoodieLayoutFactory.createLayout(config);
-  }
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
@@ -412,10 +403,16 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Return the index.
    */
   public HoodieIndex<?, ?> getIndex() {
+    if (index == null) {
+      index = getIndex(config, context);
+    }
     return index;
   }
 
   public HoodieStorageLayout getStorageLayout() {
+    if (storageLayout == null) {
+      storageLayout = HoodieLayoutFactory.createLayout(config);
+    }
     return storageLayout;
   }
 
@@ -997,7 +994,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public HoodieEngineContext getContext() {
     // This is to handle scenarios where this is called at the executor tasks which do not have access
     // to engine context, and it ends up being null (as its not serializable and marked transient here).
-    return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
+    return context == null ? new HoodieLocalEngineContext(metaClient.getHadoopConf()) : context;
   }
 
   /**
