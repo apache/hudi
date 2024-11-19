@@ -55,6 +55,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -744,7 +745,7 @@ public class HoodieMetadataTableValidator implements Serializable {
               if (partitionCreationTimeOpt.isPresent() && !completedTimeline.containsInstant(partitionCreationTimeOpt.get())) {
                 Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
                 if (lastInstant.isPresent()
-                    && HoodieTimeline.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().getCompletionTime())) {
+                    && InstantComparison.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().getCompletionTime())) {
                   LOG.warn("Ignoring additional partition " + partitionFromMDT + ", as it was deduced to be part of a "
                       + "latest completed commit which was inflight when FS based listing was polled.");
                   actualAdditionalPartitionsInMDT.remove(partitionFromMDT);
