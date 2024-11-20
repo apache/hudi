@@ -23,10 +23,10 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -298,7 +298,7 @@ public class HoodieDropPartitionsTool implements Serializable {
         TimeGenerator timeGenerator = TimeGenerators
             .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(cfg.basePath),
                 HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
-        cfg.instantTime = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
+        cfg.instantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
       }
       LOG.info(cfg.toString());
 

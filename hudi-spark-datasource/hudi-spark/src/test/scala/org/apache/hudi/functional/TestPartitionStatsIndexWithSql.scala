@@ -285,88 +285,85 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
    * 2. Update to widen the bounds: Perform updates to increase the price values, causing the min/max stats to widen.
    * 3. Update to remove or lower the max value: Delete or update the record that holds the max value to simulate a
    * scenario where the bounds need to be tightened.
-   * 4. Trigger stats recomputation: Assuming the config for tighter bounds is enabled, validate that the partition stats
+   * 4. Trigger stats recomputation: Assuming tighter bounds is enabled on every write, validate that the partition stats
    * have adjusted correctly after scanning and recomputing accurate stats.
    */
   test("Test partition stats index with tight bound") {
     Seq("cow", "mor").foreach { tableType =>
-      Seq("true", "false").foreach { isPartitionStatsIndexConsolidationEnabledOnEveryWrite =>
-        withTempDir { tmp =>
-          val tableName = generateTableName + s"_tight_bound_$isPartitionStatsIndexConsolidationEnabledOnEveryWrite"
-          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  name string,
-               |  price int,
-               |  ts long
-               |) using hudi
-               |partitioned by (ts)
-               |tblproperties (
-               |  type = '$tableType',
-               |  primaryKey = 'id',
-               |  preCombineField = 'price',
-               |  hoodie.metadata.index.partition.stats.enable = 'true',
-               |  hoodie.metadata.index.partition.stats.consolidate.on.every.write = '$isPartitionStatsIndexConsolidationEnabledOnEveryWrite',
-               |  hoodie.metadata.index.column.stats.enable = 'true',
-               |  hoodie.metadata.index.column.stats.column.list = 'price'
-               |)
-               |location '$tablePath'
-               |""".stripMargin
-          )
+      withTempDir { tmp =>
+        val tableName = generateTableName + s"_tight_bound_$tableType"
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price int,
+             |  ts long
+             |) using hudi
+             |partitioned by (ts)
+             |tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'price',
+             |  hoodie.metadata.index.partition.stats.enable = 'true',
+             |  hoodie.metadata.index.column.stats.enable = 'true',
+             |  hoodie.metadata.index.column.stats.column.list = 'price'
+             |)
+             |location '$tablePath'
+             |""".stripMargin
+        )
 
-          /**
-           * Insert: Insert values for price across multiple partitions (ts=10, ts=20, ts=30):
-           *
-           * Partition ts=10: price = 1000, 1500
-           * Partition ts=20: price = 2000, 2500
-           * Partition ts=30: price = 3000, 3500
-           *
-           * This will initialize the partition stats with bounds like [1000, 1500], [2000, 2500], and [3000, 3500].
-           */
-          spark.sql(s"insert into $tableName values (1, 'a1', 1000, 10), (2, 'a2', 1500, 10)")
-          spark.sql(s"insert into $tableName values (3, 'a3', 2000, 20), (4, 'a4', 2500, 20)")
-          spark.sql(s"insert into $tableName values (5, 'a5', 3000, 30), (6, 'a6', 3500, 30)")
+        /**
+         * Insert: Insert values for price across multiple partitions (ts=10, ts=20, ts=30):
+         *
+         * Partition ts=10: price = 1000, 1500
+         * Partition ts=20: price = 2000, 2500
+         * Partition ts=30: price = 3000, 3500
+         *
+         * This will initialize the partition stats with bounds like [1000, 1500], [2000, 2500], and [3000, 3500].
+         */
+        spark.sql(s"insert into $tableName values (1, 'a1', 1000, 10), (2, 'a2', 1500, 10)")
+        spark.sql(s"insert into $tableName values (3, 'a3', 2000, 20), (4, 'a4', 2500, 20)")
+        spark.sql(s"insert into $tableName values (5, 'a5', 3000, 30), (6, 'a6', 3500, 30)")
 
-          // validate partition stats initialization
-          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
-            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500),
-            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500),
-            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 3500)
-          )
+        // validate partition stats initialization
+        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
+          Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500),
+          Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500),
+          Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 3500)
+        )
 
-          // First Update (widen the bounds): Update the price in partition ts=30, where price = 4000 for id=6.
-          //                                  This will widen the max bounds in ts=30 from 3500 to 4000.
-          spark.sql(s"update $tableName set price = 4000 where id = 6")
-          // Validate widened stats
-          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
-            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500, true),
-            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500, true),
-            // for COW table, that stats are consolidated on every write as there is a new slice for the same filegroup
-            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4000, isPartitionStatsIndexConsolidationEnabledOnEveryWrite.toBoolean || tableType == "cow")
-          )
-          // verify file pruning
-          var metaClient = HoodieTableMetaClient.builder()
-            .setBasePath(tablePath)
-            .setConf(HoodieTestUtils.getDefaultStorageConf)
-            .build()
-          verifyFilePruning(Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true"),
-            GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)), metaClient, isDataSkippingExpected = true)
+        // First Update (widen the bounds): Update the price in partition ts=30, where price = 4000 for id=6.
+        //                                  This will widen the max bounds in ts=30 from 3500 to 4000.
+        spark.sql(s"update $tableName set price = 4000 where id = 6")
+        // Validate widened stats
+        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
+          Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500, true),
+          Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500, true),
+          Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4000, true)
+        )
+        // verify file pruning
+        var metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tablePath)
+          .setConf(HoodieTestUtils.getDefaultStorageConf)
+          .build()
+        verifyFilePruning(Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true"),
+          GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)), metaClient, isDataSkippingExpected = true)
 
-          // Second update (reduce max value)
-          spark.sql(s"delete from $tableName where id = 6")
-          // Validate that stats have recomputed and tightened
-          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
-            Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500, true),
-            Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500, true),
-            Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 3000, true) // tighter bound, note that record with prev max was deleted
-          )
-          // verify file pruning
-          metaClient = HoodieTableMetaClient.reload(metaClient)
-          verifyFilePruning(Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true"),
-            GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)), metaClient, isDataSkippingExpected = true, isNoScanExpected = true)
-        }
+        // Second update (reduce max value)
+        spark.sql(s"delete from $tableName where id = 6")
+        // Validate that stats have recomputed and tightened
+        // if tighter bound, note that record with prev max was deleted
+        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
+          Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 1500, true),
+          Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 2500, true),
+          Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 3000, true)
+        )
+        // verify file pruning
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        verifyFilePruning(Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true"),
+          GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)), metaClient, isDataSkippingExpected = true, isNoScanExpected = true)
       }
     }
   }
@@ -447,7 +444,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
         Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, true),
         Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, true),
-        Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4003, false)
+        Seq(getPartitionStatsIndexKey("ts=30", "price"), 4003, 4003, true)
       )
     }
   }
@@ -575,7 +572,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
     var totalLatestDataFiles = 0L
     val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(metaClient)
     try {
-      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().requestedTime)
         .values()
         .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
           (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](

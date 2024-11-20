@@ -700,7 +700,7 @@ public class ITTestHoodieDataSource {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.TABLE_NAME, tableType.name())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
         .option("hoodie.parquet.small.file.limit", "0") // invalidate the small file strategy
         .option("hoodie.parquet.max.file.size", "0")
         .noPartition()
@@ -726,7 +726,7 @@ public class ITTestHoodieDataSource {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.TABLE_NAME, tableType)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
         .end();
     tableEnv.executeSql(hoodieTableDDL);

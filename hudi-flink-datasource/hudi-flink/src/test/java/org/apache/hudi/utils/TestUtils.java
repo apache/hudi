@@ -20,7 +20,7 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -68,7 +69,7 @@ public class TestUtils {
     return metaClient.getCommitsTimeline().filterCompletedInstants()
         .filter(instant -> commitAction.equals(instant.getAction()))
         .lastInstant()
-        .map(HoodieInstant::getTimestamp)
+        .map(HoodieInstant::requestedTime)
         .orElse(null);
   }
 
@@ -78,7 +79,7 @@ public class TestUtils {
     return metaClient.getCommitsTimeline().filterCompletedInstants()
         .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
         .lastInstant()
-        .map(HoodieInstant::getTimestamp)
+        .map(HoodieInstant::requestedTime)
         .orElse(null);
   }
 
@@ -86,17 +87,17 @@ public class TestUtils {
     final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
         new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().firstInstant()
-        .map(HoodieInstant::getTimestamp).orElse(null);
+        .map(HoodieInstant::requestedTime).orElse(null);
   }
 
   @Nullable
   public static String getNthCompleteInstant(StoragePath basePath, int n, String action) {
     final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
-        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath, HoodieTableVersion.EIGHT);
     return metaClient.getActiveTimeline()
         .filterCompletedInstants()
         .filter(instant -> action.equals(instant.getAction()))
-        .nthInstant(n).map(HoodieInstant::getTimestamp)
+        .nthInstant(n).map(HoodieInstant::requestedTime)
         .orElse(null);
   }
 
@@ -105,7 +106,7 @@ public class TestUtils {
     final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
         new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getArchivedTimeline().getCommitsTimeline().filterCompletedInstants()
-        .nthInstant(n).map(HoodieInstant::getTimestamp).orElse(null);
+        .nthInstant(n).map(HoodieInstant::requestedTime).orElse(null);
   }
 
   public static String getSplitPartitionPath(MergeOnReadInputSplit split) {
@@ -136,14 +137,14 @@ public class TestUtils {
   public static HoodieCommitMetadata deleteInstantFile(HoodieTableMetaClient metaClient, HoodieInstant instant) throws Exception {
     ValidationUtils.checkArgument(instant.isCompleted());
     HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
-    HoodieActiveTimeline.deleteInstantFile(metaClient.getStorage(), metaClient.getMetaPath(),
-        instant);
+    TimelineUtils.deleteInstantFile(metaClient.getStorage(), metaClient.getMetaPath(),
+        instant, metaClient.getInstantFileNameGenerator());
     return metadata;
   }
 
   public static void saveInstantAsComplete(HoodieTableMetaClient metaClient, HoodieInstant instant, HoodieCommitMetadata metadata) throws Exception {
-    metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
-        serializeCommitMetadata(metadata));
+    metaClient.getActiveTimeline().saveAsComplete(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
+        serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), metadata));
   }
 
   public static String amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {

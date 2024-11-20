@@ -20,6 +20,7 @@ package org.apache.hudi.metaserver.util;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.metaserver.thrift.TAction;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
@@ -32,11 +33,11 @@ import java.util.Locale;
 public class EntityConversions {
 
   public static THoodieInstant toTHoodieInstant(HoodieInstant instant) {
-    return new THoodieInstant(instant.getTimestamp(), toTAction(instant.getAction()), toTState(instant.getState()));
+    return new THoodieInstant(instant.requestedTime(), toTAction(instant.getAction()), toTState(instant.getState()));
   }
 
-  public static HoodieInstant fromTHoodieInstant(THoodieInstant instant) {
-    return new HoodieInstant(fromTState(instant.getState()), fromTAction(instant.getAction()), instant.getTimestamp());
+  public static HoodieInstant fromTHoodieInstant(THoodieInstant instant, InstantGenerator instantGenerator) {
+    return instantGenerator.createNewInstant(fromTState(instant.getState()), fromTAction(instant.getAction()), instant.getTimestamp());
   }
 
   public static TAction toTAction(String action) {

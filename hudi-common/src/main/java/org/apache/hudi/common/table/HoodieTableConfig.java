@@ -356,13 +356,40 @@ public class HoodieTableConfig extends HoodieConfig {
         .collect(Collectors.toList());
   }
 
+  public static HoodieTableConfig loadFromHoodieProps(HoodieStorage storage, String basePath) {
+    StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    return new HoodieTableConfig(storage, metaPath);
+  }
+
+  private HoodieTableConfig(HoodieStorage storage, StoragePath metaPath) {
+    this(storage, metaPath, null, null, null, false);
+  }
+
   public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
                            String recordMergeStrategyId) {
+    this(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId, true);
+  }
+
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
+                           String recordMergeStrategyId, boolean autoUpdate) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
       this.props = fetchConfigs(storage, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
+      if (autoUpdate) {
+        autoUpdateHoodieProperties(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId);
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not load properties from " + propertyPath, e);
+    }
+  }
+
+  private void autoUpdateHoodieProperties(HoodieStorage storage, StoragePath metaPath,
+                                          RecordMergeMode recordMergeMode, String payloadClassName,
+                                          String recordMergeStrategyId) {
+    StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
+    try {
       boolean needStore = false;
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
@@ -385,7 +412,7 @@ public class HoodieTableConfig extends HoodieConfig {
         }
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not load properties from " + propertyPath, e);
+      throw new HoodieIOException("Could not store properties in " + propertyPath, e);
     }
   }
 
@@ -669,6 +696,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
     setValue(VERSION, Integer.toString(tableVersion.versionCode()));
+    setValue(TIMELINE_LAYOUT_VERSION, Integer.toString(tableVersion.getTimelineLayoutVersion().getVersion()));
   }
 
   public void setInitialVersion(HoodieTableVersion initialVersion) {

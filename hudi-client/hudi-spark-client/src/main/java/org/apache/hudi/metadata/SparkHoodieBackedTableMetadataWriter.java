@@ -245,7 +245,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     List<HoodieRecord> deletedRecords = new ArrayList<>();
     recordKeySecondaryKeyMap.forEach((key, value) -> {
-      HoodieRecord<HoodieMetadataPayload> siRecord = HoodieMetadataPayload.createSecondaryIndex(key, value, indexDefinition.getIndexName(), true);
+      HoodieRecord<HoodieMetadataPayload> siRecord = HoodieMetadataPayload.createSecondaryIndexRecord(key, value, indexDefinition.getIndexName(), true);
       deletedRecords.add(siRecord);
     });
 

@@ -32,7 +32,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
@@ -155,7 +155,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * HoodieMetadata secondary index payload field ids
    */
-  public static final String SECONDARY_INDEX_FIELD_RECORD_KEY = "recordKey";
+  public static final String SECONDARY_INDEX_RECORD_KEY_ESCAPE_CHAR = "\\";
+  public static final String SECONDARY_INDEX_RECORD_KEY_SEPARATOR = "$";
   public static final String SECONDARY_INDEX_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   /**
@@ -221,7 +222,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this(key, MetadataPartitionType.RECORD_INDEX.getRecordType(), null, null, null, recordIndexMetadata, null, false);
   }
 
-  private HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
+  protected HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
     this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata, secondaryIndexMetadata.getIsDeleted());
   }
 
@@ -344,7 +345,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       HoodieRecord<HoodieMetadataPayload> oldRecord,
       HoodieRecord<HoodieMetadataPayload> newRecord) {
     // If the new record is tombstone, we can discard it
-    if (newRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
+    if (newRecord.getData().isDeleted() || newRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
       return Option.empty();
     }
 
@@ -562,7 +563,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
     long instantTimeMillis = -1;
     try {
-      instantTimeMillis = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
+      instantTimeMillis = TimelineUtils.parseDateFromInstantTime(instantTime).getTime();
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to create metadata payload for record index. Instant time parsing for " + instantTime + " failed ", e);
     }
@@ -620,15 +621,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param secondaryKey Secondary key of the record
    * @param isDeleted    true if this record is deleted
    */
-  public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndex(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
-
-    HoodieKey key = new HoodieKey(secondaryKey, partitionPath);
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(secondaryKey, new HoodieSecondaryIndexInfo(recordKey, isDeleted));
+  public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndexRecord(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
+    // the payload key is in the format of "secondaryKey$primaryKey"
+    HoodieKey key = new HoodieKey(SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey), partitionPath);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), new HoodieSecondaryIndexInfo(isDeleted));
     return new HoodieAvroRecord<>(key, payload);
-  }
-
-  public String getRecordKeyFromSecondaryIndex() {
-    return secondaryIndexMetadata.getRecordKey();
   }
 
   public boolean isSecondaryIndexDeleted() {
