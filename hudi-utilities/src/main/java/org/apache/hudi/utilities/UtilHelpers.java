@@ -604,7 +604,7 @@ public class UtilHelpers {
 
   public static void addLockOptions(String basePath, String schema, TypedProperties props) {
     if (!props.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
-      List<String> customSupportedFSs = props.getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
+      List<String> customSupportedFSs = props.getStringList(HoodieCommonConfig.FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
       if (schema == null || customSupportedFSs.contains(schema) || StorageSchemes.isAtomicCreationSupported(schema)) {
         props.putAll(FileSystemBasedLockProvider.getLockConfig(basePath));
       }

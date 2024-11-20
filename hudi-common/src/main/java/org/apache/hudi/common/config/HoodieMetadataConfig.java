@@ -62,7 +62,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
-  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
+  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   // Enable metrics for internal Metadata Table
   public static final ConfigProperty<Boolean> METRICS_ENABLE = ConfigProperty
@@ -144,7 +144,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups. When "
           + "enabled, metadata table will have a partition to store the column ranges and will be "
@@ -219,6 +219,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "metadata table which are never added before. This config determines how to handle "
           + "such spurious deletes");
 
+  // FIXME-vc: should this be turned on?
   public static final ConfigProperty<Boolean> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
       .key(METADATA_PREFIX + OPTIMIZED_LOG_BLOCKS_SCAN)
       .defaultValue(false)
@@ -316,9 +317,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
+  // FIXME-vc: does this need to be turned on for having basic date-partitioned workloads working?
   public static final ConfigProperty<Boolean> FUNCTIONAL_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.functional.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable functional index within the Metadata Table. Note that this config is to enable/disable all functional indexes. "
           + "To enable or disable each functional index individually, users still need to use CREATE/DROP INDEX SQL commands.");
@@ -339,7 +341,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable aggregating stats for each column at the storage partition level.");
 
@@ -364,6 +366,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Enable secondary index within the Metadata Table.");
 
+  //FIXME-vc: this needs to be a list of columns? do we throw error if different columns are specifed each write?
   public static final ConfigProperty<String> SECONDARY_INDEX_COLUMN = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.column")
       .noDefaultValue()

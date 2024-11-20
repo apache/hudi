@@ -84,7 +84,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     this.lockInfo = new LockInfo();
     this.sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
     this.storage = HoodieStorageUtils.getStorage(this.lockFile.toString(), configuration);
-    List<String> customSupportedFSs = lockConfiguration.getConfig().getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
+    List<String> customSupportedFSs = lockConfiguration.getConfig().getStringList(HoodieCommonConfig.FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
     if (!customSupportedFSs.contains(this.storage.getScheme()) && !StorageSchemes.isAtomicCreationSupported(this.storage.getScheme())) {
       throw new HoodieLockException("Unsupported scheme :" + this.storage.getScheme() + ", since this fs can not support atomic creation");
     }
