@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -124,6 +125,11 @@ public class FileCreateUtils {
 
   private static void createMetaFile(String basePath, String instantTime, String suffix,
                                      HoodieStorage storage) throws IOException {
+    createMetaFile(basePath, instantTime, suffix, storage, false);
+  }
+
+  private static void createMetaFile(String basePath, String instantTime, String suffix,
+                                     HoodieStorage storage, boolean preTableVersion8) throws IOException {
     StoragePath parentPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     if (!storage.exists(parentPath)) {
       storage.create(parentPath).close();
@@ -137,7 +143,7 @@ public class FileCreateUtils {
       }
     } else {
       String instantTimeWithCompletionTime =
-          instantTime + "_" + InProcessTimeGenerator.createNewInstantTime();
+          preTableVersion8 ? instantTime : instantTime + "_" + InProcessTimeGenerator.createNewInstantTime();
       storage.create(new StoragePath(parentPath, instantTimeWithCompletionTime + suffix))
           .close();
     }
@@ -205,16 +211,18 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
 
-  public static void createCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> metadata) throws IOException {
-    createCommit(basePath, instantTime, Option.empty(), metadata);
+  public static void createCommit(CommitMetadataSerDe commitMetadataSerDe, String basePath, String instantTime,
+                                  Option<HoodieCommitMetadata> metadata) throws IOException {
+    createCommit(commitMetadataSerDe, basePath, instantTime, Option.empty(), metadata);
   }
 
-  public static void createCommit(String basePath, String instantTime, Option<String> completionTime, Option<HoodieCommitMetadata> metadata) throws IOException {
+  public static void createCommit(CommitMetadataSerDe commitMetadataSerDe, String basePath, String instantTime,
+                                  Option<String> completionTime, Option<HoodieCommitMetadata> metadata) throws IOException {
     final Supplier<String> completionTimeSupplier = () -> completionTime.isPresent() ? completionTime.get() : InProcessTimeGenerator.createNewInstantTime();
     if (metadata.isPresent()) {
       HoodieCommitMetadata commitMetadata = metadata.get();
       createMetaFile(basePath, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
-          serializeCommitMetadata(commitMetadata).get());
+          serializeCommitMetadata(commitMetadataSerDe, commitMetadata).get());
     } else {
       createMetaFile(basePath, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
           getUTF8Bytes(""));
@@ -241,10 +249,10 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
   }
 
-  public static void createDeltaCommit(String basePath, String instantTime,
+  public static void createDeltaCommit(CommitMetadataSerDe commitMetadataSerDe, String basePath, String instantTime,
                                        HoodieCommitMetadata metadata) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION,
-        serializeCommitMetadata(metadata).get());
+        serializeCommitMetadata(commitMetadataSerDe, metadata).get());
   }
 
   public static void createDeltaCommit(String basePath, String instantTime) throws IOException {
@@ -254,6 +262,11 @@ public class FileCreateUtils {
   public static void createDeltaCommit(String basePath, String instantTime,
                                        HoodieStorage storage) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, storage);
+  }
+
+  public static void createDeltaCommit(String basePath, String instantTime,
+                                       HoodieStorage storage, boolean preTableVersion8) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, storage, preTableVersion8);
   }
 
   public static void createRequestedDeltaCommit(String basePath, String instantTime)
@@ -266,15 +279,20 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
   }
 
+  public static void createInflightDeltaCommit(String basePath, String instantTime, HoodieStorage storage)
+      throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION, storage);
+  }
+
   public static void createInflightReplaceCommit(String basePath, String instantTime)
       throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
   }
 
-  public static void createReplaceCommit(String basePath, String instantTime,
-                                         HoodieReplaceCommitMetadata metadata) throws IOException {
+  public static void createReplaceCommit(CommitMetadataSerDe commitMetadataSerDe, String basePath,
+                                         String instantTime, HoodieReplaceCommitMetadata metadata) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION,
-        serializeCommitMetadata(metadata).get());
+        serializeCommitMetadata(commitMetadataSerDe, metadata).get());
   }
 
   public static void createRequestedClusterCommit(String basePath, String instantTime,
@@ -284,12 +302,12 @@ public class FileCreateUtils {
         serializeRequestedReplaceMetadata(requestedReplaceMetadata).get());
   }
 
-  public static void createInflightClusterCommit(String basePath, String instantTime,
-                                                 Option<HoodieCommitMetadata> inflightReplaceMetadata)
+  public static void createInflightClusterCommit(CommitMetadataSerDe commitMetadataSerDe, String basePath,
+                                                 String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata)
       throws IOException {
     if (inflightReplaceMetadata.isPresent()) {
       createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLUSTERING_COMMIT_EXTENSION,
-          serializeCommitMetadata(inflightReplaceMetadata.get()).get());
+          serializeCommitMetadata(commitMetadataSerDe, inflightReplaceMetadata.get()).get());
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLUSTERING_COMMIT_EXTENSION);
     }
@@ -306,12 +324,12 @@ public class FileCreateUtils {
     }
   }
 
-  public static void createInflightReplaceCommit(String basePath, String instantTime,
-                                                 Option<HoodieCommitMetadata> inflightReplaceMetadata)
+  public static void createInflightReplaceCommit(CommitMetadataSerDe commitMetadataSerDe, String basePath,
+                                                 String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata)
       throws IOException {
     if (inflightReplaceMetadata.isPresent()) {
       createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION,
-          serializeCommitMetadata(inflightReplaceMetadata.get()).get());
+          serializeCommitMetadata(commitMetadataSerDe, inflightReplaceMetadata.get()).get());
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
     }

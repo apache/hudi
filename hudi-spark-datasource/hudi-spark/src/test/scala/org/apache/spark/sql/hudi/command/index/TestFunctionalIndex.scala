@@ -503,6 +503,86 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Multiple Functional Index Update") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        // create a simple partitioned mor table and insert some records
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  price double,
+             |  ts long,
+             |  name string
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = 'mor',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by(name)
+             | location '$basePath'
+       """.stripMargin)
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2020-09-26
+        spark.sql(s"insert into $tableName values(1, 10, 1601098924, 'a1')")
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2021-09-26
+        spark.sql(s"insert into $tableName values(2, 10, 1632634924, 'a1')")
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2022-09-26
+        spark.sql(s"insert into $tableName values(3, 10, 1664170924, 'a2')")
+        // create functional index and verify
+        spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')")
+        var metaClient = createMetaClient(spark, basePath)
+        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains("func_index_idx_datestr"))
+        assertTrue(metaClient.getIndexMetadata.isPresent)
+        assertEquals(1, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
+
+        // create functional index and verify
+        spark.sql(s"create index idx_price on $tableName using column_stats(price) options(func='identity')")
+        metaClient = createMetaClient(spark, basePath)
+        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains("func_index_idx_price"))
+        assertEquals(2, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
+
+        // verify functional index records by querying metadata table
+        val metadataSql = s"select ColumnStatsMetadata.columnName, ColumnStatsMetadata.minValue.member4.value, ColumnStatsMetadata.maxValue.member4.value, " +
+          s"ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value, ColumnStatsMetadata.isDeleted from hudi_metadata('$tableName') where type=3"
+        checkAnswer(metadataSql)(
+          Seq("ts", null, null, "2020-09-26", "2021-09-26", false), // for file in name=a1
+          Seq("ts", null, null, "2022-09-26", "2022-09-26", false), // for file in name=a2
+          Seq("price", 10.0, 10.0, null, null, false), // for file in name=a1
+          Seq("price", 10.0, 10.0, null, null, false) // for file in name=a2
+        )
+
+        // do an update after initializing the index
+        // set price as 5.0 for id=1
+        spark.sql(s"update $tableName set price = 5.0 where id = 1")
+
+        // check query result for predicates including both the functional index columns
+        checkAnswer(s"select id, price from $tableName where price <= 8")(
+          Seq(1, 5.0)
+        )
+        checkAnswer(s"select id, price from $tableName where price > 8")(
+          Seq(2, 10.0),
+          Seq(3, 10.0)
+        )
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') >= '2022-09-26'")(
+          Seq(3, "a2")
+        )
+
+        // verify there are new updates to functional index
+        checkAnswer(metadataSql)(
+          Seq("ts", null, null, "2020-09-26", "2021-09-26", false), // for file in name=a1
+          Seq("ts", null, null, "2020-09-26", "2020-09-26", false), // for update of id=1
+          Seq("ts", null, null, "2022-09-26", "2022-09-26", false), // for file in name=a2
+          Seq("price", 10.0, 10.0, null, null, false), // for file in name=a1
+          Seq("price", 5.0, 5.0, null, null, false), // for update of id=1
+          Seq("price", 10.0, 10.0, null, null, false) // for file in name=a2
+        )
+      }
+    }
+  }
+
   test("Test Enable and Disable Functional Index") {
     if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
@@ -790,7 +870,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
       // rollback the operation
       val lastCompletedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant()
       val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), getWriteConfig(Map.empty, metaClient.getBasePath.toString))
-      writeClient.rollback(lastCompletedInstant.get().getTimestamp)
+      writeClient.rollback(lastCompletedInstant.get().requestedTime)
       // validate the functional index
       checkAnswer(metadataSql)(
         // the last commit is rolledback so no records for that
@@ -990,7 +1070,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     var totalLatestDataFiles = 0L
     val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(metaClient)
     try {
-      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().requestedTime)
         .values()
         .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
           (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](

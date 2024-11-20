@@ -24,9 +24,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -534,8 +534,9 @@ public class TestWriteBase {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
       Option<HoodieInstant> lastCompletedInstant =
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-      HoodieActiveTimeline.deleteInstantFile(
-          metaClient.getStorage(), metaClient.getMetaPath(), lastCompletedInstant.get());
+      TimelineUtils.deleteInstantFile(
+          metaClient.getStorage(), metaClient.getMetaPath(), lastCompletedInstant.get(),
+          metaClient.getInstantFileNameGenerator());
       // refresh the heartbeat in case it is timed out.
       OutputStream outputStream = metaClient.getStorage().create(new StoragePath(
           HoodieTableMetaClient.getHeartbeatFolderPath(basePath)

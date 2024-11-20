@@ -23,10 +23,14 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
+import org.apache.hudi.metrics.prometheus.PrometheusReporter;
+import org.apache.hudi.metrics.prometheus.PushGatewayMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -46,11 +50,21 @@ public class TestMetricsReporterFactory {
   @Mock
   MetricRegistry registry;
 
-  @Test
-  public void metricsReporterFactoryShouldReturnReporter() {
-    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
+  public static Object[][] params() {
+    return new Object[][] {
+        {MetricsReporterType.INMEMORY, InMemoryMetricsReporter.class},
+        {MetricsReporterType.CONSOLE, ConsoleMetricsReporter.class},
+        {MetricsReporterType.PROMETHEUS, PrometheusReporter.class},
+        {MetricsReporterType.PROMETHEUS_PUSHGATEWAY, PushGatewayMetricsReporter.class},
+        {MetricsReporterType.SLF4J, Slf4jMetricsReporter.class}};
+  }
+
+  @ParameterizedTest
+  @MethodSource("params")
+  public void metricsReporterFactoryShouldReturnReporter(MetricsReporterType type, Class expectClazz) {
+    when(metricsConfig.getMetricsReporterType()).thenReturn(type);
     MetricsReporter reporter = MetricsReporterFactory.createReporter(metricsConfig, registry).get();
-    assertTrue(reporter instanceof InMemoryMetricsReporter);
+    assertEquals(reporter.getClass(), expectClazz);
   }
 
   @Test

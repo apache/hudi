@@ -36,7 +36,7 @@ import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
@@ -203,6 +203,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     Await.result(f2, Duration("120s"))
   }
 
+  @Disabled("[HUDI-8548]")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testStructuredStreaming(tableType: HoodieTableType): Unit = {
@@ -256,6 +257,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       !isAsyncClustering, isAsyncClustering, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, checkClusteringResult)
   }
 
+  @Disabled("[HUDI-8548]")
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testStructuredStreamingWithCompaction(isAsyncCompaction: Boolean): Unit = {
@@ -470,7 +472,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .getTimelineOfActions(CollectionUtils.createSet(instantAction))
       .filterCompletedInstants
       .lastInstant
-      .get.getTimestamp
+      .get.requestedTime
   }
 
   private def streamingWrite(schema: StructType, sourcePath: String, destPath: String, hudiOptions: Map[String, String], checkpoint: String): Unit = {

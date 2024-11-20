@@ -74,7 +74,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * This results in two I/O passes over the log file.
  */
 @NotThreadSafe
-public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
+public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     implements Iterable<HoodieRecord>, Closeable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordScanner.class);
@@ -160,7 +160,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return;
     }
 
-    scanInternal(Option.of(AbstractHoodieLogRecordReader.KeySpec.fullKeySpec(missingKeys)), false);
+    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.fullKeySpec(missingKeys)), false);
   }
 
   /**
@@ -193,7 +193,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     //       and will have to scan every time as we can't know (based on just
     //       the records cached) whether particular prefix was scanned or just records
     //       matching the prefix looked up (by [[scanByFullKeys]] API)
-    scanInternal(Option.of(AbstractHoodieLogRecordReader.KeySpec.prefixKeySpec(missingKeyPrefixes)), false);
+    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.prefixKeySpec(missingKeyPrefixes)), false);
     scannedPrefixes.addAll(missingKeyPrefixes);
   }
 
@@ -318,7 +318,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   /**
    * Builder used to build {@code HoodieMergedLogRecordScanner}.
    */
-  public static class Builder extends AbstractHoodieLogRecordReader.Builder {
+  public static class Builder extends AbstractHoodieLogRecordScanner.Builder {
     private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;

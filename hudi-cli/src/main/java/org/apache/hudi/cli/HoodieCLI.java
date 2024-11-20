@@ -23,8 +23,6 @@ import org.apache.hudi.cli.utils.TempViewProvider;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -48,7 +46,6 @@ public class HoodieCLI {
   public static String basePath;
   protected static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
-  public static TimelineLayoutVersion layoutVersion;
   public static TempViewProvider tempViewProvider;
 
   /**
@@ -74,11 +71,6 @@ public class HoodieCLI {
     HoodieCLI.basePath = basePath;
   }
 
-  private static void setLayoutVersion(Integer layoutVersion) {
-    HoodieCLI.layoutVersion = new TimelineLayoutVersion(
-        (layoutVersion == null) ? TimelineLayoutVersion.CURR_VERSION : layoutVersion);
-  }
-
   public static boolean initConf() {
     if (HoodieCLI.conf == null) {
       HoodieCLI.conf = HadoopFSUtils.getStorageConf(
@@ -101,12 +93,11 @@ public class HoodieCLI {
         .setConf(HoodieCLI.conf.newInstance()).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
         .setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
         .setTimeGeneratorConfig(timeGeneratorConfig == null ? HoodieTimeGeneratorConfig.defaultConfig(basePath) : timeGeneratorConfig)
-        .setLayoutVersion(Option.of(layoutVersion)).build());
+        .build());
   }
 
-  public static void connectTo(String basePath, Integer layoutVersion) {
+  public static void connectTo(String basePath) {
     setBasePath(basePath);
-    setLayoutVersion(layoutVersion);
     refreshTableMetadata();
   }
 
