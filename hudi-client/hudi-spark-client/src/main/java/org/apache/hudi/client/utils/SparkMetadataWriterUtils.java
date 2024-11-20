@@ -151,7 +151,7 @@ public class SparkMetadataWriterUtils {
   }
 
   public static HoodieData<HoodieRecord> getFunctionalIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex,
-                                                                                   HoodieWriteConfig metadataWriteConfig, String instantTime) {
+                                                                                   HoodieWriteConfig metadataWriteConfig, String instantTime, String indexName) {
     // Group data using functional index metadata and then create bloom filter on the group
     Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getFunctionalIndexColumnNames())
         // row.get(1) refers to partition path value and row.get(2) refers to file name.
@@ -166,7 +166,7 @@ public class SparkMetadataWriterUtils {
             bloomFilter.add(key);
           });
           ByteBuffer bloomByteBuffer = ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString()));
-          HoodieRecord bloomFilterRecord = createBloomFilterMetadataRecord(partition, fileName, instantTime, metadataWriteConfig.getBloomFilterType(), bloomByteBuffer, false);
+          HoodieRecord bloomFilterRecord = createBloomFilterMetadataRecord(partition, fileName, instantTime, metadataWriteConfig.getBloomFilterType(), bloomByteBuffer, false, indexName);
           return Collections.singletonList(bloomFilterRecord).iterator();
         }), Encoders.kryo(HoodieRecord.class));
     return HoodieJavaRDD.of(bloomFilterRecords.javaRDD());

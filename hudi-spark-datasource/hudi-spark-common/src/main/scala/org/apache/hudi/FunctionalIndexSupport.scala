@@ -59,10 +59,20 @@ class FunctionalIndexSupport(spark: SparkSession,
                                         ): Option[Set[String]] = {
     lazy val functionalIndexPartitionOpt = getFunctionalIndexPartition(queryFilters)
     if (isIndexAvailable && queryFilters.nonEmpty && functionalIndexPartitionOpt.nonEmpty) {
-      val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
-      val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)
-      val indexDf = loadFunctionalIndexDataFrame(functionalIndexPartitionOpt.get, prunedPartitions, readInMemory)
-      Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
+      val indexPartition = functionalIndexPartitionOpt.get
+      val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
+      if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
+        val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
+        val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)
+        val indexDf = loadFunctionalIndexDataFrame(indexPartition, prunedPartitions, readInMemory)
+        Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
+      } else if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
+        val prunedPartitionAndFileNames = getPrunedPartitionsAndFileNamesMap(prunedPartitionsAndFileSlices, includeLogFiles = true)
+        // TODO: we should get the list of keys to pass from queryFilters
+        Option.apply(getCandidateFilesForKeys(indexPartition, prunedPartitionAndFileNames, List("sunnyvale")))
+      } else {
+        Option.empty
+      }
     } else {
       Option.empty
     }
@@ -125,9 +135,15 @@ class FunctionalIndexSupport(spark: SparkSession,
         val targetColumnName = expr.references.head.name
         // Check if the expression string contains any of the function names
         val exprString = expr.toString
-        SPARK_FUNCTION_MAP.asScala.keys
+        val functionNameOption = SPARK_FUNCTION_MAP.asScala.keys
           .find(exprString.contains)
-          .map(functionName => functionName -> targetColumnName)
+
+        // TODO: We should check the index metadata first to see if there is a functional index matching the column name
+        //       in the expression. If so, then check whether the indexFunction in that index metadata is also present
+        //       in the expression. If so, then return the indexFunction and the column name. If not, then return identity.
+        //       If there is no functional index metadata for the column name, then return None.
+        val functionName = functionNameOption.getOrElse("identity")
+        Some(functionName -> targetColumnName)
       } else {
         None // Skip expressions that do not match the criteria
       }
@@ -139,11 +155,6 @@ class FunctionalIndexSupport(spark: SparkSession,
                                    shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
       val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
-      val indexType = indexDefinition.getIndexType
-      // NOTE: Currently only functional indexes created using column_stats is supported.
-      // HUDI-7007 tracks for adding support for other index types such as bloom filters.
-      checkState(indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS),
-        s"Index type $indexType is not supported")
       val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadFunctionalIndexForColumnsInternal(
         indexDefinition.getSourceFields.asScala.toSeq, prunedPartitions, indexPartition, shouldReadInMemory)
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
@@ -197,6 +208,44 @@ class FunctionalIndexSupport(spark: SparkSession,
         .filter(JFunction.toJavaSerializableFunction(columnStatsRecord => columnStatsRecord != null))
 
     columnStatsRecords
+  }
+
+  private def getPrunedPartitionsAndFileNamesMap(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                                 includeLogFiles: Boolean = false): Map[String, Set[String]] = {
+    prunedPartitionsAndFileSlices.foldLeft(Map.empty[String, Set[String]]) {
+      case (partitionToFileMap, (partitionPathOpt, fileSlices)) =>
+        partitionPathOpt match {
+          case Some(partitionPath) =>
+            val fileNames = fileSlices.flatMap { fileSlice =>
+              val baseFile = Option(fileSlice.getBaseFile.orElse(null)).map(_.getFileName).toSeq
+              val logFiles = if (includeLogFiles) {
+                fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toSeq
+              } else Seq.empty[String]
+              baseFile ++ logFiles
+            }.toSet
+
+            // Update the map with the new partition and its file names
+            partitionToFileMap.updated(partitionPath.path, partitionToFileMap.getOrElse(partitionPath.path, Set.empty) ++ fileNames)
+          case None =>
+            partitionToFileMap // Skip if no partition path
+        }
+    }
+  }
+
+  private def getCandidateFilesForKeys(indexPartition: String, prunedPartitionAndFileNames: Map[String, Set[String]], keys: List[String]): Set[String] = {
+    val candidateFiles = prunedPartitionAndFileNames.flatMap { case (partition, fileNames) =>
+      fileNames.filter { fileName =>
+        val bloomFilterOpt = toScalaOption(metadataTable.getBloomFilter(partition, fileName, indexPartition))
+        bloomFilterOpt match {
+          case Some(bloomFilter) =>
+            keys.exists(bloomFilter.mightContain)
+          case None =>
+            true // If bloom filter is empty or undefined, assume the file might contain the record key
+        }
+      }
+    }.toSet
+
+    candidateFiles
   }
 }
 
