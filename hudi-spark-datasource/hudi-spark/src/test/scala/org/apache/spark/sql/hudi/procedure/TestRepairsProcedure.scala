@@ -62,7 +62,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            | )
        """.stripMargin)
       // create commit instant
-      Files.createFile(Paths.get(tablePath, ".hoodie", "100.commit"))
+      Files.createFile(Paths.get(tablePath, ".hoodie/timeline", "100.commit"))
 
       val metaClient = createMetaClient(spark, tablePath)
 
@@ -547,7 +547,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
   @throws[IOException]
   def createEmptyCleanRequestedFile(basePath: String, instantTime: String, configuration: Configuration): Unit = {
-    val commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + INSTANT_FILE_NAME_GENERATOR.makeRequestedCleanerFileName(instantTime))
+    val commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME
+      + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/" + INSTANT_FILE_NAME_GENERATOR.makeRequestedCleanerFileName(instantTime))
     val fs = HadoopFSUtils.getFs(basePath, configuration)
     val os = fs.create(commitFilePath, true)
     os.close()
