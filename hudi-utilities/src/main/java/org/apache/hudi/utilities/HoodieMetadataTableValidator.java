@@ -745,7 +745,7 @@ public class HoodieMetadataTableValidator implements Serializable {
               if (partitionCreationTimeOpt.isPresent() && !completedTimeline.containsInstant(partitionCreationTimeOpt.get())) {
                 Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
                 if (lastInstant.isPresent()
-                    && InstantComparison.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().getCompletionTime())) {
+                    && InstantComparison.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().requestedTime())) {
                   LOG.warn("Ignoring additional partition " + partitionFromMDT + ", as it was deduced to be part of a "
                       + "latest completed commit which was inflight when FS based listing was polled.");
                   actualAdditionalPartitionsInMDT.remove(partitionFromMDT);
