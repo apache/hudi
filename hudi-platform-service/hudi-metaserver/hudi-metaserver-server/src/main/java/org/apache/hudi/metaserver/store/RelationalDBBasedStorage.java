@@ -18,9 +18,7 @@
 
 package org.apache.hudi.metaserver.store;
 
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metaserver.store.bean.InstantBean;
 import org.apache.hudi.metaserver.store.bean.TableBean;
@@ -38,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -128,8 +128,8 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
       oldTimestamp = getLatestTimestamp(tableId);
       do {
         newTimestamp = HoodieInstantTimeGenerator.formatDate(new Date(System.currentTimeMillis()));
-      } while (oldTimestamp != null && HoodieTimeline.compareTimestamps(newTimestamp,
-          HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldTimestamp));
+      } while (oldTimestamp != null && compareTimestamps(newTimestamp,
+          LESSER_THAN_OR_EQUALS, oldTimestamp));
       Map<String, Object> params = new HashMap<>();
       params.put("tableId", tableId);
       params.put("oldTimestamp", oldTimestamp);

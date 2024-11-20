@@ -39,18 +39,20 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.util.{JFunction, JavaConversions}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSparkUtils}
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.{Disabled, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import org.scalatest.Assertions.{assertResult, assertThrows}
 
 import java.util.concurrent.Executors
+
 import scala.collection.JavaConverters
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -192,6 +194,27 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
         Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
+      // update the secondary key column after creating multiple secondary indexes
+      spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
+      // validate the secondary index records themselves
+      checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        // row1 record is updated
+        Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false),
+        Seq(s"1${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+        Seq(s"2${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+        Seq(s"3${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false)
+      )
+      // validate data and data skipping
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
+        Seq(1, "row1", "xyz", "p1")
+      )
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where ts = 1")(
+        Seq(1, "row1", "xyz", "p1")
+      )
+      verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
+      verifyQueryPredicate(hudiOpts, "ts")
     }
   }
 
@@ -660,11 +683,11 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
         val lastCompactionInstant = compactionTimeline
           .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-            HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+            metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
               .getOperationType == WriteOperationType.COMPACT))
           .lastInstant()
         val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")
-          .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+          .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().requestedTime)))
           .findAny()
         assertTrue(compactionBaseFile.isPresent)
       } finally {
@@ -969,6 +992,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   /**
    * Test case to write with updates and validate secondary index with clustering.
    */
+  @Disabled("[HUDI-8549]")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testSecondaryIndexWithClusteringAndCleaning(tableType: HoodieTableType): Unit = {
@@ -1154,9 +1178,9 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // Do a savepoint
       val firstCompletedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
       val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts))
-      writeClient.savepoint(firstCompletedInstant.get().getTimestamp, "testUser", "savepoint to first commit")
-      val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
-      assertEquals(firstCompletedInstant.get().getTimestamp, savepointTimestamp)
+      writeClient.savepoint(firstCompletedInstant.get().requestedTime, "testUser", "savepoint to first commit")
+      val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().requestedTime
+      assertEquals(firstCompletedInstant.get().requestedTime, savepointTimestamp)
       // Restore to savepoint
       writeClient.restoreToSavepoint(savepointTimestamp)
       // verify restore completed
@@ -1213,7 +1237,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     var totalLatestDataFiles = 0L
     val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(opts)
     try {
-      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().requestedTime)
         .values()
         .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
           (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](

@@ -26,6 +26,9 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -46,7 +49,9 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
   protected final HoodieWriteConfig config;
 
   protected final HoodieTable<T, I, K, O> table;
-
+  protected final InstantGenerator instantGenerator;
+  protected final InstantFileNameParser instantFileNameParser;
+  protected final InstantFileNameGenerator instantFileNameGenerator;
   protected final String instantTime;
 
   public BaseActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
@@ -54,6 +59,9 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     this.storageConf = context.getStorageConf();
     this.config = config;
     this.table = table;
+    this.instantGenerator = table.getInstantGenerator();
+    this.instantFileNameGenerator = table.getInstantFileNameGenerator();
+    this.instantFileNameParser = table.getInstantFileNameParser();
     this.instantTime = instantTime;
   }
 

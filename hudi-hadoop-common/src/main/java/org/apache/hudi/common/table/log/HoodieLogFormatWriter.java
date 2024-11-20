@@ -217,7 +217,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void rollOver() throws IOException {
     closeStream();
-    this.logFile = logFile.rollOver(storage, rolloverLogWriteToken);
+    this.logFile = logFile.rollOver(rolloverLogWriteToken);
     this.closed = false;
   }
 

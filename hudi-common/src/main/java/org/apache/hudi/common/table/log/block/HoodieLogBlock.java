@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.Option;
@@ -152,8 +153,8 @@ public abstract class HoodieLogBlock {
         LOG.error("Cannot write record positions to the log block header.", e);
       }
     } else {
-      LOG.warn("There are duplicate keys in the records (number of unique positions: %s, "
-              + "number of records: %s). Skip writing record positions to the log block header.",
+      LOG.warn("There are duplicate keys in the records (number of unique positions: {}, "
+              + "number of records: {}). Skip writing record positions to the log block header.",
           positionSet.size(), numRecords);
     }
   }
@@ -162,21 +163,25 @@ public abstract class HoodieLogBlock {
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */
   public enum HoodieLogBlockType {
-    COMMAND_BLOCK(":command"),
-    DELETE_BLOCK(":delete"),
-    CORRUPT_BLOCK(":corrupted"),
-    AVRO_DATA_BLOCK("avro"),
-    HFILE_DATA_BLOCK("hfile"),
-    PARQUET_DATA_BLOCK("parquet"),
-    CDC_DATA_BLOCK("cdc");
+    COMMAND_BLOCK(":command", HoodieTableVersion.ONE),
+    DELETE_BLOCK(":delete", HoodieTableVersion.ONE),
+    CORRUPT_BLOCK(":corrupted", HoodieTableVersion.ONE),
+    AVRO_DATA_BLOCK("avro", HoodieTableVersion.ONE),
+    HFILE_DATA_BLOCK("hfile", HoodieTableVersion.ONE),
+    PARQUET_DATA_BLOCK("parquet", HoodieTableVersion.FOUR),
+    CDC_DATA_BLOCK("cdc", HoodieTableVersion.SIX);
 
     private static final Map<String, HoodieLogBlockType> ID_TO_ENUM_MAP =
         TypeUtils.getValueToEnumMap(HoodieLogBlockType.class, e -> e.id);
 
     private final String id;
 
-    HoodieLogBlockType(String id) {
+    @SuppressWarnings("unused")
+    private final HoodieTableVersion earliestTableVersion;
+
+    HoodieLogBlockType(String id, HoodieTableVersion earliestTableVersion) {
       this.id = id;
+      this.earliestTableVersion = earliestTableVersion;
     }
 
     public static HoodieLogBlockType fromId(String id) {
@@ -196,7 +201,21 @@ public abstract class HoodieLogBlock {
    * new enums at the end.
    */
   public enum HeaderMetadataType {
-    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, COMPACTED_BLOCK_TIMES, RECORD_POSITIONS, BLOCK_IDENTIFIER, IS_PARTIAL
+    INSTANT_TIME(HoodieTableVersion.ONE),
+    TARGET_INSTANT_TIME(HoodieTableVersion.ONE),
+    SCHEMA(HoodieTableVersion.ONE),
+    COMMAND_BLOCK_TYPE(HoodieTableVersion.ONE),
+    COMPACTED_BLOCK_TIMES(HoodieTableVersion.FIVE),
+    RECORD_POSITIONS(HoodieTableVersion.SIX),
+    BLOCK_IDENTIFIER(HoodieTableVersion.SIX),
+    IS_PARTIAL(HoodieTableVersion.EIGHT);
+
+    @SuppressWarnings("unused")
+    private final HoodieTableVersion earliestTableVersion;
+
+    HeaderMetadataType(HoodieTableVersion version) {
+      this.earliestTableVersion = version;
+    }
   }
 
   /**

@@ -277,7 +277,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
-    public Builder<T> withKeyFiledOverride(String keyFieldOverride) {
+    public Builder<T> withKeyFieldOverride(String keyFieldOverride) {
       this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
       return this;
     }
