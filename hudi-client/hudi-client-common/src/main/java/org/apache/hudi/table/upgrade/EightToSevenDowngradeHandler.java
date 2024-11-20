@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -62,7 +63,7 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailed
  * Version 6 is the table version for release 0.x (0.14.0 onwards).
  * Version 8 is the placeholder version to track 1.x.
  */
-public class EightToSixDowngradeHandler implements DowngradeHandler {
+public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 
@@ -71,7 +72,7 @@ public class EightToSixDowngradeHandler implements DowngradeHandler {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     // Rollback and run compaction in one step
-    rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, true);
+    rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()));
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
     // Handle timeline downgrade:
@@ -91,7 +92,7 @@ public class EightToSixDowngradeHandler implements DowngradeHandler {
     downgradeFromLSMTimeline(table, context, config);
 
     // downgrade table properties
-    downgradePartitionFields(config, context, upgradeDowngradeHelper, tablePropsToAdd);
+    downgradePartitionFields(config, metaClient.getTableConfig(), tablePropsToAdd);
     unsetInitialVersion(config, metaClient.getTableConfig(), tablePropsToAdd);
     unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd);
     downgradeKeyGeneratorType(config, metaClient.getTableConfig(), tablePropsToAdd);
@@ -106,10 +107,8 @@ public class EightToSixDowngradeHandler implements DowngradeHandler {
   }
 
   static void downgradePartitionFields(HoodieWriteConfig config,
-                                       HoodieEngineContext context,
-                                       SupportsUpgradeDowngrade upgradeDowngradeHelper,
+                                       HoodieTableConfig tableConfig,
                                        Map<ConfigProperty, String> tablePropsToAdd) {
-    HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
     String keyGenerator = tableConfig.getKeyGeneratorClassName();
     String partitionPathField = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
     if (keyGenerator != null && partitionPathField != null

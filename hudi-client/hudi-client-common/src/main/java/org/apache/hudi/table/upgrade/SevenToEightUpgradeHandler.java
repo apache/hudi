@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -49,16 +50,17 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.upgradeToLSMTi
  * Version 6 is the table version for release 0.x (0.14.0 onwards).
  * Version 8 is the placeholder version to track 1.x.
  */
-public class SixToEightUpgradeHandler implements UpgradeHandler {
+public class SevenToEightUpgradeHandler implements UpgradeHandler {
 
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
                                              String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // Rollback and run compaction in one step
-    rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, true);
+    rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()));
 
     // handle table properties upgrade
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();

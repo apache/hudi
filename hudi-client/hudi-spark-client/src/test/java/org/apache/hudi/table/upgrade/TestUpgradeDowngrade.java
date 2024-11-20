@@ -622,8 +622,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       tableConfig.setValue(BASE_FILE_FORMAT, cfg.getString(BASE_FILE_FORMAT));
     }
 
-    // TODO: Downgrade Script for table version 8 is still in progress.
-    assertTrue(HoodieTableVersion.EIGHT.greaterThan(fromVersion));
+    // Downgrade Script for table version 8 is still in progress.
+    assertTrue(HoodieTableVersion.SEVEN.greaterThan(fromVersion));
     prepForDowngradeFromVersion(HoodieTableVersion.SIX);
 
     // prepare data. Make 2 commits, in which 2nd is not committed.

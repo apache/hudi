@@ -29,6 +29,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.BaseHoodieTimeline;
+import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -187,9 +189,14 @@ public class UpgradeDowngradeUtils {
   }
 
   static void upgradeToLSMTimeline(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
-    ValidationUtils.checkState(table.getMetaClient().getTimelineLayoutVersion() == TimelineLayoutVersion.LAYOUT_VERSION_1,
-        "Upgrade to LSM timeline is only supported for layout version 1");
+    table.getMetaClient().getTableConfig().getTimelineLayoutVersion().ifPresent(
+        timelineLayoutVersion -> ValidationUtils.checkState(TimelineLayoutVersion.LAYOUT_VERSION_1.equals(timelineLayoutVersion),
+            "Upgrade to LSM timeline is only supported for layout version 1. Given version: " + timelineLayoutVersion));
     HoodieArchivedTimeline archivedTimeline = table.getMetaClient().getArchivedTimeline();
+    if (archivedTimeline.getInstants().isEmpty()) {
+      return;
+    }
+
     Consumer<Exception> exceptionHandler = e -> {
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException(e);
@@ -206,9 +213,15 @@ public class UpgradeDowngradeUtils {
   }
 
   static void downgradeFromLSMTimeline(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
-    ValidationUtils.checkState(table.getMetaClient().getTimelineLayoutVersion() == TimelineLayoutVersion.LAYOUT_VERSION_2,
-        "Downgrade from LSM timeline is only supported for layout version 2");
+    // if timeline layout version is present in the Option then check if it is LAYOUT_VERSION_2
+    table.getMetaClient().getTableConfig().getTimelineLayoutVersion().ifPresent(
+        timelineLayoutVersion -> ValidationUtils.checkState(TimelineLayoutVersion.LAYOUT_VERSION_2.equals(timelineLayoutVersion),
+            "Downgrade from LSM timeline is only supported for layout version 2. Given version: " + timelineLayoutVersion));
     HoodieArchivedTimeline lsmArchivedTimeline = table.getMetaClient().getArchivedTimeline();
+    if (lsmArchivedTimeline.getInstants().isEmpty()) {
+      return;
+    }
+
     Consumer<Exception> exceptionHandler = e -> {
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException("Failed to downgrade LSM timeline to old archived format", e);
@@ -265,7 +278,7 @@ public class UpgradeDowngradeUtils {
       replacedFileName = replacedFileName.replace(instant.getAction(), SIX_TO_EIGHT_TIMELINE_ACTION_MAP.get(instant.getAction()));
     }
     try {
-      return renameInstantFile(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV2, commitMetadataSerDeV1, SIX_TO_EIGHT_TMP_FILE_PREFIX, activeTimelineV1);
+      return renameInstantFile(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, commitMetadataSerDeV2, SIX_TO_EIGHT_TMP_FILE_PREFIX, activeTimelineV1);
     } catch (IOException e) {
       LOG.warn("Can not to complete the upgrade from version seven to version eight. The reason for failure is {}", e.getMessage());
     }
@@ -273,22 +286,21 @@ public class UpgradeDowngradeUtils {
   }
 
   private static boolean renameInstantFile(HoodieInstant instant, HoodieTableMetaClient metaClient, String originalFileName, String replacedFileName,
-                                           CommitMetadataSerDeV2 commitMetadataSerDeV2, CommitMetadataSerDeV1 commitMetadataSerDeV1,
-                                           String tmpFilePrefix, ActiveTimelineV1 activeTimelineV1) throws IOException {
+                                           CommitMetadataSerDe commitMetadataDeserializer, CommitMetadataSerDe commitMetadataSerializer,
+                                           String tmpFilePrefix, BaseHoodieTimeline activeTimeline) throws IOException {
     StoragePath fromPath = new StoragePath(metaClient.getMetaPath(), originalFileName);
     StoragePath toPath = new StoragePath(metaClient.getMetaPath(), replacedFileName);
     boolean success = true;
     if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
-      // TODO: Check if we need to reverse the serde order in case of upgrade/downgrade.
       HoodieCommitMetadata commitMetadata =
-          commitMetadataSerDeV2.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-      Option<byte[]> data = commitMetadataSerDeV1.serialize(commitMetadata);
+          commitMetadataDeserializer.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      Option<byte[]> data = commitMetadataSerializer.serialize(commitMetadata);
       // Create a temporary file to store the json metadata.
-      String tmpFileName = tmpFilePrefix + UUID.randomUUID() + ".json";
+      String fileExtension = commitMetadataSerializer instanceof CommitMetadataSerDeV1 ? ".json" : ".avro";
+      String tmpFileName = tmpFilePrefix + UUID.randomUUID() + fileExtension;
       StoragePath tmpPath = new StoragePath(metaClient.getTempFolderPath(), tmpFileName);
       String tmpPathStr = tmpPath.toUri().toString();
-      // TODO: Check if we need to create the ActiveTimelineV2 in case of upgrade/downgrade.
-      activeTimelineV1.createFileInMetaPath(tmpPathStr, data, true);
+      activeTimeline.createFileInMetaPath(tmpPathStr, data, true, metaClient);
       // Note. this is a 2 step. First we create the V1 commit file and then delete file. If it fails in the middle, rerunning downgrade will be idempotent.
       metaClient.getStorage().deleteFile(toPath); // First delete if it was created by previous failed downgrade.
       success = metaClient.getStorage().rename(tmpPath, toPath);

@@ -41,7 +41,7 @@ public class HoodieTableConfigUtils {
    * strip the partition key generator related info from the fields.
    */
   public static Option<String> getPartitionFieldProp(HoodieConfig config) {
-    if (getTableVersion(config).greaterThan(HoodieTableVersion.SIX)) {
+    if (getTableVersion(config).greaterThan(HoodieTableVersion.SEVEN)) {
       // With table version eight, the table config org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS
       // stores the corresponding partition type as well. This partition type is useful for CustomKeyGenerator
       // and CustomAvroKeyGenerator.
@@ -71,7 +71,7 @@ public class HoodieTableConfigUtils {
    * generator is configured. This function would strip the partition type and return the partition field.
    */
   public static String getPartitionFieldWithoutKeyGenPartitionType(String partitionField, HoodieConfig config) {
-    return getTableVersion(config).greaterThan(HoodieTableVersion.SIX)
+    return getTableVersion(config).greaterThan(HoodieTableVersion.SEVEN)
         ? partitionField.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)[0]
         : partitionField;
   }

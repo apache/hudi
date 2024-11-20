@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
+class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
@@ -54,9 +54,9 @@ class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
     // downgrade table props to version seven
     // assert table version is seven and the partition fields in table config does not have partition type
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
-      .run(HoodieTableVersion.SIX, null)
+      .run(HoodieTableVersion.SEVEN, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig.getTableVersion)
+    assertEquals(HoodieTableVersion.SEVEN, metaClient.getTableConfig.getTableVersion)
     assertEquals("partition", HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
 
     // auto upgrade the table
