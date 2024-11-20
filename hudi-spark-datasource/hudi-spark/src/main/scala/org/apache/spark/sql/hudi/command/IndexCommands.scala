@@ -21,8 +21,11 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkIndexClient
+import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.secondary.SecondaryIndexManager
 import org.apache.hudi.metadata.MetadataPartitionType
@@ -34,7 +37,6 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util
-
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
 case class CreateIndexCommand(table: CatalogTable,
@@ -50,6 +52,15 @@ case class CreateIndexCommand(table: CatalogTable,
     val columnsMap: java.util.LinkedHashMap[String, java.util.Map[String, String]] =
       new util.LinkedHashMap[String, java.util.Map[String, String]]()
     columns.map(c => columnsMap.put(c._1.mkString("."), c._2.asJava))
+
+    // validate that only overwrite with latest payloads can enabled SI
+    if (indexType.equals("secondary_index")) {
+      // do additional validation
+      if ((metaClient.getTableConfig.getPayloadClass != null && !(metaClient.getTableConfig.getPayloadClass.equals(classOf[OverwriteWithLatestAvroPayload].getCanonicalName)))
+        || (metaClient.getTableConfig.getRecordMergeMode ne RecordMergeMode.OVERWRITE_WITH_LATEST)) {
+        throw new HoodieIOException("Secondary Index can only be enabled on table with OverwriteWithLatestAvroPayload payload class or " + "Merge mode set to OVERWRITE_WITH_LATEST")
+      }
+    }
 
     if (options.contains("func") || indexType.equals("secondary_index")) {
       val extraOpts = options ++ table.properties
