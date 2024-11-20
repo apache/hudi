@@ -24,7 +24,9 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -312,6 +314,23 @@ public enum MetadataPartitionType {
     }
   }
 
+  /**
+   * Returns the index definition name without the prefix of the partition type. This name
+   * is what's provided by user while creating the index. This function is useful for partition
+   * types like functional and secondary index which use a prefix.
+   */
+  public String getIndexNameWithoutPrefix(HoodieIndexDefinition indexDefinition) {
+    String indexName = indexDefinition.getIndexName();
+    ValidationUtils.checkArgument(indexName.startsWith(partitionPath), String.format("Index Name %s does not start with partition path %s", indexName, partitionPath));
+    if (indexDefinition.getIndexName().length() > partitionPath.length()) {
+      return indexDefinition.getIndexName().substring(partitionPath.length() + 1);
+    }
+    return "";
+  }
+
+  /**
+   * Returns true if partition type is functional or secondary.
+   */
   public static boolean isGenericIndex(String metadataPartitionPath) {
     return metadataPartitionPath.startsWith(SECONDARY_INDEX.getPartitionPath())
         || metadataPartitionPath.startsWith(FUNCTIONAL_INDEX.getPartitionPath());

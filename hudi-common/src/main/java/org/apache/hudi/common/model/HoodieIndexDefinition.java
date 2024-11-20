@@ -81,10 +81,6 @@ public class HoodieIndexDefinition implements Serializable {
     return indexType;
   }
 
-  public String getIndexNameWithoutPrefix() {
-    return indexName.substring(indexType.length() + 1);
-  }
-
   @Override
   public String toString() {
     return new StringJoiner(", ", HoodieIndexDefinition.class.getSimpleName() + "[", "]")

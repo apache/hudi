@@ -80,7 +80,10 @@ case class DropIndexCommand(table: CatalogTable,
     } else if (indexMetadataOpt.isPresent) {
       val indexMetadata = indexMetadataOpt.get
       val indexDefinitions = indexMetadata.getIndexDefinitions.values().stream()
-        .filter(definition => definition.getIndexNameWithoutPrefix.equals(indexName))
+        .filter(definition => {
+          val partitionType = MetadataPartitionType.fromPartitionPath(definition.getIndexName)
+          partitionType.getIndexNameWithoutPrefix(definition).equals(indexName)
+        })
         .collect(Collectors.toList[HoodieIndexDefinition])
       if (indexDefinitions.isEmpty && !ignoreIfNotExists) {
         throw new HoodieIndexException(String.format("Index does not exist: %s", indexName))
