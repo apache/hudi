@@ -275,8 +275,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
       stat.setTotalLogRecords(scanner.getTotalLogRecords());
       stat.setPartitionPath(operation.getPartitionPath());
-      stat
-          .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+      stat.setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
       stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
       stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
       stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
