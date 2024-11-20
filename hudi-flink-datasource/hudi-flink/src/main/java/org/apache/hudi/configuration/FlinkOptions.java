@@ -692,6 +692,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(true) // default true for MOR write
       .withDescription("Async Compaction, enabled by default for MOR");
 
+  public static final ConfigOption<Boolean> COMPACTION_TASK_ASYNC_ENABLED = ConfigOptions
+      .key("compaction.task.async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Execute compaction tasks asynchronously, enabled by default in streaming mode and permanently disabled in batch mode");
+
   @AdvancedConfig
   public static final ConfigOption<Integer> COMPACTION_TASKS = ConfigOptions
       .key("compaction.tasks")

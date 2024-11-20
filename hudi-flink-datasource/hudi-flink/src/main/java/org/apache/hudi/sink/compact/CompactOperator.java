@@ -24,7 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
@@ -68,9 +68,9 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   private transient HoodieFlinkWriteClient<?> writeClient;
 
   /**
-   * Whether to execute compaction asynchronously.
+   * Whether to execute compaction task asynchronously.
    */
-  private final boolean asyncCompaction;
+  private final boolean asyncCompactionTask;
 
   /**
    * Id of current subtask.
@@ -94,7 +94,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
 
   public CompactOperator(Configuration conf) {
     this.conf = conf;
-    this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
+    this.asyncCompactionTask = conf.getBoolean(FlinkOptions.COMPACTION_TASK_ASYNC_ENABLED);
   }
 
   @Override
@@ -106,7 +106,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   public void open() throws Exception {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    if (this.asyncCompaction) {
+    if (this.asyncCompactionTask) {
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
     this.collector = new StreamRecordCollector<>(output);
@@ -118,7 +118,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     final CompactionPlanEvent event = record.getValue();
     final String instantTime = event.getCompactionInstantTime();
     final CompactionOperation compactionOperation = event.getOperation();
-    if (asyncCompaction) {
+    if (asyncCompactionTask) {
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
           () -> doCompaction(instantTime, compactionOperation, collector, reloadWriteConfig()),

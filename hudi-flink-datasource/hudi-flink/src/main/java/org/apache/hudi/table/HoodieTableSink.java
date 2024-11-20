@@ -119,7 +119,7 @@ public class HoodieTableSink implements
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         // use synchronous compaction for bounded source.
         if (context.isBounded()) {
-          conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+          conf.setBoolean(FlinkOptions.COMPACTION_TASK_ASYNC_ENABLED, false);
         }
         return Pipelines.compact(conf, pipeline);
       } else {
