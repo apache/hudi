@@ -353,6 +353,13 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             .mode(SaveMode.Append)
             .save(basePath)) (
             "Can not perform operation " + WriteOperationType.fromValue(operationType) + " on secondary index")
+          // disable secondary index and retry
+          df.write.format("hudi")
+            .options(hudiOpts)
+            .option(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key, "false")
+            .option(OPERATION.key, operationType)
+            .mode(SaveMode.Append)
+            .save(basePath)
         }
       }
     }

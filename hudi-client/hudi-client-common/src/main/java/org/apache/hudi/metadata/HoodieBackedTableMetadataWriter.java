@@ -1132,6 +1132,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap, HoodieData<WriteStatus> writeStatus) {
+    if (!dataWriteConfig.isSecondaryIndexEnabled()) {
+      return;
+    }
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
     WriteOperationType operationType = commitMetadata.getOperationType();

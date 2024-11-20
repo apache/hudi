@@ -67,23 +67,23 @@ public class TestMetadataPartitionType {
       case FUNCTIONAL_INDEX:
       case SECONDARY_INDEX:
         metadataConfigBuilder.enable(true);
-        expectedEnabledPartitions = 1;
+        expectedEnabledPartitions = 2;
         break;
       case COLUMN_STATS:
         metadataConfigBuilder.enable(true).withMetadataIndexColumnStats(true);
-        expectedEnabledPartitions = 2;
+        expectedEnabledPartitions = 3;
         break;
       case BLOOM_FILTERS:
         metadataConfigBuilder.enable(true).withMetadataIndexBloomFilter(true);
-        expectedEnabledPartitions = 2;
+        expectedEnabledPartitions = 3;
         break;
       case RECORD_INDEX:
         metadataConfigBuilder.enable(true).withEnableRecordIndex(true);
-        expectedEnabledPartitions = 2;
+        expectedEnabledPartitions = 3;
         break;
       case PARTITION_STATS:
         metadataConfigBuilder.enable(true).withMetadataIndexPartitionStats(true).withColumnStatsIndexForColumns("partitionCol");
-        expectedEnabledPartitions = 2;
+        expectedEnabledPartitions = 3;
         break;
       default:
         throw new IllegalArgumentException("Unknown partition type: " + partitionType);
@@ -93,7 +93,7 @@ public class TestMetadataPartitionType {
 
     // Verify partition type is enabled due to config
     if (partitionType == MetadataPartitionType.FUNCTIONAL_INDEX || partitionType == MetadataPartitionType.SECONDARY_INDEX) {
-      assertEquals(1, enabledPartitions.size(), "FUNCTIONAL_INDEX or SECONDARY_INDEX should be enabled by SQL, only FILES is enabled in this case.");
+      assertEquals(2, enabledPartitions.size(), "FUNCTIONAL_INDEX should be enabled by SQL, only FILES and SECONDARY_INDEX is enabled in this case.");
       assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES));
     } else {
       assertEquals(expectedEnabledPartitions, enabledPartitions.size());
@@ -115,10 +115,11 @@ public class TestMetadataPartitionType {
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
 
-    // Verify RECORD_INDEX and FILES is enabled due to availability
-    assertEquals(2, enabledPartitions.size(), "RECORD_INDEX and FILES should be available");
+    // Verify RECORD_INDEX and FILES is enabled due to availability, and SECONDARY_INDEX by default
+    assertEquals(3, enabledPartitions.size(), "RECORD_INDEX, SECONDARY_INDEX and FILES should be available");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES), "FILES should be enabled by availability");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.RECORD_INDEX), "RECORD_INDEX should be enabled by availability");
+    assertTrue(enabledPartitions.contains(MetadataPartitionType.SECONDARY_INDEX), "SECONDARY_INDEX should be enabled by default");
   }
 
   @Test
@@ -154,10 +155,11 @@ public class TestMetadataPartitionType {
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
 
-    // Verify FUNCTIONAL_INDEX and FILES is enabled due to availability
-    assertEquals(2, enabledPartitions.size(), "FUNCTIONAL_INDEX and FILES should be available");
+    // Verify FUNCTIONAL_INDEX and FILES is enabled due to availability, and SECONDARY_INDEX by default
+    assertEquals(3, enabledPartitions.size(), "FUNCTIONAL_INDEX, FILES and SECONDARY_INDEX should be available");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES), "FILES should be enabled by availability");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.FUNCTIONAL_INDEX), "FUNCTIONAL_INDEX should be enabled by availability");
+    assertTrue(enabledPartitions.contains(MetadataPartitionType.SECONDARY_INDEX), "SECONDARY_INDEX should be enabled by default");
   }
 
   @Test
