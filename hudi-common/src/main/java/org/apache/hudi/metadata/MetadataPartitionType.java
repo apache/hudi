@@ -323,7 +323,7 @@ public enum MetadataPartitionType {
     String indexName = indexDefinition.getIndexName();
     ValidationUtils.checkArgument(indexName.startsWith(partitionPath), String.format("Index Name %s does not start with partition path %s", indexName, partitionPath));
     if (indexDefinition.getIndexName().length() > partitionPath.length()) {
-      return indexDefinition.getIndexName().substring(partitionPath.length() + 1);
+      return indexDefinition.getIndexName().substring(partitionPath.length());
     }
     return "";
   }

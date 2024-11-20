@@ -239,7 +239,7 @@ public class TestMetadataPartitionType {
   }
 
   private HoodieIndexDefinition createIndexDefinition(MetadataPartitionType partitionType, String userIndexName) {
-    String indexSuffix = StringUtils.nonEmpty(userIndexName) ? "_" + userIndexName : "";
+    String indexSuffix = StringUtils.nonEmpty(userIndexName) ? userIndexName : "";
     return new HoodieIndexDefinition(partitionType.getPartitionPath() + indexSuffix, null, null, null, null);
   }
 
