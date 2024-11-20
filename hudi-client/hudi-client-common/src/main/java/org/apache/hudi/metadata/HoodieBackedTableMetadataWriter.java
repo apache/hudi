@@ -1135,7 +1135,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
     WriteOperationType operationType = commitMetadata.getOperationType();
-    if (operationType.isOverwriteOrDeletePartition() && MetadataPartitionType.SECONDARY_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
+    if (operationType.isInsertOverwriteOrDeletePartition() && MetadataPartitionType.SECONDARY_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
       throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
     } else if (operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.CLUSTER) {
       return;

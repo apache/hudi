@@ -157,7 +157,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    */
   protected final void dropIndexOnRestore() {
     for (String partitionPath : table.getMetaClient().getTableConfig().getMetadataPartitions()) {
-      if (MetadataPartitionType.shouldDeleteMDTPartitionOnOverwriteOrRestore(partitionPath)) {
+      if (MetadataPartitionType.shouldDeletePartitionOnRestore(partitionPath)) {
         // setting backup to true as this delete is part of restore operation
         HoodieTableMetadataUtil.deleteMetadataTablePartition(table.getMetaClient(), context, partitionPath, true);
       }
