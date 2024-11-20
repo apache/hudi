@@ -133,7 +133,7 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty()).orElseThrow(schemaNotFoundError());
+    return getTableAvroSchema(includeMetadataFields, null);
   }
 
   /**
@@ -142,22 +142,19 @@ public class TableSchemaResolver {
    * @param timestamp as of which table's schema will be fetched
    */
   public Schema getTableAvroSchema(String timestamp) throws Exception {
-    Option<HoodieInstant> instant = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants()
-        .findInstantsBeforeOrEquals(timestamp)
-        .lastInstant();
-    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant)
-        .orElseThrow(schemaNotFoundError());
+    return getTableAvroSchema(metaClient.getTableConfig().populateMetaFields(), timestamp);
   }
 
   /**
    * Fetches tables schema in Avro format as of the given instant
+   * Gets schema for a hoodie table in Avro format, can choice if include metadata fields.
    *
+   * @param includeMetadataFields choice if include metadata fields
    * @param timestamp as of which table's schema will be fetched
    */
-  public Schema getTableAvroSchema(String timestamp, boolean includeMetadataFields) throws Exception {
+  public Schema getTableAvroSchema(boolean includeMetadataFields, String timestamp) throws Exception {
     if (timestamp == null) {
-      return getTableAvroSchema(includeMetadataFields);
+      return getTableAvroSchemaInternal(includeMetadataFields, Option.empty()).orElseThrow(schemaNotFoundError());
     }
     Option<HoodieInstant> instant = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants()

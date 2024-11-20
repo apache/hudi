@@ -50,6 +50,7 @@ import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 
 import java.net.URI
 import java.util
+import java.util.Date
 import java.util.concurrent.TimeUnit
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -161,7 +162,12 @@ class HoodieCatalog extends DelegatingCatalogExtension
 
         // spark passes microseconds
         val milliseconds = TimeUnit.MICROSECONDS.toMillis(timestamp)
-        val targetTimestamp = HoodieInstantTimeGenerator.formatMillis(milliseconds)
+        val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(catalogTable0.location.toString)
+          .setConf(HadoopFSUtils.getStorageConf(SparkSession.active.sessionState.newHadoopConf))
+          .build()
+        HoodieInstantTimeGenerator.setCommitTimeZone(metaClient.getTableConfig.getTimelineTimezone)
+        val targetTimestamp = HoodieInstantTimeGenerator.formatDateWitTimeZone(new Date(milliseconds))
 
         constructTable(ident, catalogTable0, targetTimestamp)
 
