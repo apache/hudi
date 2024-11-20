@@ -46,7 +46,7 @@ public class HoodieSparkExtensibleBucketIndex extends HoodieExtensibleBucketInde
   public HoodieData<WriteStatus> updateLocation(HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
                                                 HoodieTable hoodieTable, String instantTime) throws HoodieIndexException {
     HoodieInstant instant = hoodieTable.getMetaClient().getActiveTimeline().findInstantsAfterOrEquals(instantTime, 1).firstInstant().get();
-    ValidationUtils.checkState(instant.getTimestamp().equals(instantTime), "Cannot get the same instant, instantTime: " + instantTime);
+    ValidationUtils.checkState(instant.requestedTime().equals(instantTime), "Cannot get the same instant, instantTime: " + instantTime);
     if (!ClusteringUtils.isClusteringOrReplaceCommitAction(instant.getAction())) {
       return writeStatuses;
     }
@@ -65,7 +65,7 @@ public class HoodieSparkExtensibleBucketIndex extends HoodieExtensibleBucketInde
           String partition = m.get(ExtensibleBucketIndexUtils.METADATA_PARTITION_PATH);
           // Generate new bucket metadata
           HoodieExtensibleBucketMetadata clusteringBucketMetadata =
-              ExtensibleBucketIndexUtils.deconstructExtensibleExtraMetadata(m, instantPlanPair.get().getLeft().getTimestamp());
+              ExtensibleBucketIndexUtils.deconstructExtensibleExtraMetadata(m, instantPlanPair.get().getLeft().requestedTime());
           // Checking version continuity
           Option<HoodieExtensibleBucketMetadata> oldMetadata = ExtensibleBucketIndexUtils.loadMetadata(hoodieTable, partition);
           ValidationUtils.checkArgument(oldMetadata.isPresent(), "No metadata found for partition " + partition);

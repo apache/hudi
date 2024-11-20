@@ -202,7 +202,7 @@ public class ExtensibleBucketIndexUtils {
           return plan.getExtraMetadata().getOrDefault(BaseExtensibleBucketClusteringPlanStrategy.CLUSTERING_PLAN_TYPE_KEY, "empty")
               .equals(BaseExtensibleBucketClusteringPlanStrategy.BUCKET_RESIZING_PLAN);
         }).flatMap(planPair -> {
-          String instantTime = planPair.getKey().getTimestamp();
+          String instantTime = planPair.getKey().requestedTime();
           return planPair.getValue().getInputGroups()
               .stream()
               .filter(group -> partitions.contains(group.getExtraMetadata().get(METADATA_PARTITION_PATH)))
@@ -232,7 +232,7 @@ public class ExtensibleBucketIndexUtils {
           return plan.getExtraMetadata().getOrDefault(BaseExtensibleBucketClusteringPlanStrategy.CLUSTERING_PLAN_TYPE_KEY, "empty")
               .equals(BaseExtensibleBucketClusteringPlanStrategy.BUCKET_RESIZING_PLAN);
         }).flatMap(planPair -> {
-          String instantTime = planPair.getKey().getTimestamp();
+          String instantTime = planPair.getKey().requestedTime();
           return planPair.getValue().getInputGroups()
               .stream()
               .filter(group -> partitions.contains(group.getExtraMetadata().get(METADATA_PARTITION_PATH)))

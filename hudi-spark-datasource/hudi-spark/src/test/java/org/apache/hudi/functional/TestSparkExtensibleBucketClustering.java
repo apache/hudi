@@ -61,7 +61,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.spark_project.guava.collect.Lists;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -477,7 +476,7 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
   }
 
   private List<Row> readRecordsSortedByPK() {
-    return readRecords(false, Lists.newArrayList("partition_path", "_row_key"));
+    return readRecords(false, Arrays.asList("partition_path", "_row_key"));
   }
 
   private List<Row> readRecords() {
