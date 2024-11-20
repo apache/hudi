@@ -82,7 +82,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
     //       it since these records will be put into queue of BoundedInMemoryExecutor.
     // Just call callback without merging
-    callback.apply(hoodieRecord.copy());
+    if (callback != null) {
+      callback.apply(hoodieRecord.copy());
+    }
   }
 
   @Override

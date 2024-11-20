@@ -22,19 +22,25 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metadata.BaseFileUtils;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.avro.Schema;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -89,7 +95,7 @@ public class TestRLIRecordGeneration extends HoodieClientTestBase {
             fileIdToFileNameMapping1.put(writeStatFileId, writeStatus.getStat().getPath().substring(writeStatus.getStat().getPath().lastIndexOf("/") + 1));
           }
 
-          Iterator<HoodieRecord> rliRecordsItr = BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
+          Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
               writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage());
           while (rliRecordsItr.hasNext()) {
             HoodieRecord rliRecord = rliRecordsItr.next();
@@ -125,7 +131,11 @@ public class TestRLIRecordGeneration extends HoodieClientTestBase {
       if (tableType == HoodieTableType.COPY_ON_WRITE) {
         List<String> expectedRLIInserts = inserts2.stream().map(record -> record.getKey().getRecordKey()).collect(Collectors.toList());
         List<String> expectedRLIDeletes = deletes2.stream().map(record -> record.getKey().getRecordKey()).collect(Collectors.toList());
-        generateRliRecordsAndAssert(writeStatuses2, fileIdToFileNameMapping1, finalCommitTime2, writeConfig, expectedRLIInserts, expectedRLIDeletes);
+        List<String> actualInserts = new ArrayList<>();
+        List<String> actualDeletes = new ArrayList<>();
+        generateRliRecordsAndAssert(writeStatuses2, fileIdToFileNameMapping1, finalCommitTime2, writeConfig, actualInserts, actualDeletes);
+
+        assertListEquality(expectedRLIInserts, expectedRLIDeletes, actualInserts, actualDeletes);
       } else {
         // trigger 2nd commit followed by compaction.
         commitTime = client.createNewInstantTime();
@@ -142,19 +152,41 @@ public class TestRLIRecordGeneration extends HoodieClientTestBase {
         List<WriteStatus> writeStatuses3 = client.upsert(jsc.parallelize(records3, 1), commitTime).collect();
         assertNoWriteErrors(writeStatuses3);
 
+        List<String> expectedRLIInserts = inserts3.stream().map(record -> record.getKey().getRecordKey()).collect(Collectors.toList());
+        List<String> expectedRLIDeletes = deletes3.stream().map(record -> record.getKey().getRecordKey()).collect(Collectors.toList());
+        List<String> actualInserts = new ArrayList<>();
+        List<String> actualDeletes = new ArrayList<>();
+        generateRliRecordsAndAssert(writeStatuses3.stream().filter(writeStatus -> !FSUtils.isLogFile(FSUtils.getFileName(writeStatus.getStat().getPath(), writeStatus.getPartitionPath())))
+                .collect(Collectors.toList()), Collections.emptyMap(), finalCommitTime3, writeConfig, actualInserts, actualDeletes);
+
+        // process log files.
+        String latestCommitTimestamp = metaClient.reloadActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime();
+        Option<Schema> writerSchemaOpt = tryResolveSchemaForTable(metaClient);
+        writeStatuses3.stream().filter(writeStatus -> FSUtils.isLogFile(FSUtils.getFileName(writeStatus.getStat().getPath(), writeStatus.getPartitionPath())))
+            .forEach(writeStatus -> {
+              try {
+                actualDeletes.addAll(HoodieTableMetadataUtil.getDeletedRecordKeys(basePath + "/" + writeStatus.getStat().getPath(), metaClient, writerSchemaOpt,
+                    writeConfig.getMetadataConfig().getMaxReaderBufferSize(), latestCommitTimestamp));
+              } catch (IOException e) {
+                throw new HoodieIOException("Failed w/ IOException ", e);
+              }
+            });
+
+        assertListEquality(expectedRLIInserts, expectedRLIDeletes, actualInserts, actualDeletes);
+
         // trigger compaction
         Option<String> compactionInstantOpt = client.scheduleCompaction(Option.empty());
         assertTrue(compactionInstantOpt.isPresent());
         List<HoodieWriteStat> compactionWriteStats = (List<HoodieWriteStat>) client.compact(compactionInstantOpt.get()).getWriteStats().get();
 
-        List<String> expectedRLIDeletes = deletes3.stream().map(record -> record.getKey().getRecordKey()).collect(Collectors.toList());
+        expectedRLIDeletes = deletes3.stream().map(record -> record.getKey().getRecordKey()).collect(Collectors.toList());
         // since deletes are lazily realized when compaction kicks in, we need to account for deletes from 2nd commit as well.
         expectedRLIDeletes.addAll(deletes2.stream().map(record -> record.getKey().getRecordKey()).collect(Collectors.toList()));
         List<String> actualRLIDeletes = new ArrayList<>();
 
         compactionWriteStats.forEach(writeStat -> {
           try {
-            Iterator<HoodieRecord> rliRecordsItr = BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStat,
+            Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStat,
                 writeConfig.getWritesFileIdEncoding(), finalCommitTime3, metaClient.getStorage());
             while (rliRecordsItr.hasNext()) {
               HoodieRecord rliRecord = rliRecordsItr.next();
@@ -177,38 +209,56 @@ public class TestRLIRecordGeneration extends HoodieClientTestBase {
     }
   }
 
-  private void generateRliRecordsAndAssert(List<WriteStatus> writeStatuses, Map<String, String> fileIdToFileNameMapping, String commitTime,
-                                           HoodieWriteConfig writeConfig, List<String> expectedRLIInserts, List<String> expectedRLIDeletes) {
-    List<String> actualRLIDeletes = new ArrayList<>();
-    List<String> actualRLIInserts = new ArrayList<>();
-    writeStatuses.forEach(writeStatus -> {
-      assertTrue(writeStatus.getStat().getNumDeletes() != 0);
-      // Fetch record keys for all
-      try {
-        String writeStatFileId = writeStatus.getFileId();
-        assertEquals(writeStatus.getStat().getPrevBaseFile(), fileIdToFileNameMapping.get(writeStatFileId));
+  private void assertListEquality(List<String> expectedRLIInserts, List<String> expectedRLIDeletes, List<String> actualInserts,
+                                  List<String> actualDeletes) {
+    Collections.sort(expectedRLIInserts);
+    Collections.sort(actualInserts);
+    Collections.sort(expectedRLIDeletes);
+    Collections.sort(actualDeletes);
+    assertEquals(expectedRLIInserts, actualInserts);
+    assertEquals(expectedRLIDeletes, actualDeletes);
+  }
 
-        Iterator<HoodieRecord> rliRecordsItr = BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStatus.getStat(),
-            writeConfig.getWritesFileIdEncoding(), commitTime, metaClient.getStorage());
-        while (rliRecordsItr.hasNext()) {
-          HoodieRecord rliRecord = rliRecordsItr.next();
-          String key = rliRecord.getRecordKey();
-          if (rliRecord.getData() instanceof EmptyHoodieRecordPayload) {
-            actualRLIDeletes.add(key);
-          } else {
-            actualRLIInserts.add(key);
+  private static Option<Schema> tryResolveSchemaForTable(HoodieTableMetaClient dataTableMetaClient) {
+    if (dataTableMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+      return Option.empty();
+    }
+
+    try {
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(dataTableMetaClient);
+      return Option.of(schemaResolver.getTableAvroSchema());
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
+    }
+  }
+
+  private void generateRliRecordsAndAssert(List<WriteStatus> writeStatuses, Map<String, String> fileIdToFileNameMapping, String commitTime,
+                                           HoodieWriteConfig writeConfig, List<String> actualInserts,
+                                           List<String> actualDeletes) {
+    writeStatuses.forEach(writeStatus -> {
+      if (!FSUtils.isLogFile(FSUtils.getFileName(writeStatus.getStat().getPath(), writeStatus.getPartitionPath()))) {
+        // Fetch record keys for all
+        try {
+          String writeStatFileId = writeStatus.getFileId();
+          if (!fileIdToFileNameMapping.isEmpty()) {
+            assertEquals(writeStatus.getStat().getPrevBaseFile(), fileIdToFileNameMapping.get(writeStatFileId));
           }
+
+          Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStatus.getStat(),
+              writeConfig.getWritesFileIdEncoding(), commitTime, metaClient.getStorage());
+          while (rliRecordsItr.hasNext()) {
+            HoodieRecord rliRecord = rliRecordsItr.next();
+            String key = rliRecord.getRecordKey();
+            if (rliRecord.getData() instanceof EmptyHoodieRecordPayload) {
+              actualDeletes.add(key);
+            } else {
+              actualInserts.add(key);
+            }
+          }
+        } catch (IOException e) {
+          throw new HoodieException("Should not have failed ", e);
         }
-      } catch (IOException e) {
-        throw new HoodieException("Should not have failed ", e);
       }
     });
-
-    Collections.sort(expectedRLIInserts);
-    Collections.sort(actualRLIInserts);
-    Collections.sort(expectedRLIDeletes);
-    Collections.sort(actualRLIDeletes);
-    assertEquals(expectedRLIInserts, actualRLIInserts);
-    assertEquals(expectedRLIDeletes, actualRLIDeletes);
   }
 }

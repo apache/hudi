@@ -32,14 +32,13 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
 import static java.util.stream.Collectors.toList;
 
-public class BaseFileUtils {
+public class BaseFileRecordParsingUtils {
 
   /**
    * Generates RLI Metadata records for base files.
@@ -64,10 +63,9 @@ public class BaseFileUtils {
     String previousFileName = writeStat.getPrevBaseFile();
     String fileId = FSUtils.getFileId(latestFileName);
     Set<String> recordKeysFromLatestBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, latestFileName);
-    if (writeStat.getNumDeletes() == 0) { // if there are no deletes, reading only the file added as part of current commit metadata would suffice.
-      // this means that both inserts and updates from latest base file might result in RLI records.
-      return new ArrayList(recordKeysFromLatestBaseFile).stream().map(recordKey -> HoodieMetadataPayload.createRecordIndexUpdate((String) recordKey, partition, fileId,
-          instantTime, writesFileIdEncoding)).iterator();
+    if (previousFileName == null) {
+      return recordKeysFromLatestBaseFile.stream().map(recordKey -> (HoodieRecord)HoodieMetadataPayload.createRecordIndexUpdate(recordKey, partition, fileId,
+          instantTime, writesFileIdEncoding)).collect(toList()).iterator();
     } else {
       // read from previous base file and find difference to also generate delete records.
       // we will return new inserts and deletes from this code block
