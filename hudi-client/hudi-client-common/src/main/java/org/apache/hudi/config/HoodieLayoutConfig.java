@@ -54,6 +54,9 @@ public class HoodieLayoutConfig extends HoodieConfig {
   public static final String SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME =
       "org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner";
 
+  public static final String EXTENSIBLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME =
+      "org.apache.hudi.table.action.commit.SparkExtensibleBucketPartitioner";
+
   private HoodieLayoutConfig() {
     super();
   }
@@ -91,8 +94,11 @@ public class HoodieLayoutConfig extends HoodieConfig {
         layoutConfig.setDefaultValue(LAYOUT_TYPE, HoodieStorageLayout.LayoutType.BUCKET.name());
 
         // Currently, the partitioner of the SIMPLE bucket index is supported by SparkBucketIndexPartitioner only.
-        if ("SIMPLE".equals(layoutConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE))) {
+        if (HoodieIndex.BucketIndexEngineType.SIMPLE.name().equals(layoutConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE))) {
           layoutConfig.setDefaultValue(LAYOUT_PARTITIONER_CLASS_NAME, SIMPLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME);
+        }
+        if (HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET.name().equals(layoutConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE))) {
+          layoutConfig.setDefaultValue(LAYOUT_PARTITIONER_CLASS_NAME, EXTENSIBLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME);
         }
       }
       layoutConfig.setDefaultValue(LAYOUT_TYPE, LAYOUT_TYPE.defaultValue());

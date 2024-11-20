@@ -567,6 +567,25 @@ public class TestHoodieWriteConfig {
   }
 
   @Test
+  public void testExtensibleBucketIndexPartitionerConfig() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
+            .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET).build())
+        .build();
+    assertEquals(HoodieLayoutConfig.EXTENSIBLE_BUCKET_LAYOUT_PARTITIONER_CLASS_NAME, writeConfig.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
+
+    HoodieWriteConfig overwritePartitioner = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
+            .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE)
+            .build())
+        .withLayoutConfig(HoodieLayoutConfig.newBuilder().withLayoutPartitioner("org.apache.hudi.table.action.commit.UpsertPartitioner").build())
+        .build();
+    assertEquals("org.apache.hudi.table.action.commit.UpsertPartitioner", overwritePartitioner.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
+  }
+
+  @Test
   public void testAutoAdjustCleanPolicyForNonBlockingConcurrencyControl() {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());

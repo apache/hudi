@@ -180,4 +180,8 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
   protected HoodieWriteConfig getWriteConfig() {
     return this.writeConfig;
   }
+
+  protected long clusteringMaxNumGroups() {
+    return this.writeConfig.getClusteringMaxNumGroups();
+  }
 }

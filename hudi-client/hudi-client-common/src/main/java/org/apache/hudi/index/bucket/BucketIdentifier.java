@@ -35,6 +35,8 @@ public class BucketIdentifier implements Serializable {
   // Ensure the same records keys from different writers are desired to be distributed into the same bucket
   private static final String CONSTANT_FILE_ID_SUFFIX = "-0000-0000-0000-000000000000";
 
+  private static final String EXTENSIBLE_FILE_IDE_SUFFIX = "-0000-0000-000000000000";
+
   public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
     return getBucketId(record.getKey(), indexKeyFields, numBuckets);
   }
@@ -48,6 +50,10 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static int getBucketId(String recordKey, String indexKeyFields, int numBuckets) {
+    return getBucketId(getHashKeys(recordKey, indexKeyFields), numBuckets);
+  }
+
+  public static int getBucketId(String recordKey, List<String> indexKeyFields, int numBuckets) {
     return getBucketId(getHashKeys(recordKey, indexKeyFields), numBuckets);
   }
 
@@ -113,6 +119,14 @@ public class BucketIdentifier implements Serializable {
 
   private static String newBucketFileIdFixedSuffix(int bucketId) {
     return newBucketFileIdFixedSuffix(bucketIdStr(bucketId));
+  }
+
+  public static String newExtensibleBucketFileIdFixedSuffix(int bucketId, short version) {
+    return bucketIdStr(bucketId) + "-" + bucketVersionStr(version) + EXTENSIBLE_FILE_IDE_SUFFIX;
+  }
+
+  private static String bucketVersionStr(short version) {
+    return String.format("%04d", version);
   }
 
   public static boolean isBucketFileName(String name) {

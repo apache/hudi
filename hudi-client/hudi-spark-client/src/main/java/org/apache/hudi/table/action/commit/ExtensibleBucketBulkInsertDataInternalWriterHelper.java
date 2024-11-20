@@ -18,22 +18,30 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.ExtensibleBucketIdentifier;
+import org.apache.hudi.index.bucket.ExtensibleBucketIndexUtils;
+import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 
-// TODO: complete the implementation of this class for extensible bucket
+/**
+ * Helper class for native row writer for bulk_insert with extensible bucket index.
+ * Only deal with one partition => one file group.
+ */
 public class ExtensibleBucketBulkInsertDataInternalWriterHelper extends BucketBulkInsertDataInternalWriterHelper {
 
-  public ExtensibleBucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig, String instantTime, int taskPartitionId,
-                                                            long taskId, long taskEpochId, StructType structType, boolean populateMetaFields,
-                                                            boolean arePartitionRecordsSorted) {
-    super(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted);
-  }
+  private static final Logger LOG = LoggerFactory.getLogger(ExtensibleBucketBulkInsertDataInternalWriterHelper.class);
 
   public ExtensibleBucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig, String instantTime, int taskPartitionId, long taskId, long taskEpochId,
                                                             StructType structType, boolean populateMetaFields, boolean arePartitionRecordsSorted, boolean shouldPreserveHoodieMetadata) {
@@ -42,11 +50,47 @@ public class ExtensibleBucketBulkInsertDataInternalWriterHelper extends BucketBu
 
   @Override
   public void write(InternalRow row) throws IOException {
-    super.write(row);
+    try {
+      if (handle == null) {
+        // We can ensure that one writer has only one handle
+        String partitionPath = String.valueOf(extractPartitionPath(row));
+        String recordKey = String.valueOf(extractRecordKey(row));
+        handle = getBucketRowCreateHandle(partitionPath, recordKey);
+      }
+      handle.write(row);
+    } catch (Throwable t) {
+      LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle for ExtensibleBucket ", t);
+      throw new IOException(t);
+    }
+  }
+
+  private HoodieRowCreateHandle getBucketRowCreateHandle(String partitionPath, String recordKey) {
+    ExtensibleBucketIdentifier bucketIdentifier = getBucketIdentifier(partitionPath);
+    int bucketId = bucketIdentifier.getBucketId(recordKey, indexKeyFields);
+    short bucketVersion = bucketIdentifier.getMetadata().getBucketVersion();
+    String fileIdPrefix = BucketIdentifier.newExtensibleBucketFileIdFixedSuffix(bucketId, bucketVersion);
+    String fileId = FSUtils.createNewFileId(fileIdPrefix, 0);
+
+    ValidationUtils.checkArgument(!bucketIdentifier.isPending() || hoodieTable.getFileSystemView()
+        .getAllFileGroups(partitionPath)
+        .filter(fg -> fg.getAllFileSlices().findFirst().isPresent())
+        .noneMatch(fg -> fg.getFileGroupId().getFileId().equals(fileId)),
+        "Extensible Bucket bulk_insert only support write to new file group");
+
+    return new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
+        instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
+  }
+
+  private ExtensibleBucketIdentifier getBucketIdentifier(String partition) {
+    return ExtensibleBucketIndexUtils.fetchLatestUncommittedExtensibleBucketIdentifier(hoodieTable, Collections.singleton(partition)).get(partition);
   }
 
   @Override
   public void close() throws IOException {
-    super.close();
+    if (handle != null) {
+      LOG.info("closing bulk_inset file : {}", handle.getFileName());
+      writeStatusList.add(handle.close());
+      handle = null;
+    }
   }
 }

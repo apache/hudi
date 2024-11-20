@@ -26,10 +26,12 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.util.MathUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
+import org.apache.hudi.table.action.cluster.strategy.BaseExtensibleBucketClusteringPlanStrategy;
 
 import java.io.File;
 import java.io.FileReader;
@@ -57,12 +59,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy";
   public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy";
+  public static final String SPARK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.SparkExtensibleBucketClusteringPlanStrategy";
+
   public static final String SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
   public static final String SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy";
   public static final String JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY =
       "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
+  public static final String SPARK_EXTENSIBLE_BUCKET_EXECUTION_STRATEGY =
+      "org.apache.hudi.client.clustering.run.strategy.SparkExtensibleBucketClusteringExecutionStrategy";
   public static final String PLAN_PARTITION_FILTER_MODE =
       "hoodie.clustering.plan.partition.filter.mode";
 
@@ -319,6 +326,22 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Determines target sample size used by the Boundary-based Interleaved Index method "
           + "of building space-filling curve. Larger sample size entails better layout optimization outcomes, "
           + "at the expense of higher memory footprint.");
+
+  public static final ConfigProperty<BaseExtensibleBucketClusteringPlanStrategy.ExtensibleBucketResizingPlanMode> BUCKET_RESIZING_PLAN_MODE = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "bucket.resizing.plan.mode")
+      .defaultValue(BaseExtensibleBucketClusteringPlanStrategy.ExtensibleBucketResizingPlanMode.FORCE)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Bucket resizing clustering plan mode, currently support FORCE");
+
+  public static final ConfigProperty<String> BUCKET_RESIZING_TARGET_NUM = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "bucket.resizing.target.num")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Target number of bucket after resizing, only effective when bucket index engine is EXTENSIBLE_BUCKET and "
+          + "bucket resizing plan mode is FORCE."
+          + "Value must be power of 2");
 
   /**
    * @deprecated this setting has no effect
@@ -621,6 +644,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withDataOptimizeBuildCurveSampleNumber(int sampleNumber) {
       clusteringConfig.setValue(LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE, String.valueOf(sampleNumber));
+      return this;
+    }
+
+    public Builder withBucketResizingPlanMode(BaseExtensibleBucketClusteringPlanStrategy.ExtensibleBucketResizingPlanMode mode) {
+      clusteringConfig.setValue(BUCKET_RESIZING_PLAN_MODE, mode.name());
+      return this;
+    }
+
+    public Builder withBucketResizingTargetBucketNum(int targetBucketNum) {
+      ValidationUtils.checkArgument(MathUtils.isPowerOf2(targetBucketNum), "Target number of bucket after resizing must be power of 2");
+      clusteringConfig.setValue(BUCKET_RESIZING_TARGET_NUM, String.valueOf(targetBucketNum));
       return this;
     }
 

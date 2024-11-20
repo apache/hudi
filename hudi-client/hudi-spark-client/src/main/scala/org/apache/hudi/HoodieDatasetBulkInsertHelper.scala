@@ -31,7 +31,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
 import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
-import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
+import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ExtensibleBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
 
@@ -173,7 +173,7 @@ object HoodieDatasetBulkInsertHelper
               shouldPreserveHoodieMetadata)
           case HoodieIndex.IndexType.BUCKET if writeConfig.getBucketIndexEngineType
             == BucketIndexEngineType.EXTENSIBLE_BUCKET =>
-            new ConsistentBucketBulkInsertDataInternalWriterHelper(
+            new ExtensibleBucketBulkInsertDataInternalWriterHelper(
               table,
               writeConfig,
               instantTime,

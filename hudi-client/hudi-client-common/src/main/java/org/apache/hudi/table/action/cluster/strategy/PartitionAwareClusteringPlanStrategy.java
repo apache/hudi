@@ -155,7 +155,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
             partitionPaths,
             partitionPath -> {
               List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-              return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
+              return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(clusteringMaxNumGroups());
             },
             partitionPaths.size())
         .stream()

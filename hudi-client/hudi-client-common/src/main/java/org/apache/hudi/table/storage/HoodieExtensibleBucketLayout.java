@@ -21,6 +21,7 @@ package org.apache.hudi.table.storage;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.Set;
@@ -55,12 +56,11 @@ public class HoodieExtensibleBucketLayout extends HoodieStorageLayout {
     return true;
   }
 
-  /**
-   * Extensible bucket will tag all incoming records, so we could go ahead reusing an existing Partitioner
-   */
   @Override
   public Option<String> layoutPartitionerClass() {
-    return Option.empty();
+    return config.contains(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME)
+        ? Option.of(config.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME.key()))
+        : Option.empty();
   }
 
   @Override
