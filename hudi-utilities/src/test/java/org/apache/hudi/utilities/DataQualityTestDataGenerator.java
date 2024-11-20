@@ -46,15 +46,15 @@ public class DataQualityTestDataGenerator  extends UtilitiesTestBase {
 
   @Test
   public void testGenerateData() throws IOException {
-    int initialInserts = 10000;
-    int recurrentInserts = 2000;
-    int recurrentUpdates = 4000;
-    int updatesWithLowerOrderingValue = 500;
-    int recurrentDeletes = 1000;
-    int totalRounds = 10;
+    int initialInserts = 100;
+    int recurrentInserts = 20;
+    int recurrentUpdates = 40;
+    int updatesWithLowerOrderingValue = 5;
+    int recurrentDeletes = 10;
+    int totalRounds = 3;
     int numMillsLess = 120000;
 
-    String basePath = "/tmp/test_data/";
+    String basePath = "/tmp/test_short_data/";
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/path").build();
@@ -64,7 +64,7 @@ public class DataQualityTestDataGenerator  extends UtilitiesTestBase {
 
     List<HoodieRecord> initialInsertRecords = dataGen.generateInserts(commit1, initialInserts);
 
-    UtilitiesTestBase.Helpers.saveParquetToDFS(UtilitiesTestBase.Helpers.toGenericRecords(initialInsertRecords), new Path(basePath+"/0/inputdata.parquet"));
+    UtilitiesTestBase.Helpers.saveParquetToDFS(UtilitiesTestBase.Helpers.toGenericRecords(initialInsertRecords), new Path(basePath + "/0/inputdata.parquet"));
 
     for (int i = 1; i < totalRounds; i++) {
       String commit = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
@@ -75,8 +75,7 @@ public class DataQualityTestDataGenerator  extends UtilitiesTestBase {
       allRecords.addAll(updates);
       allRecords.addAll(dataGen.generateInserts(commit, recurrentInserts));
       allGenRecs.addAll(UtilitiesTestBase.Helpers.toGenericRecords(allRecords));
-      UtilitiesTestBase.Helpers.saveParquetToDFS(allGenRecs, new Path(basePath+"/"+i+"/inputdata.parquet"));
+      UtilitiesTestBase.Helpers.saveParquetToDFS(allGenRecs, new Path(basePath + "/" + i + "/inputdata.parquet"));
     }
   }
-
 }
