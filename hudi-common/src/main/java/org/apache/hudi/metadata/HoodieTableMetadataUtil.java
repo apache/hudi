@@ -785,13 +785,13 @@ public class HoodieTableMetadataUtil {
       int parallelism = Math.max(Math.min(allWriteStats.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
       String basePath = dataTableMetaClient.getBasePath().toString();
       // we might need to set some additional variables if we need to process log files.
-      boolean anyLogFilesWithDeleteBlocks = allWriteStats.stream().anyMatch(writeStat -> {
+      boolean anyLogFilesWithDeletes = allWriteStats.stream().anyMatch(writeStat -> {
         String fileName = FSUtils.getFileName(writeStat.getPath(), writeStat.getPartitionPath());
-        return FSUtils.isLogFile(fileName) && writeStat.getNumInserts() == 0 && writeStat.getNumUpdateWrites() == 0 && writeStat.getNumDeletes() > 0;
+        return FSUtils.isLogFile(fileName) && writeStat.getNumDeletes() > 0;
       });
       Option<String> latestCommitTimestamp = Option.empty();
       Option<Schema> writerSchemaOpt = Option.empty();
-      if (anyLogFilesWithDeleteBlocks) { // if we have a log file w/ pure deletes.
+      if (anyLogFilesWithDeletes) { // if we have a log file w/ deletes.
         latestCommitTimestamp = Option.of(dataTableMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime());
         writerSchemaOpt = tryResolveSchemaForTable(dataTableMetaClient);
       }
@@ -806,9 +806,10 @@ public class HoodieTableMetadataUtil {
             if (writeStat.getPath().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
               return BaseFileUtils.generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage);
             } else {
-              // for logs, we only need to process delete blocks for RLI
-              if (writeStat.getNumInserts() == 0 && writeStat.getNumUpdateWrites() == 0 && writeStat.getNumDeletes() > 0) {
-                Set<String> deletedRecordKeys = getDeletedRecordKeys(dataTableMetaClient.getBasePath().toString() + "/" + writeStat.getPath(), dataTableMetaClient,
+              // for logs, we only need to process log files containing deletes
+              if (writeStat.getNumDeletes() > 0) {
+                StoragePath fullFilePath = new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath());
+                Set<String> deletedRecordKeys = getDeletedRecordKeys(fullFilePath.toString(), dataTableMetaClient,
                     finalWriterSchemaOpt, maxBufferSize, finalLatestCommitTimestamp.get());
                 return deletedRecordKeys.stream().map(recordKey -> HoodieMetadataPayload.createRecordIndexDelete(recordKey)).collect(toList()).iterator();
               }
@@ -1395,7 +1396,7 @@ public class HoodieTableMetadataUtil {
                                                  String latestCommitTimestamp) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       // read log file records without merging
-      List<HoodieRecord> records = new ArrayList<>();
+      List<String> deletedKeys = new ArrayList<>();
       HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
           .withStorage(datasetMetaClient.getStorage())
           .withBasePath(datasetMetaClient.getBasePath())
@@ -1404,10 +1405,10 @@ public class HoodieTableMetadataUtil {
           .withLatestInstantTime(latestCommitTimestamp)
           .withReaderSchema(writerSchemaOpt.get())
           .withTableMetaClient(datasetMetaClient)
+          .withLogRecordScannerCallbackForDeletedKeys(deletedKey -> deletedKeys.add(deletedKey.getRecordKey()))
           .build();
       scanner.scan();
-      // HoodieUnMergedLogRecordScanner will expose deleted record keys
-      return scanner.getDeletedRecordKeys();
+      return deletedKeys.stream().collect(Collectors.toSet());
     }
     return Collections.emptySet();
   }
