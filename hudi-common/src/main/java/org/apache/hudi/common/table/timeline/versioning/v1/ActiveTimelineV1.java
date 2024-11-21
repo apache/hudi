@@ -668,9 +668,9 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   public void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
     StoragePath fullPath = getInstantFileNamePath(filename);
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      FileIOUtils.createFileInPath(metaClient.getStorage(), fullPath, content);
+      FileIOUtils.createFileInPath(metaClient.getStorage(timelinePath), fullPath, content);
     } else {
-      metaClient.getStorage().createImmutableFileInPath(fullPath, content);
+      metaClient.getStorage(timelinePath).createImmutableFileInPath(fullPath, content);
     }
   }
 

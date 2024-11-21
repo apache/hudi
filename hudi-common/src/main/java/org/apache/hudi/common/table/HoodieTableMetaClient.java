@@ -427,7 +427,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieStorage getStorage(StoragePath storagePath) {
-    return getStorage(metaPath, getStorageConf(), consistencyGuardConfig, fileSystemRetryConfig);
+    return getStorage(storagePath, getStorageConf(), consistencyGuardConfig, fileSystemRetryConfig);
   }
 
   private static HoodieStorage getStorage(StoragePath path,
