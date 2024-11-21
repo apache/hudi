@@ -53,7 +53,8 @@ public class HoodieTimeGeneratorConfig extends HoodieConfig {
       })
       .sinceVersion("1.0.0")
       .markAdvanced()
-      .withDocumentation("The max expected clock skew time for WaitBasedTimeGenerator in ms");
+      .withDocumentation("The max expected clock skew time in ms between two processes generating time. Used by "
+          + TimeGeneratorType.WAIT_TO_ADJUST_SKEW.name() + " time generator to implement TrueTime semantics.");
 
   private HoodieTimeGeneratorConfig() {
     super();

@@ -185,9 +185,6 @@ public class HoodieTableMetadataUtil {
       DoubleWrapper.class, FloatWrapper.class, LongWrapper.class,
       StringWrapper.class, TimeMicrosWrapper.class, TimestampMicrosWrapper.class));
 
-  // we have max of 4 partitions (FILES, COL_STATS, BLOOM, RLI)
-  private static final List<String> VALID_PARTITION_INITIALIZATION_TIME_SUFFIXES = Arrays.asList("010", "011", "012", "013");
-
   /**
    * Returns whether the files partition of metadata table is ready for read.
    *
