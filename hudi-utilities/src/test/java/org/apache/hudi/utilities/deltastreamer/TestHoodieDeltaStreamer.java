@@ -49,8 +49,8 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
@@ -423,14 +423,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/path").build();
     TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig(), HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
 
-    String commit1 = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
+    String commit1 = HoodieInstantTimeGenerator.createNewInstantTime(true, timeGenerator, 100);
 
     List<HoodieRecord> initialInsertRecords = dataGen.generateInserts(commit1, initialInserts);
 
     Helpers.saveParquetToDFS(Helpers.toGenericRecords(initialInsertRecords), new Path(basePath + "/0/inputdata.parquet"));
 
     for (int i = 1; i < 10; i++) {
-      String commit = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
+      String commit = HoodieInstantTimeGenerator.createNewInstantTime(true, timeGenerator, 100);
       List<HoodieRecord> allRecords = new ArrayList<>();
       List<GenericRecord> allGenRecs = new ArrayList<>();
       allGenRecs.addAll(dataGen.generateUniqueDeleteGenRecStream(commit, recurrentDeletes).collect(Collectors.toList()));
