@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
@@ -29,8 +28,6 @@ import java.io.Serializable;
  * Interface for serializing and deserializing commit metadata.
  */
 public interface CommitMetadataSerDe extends Serializable {
-
-  TimelineLayoutVersion getLayoutVersion();
 
   <T> T deserialize(HoodieInstant instant, byte[] bytes, Class<T> clazz) throws IOException;
 
