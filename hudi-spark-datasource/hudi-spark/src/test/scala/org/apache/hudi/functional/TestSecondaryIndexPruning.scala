@@ -1198,68 +1198,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @Test
-  def testBloomFiltersIndexWithChanges(): Unit = {
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      val tableName = "test_bloom_filters_index_with_changes"
-      val hudiOpts = commonOpts ++ Map(
-        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
-        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
-      val sqlTableType = "cow"
-
-      spark.sql(
-        s"""
-           CREATE TABLE $tableName (
-           |    ts BIGINT,
-           |    id STRING,
-           |    rider STRING,
-           |    driver STRING,
-           |    fare DOUBLE,
-           |    city STRING,
-           |    state STRING
-           |) USING HUDI
-           |options(
-           |    primaryKey ='id',
-           |    type = '$sqlTableType',
-           |    hoodie.metadata.enable = 'true',
-           |    hoodie.datasource.write.recordkey.field = 'id',
-           |    hoodie.enable.data.skipping = 'true'
-           |)
-           |PARTITIONED BY (state)
-           |location '$basePath'
-       """.stripMargin)
-
-      spark.sql("set hoodie.parquet.small.file.limit=0")
-      spark.sql("set hoodie.enable.data.skipping=true")
-      spark.sql("set hoodie.metadata.enable=true")
-
-      spark.sql(s"""
-           |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
-           |  (1695159649,'trip1','rider-A','driver-K',19.10,'san_francisco','california'),
-           |  (1695414531,'trip6','rider-C','driver-K',17.14,'san_diego','california'),
-           |  (1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas'),
-           |  (1695516137,'trip4','rider-F','driver-P',34.15,'houston','texas')
-           |""".stripMargin)
-
-      spark.sql(
-        s"""
-           |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
-           |  (1695091554,'trip2','rider-C','driver-M',27.70,'sunnyvale','california'),
-           |  (1699349649,'trip5','rider-A','driver-Q',3.32,'san_diego','texas')
-           |""".stripMargin)
-
-      spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(numHashFunctions=1, fpp=0.00000000001)")
-
-      checkAnswer(s"select id, rider from $tableName where city = 'sunnyvale'")(
-        Seq("trip2", "rider-C")
-      )
-
-      if (true) {
-        val a = 1;
-      }
-    }
-  }
-
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testUpdatesReInsertsDeletes(hoodieTableType: HoodieTableType): Unit = {
