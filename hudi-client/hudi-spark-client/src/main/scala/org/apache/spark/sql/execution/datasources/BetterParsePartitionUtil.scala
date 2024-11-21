@@ -106,6 +106,7 @@ object BetterParsePartitionUtil extends Logging {
                                           partitionFragments: Array[String]): Array[Object] = {
     val prefix = s"${partitionSchema.head.name}="
     if (partitionPath.startsWith(prefix)) {
+      // hive style partitioning, so it is easy to figure out where each raw field starts and ends
       val rawFieldVals = splitHiveSlashPartitions(partitionFragments, partitionSchema.length)
       partitionSchema.fields.zip(rawFieldVals).map(col => {
         if (timestampFields.isDefined && timestampFields.get.contains(col._1.name)) {
@@ -117,6 +118,8 @@ object BetterParsePartitionUtil extends Logging {
         }
       })
     } else if (timestampFields.isDefined) {
+      // we have timestamp keygen configs saved to tableconfig, so we can figure out which slashes are
+      // part of the field and which slashes separate fields
       val outputFormat = ConfigUtils.getStringWithAltKeys(tableConfig.getProps,
         TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT)
       val nSlashes = outputFormat.count(_ == StoragePath.SEPARATOR_CHAR)
@@ -141,7 +144,8 @@ object BetterParsePartitionUtil extends Logging {
       })
     } else {
       // If the partition column size is not equal to the partition fragments size
-      // and the partition column size > 1, we do not know how to map the partition
+      // and the partition column size > 1, and we don't have the keygen configs,
+      // we do not know how to map the partition
       // fragments to the partition columns and therefore return an empty tuple. We don't
       // fail outright so that in some cases we can fallback to reading the table as non-partitioned
       // one
