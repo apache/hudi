@@ -68,7 +68,6 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
@@ -90,6 +89,12 @@ public class FileCreateUtils {
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
   /** An empty byte array */
   public static final byte[] EMPTY_BYTES = new byte[0];
+
+  public static StoragePath getTimelinePath(StoragePath basePath) throws IOException {
+    return new StoragePath(
+        new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME),
+        HoodieTableMetaClient.TIMELINEFOLDER_NAME);
+  }
 
   public static String baseFileName(String instantTime, String fileId) {
     return baseFileName(instantTime, fileId, BASE_FILE_EXTENSION);
@@ -160,7 +165,7 @@ public class FileCreateUtils {
 
   private static void createMetaFile(String basePath, String instantTime, Supplier<String> completionTimeSupplier, String suffix, byte[] content) throws IOException {
     try {
-      Path parentPath = Paths.get(TIMELINE_LAYOUT_V2.getTimelinePath(new StoragePath(basePath)).makeQualified(new URI("file:///")).toUri());
+      Path parentPath = Paths.get(getTimelinePath(new StoragePath(basePath)).makeQualified(new URI("file:///")).toUri());
 
       Files.createDirectories(parentPath);
       if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
@@ -194,7 +199,7 @@ public class FileCreateUtils {
 
   private static void deleteMetaFile(String basePath, String instantTime, String suffix,
                                      HoodieStorage storage) throws IOException {
-    StoragePath parentPath = TIMELINE_LAYOUT_V2.getTimelinePath(new StoragePath(basePath));
+    StoragePath parentPath = getTimelinePath(new StoragePath(basePath));
 
     if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION)
         || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
@@ -513,7 +518,7 @@ public class FileCreateUtils {
 
   private static void removeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
     try {
-      Path parentPath = Paths.get(TIMELINE_LAYOUT_V2.getTimelinePath(new StoragePath(basePath)).makeQualified(new URI("file:///")).toUri());
+      Path parentPath = Paths.get(getTimelinePath(new StoragePath(basePath)).makeQualified(new URI("file:///")).toUri());
 
       if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
         Path metaFilePath = parentPath.resolve(instantTime + suffix);

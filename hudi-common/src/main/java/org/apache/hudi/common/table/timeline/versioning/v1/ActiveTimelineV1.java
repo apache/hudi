@@ -51,8 +51,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
-
 public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTimeline {
 
   public static final String TIMELINE_FOLDER_NAME = HoodieTableMetaClient.METAFOLDER_NAME;
@@ -76,7 +74,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   protected ActiveTimelineV1(HoodieTableMetaClient metaClient, Set<String> includedExtensions,
                              boolean applyLayoutFilters) {
-    timelinePath = TIMELINE_LAYOUT_V1.getTimelinePath(metaClient.getBasePath());
+    timelinePath = metaClient.getMetaPath();
     // Filter all the filter in the metapath and include only the extensions passed and
     // convert them into HoodieInstant
     try {

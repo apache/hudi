@@ -40,6 +40,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     final HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
 
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+    tablePropsToAdd.put(HoodieTableConfig.TIMELINE_FOLDER, HoodieTableConfig.TIMELINE_FOLDER.defaultValue());
     upgradePartitionFields(config, tableConfig, tablePropsToAdd);
 
     return tablePropsToAdd;

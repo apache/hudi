@@ -125,9 +125,11 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       context.map(instants, instant -> {
         String fileName = instantFileNameGenerator.getFileName(instant);
         // Rename the metadata file name from the ${instant_time}_${completion_time}.action[.state] format in version 1.x to the ${instant_time}.action[.state] format in version 0.x.
-        StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePath(metaClient.getBasePath()), fileName);
+        StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getTimelinePath(
+            metaClient.getTableConfig(), metaClient.getBasePath()), fileName);
         long modificationTime = instant.isCompleted() ? convertCompletionTimeToEpoch(instant) : -1;
-        StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePath(metaClient.getBasePath()), fileName.replaceAll(UNDERSCORE + "\\d+", ""));
+        StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePathProvider().getTimelinePath(
+            metaClient.getTableConfig(), metaClient.getBasePath()), fileName.replaceAll(UNDERSCORE + "\\d+", ""));
         boolean success = true;
         if (fileName.contains(UNDERSCORE)) {
           try {

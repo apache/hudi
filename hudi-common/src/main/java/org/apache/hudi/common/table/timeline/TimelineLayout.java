@@ -18,21 +18,21 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.v1.TimelinePathProviderV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.TimelineV1Factory;
 import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameGeneratorV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameParserV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.TimelinePathProviderV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.TimelineV2Factory;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.storage.StoragePath;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -76,7 +76,7 @@ public abstract class TimelineLayout implements Serializable {
 
   public abstract CommitMetadataSerDe getCommitMetadataSerDe();
 
-  public abstract StoragePath getTimelinePath(StoragePath basePath);
+  public abstract TimelinePathProvider getTimelinePathProvider();
 
   /**
    * Table Layout where state transitions are managed by renaming files.
@@ -125,8 +125,8 @@ public abstract class TimelineLayout implements Serializable {
     }
 
     @Override
-    public StoragePath getTimelinePath(StoragePath basePath) {
-      return new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    public TimelinePathProvider getTimelinePathProvider() {
+      return new TimelinePathProviderV1();
     }
   }
 
@@ -201,8 +201,8 @@ public abstract class TimelineLayout implements Serializable {
     }
 
     @Override
-    public StoragePath getTimelinePath(StoragePath basePath) {
-      return new StoragePath(new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableMetaClient.TIMELINEFOLDER_NAME);
+    public TimelinePathProvider getTimelinePathProvider() {
+      return new TimelinePathProviderV2();
     }
   }
 }

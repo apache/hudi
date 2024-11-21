@@ -84,6 +84,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -181,7 +182,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
     this.timelineLayoutVersion = layoutVersion.orElseGet(() -> tableConfig.getTimelineLayoutVersion().get());
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
-    this.timelinePath = timelineLayout.getTimelinePath(this.basePath);
+    this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
     LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
@@ -497,7 +498,7 @@ public class HoodieTableMetaClient implements Serializable {
   private void reloadTimelineLayout() {
     this.timelineLayoutVersion = tableConfig.getTimelineLayoutVersion().get();
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
-    this.timelinePath = timelineLayout.getTimelinePath(this.basePath);
+    this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, basePath);
   }
 
   /**
@@ -600,11 +601,7 @@ public class HoodieTableMetaClient implements Serializable {
     if (!storage.exists(metaPathDir)) {
       storage.createDirectory(metaPathDir);
     }
-    //Create Timeline Folder
-    StoragePath timelinePathDir = new StoragePath(metaPathDir, TIMELINEFOLDER_NAME);
-    if (!storage.exists(timelinePathDir)) {
-      storage.createDirectory(timelinePathDir);
-    }
+
     // create schema folder
     StoragePath schemaPathDir = new StoragePath(metaPathDir, SCHEMA_FOLDER_NAME);
     if (!storage.exists(schemaPathDir)) {
@@ -620,6 +617,14 @@ public class HoodieTableMetaClient implements Serializable {
       }
     }
 
+    // if anything other than default archive log folder is specified, create that too
+    String timelinePropVal = new HoodieConfig(props).getStringOrDefault(TIMELINE_FOLDER);
+    if (!StringUtils.isNullOrEmpty(timelinePropVal)) {
+      StoragePath timelineDir = new StoragePath(metaPathDir, timelinePropVal);
+      if (!storage.exists(timelineDir)) {
+        storage.createDirectory(timelineDir);
+      }
+    }
     // Always create temporaryFolder which is needed for finalizeWrite for Hoodie tables
     final StoragePath temporaryFolder = new StoragePath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
     if (!storage.exists(temporaryFolder)) {
@@ -967,6 +972,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String payloadClassName;
     private String recordMergerStrategyId;
     private Integer timelineLayoutVersion;
+    private String timelineFolder;
     private String baseFileFormat;
     private String preCombineField;
     private String partitionFields;
@@ -1022,6 +1028,11 @@ public class HoodieTableMetaClient implements Serializable {
       this.tableVersion = tableVersion;
       // TimelineLayoutVersion is an internal setting which will be consistent with table version.
       setTimelineLayoutVersion(tableVersion.getTimelineLayoutVersion().getVersion());
+      return this;
+    }
+
+    public TableBuilder setTimelineFolder(String timelineFolder) {
+      this.timelineFolder = timelineFolder;
       return this;
     }
 
@@ -1194,6 +1205,7 @@ public class HoodieTableMetaClient implements Serializable {
       return setTableType(metaClient.getTableType())
           .setTableName(metaClient.getTableConfig().getTableName())
           .setTableVersion(metaClient.getTableConfig().getTableVersion())
+          .setTimelineFolder(metaClient.getTableConfig().getTimelineFolder())
           .setArchiveLogFolder(metaClient.getTableConfig().getArchivelogFolder())
           .setRecordMergeMode(metaClient.getTableConfig().getRecordMergeMode())
           .setPayloadClassName(metaClient.getTableConfig().getPayloadClass())
@@ -1221,6 +1233,10 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (hoodieConfig.contains(VERSION)) {
         setTableVersion(hoodieConfig.getInt(VERSION));
+      }
+
+      if (hoodieConfig.contains(TIMELINE_FOLDER)) {
+        setTimelineFolder(hoodieConfig.getString(TIMELINE_FOLDER));
       }
 
       if (hoodieConfig.contains(HoodieTableConfig.TYPE)) {
@@ -1357,6 +1373,12 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.ARCHIVELOG_FOLDER, archiveLogFolder);
       } else {
         tableConfig.setDefaultValue(HoodieTableConfig.ARCHIVELOG_FOLDER);
+      }
+
+      if (!StringUtils.isNullOrEmpty(timelineFolder)) {
+        tableConfig.setValue(HoodieTableConfig.TIMELINE_FOLDER, timelineFolder);
+      } else {
+        tableConfig.setDefaultValue(HoodieTableConfig.TIMELINE_FOLDER);
       }
 
       if (null != timelineLayoutVersion) {

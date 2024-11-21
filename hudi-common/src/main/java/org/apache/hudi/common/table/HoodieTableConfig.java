@@ -222,8 +222,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
-      .defaultValue("archived")
+      .defaultValue("history")
       .withDocumentation("path under the meta folder, to store archived timeline instants at.");
+
+  public static final ConfigProperty<String> TIMELINE_FOLDER = ConfigProperty
+      .key("hoodie.timeline.folder")
+      .defaultValue("timeline")
+      .withDocumentation("path under the meta folder, to store timeline instants at.");
 
   public static final ConfigProperty<Boolean> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
       .key("hoodie.bootstrap.index.enable")
@@ -539,6 +544,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       hoodieConfig.setDefaultValue(TYPE);
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
+      hoodieConfig.setDefaultValue(TIMELINE_FOLDER);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
         // Use latest Version as default unless forced by client
         hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
@@ -900,6 +906,13 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public String getArchivelogFolder() {
     return getStringOrDefault(ARCHIVELOG_FOLDER);
+  }
+
+  /**
+   * Get the relative path of archive log folder under metafolder, for this table.
+   */
+  public String getTimelineFolder() {
+    return getStringOrDefault(TIMELINE_FOLDER);
   }
 
   /**
