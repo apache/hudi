@@ -371,6 +371,7 @@ public class HoodieTableMetadataUtil {
                                                                                int columnStatsIndexParallelism,
                                                                                List<String> targetColumnsForColumnStatsIndex,
                                                                                Integer writesFileIdEncoding,
+                                                                               int maxColsToIndex,
                                                                                HoodieMetadataConfig metadataConfig) {
     final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
@@ -385,7 +386,7 @@ public class HoodieTableMetadataUtil {
 
     if (enabledPartitionTypes.contains(MetadataPartitionType.COLUMN_STATS)) {
       final HoodieData<HoodieRecord> metadataColumnStatsRDD = convertMetadataToColumnStatsRecords(commitMetadata, context,
-          dataMetaClient, isColumnStatsIndexEnabled, columnStatsIndexParallelism, targetColumnsForColumnStatsIndex);
+          dataMetaClient, isColumnStatsIndexEnabled, columnStatsIndexParallelism, targetColumnsForColumnStatsIndex, maxColsToIndex);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
     }
     if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS)) {
@@ -566,12 +567,12 @@ public class HoodieTableMetadataUtil {
                                                                                int bloomIndexParallelism,
                                                                                boolean isColumnStatsIndexEnabled,
                                                                                int columnStatsIndexParallelism,
-                                                                               List<String> targetColumnsForColumnStatsIndex) {
+                                                                               List<String> targetColumnsForColumnStatsIndex,
+                                                                               int maxColsForIndex) {
     final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = engineContext.parallelize(
         convertMetadataToFilesPartitionRecords(cleanMetadata, instantTime), 1);
     partitionToRecordsMap.put(MetadataPartitionType.FILES.getPartitionPath(), filesPartitionRecordsRDD);
-
     if (enabledPartitionTypes.contains(MetadataPartitionType.BLOOM_FILTERS)) {
       final HoodieData<HoodieRecord> metadataBloomFilterRecordsRDD =
           convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism);
@@ -581,7 +582,7 @@ public class HoodieTableMetadataUtil {
     if (enabledPartitionTypes.contains(MetadataPartitionType.COLUMN_STATS)) {
       final HoodieData<HoodieRecord> metadataColumnStatsRDD =
           convertMetadataToColumnStatsRecords(cleanMetadata, engineContext,
-              dataMetaClient, isColumnStatsIndexEnabled, columnStatsIndexParallelism, targetColumnsForColumnStatsIndex);
+              dataMetaClient, isColumnStatsIndexEnabled, columnStatsIndexParallelism, targetColumnsForColumnStatsIndex, maxColsForIndex);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
     }
     if (enabledPartitionTypes.contains(MetadataPartitionType.EXPRESSION_INDEX)) {
@@ -613,8 +614,10 @@ public class HoodieTableMetadataUtil {
           if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
             partitionToRecordsMap.put(indexName, convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism));
           } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
+            //-1 for max columns to index because we should never have
             partitionToRecordsMap.put(indexName,
-                convertMetadataToColumnStatsRecords(cleanMetadata, engineContext, dataMetaClient, true, columnStatsIndexParallelism, indexDefinition.getSourceFields()));
+                convertMetadataToColumnStatsRecords(cleanMetadata, engineContext, dataMetaClient, true,
+                    columnStatsIndexParallelism, indexDefinition.getSourceFields(), 0));
           } else {
             throw new HoodieMetadataException("Unsupported expression index type");
           }
@@ -734,6 +737,7 @@ public class HoodieTableMetadataUtil {
    * @param isColumnStatsIndexEnabled        - Is column stats index enabled
    * @param columnStatsIndexParallelism      - Parallelism for column stats index records generation
    * @param targetColumnsForColumnStatsIndex - List of columns for column stats index
+   * @param maxColumnsToIndex                - if targetColumnsForColumnStatsIndex we will index the first maxColumnsToIndex of the table
    * @return List of column stats index records for the clean metadata
    */
   public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCleanMetadata cleanMetadata,
@@ -741,7 +745,8 @@ public class HoodieTableMetadataUtil {
                                                                              HoodieTableMetaClient dataMetaClient,
                                                                              boolean isColumnStatsIndexEnabled,
                                                                              int columnStatsIndexParallelism,
-                                                                             List<String> targetColumnsForColumnStatsIndex) {
+                                                                             List<String> targetColumnsForColumnStatsIndex,
+                                                                             int maxColumnsToIndex) {
     List<Pair<String, String>> deleteFileList = new ArrayList<>();
     cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
       // Files deleted from a partition
@@ -750,7 +755,7 @@ public class HoodieTableMetadataUtil {
     });
 
     List<String> columnsToIndex =
-        getColumnsToIndex(isColumnStatsIndexEnabled, targetColumnsForColumnStatsIndex,
+        getColumnsToIndex(isColumnStatsIndexEnabled, targetColumnsForColumnStatsIndex, maxColumnsToIndex,
             Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)));
 
     if (columnsToIndex.isEmpty()) {
@@ -1120,10 +1125,11 @@ public class HoodieTableMetadataUtil {
                                                                           boolean isColumnStatsIndexEnabled,
                                                                           int columnStatsIndexParallelism,
                                                                           List<String> targetColumnsForColumnStatsIndex,
+                                                                          int maxColsForIndex,
                                                                           int maxReaderBufferSize) {
     // Find the columns to index
     final List<String> columnsToIndex =
-        getColumnsToIndex(isColumnStatsIndexEnabled, targetColumnsForColumnStatsIndex,
+        getColumnsToIndex(isColumnStatsIndexEnabled, targetColumnsForColumnStatsIndex, maxColsForIndex,
             Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)));
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
@@ -1314,7 +1320,8 @@ public class HoodieTableMetadataUtil {
                                                                              HoodieTableMetaClient dataMetaClient,
                                                                              boolean isColumnStatsIndexEnabled,
                                                                              int columnStatsIndexParallelism,
-                                                                             List<String> targetColumnsForColumnStatsIndex) {
+                                                                             List<String> targetColumnsForColumnStatsIndex,
+                                                                             int maxColumnsToIndex) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
 
@@ -1337,7 +1344,7 @@ public class HoodieTableMetadataUtil {
           tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
 
       List<String> columnsToIndex = getColumnsToIndex(isColumnStatsIndexEnabled, targetColumnsForColumnStatsIndex,
-          Lazy.eagerly(tableSchema));
+          maxColumnsToIndex, Lazy.eagerly(tableSchema));
 
       if (columnsToIndex.isEmpty()) {
         // In case there are no columns to index, bail
@@ -1358,20 +1365,20 @@ public class HoodieTableMetadataUtil {
    */
   private static List<String> getColumnsToIndex(boolean isColumnStatsIndexEnabled,
                                                 List<String> targetColumnsForColumnStatsIndex,
+                                                int maxColumnsToIndex,
                                                 Lazy<Option<Schema>> lazyWriterSchemaOpt) {
     checkState(isColumnStatsIndexEnabled);
 
     if (!targetColumnsForColumnStatsIndex.isEmpty()) {
       return targetColumnsForColumnStatsIndex;
+    } else {
+      if (maxColumnsToIndex <= 0) {
+        return Collections.emptyList();
+      }
+      return lazyWriterSchemaOpt.get()
+          .map(tableSchema -> getFirstNFieldNames(tableSchema, maxColumnsToIndex))
+          .orElse(Collections.emptyList());
     }
-
-    Option<Schema> writerSchemaOpt = lazyWriterSchemaOpt.get();
-    return writerSchemaOpt
-        .map(writerSchema ->
-            writerSchema.getFields().stream()
-                .map(Schema.Field::name)
-                .collect(Collectors.toList()))
-        .orElse(Collections.emptyList());
   }
 
   private static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
@@ -2384,6 +2391,7 @@ public class HoodieTableMetadataUtil {
     final List<String> columnsToIndex = getColumnsToIndex(
         metadataConfig.isPartitionStatsIndexEnabled(),
         metadataConfig.getColumnsEnabledForColumnStatsIndex(),
+        metadataConfig.getMaximumColumnsForColumnStats(),
         lazyWriterSchemaOpt);
     if (columnsToIndex.isEmpty()) {
       LOG.warn("No columns to index for partition stats index");
@@ -2456,7 +2464,10 @@ public class HoodieTableMetadataUtil {
       HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
       Option<Schema> tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
       Lazy<Option<Schema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
-      List<String> columnsToIndex = getColumnsToIndex(metadataConfig.isPartitionStatsIndexEnabled(), metadataConfig.getColumnsEnabledForColumnStatsIndex(), writerSchemaOpt);
+      List<String> columnsToIndex = getColumnsToIndex(metadataConfig.isPartitionStatsIndexEnabled(),
+          metadataConfig.getColumnsEnabledForColumnStatsIndex(),
+          metadataConfig.getMaximumColumnsForColumnStats(),
+          writerSchemaOpt);
       if (columnsToIndex.isEmpty()) {
         return engineContext.emptyHoodieData();
       }
@@ -2732,5 +2743,32 @@ public class HoodieTableMetadataUtil {
     Map<String, Long> getFileNameToSizeMap() {
       return filenameToSizeMap;
     }
+  }
+
+  public static List<String> getColumnsToIndex(HoodieMetadataConfig metadataConfig, Schema tableSchema) {
+    List<String> userSetStrings = metadataConfig.getColumnsEnabledForColumnStatsIndex();
+    if (!userSetStrings.isEmpty()) {
+      return userSetStrings;
+    } else {
+      return getFirstNFieldNames(tableSchema, metadataConfig.getMaximumColumnsForColumnStats());
+    }
+  }
+
+  private static List<String> getFirstNFieldNames(Schema tableSchema, int n) {
+    return tableSchema.getFields().subList(0, Math.min(tableSchema.getFields().size(), n))
+        .stream().map(Schema.Field::name).collect(Collectors.toList());
+  }
+
+  public static List<String> getColumnsToIndex(HoodieMetadataConfig metadataConfig, List<String> tableFieldNames) {
+    List<String> userSetStrings = metadataConfig.getColumnsEnabledForColumnStatsIndex();
+    if (!userSetStrings.isEmpty()) {
+      return userSetStrings;
+    } else {
+      return getFirstNFieldNames(tableFieldNames, metadataConfig.getMaximumColumnsForColumnStats());
+    }
+  }
+
+  private static List<String> getFirstNFieldNames(List<String> tableFieldNames, int n) {
+    return tableFieldNames.subList(0, Math.min(tableFieldNames.size(), n));
   }
 }

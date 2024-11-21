@@ -514,6 +514,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
         engineContext, Collections.emptyMap(), partitionToFilesMap, dataMetaClient, dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
         dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
+        dataWriteConfig.getMaximumColumnsForColumnStats(),
         dataWriteConfig.getMetadataConfig().getMaxReaderBufferSize());
 
     final int fileGroupCount = dataWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
@@ -1053,7 +1054,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
               dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(), dataWriteConfig.getWritesFileIdEncoding(),
-              dataWriteConfig.getMetadataConfig());
+                  dataWriteConfig.getMaximumColumnsForColumnStats(), dataWriteConfig.getMetadataConfig());
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
@@ -1077,7 +1078,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
               dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
-              dataWriteConfig.getWritesFileIdEncoding(), dataWriteConfig.getMetadataConfig());
+              dataWriteConfig.getWritesFileIdEncoding(), dataWriteConfig.getMaximumColumnsForColumnStats(), dataWriteConfig.getMetadataConfig());
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(records, commitMetadata);
       partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), records.union(additionalUpdates));
       updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
@@ -1215,7 +1216,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
         cleanMetadata, instantTime, dataMetaClient, enabledPartitionTypes,
         dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
-        dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex()));
+        dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
+        dataWriteConfig.getMaximumColumnsForColumnStats()));
     closeInternal();
   }
 

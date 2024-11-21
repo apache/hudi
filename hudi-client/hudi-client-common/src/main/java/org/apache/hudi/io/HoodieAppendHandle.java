@@ -57,6 +57,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -432,19 +433,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
 
     if (config.isMetadataColumnStatsIndexEnabled()) {
-      final List<Schema.Field> fieldsToIndex;
-      // If column stats index is enabled but columns not configured then we assume that
-      // all columns should be indexed
-      if (config.getColumnsEnabledForColumnStatsIndex().isEmpty()) {
-        fieldsToIndex = writeSchemaWithMetaFields.getFields();
-      } else {
-        Set<String> columnsToIndexSet = new HashSet<>(config.getColumnsEnabledForColumnStatsIndex());
-
-        fieldsToIndex = writeSchemaWithMetaFields.getFields().stream()
-            .filter(field -> columnsToIndexSet.contains(field.name()))
-            .collect(Collectors.toList());
-      }
-
+      Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil.getColumnsToIndex(config.getMetadataConfig(), writeSchemaWithMetaFields));
+      final List<Schema.Field> fieldsToIndex = writeSchemaWithMetaFields.getFields().stream()
+          .filter(field -> columnsToIndexSet.contains(field.name()))
+          .collect(Collectors.toList());
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
             collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields);

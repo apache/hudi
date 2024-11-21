@@ -173,6 +173,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
 
+  public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_MAX_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.max.columns")
+      .defaultValue(32)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Maximum number of columns to generate column stats for. If the config `" + COLUMN_STATS_INDEX_FOR_COLUMNS.key() + "` is set then then this config will be ignored."
+       + "If unset, then column stats will be generated for the first n columns in the table schema");
+
   public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY = "in-memory";
   public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE = "engine";
 
@@ -411,6 +419,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
     return StringUtils.split(getString(COLUMN_STATS_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
+  }
+
+  public Integer getMaximumColumnsForColumnStats() {
+    return getIntOrDefault(COLUMN_STATS_INDEX_MAX_COLUMNS);
   }
 
   public String getColumnStatsIndexProcessingModeOverride() {
