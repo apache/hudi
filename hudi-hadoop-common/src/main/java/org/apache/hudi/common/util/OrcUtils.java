@@ -126,7 +126,7 @@ public class OrcUtils extends FileFormatUtils {
     }
     List<Pair<HoodieKey, Long>> hoodieKeysAndPositions = new ArrayList<>();
     long position = 0;
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(storage, filePath, Option.empty())) {
+    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(storage, filePath)) {
       while (iterator.hasNext()) {
         hoodieKeysAndPositions.add(Pair.of(iterator.next(), position));
         position++;
