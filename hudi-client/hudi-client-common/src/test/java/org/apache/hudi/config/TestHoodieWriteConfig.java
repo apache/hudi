@@ -548,6 +548,60 @@ public class TestHoodieWriteConfig {
   }
 
   @Test
+  public void testExtensibleBucketIndexDefaultClusteringConfig() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
+            .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET).build())
+        .build();
+    assertEquals(HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY, writeConfig.getClusteringPlanStrategyClass());
+    assertEquals(HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_EXECUTION_STRATEGY, writeConfig.getClusteringExecutionStrategyClass());
+    assertEquals(HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY, writeConfig.getClusteringUpdatesStrategyClass());
+  }
+
+  @Test
+  public void testExtensibleBucketIndexInvalidClusteringConfig() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    TypedProperties consistentBucketIndexProps = HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET).build().getProps();
+    HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder().withPath("/tmp");
+
+    assertThrows(IllegalArgumentException.class,
+        () -> writeConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .fromProperties(consistentBucketIndexProps)
+            .withClusteringPlanStrategyClass(HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY).build()));
+    assertThrows(IllegalArgumentException.class,
+        () -> writeConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .fromProperties(consistentBucketIndexProps)
+            .withClusteringPlanStrategyClass(HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY).build()));
+    assertThrows(IllegalArgumentException.class,
+        () -> writeConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .fromProperties(consistentBucketIndexProps)
+            .withClusteringPlanStrategyClass(HoodieClusteringConfig.FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY).build()));
+
+    assertThrows(IllegalArgumentException.class,
+        () -> writeConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .fromProperties(consistentBucketIndexProps)
+            .withClusteringExecutionStrategyClass(HoodieClusteringConfig.SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY).build()));
+    assertThrows(IllegalArgumentException.class,
+        () -> writeConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .fromProperties(consistentBucketIndexProps)
+            .withClusteringExecutionStrategyClass(HoodieClusteringConfig.JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY).build()));
+    assertThrows(IllegalArgumentException.class,
+        () -> writeConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .fromProperties(consistentBucketIndexProps)
+            .withClusteringExecutionStrategyClass(HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY).build()));
+
+    assertThrows(IllegalArgumentException.class,
+        () -> writeConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .fromProperties(consistentBucketIndexProps)
+            .withBucketResizingConcurrentWriteEnabled(false)
+            .withRollbackPendingClustering(false).build()));
+  }
+
+  @Test
   public void testSimpleBucketIndexPartitionerConfig() {
     Properties props = new Properties();
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");

@@ -33,16 +33,22 @@ import org.apache.hudi.index.bucket.ExtensibleBucketIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class SparkExtensibleBucketDuplicateUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(SparkExtensibleBucketDuplicateUpdateStrategy.class);
+
   public SparkExtensibleBucketDuplicateUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table,
                                                       Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
     super(engineContext, table, fileGroupsInPendingClustering);
@@ -58,7 +64,8 @@ public class SparkExtensibleBucketDuplicateUpdateStrategy<T extends HoodieRecord
     // find that records which need to be updated
     HoodieData<HoodieRecord<T>> filteredRecordsRDD = taggedRecordsRDD.filter(r -> {
       checkState(r.getCurrentLocation() != null);
-      return fileGroupsInPendingClustering.contains(new HoodieFileGroupId(r.getPartitionPath(), r.getCurrentLocation().getFileId()));
+      HoodieFileGroupId hoodieFileGroupId = new HoodieFileGroupId(r.getPartitionPath(), r.getCurrentLocation().getFileId());
+      return fileGroupsInPendingClustering.contains(hoodieFileGroupId);
     });
 
     // no records need to be updated, return directly
@@ -66,8 +73,16 @@ public class SparkExtensibleBucketDuplicateUpdateStrategy<T extends HoodieRecord
       return Pair.of(taggedRecordsRDD, Collections.emptySet());
     }
 
+    List<HoodieFileGroupId> fileGroupIds = filteredRecordsRDD.map(r -> new HoodieFileGroupId(r.getPartitionPath(), r.getCurrentLocation().getFileId())).distinct().collectAsList();
+
+    if (!table.getConfig().isBucketResizingConcurrentWriteEnable()) {
+      // disallow concurrent writing to the bucket-resizing bucket
+      LOG.warn("Disallow concurrent writing to the bucket-resizing bucket: " + fileGroupIds);
+      return Pair.of(taggedRecordsRDD, fileGroupIds.stream().collect(Collectors.toSet()));
+    }
+
     // find bucket-identifier for each partition
-    final Set<String> partitions = new HashSet<>(filteredRecordsRDD.map(HoodieRecord::getPartitionPath).distinct().collectAsList());
+    final Set<String> partitions = fileGroupIds.stream().map(HoodieFileGroupId::getPartitionPath).collect(Collectors.toSet());
 
     Map<String, ExtensibleBucketIdentifier> bucketIdentifier = ExtensibleBucketIndexUtils.fetchLatestUncommittedExtensibleBucketIdentifier(table, partitions);
 

@@ -20,7 +20,6 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.clustering.update.strategy.SparkExtensibleBucketDuplicateUpdateStrategy;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -38,6 +37,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.ExtensibleBucketIndexUtils;
@@ -74,7 +74,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 // TODO: support not row writer
 @Tag("functional")
@@ -109,8 +111,39 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringPlanStrategyClass(HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY)
             .withClusteringExecutionStrategyClass(HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_EXECUTION_STRATEGY)
-            .withClusteringUpdatesStrategy(SparkExtensibleBucketDuplicateUpdateStrategy.class.getName())
+            .withClusteringUpdatesStrategy(HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY)
             .withBucketResizingTargetBucketNum(targetBucketNum)
+            .withBucketResizingConcurrentWriteEnabled(true)
+            .build())
+        .build();
+
+    writeClient = getHoodieWriteClient(config);
+  }
+
+  public void setUp(int maxFileSize, int targetBucketNum, String updateStrategyName, boolean enableConcurrentWrite, boolean enableRollback) throws IOException {
+    initPath();
+    initSparkContexts();
+    initTestDataGenerator();
+    initFileSystem();
+    Properties pros = getPropertiesForKeyGen(true);
+    String initBucketNum = pros.getProperty(HoodieTableConfig.INITIAL_BUCKET_NUM_FOR_NEW_PARTITION.key());
+    if (initBucketNum == null) {
+      pros.setProperty(HoodieTableConfig.INITIAL_BUCKET_NUM_FOR_NEW_PARTITION.key(), "8");
+    }
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, pros);
+    config = getConfigBuilder().withProps(pros)
+        .withAutoCommit(false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(pros)
+            .withIndexType(HoodieIndex.IndexType.BUCKET).withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET)
+            .build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(maxFileSize).build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withBucketResizingTargetBucketNum(targetBucketNum)
+            .withClusteringPlanStrategyClass(HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY)
+            .withClusteringExecutionStrategyClass(HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_EXECUTION_STRATEGY)
+            .withClusteringUpdatesStrategy(updateStrategyName)
+            .withBucketResizingConcurrentWriteEnabled(enableConcurrentWrite)
+            .withRollbackPendingClustering(enableRollback)
             .build())
         .build();
 
@@ -133,6 +166,55 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
         {16, false},
         {128, false}
     });
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testRejectUpdateToResizingBucket(boolean rowWriterEnable) throws IOException {
+    int maxFileSize = 128 * 1024 * 1024;
+    setUp(maxFileSize, 16, HoodieClusteringConfig.SPARK_REJECT_UPDATE_STRATEGY, false, false);
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
+    config.setValue("hoodie.metadata.enable", "false");
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    List<Row> expectedRows = readRecordsSortedByPK();
+    // pending clustering
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    // update to resizing bucket, expect to fail
+    assertThrows(HoodieUpsertException.class, () -> writeData(HoodieActiveTimeline.createNewInstantTime(), 1000, true));
+    // commit the pending clustering
+    writeClient.cluster(clusteringTime, true);
+    List<Row> actualRows = readRecordsSortedByPK();
+    verifyRows(expectedRows, actualRows);
+    // write to resizing bucket after clustering
+    assertDoesNotThrow(() -> writeData(HoodieActiveTimeline.createNewInstantTime(), 1000, true));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testRollbackPendingClustering(boolean rowWriterEnable) throws IOException {
+    int maxFileSize = 128 * 1024 * 1024;
+    setUp(maxFileSize, 16, HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY, false, true);
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
+    config.setValue("hoodie.metadata.enable", "false");
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    // pending clustering
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    // update to resizing bucket, expect rollback pending clustering
+    assertDoesNotThrow(() -> writeData(HoodieActiveTimeline.createNewInstantTime(), 1000, true));
+    // commit the pending clustering but expect fail because of rollback
+    assertThrows(HoodieException.class, () -> writeClient.cluster(clusteringTime, true));
+    List<Row> expectedRows = readRecordsSortedByPK();
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Assertions.assertEquals(metaClient.getActiveTimeline().filterPendingReplaceTimeline().countInstants(), 0);
+    Assertions.assertEquals(metaClient.getActiveTimeline().getCompletedReplaceTimeline().countInstants(), 0);
+    Assertions.assertEquals(metaClient.getActiveTimeline().getRollbackTimeline().countInstants(), 1);
+
+    // clustering again
+    String clusteringTimeAgain = (String) writeClient.scheduleClustering(Option.empty()).get();
+    writeClient.cluster(clusteringTimeAgain, true);
+    List<Row> actualRows = readRecordsSortedByPK();
+    verifyRows(expectedRows, actualRows);
   }
 
   @ParameterizedTest

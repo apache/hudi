@@ -55,6 +55,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy";
   public static final String FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy";
+  public static final String FLINK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.FlinkExtensibleBucketClusteringPlanStrategy";
   public static final String SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy";
   public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
@@ -72,6 +74,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.run.strategy.SparkExtensibleBucketClusteringExecutionStrategy";
   public static final String PLAN_PARTITION_FILTER_MODE =
       "hoodie.clustering.plan.partition.filter.mode";
+
+  public static final String SPARK_REJECT_UPDATE_STRATEGY =
+      "org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy";
+  public static final String SPARK_CONSISTENT_BUCKET_DUPLICATE_UPDATE_STRATEGY =
+      "org.apache.hudi.client.clustering.update.strategy.SparkConsistentBucketDuplicateUpdateStrategy";
+  public static final String SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY =
+      "org.apache.hudi.client.clustering.update.strategy.SparkExtensibleBucketDuplicateUpdateStrategy";
 
   // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
   private static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
@@ -227,7 +236,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> UPDATES_STRATEGY = ConfigProperty
       .key("hoodie.clustering.updates.strategy")
-      .defaultValue("org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy")
+      .defaultValue(SPARK_REJECT_UPDATE_STRATEGY)
       .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Determines how to handle updates, deletes to file groups that are under clustering."
@@ -333,6 +342,15 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Bucket resizing clustering plan mode, currently support FORCE");
+
+  public static final ConfigProperty<Boolean> BUCKET_RESIZING_CONCURRENT_WRITE_ENABLED = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "bucket.resizing.concurrent.write.enabled")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Enable concurrent write during bucket resizing, only effective when bucket index engine is EXTENSIBLE_BUCKET."
+          + "When set to true, the writer will write to both old and new bucket during resizing. "
+          + "When set to false, the writer will rollback pending bucket-resizing when written records' location is during resizing.");
 
   public static final ConfigProperty<String> BUCKET_RESIZING_TARGET_NUM = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "bucket.resizing.target.num")
@@ -570,7 +588,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       clusteringConfig.setValue(PLAN_STRATEGY_SMALL_FILE_LIMIT, String.valueOf(clusteringSmallFileLimit));
       return this;
     }
-    
+
     public Builder withClusteringSortColumns(String sortColumns) {
       clusteringConfig.setValue(PLAN_STRATEGY_SORT_COLUMNS, sortColumns);
       return this;
@@ -658,6 +676,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withBucketResizingConcurrentWriteEnabled(Boolean enabled) {
+      clusteringConfig.setValue(BUCKET_RESIZING_CONCURRENT_WRITE_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
     public HoodieClusteringConfig build() {
       setDefaults();
       validate();
@@ -668,6 +691,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
     private void setDefaults() {
       clusteringConfig.setDefaultValue(PLAN_STRATEGY_CLASS_NAME, getDefaultPlanStrategyClassName(engineType));
       clusteringConfig.setDefaultValue(EXECUTION_STRATEGY_CLASS_NAME, getDefaultExecutionStrategyClassName(engineType));
+      if (isExtensibleBucketIndex()) {
+        // set default value for pending clustering rollback
+        clusteringConfig.setDefaultValue(ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT, true);
+        // set default value for concurrent write during bucket resizing
+        clusteringConfig.setDefaultValue(UPDATES_STRATEGY, SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY);
+      }
       clusteringConfig.setDefaults(HoodieClusteringConfig.class.getName());
     }
 
@@ -692,6 +721,32 @@ public class HoodieClusteringConfig extends HoodieConfig {
               "Consistent hashing bucket index only supports clustering execution strategy : " + SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
         }
       }
+
+      if (isExtensibleBucketIndex()) {
+        String planStrategy = clusteringConfig.getString(PLAN_STRATEGY_CLASS_NAME);
+        if (engineType == EngineType.FLINK) {
+          ValidationUtils.checkArgument(planStrategy.equalsIgnoreCase(FLINK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY),
+              "Extensible bucket index only supports clustering plan strategy : " + FLINK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY);
+        } else {
+          ValidationUtils.checkArgument(
+              planStrategy.equalsIgnoreCase(SPARK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY),
+              "Extensible bucket index only supports clustering plan strategy : " + SPARK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY);
+          ValidationUtils.checkArgument(
+              clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME).equals(SPARK_EXTENSIBLE_BUCKET_EXECUTION_STRATEGY),
+                "Extensible bucket index only supports clustering execution strategy : " + SPARK_EXTENSIBLE_BUCKET_EXECUTION_STRATEGY);
+          String updateStrategy = clusteringConfig.getString(UPDATES_STRATEGY);
+          ValidationUtils.checkArgument(updateStrategy.equalsIgnoreCase(SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY)
+              || updateStrategy.equalsIgnoreCase(SPARK_REJECT_UPDATE_STRATEGY),
+                "Extensible bucket index only supports update strategy : " + SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY + " or " + SPARK_REJECT_UPDATE_STRATEGY);
+          Boolean rollback = clusteringConfig.getBoolean(ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
+          Boolean enableDualWrite = clusteringConfig.getBoolean(BUCKET_RESIZING_CONCURRENT_WRITE_ENABLED);
+          ValidationUtils.checkArgument(
+              SPARK_REJECT_UPDATE_STRATEGY.equals(updateStrategy)
+              || enableDualWrite
+              || rollback,
+              "When disable concurrent write during bucket resizing, must enable rollback pending clustering on conflict");
+        }
+      }
     }
 
     private boolean isConsistentHashingBucketIndex() {
@@ -701,12 +756,19 @@ public class HoodieClusteringConfig extends HoodieConfig {
           && clusteringConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key()).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name());
     }
 
+    private boolean isExtensibleBucketIndex() {
+      return clusteringConfig.contains(HoodieIndexConfig.INDEX_TYPE.key())
+          && clusteringConfig.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
+          && clusteringConfig.getString(HoodieIndexConfig.INDEX_TYPE.key()).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name())
+          && clusteringConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key()).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET.name());
+    }
+
     private String getDefaultPlanStrategyClassName(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return isConsistentHashingBucketIndex() ? SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY : SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+          return getDefaultPlanStrategyClassNameForSpark();
         case FLINK:
-          return isConsistentHashingBucketIndex() ? FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY : FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+          return getDefaultPlanStrategyClassNameForFlink();
         case JAVA:
           return JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
         default:
@@ -714,16 +776,46 @@ public class HoodieClusteringConfig extends HoodieConfig {
       }
     }
 
+    private String getDefaultPlanStrategyClassNameForSpark() {
+      if (isConsistentHashingBucketIndex()) {
+        return SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY;
+      }
+      if (isExtensibleBucketIndex()) {
+        return SPARK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY;
+      }
+      return SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+    }
+
+    private String getDefaultPlanStrategyClassNameForFlink() {
+      if (isConsistentHashingBucketIndex()) {
+        return FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY;
+      }
+      if (isExtensibleBucketIndex()) {
+        return FLINK_EXTENSIBLE_BUCKET_CLUSTERING_PLAN_STRATEGY;
+      }
+      return FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+    }
+
     private String getDefaultExecutionStrategyClassName(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return isConsistentHashingBucketIndex() ? SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY : SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
+          return getDefaultExecutionStrategyClassNameForSpark();
         case FLINK:
         case JAVA:
           return JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY;
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
+    }
+
+    private String getDefaultExecutionStrategyClassNameForSpark() {
+      if (isConsistentHashingBucketIndex()) {
+        return SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY;
+      }
+      if (isExtensibleBucketIndex()) {
+        return SPARK_EXTENSIBLE_BUCKET_EXECUTION_STRATEGY;
+      }
+      return SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
     }
   }
 

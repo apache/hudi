@@ -1359,6 +1359,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieIndex.IndexType.BUCKET.equals(getIndexType()) && HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET.equals(getBucketIndexEngineType());
   }
 
+  public boolean isBucketResizingConcurrentWriteEnable() {
+    return getBoolean(HoodieClusteringConfig.BUCKET_RESIZING_CONCURRENT_WRITE_ENABLED);
+  }
+
   /**
    * Returns whether the table writer would generate pure log files at the very first place.
    */
