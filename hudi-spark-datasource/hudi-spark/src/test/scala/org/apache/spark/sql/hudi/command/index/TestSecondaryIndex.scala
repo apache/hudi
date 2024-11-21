@@ -31,7 +31,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY
 import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
@@ -130,7 +130,10 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             .setBasePath(basePath)
             .setConf(HoodieTestUtils.getDefaultStorageConf)
             .build()
+          assertFalse(metaClient.getTableConfig.getRelativeIndexDefinitionPath.get().contains(metaClient.getBasePath))
+          assertTrue(metaClient.getIndexDefinitionPath.contains(metaClient.getBasePath.toString))
           val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.values().stream().findFirst().get()
+
           metaClient.getTableConfig.setMetadataPartitionState(metaClient, indexDefinition.getIndexName, false)
           checkAnswer(s"drop index idx_price on $tableName")()
           checkAnswer(s"show indexes from $tableName")(
