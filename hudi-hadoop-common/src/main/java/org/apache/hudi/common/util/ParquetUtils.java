@@ -495,7 +495,7 @@ public class ParquetUtils extends FileFormatUtils {
    * An iterator that can apply the given function {@code func} to transform records
    * from the underneath record iterator to hoodie keys.
    */
-  private static class HoodieKeyIterator implements ClosableIterator<HoodieKey> {
+  public static class HoodieKeyIterator implements ClosableIterator<HoodieKey> {
     private final ClosableIterator<GenericRecord> nestedItr;
     private final Function<GenericRecord, HoodieKey> func;
 
