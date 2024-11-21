@@ -427,3 +427,6 @@ ed151b3183 [AUDIT-1051] Change log for release-v1.42.2 (Hotfix on top of 1.42.0)
 576c5fcdb6 [ENG-16492][INTERNAL] Fix client close and heartbeat removal after conflict (#1023)
 14f7da2a94 [ENG-10945][INTERNAL] Update workflows to build/test with Spark 3.5 (#933)
 e20cb5fb60 [AUDIT-1050]: Changelog for release-v1.42.0 (#1018)
+
+---[2024-11-21 13:07:18] [release-v1.45.1] ---
+3305c31c322 [ENG-17701][INTERNAL] Update refresh command for RemoteFSView (#1047)
