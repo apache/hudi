@@ -28,7 +28,6 @@ import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
-
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test

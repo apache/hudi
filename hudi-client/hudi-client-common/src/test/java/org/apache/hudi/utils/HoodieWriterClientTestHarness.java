@@ -1220,6 +1220,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     new UpgradeDowngrade(metaClient, newConfig, client.getEngineContext(), upgradeDowngrade)
         .run(HoodieTableVersion.EIGHT, null);
 
+    client = getHoodieWriteClient(newConfig);
     client.savepoint("004", "user1", "comment1");
     client.restoreToInstant("004", config.isMetadataTableEnabled());
     metaClient = HoodieTestUtils.createMetaClient(storageConf, new StoragePath(basePath), HoodieTableVersion.EIGHT);
