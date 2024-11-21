@@ -1025,7 +1025,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
-      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant);
+      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant, false);
       if (metadataWriterOpt.isPresent()) {
         try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
           metadataWriter.dropMetadataPartitions(metadataPartitions);

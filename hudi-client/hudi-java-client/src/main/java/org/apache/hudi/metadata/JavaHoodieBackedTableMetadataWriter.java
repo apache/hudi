@@ -58,7 +58,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   protected JavaHoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                 HoodieEngineContext engineContext,
                                                 Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, true);
   }
 
   @Override

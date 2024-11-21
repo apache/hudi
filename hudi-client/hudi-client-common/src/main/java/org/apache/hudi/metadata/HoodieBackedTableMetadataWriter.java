@@ -166,12 +166,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
+   * @param shouldInitialize           Determines whether metadata writer should be initialized by reading the metadata
    */
-  protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
-                                            HoodieWriteConfig writeConfig,
+  protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                            HoodieEngineContext engineContext,
-                                            Option<String> inflightInstantTimestamp) {
+                                            HoodieEngineContext engineContext, Option<String> inflightInstantTimestamp,
+                                            boolean shouldInitialize) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.storageConf = storageConf;
@@ -184,7 +184,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
       try {
         initRegistry();
-        initialized = initializeIfNeeded(dataMetaClient, inflightInstantTimestamp);
+        if (shouldInitialize) {
+          initialized = initializeIfNeeded(dataMetaClient, inflightInstantTimestamp);
+        }
       } catch (IOException e) {
         LOG.error("Failed to initialize metadata table", e);
       }
