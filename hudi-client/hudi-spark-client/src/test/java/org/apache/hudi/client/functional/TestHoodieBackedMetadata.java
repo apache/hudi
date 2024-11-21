@@ -2952,11 +2952,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // delete partitions
-      newCommitTime = client.createNewInstantTime(5000);
+      newCommitTime = client.createNewInstantTime();
       client.deletePartitions(singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), newCommitTime);
 
       // add 1 more commit
-      newCommitTime = client.createNewInstantTime(5000);
+      newCommitTime = client.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateInserts(newCommitTime, 10);
       upsertRecords = new ArrayList<>();

@@ -189,16 +189,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
         .setMetaserverConfig(config.getProps()).build();
   }
-
-  /**
-   * Returns next instant time in milliseconds. An explicit Lock is enabled in the context.
-   *
-   * @param milliseconds Milliseconds to add to current time while generating the new instant time.
-   */
-  public String createNewInstantTime(long milliseconds) {
-    return TimelineUtils.generateInstantTime(true, timeGenerator, milliseconds);
-  }
-
+  
   /**
    * Returns next instant time in the correct format. An explicit Lock is enabled in the context.
    */
