@@ -838,6 +838,51 @@ public class HoodieTableMetadataUtil {
     }
   }
 
+  static List<String> getRecordKeysDeletedOrUpdated(HoodieEngineContext engineContext,
+                                                                      HoodieCommitMetadata commitMetadata,
+                                                                      HoodieMetadataConfig metadataConfig,
+                                                                      HoodieTableMetaClient dataTableMetaClient,
+                                                                      String instantTime) {
+
+    List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
+        .flatMap(Collection::stream).collect(Collectors.toList());
+
+    if (allWriteStats.isEmpty()) {
+      return Collections.emptyList();
+    }
+
+    try {
+      int parallelism = Math.max(Math.min(allWriteStats.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
+      String basePath = dataTableMetaClient.getBasePath().toString();
+      // we might need to set some additional variables if we need to process log files.
+      boolean anyLogFiles = allWriteStats.stream().anyMatch(writeStat -> {
+        String fileName = FSUtils.getFileName(writeStat.getPath(), writeStat.getPartitionPath());
+        return FSUtils.isLogFile(fileName);
+      });
+      Option<Schema> writerSchemaOpt = Option.empty();
+      if (anyLogFiles) {
+        writerSchemaOpt = tryResolveSchemaForTable(dataTableMetaClient);
+      }
+      int maxBufferSize = metadataConfig.getMaxReaderBufferSize();
+      StorageConfiguration storageConfiguration = dataTableMetaClient.getStorageConf();
+      Option<Schema> finalWriterSchemaOpt = writerSchemaOpt;
+      return engineContext.parallelize(allWriteStats, parallelism)
+          .flatMap(writeStat -> {
+            HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
+            // handle base files
+            if (writeStat.getPath().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+              return BaseFileRecordParsingUtils.getRecordKeysDeletedOrUpdated(basePath, writeStat, storage).iterator();
+            } else {
+              // for logs, every entry is either an update or a delete
+                StoragePath fullFilePath = new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath());
+                return getRecordKeys(fullFilePath.toString(), dataTableMetaClient, finalWriterSchemaOpt, maxBufferSize, instantTime).iterator();
+            }
+          }).collectAsList();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to generate column stats records for metadata table", e);
+    }
+  }
+
   private static void reAddLogFilesFromRollbackPlan(HoodieTableMetaClient dataTableMetaClient, String instantTime,
                                                     Map<String, Map<String, Long>> partitionToFilesMap) {
     InstantGenerator factory = dataTableMetaClient.getInstantGenerator();
@@ -1409,6 +1454,30 @@ public class HoodieTableMetadataUtil {
           .build();
       scanner.scan();
       return deletedKeys.stream().collect(Collectors.toSet());
+    }
+    return Collections.emptySet();
+  }
+
+  @VisibleForTesting
+  public static Set<String> getRecordKeys(String filePath, HoodieTableMetaClient datasetMetaClient,
+                                                 Option<Schema> writerSchemaOpt, int maxBufferSize,
+                                                 String latestCommitTimestamp) throws IOException {
+    if (writerSchemaOpt.isPresent()) {
+      // read log file records without merging
+      Set<String> allRecordKeys = new HashSet<>();
+      HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
+          .withStorage(datasetMetaClient.getStorage())
+          .withBasePath(datasetMetaClient.getBasePath())
+          .withLogFilePaths(Collections.singletonList(filePath))
+          .withBufferSize(maxBufferSize)
+          .withLatestInstantTime(latestCommitTimestamp)
+          .withReaderSchema(writerSchemaOpt.get())
+          .withTableMetaClient(datasetMetaClient)
+          .withLogRecordScannerCallback(record -> allRecordKeys.add(record.getRecordKey()))
+          .withLogRecordScannerCallbackForDeletedKeys(deletedKey -> allRecordKeys.add(deletedKey.getRecordKey()))
+          .build();
+      scanner.scan();
+      return allRecordKeys;
     }
     return Collections.emptySet();
   }

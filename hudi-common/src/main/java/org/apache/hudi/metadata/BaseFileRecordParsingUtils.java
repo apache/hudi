@@ -32,6 +32,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -86,6 +87,37 @@ public class BaseFileRecordParsingUtils {
       return toReturn.iterator();
     }
   }
+
+  public static List<String> getRecordKeysDeletedOrUpdated(String basePath,
+                                                           HoodieWriteStat writeStat,
+                                                           HoodieStorage storage) throws IOException {
+    String partition = writeStat.getPartitionPath();
+    String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
+    String previousFileName = writeStat.getPrevBaseFile();
+    Set<String> recordKeysFromLatestBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, latestFileName);
+    if (previousFileName == null) {
+      // if this is a new base file for a new file group, everything is an insert.
+      return Collections.emptyList();
+    } else {
+      // read from previous base file and find difference to also generate delete records.
+      // we will return updates and deletes from this code block
+      Set<String> recordKeysFromPreviousBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, previousFileName);
+      List<String> toReturn = recordKeysFromPreviousBaseFile.stream()
+          .filter(recordKey -> {
+            // deleted record
+            return !recordKeysFromLatestBaseFile.contains(recordKey);
+          }).collect(toList());
+
+      toReturn.addAll(recordKeysFromLatestBaseFile.stream()
+          .filter(recordKey -> {
+            // updates
+            return recordKeysFromPreviousBaseFile.contains(recordKey);
+          }).collect(toList()));
+      return toReturn;
+    }
+  }
+
+
 
   private static Set<String> getRecordKeysFromBaseFile(HoodieStorage storage, String basePath, String partition, String fileName) throws IOException {
     StoragePath dataFilePath = new StoragePath(basePath, StringUtils.isNullOrEmpty(partition) ? fileName : (partition + Path.SEPARATOR) + fileName);

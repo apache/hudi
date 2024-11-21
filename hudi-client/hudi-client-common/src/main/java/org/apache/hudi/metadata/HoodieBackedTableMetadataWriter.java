@@ -1065,7 +1065,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()).union(additionalUpdates));
       }
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
-      updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, writeStatus);
+      updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
       return partitionToRecordMap;
     });
     closeInternal();
@@ -1127,7 +1127,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return getFunctionalIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime);
   }
 
-  private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap, HoodieData<WriteStatus> writeStatus) {
+  private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap,
+                                             String instantTime) {
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
     if (commitMetadata.getOperationType() == WriteOperationType.COMPACT
@@ -1141,7 +1142,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .forEach(partition -> {
           HoodieData<HoodieRecord> secondaryIndexRecords;
           try {
-            secondaryIndexRecords = getSecondaryIndexUpdates(commitMetadata, partition, writeStatus);
+            secondaryIndexRecords = getSecondaryIndexUpdates(commitMetadata, partition, instantTime);
           } catch (Exception e) {
             throw new HoodieMetadataException("Failed to get secondary index updates for partition " + partition, e);
           }
@@ -1149,20 +1150,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         });
   }
 
-  private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, HoodieData<WriteStatus> writeStatus) throws Exception {
+  private HoodieData<HoodieRecord> getSecondaryIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
     List<Pair<String, Pair<String, List<String>>>> partitionFilePairs = getPartitionFilePairs(commitMetadata);
     // Build a list of keys that need to be removed. A 'delete' record will be emitted into the respective FileGroup of
     // the secondary index partition for each of these keys. For a commit which is deleting/updating a lot of records, this
     // operation is going to be expensive (in CPU, memory and IO)
-    List<String> keysToRemove = new ArrayList<>();
-    writeStatus.collectAsList().forEach(status -> {
-      status.getWrittenRecordDelegates().forEach(recordDelegate -> {
-        // Consider those keys which were either updated or deleted in this commit
-        if (!recordDelegate.getNewLocation().isPresent() || (recordDelegate.getCurrentLocation().isPresent() && recordDelegate.getNewLocation().isPresent())) {
-          keysToRemove.add(recordDelegate.getRecordKey());
-        }
-      });
-    });
+    List<String> keysToRemove = HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(engineContext, commitMetadata, dataWriteConfig.getMetadataConfig(),
+        dataMetaClient, instantTime);
+
     HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
     // Fetch the secondary keys that each of the record keys ('keysToRemove') maps to
     // This is obtained by scanning the entire secondary index partition in the metadata table
