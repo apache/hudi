@@ -1059,12 +1059,11 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       )
       verifyQueryPredicate(hudiOpts, "not_record_key_col")
 
-      // update the secondary key column by insert.
-      spark.sql(s"insert into $tableName values (5, 'row2',  'efg', 'p2')")
+      // update the secondary key column by update.
+      spark.sql(s"update $tableName set not_record_key_col = 'efg' where record_key_col = 'row2'")
       confirmLastCommitType(ActionType.replacecommit)
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
         Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false),
         Seq(s"efg${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
         Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false))
@@ -1075,7 +1074,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
         Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false),
-        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
         Seq(s"fgh${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
         Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false))
 
@@ -1084,7 +1082,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       confirmLastCommitType(ActionType.replacecommit)
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
         Seq(s"fgh${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
         Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
       )
