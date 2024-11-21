@@ -78,7 +78,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
-import static org.apache.hudi.common.config.RecordMergeMode.OVERWRITE_WITH_LATEST;
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
@@ -740,7 +740,7 @@ public class HoodieTableConfig extends HoodieConfig {
         }
 
         // set merger strategy based on merge mode
-        if (inferredRecordMergeMode == OVERWRITE_WITH_LATEST) {
+        if (inferredRecordMergeMode == COMMIT_TIME_ORDERING) {
           inferredRecordMergeStrategyId = OVERWRITE_MERGE_STRATEGY_UUID;
         } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
           inferredRecordMergeStrategyId = DEFAULT_MERGE_STRATEGY_UUID;
@@ -755,9 +755,9 @@ public class HoodieTableConfig extends HoodieConfig {
               "Default merge strategy ID can only be used with the merge mode of EVENT_TIME_ORDERING");
           inferredRecordMergeMode = EVENT_TIME_ORDERING;
         } else if (recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID)) {
-          checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST,
+          checkArgument(recordMergeMode == null || recordMergeMode == COMMIT_TIME_ORDERING,
               "Overwrite with latest merger strategy ID can only be used with the merge mode of OVERWRITE_WITH_LATEST");
-          inferredRecordMergeMode = OVERWRITE_WITH_LATEST;
+          inferredRecordMergeMode = COMMIT_TIME_ORDERING;
         } else {
           checkArgument(!recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
               "Payload based strategy should only be used if you have a custom payload class set");
@@ -795,8 +795,8 @@ public class HoodieTableConfig extends HoodieConfig {
         // strategy and merge mode must be unset or align with overwrite
         checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID),
             "Record merge strategy cannot be set if a merge payload is used");
-        checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST, "Only overwrite with latest record merge mode can be used with overwrite payload");
-        inferredRecordMergeMode = OVERWRITE_WITH_LATEST;
+        checkArgument(recordMergeMode == null || recordMergeMode == COMMIT_TIME_ORDERING, "Only overwrite with latest record merge mode can be used with overwrite payload");
+        inferredRecordMergeMode = COMMIT_TIME_ORDERING;
         inferredRecordMergeStrategyId = OVERWRITE_MERGE_STRATEGY_UUID;
       } else {
         // using custom avro payload

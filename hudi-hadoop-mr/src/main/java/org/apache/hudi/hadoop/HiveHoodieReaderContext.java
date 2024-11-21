@@ -175,7 +175,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
         return Option.of(new DefaultHiveRecordMerger());
-      case OVERWRITE_WITH_LATEST:
+      case COMMIT_TIME_ORDERING:
         return Option.of(new OverwriteWithLatestHiveRecordMerger());
       case CUSTOM:
       default:

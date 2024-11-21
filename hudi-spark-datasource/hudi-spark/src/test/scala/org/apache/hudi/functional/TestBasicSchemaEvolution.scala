@@ -51,7 +51,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
     HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key() -> "true",
-    HoodieWriteConfig.RECORD_MERGE_MODE.key() -> RecordMergeMode.OVERWRITE_WITH_LATEST.name(),
+    HoodieWriteConfig.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name(),
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",

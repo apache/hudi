@@ -60,7 +60,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
         return Option.of(new DefaultSparkRecordMerger());
-      case OVERWRITE_WITH_LATEST:
+      case COMMIT_TIME_ORDERING:
         return Option.of(new OverwriteWithLatestSparkRecordMerger());
       case CUSTOM:
       default:
