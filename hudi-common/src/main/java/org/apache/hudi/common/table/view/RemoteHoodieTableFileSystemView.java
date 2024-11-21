@@ -164,6 +164,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private final HoodieTableMetaClient metaClient;
   private HoodieTimeline timeline;
   private final TimelineServiceClient timelineServiceClient;
+  private final boolean remoteInitEnabled;
 
   private boolean closed = false;
 
@@ -185,7 +186,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     this.metaClient = metaClient;
     this.timeline = timeline;
     this.timelineServiceClient = timelineServiceClient;
-    if (viewConf.isRemoteInitEnabled()) {
+    this.remoteInitEnabled = viewConf.isRemoteInitEnabled();
+    if (remoteInitEnabled) {
       initialiseTimelineInRemoteView(timeline);
     }
   }
@@ -531,8 +533,14 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParams();
     try {
       // refresh the local timeline first.
-      this.timeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
-      return executeRequest(REFRESH_TABLE, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
+      metaClient.reloadActiveTimeline();
+      this.timeline = TimelineUtils.getVisibleTimelineForFsView(metaClient);
+      if (remoteInitEnabled) {
+        initialiseTimelineInRemoteView(timeline);
+        return true;
+      } else {
+        return executeRequest(REFRESH_TABLE, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
+      }
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
