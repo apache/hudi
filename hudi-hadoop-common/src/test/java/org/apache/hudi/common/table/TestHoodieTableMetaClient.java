@@ -229,4 +229,18 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME
         + Path.SEPARATOR + "hoodie.properties"));
   }
+
+  @Test
+  public void testGetIndexDefinitionPath() throws IOException {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t7";
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .initTable(this.metaClient.getStorageConf(), basePath);
+    assertEquals(metaClient.getMetaPath() + "/.index_defs/index.json", metaClient.getIndexDefinitionPath());
+
+    String randomDefinitionPath = "/a/b/c";
+    metaClient.getTableConfig().setValue(HoodieTableConfig.INDEX_DEFINITION_PATH.key(), "/a/b/c");
+    assertEquals(randomDefinitionPath, metaClient.getIndexDefinitionPath());
+  }
 }

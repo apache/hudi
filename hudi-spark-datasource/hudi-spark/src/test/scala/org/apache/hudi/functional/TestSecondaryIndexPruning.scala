@@ -267,7 +267,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
       )
       // drop secondary index
-      spark.sql(s"drop index secondary_index_idx_not_record_key_col on $tableName")
+      spark.sql(s"drop index idx_not_record_key_col on $tableName")
       // validate index dropped successfully
       metaClient = HoodieTableMetaClient.reload(metaClient)
       assert(!metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))

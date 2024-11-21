@@ -70,7 +70,10 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
                | options (
                |  primaryKey ='id',
                |  type = '$tableType',
-               |  preCombineField = 'ts'
+               |  preCombineField = 'ts',
+               |  hoodie.metadata.enable = 'true',
+               |  hoodie.metadata.record.index.enable = 'true',
+               |  hoodie.metadata.index.secondary.enable = 'true'
                | )
                | partitioned by(ts)
                | location '$basePath'
@@ -78,42 +81,67 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-          checkAnswer(s"show indexes from default.$tableName")()
+          checkAnswer(s"show indexes from default.$tableName")(
+            Seq("record_index", "record_index", "")
+          )
 
-          checkAnswer(s"create index idx_name on $tableName using lucene (name) options(block_size=1024)")()
-          checkAnswer(s"create index idx_price on $tableName using lucene (price options(order='desc')) options(block_size=512)")()
+          spark.sql(s"create index idx_name on $tableName using secondary_index(name)")
+          checkAnswer(s"show indexes from default.$tableName")(
+            Seq("secondary_index_idx_name", "secondary_index", "name"),
+            Seq("record_index", "record_index", "")
+          )
 
-          // Create an index with multiple columns
-          checkException(s"create index idx_id_ts on $tableName using lucene (id, ts)")("Lucene index only support single column")
-
+          spark.sql(s"create index idx_price on $tableName using secondary_index(price)")
           // Create an index with the occupied name
-          checkException(s"create index idx_price on $tableName using lucene (price)")(
-            "Secondary index already exists: idx_price"
+          checkException(s"create index idx_price on $tableName using secondary_index(price)")(
+            "Index already exists: idx_price"
           )
 
-          // Create indexes repeatedly on columns(index name is different, but the index type and involved column is same)
-          checkException(s"create index idx_price_1 on $tableName using lucene (price)")(
-            "Secondary index already exists: idx_price_1"
-          )
-
+          // Both indexes should be shown
           checkAnswer(s"show indexes from $tableName")(
-            Seq("idx_name", "name", "lucene", "", "{\"block_size\":\"1024\"}"),
-            Seq("idx_price", "price", "lucene", "{\"price\":{\"order\":\"desc\"}}", "{\"block_size\":\"512\"}")
+            Seq("secondary_index_idx_name", "secondary_index", "name"),
+            Seq("secondary_index_idx_price", "secondary_index", "price"),
+            Seq("record_index", "record_index", "")
           )
 
           checkAnswer(s"drop index idx_name on $tableName")()
-          checkException(s"drop index idx_name on $tableName")("Secondary index not exists: idx_name")
-
+          // show index shows only one index after dropping
           checkAnswer(s"show indexes from $tableName")(
-            Seq("idx_price", "price", "lucene", "{\"price\":{\"order\":\"desc\"}}", "{\"block_size\":\"512\"}")
+            Seq("secondary_index_idx_price", "secondary_index", "price"),
+            Seq("record_index", "record_index", "")
           )
 
+          // can not drop already dropped index
+          checkException(s"drop index idx_name on $tableName")("Index does not exist: idx_name")
+          // create index again
+          spark.sql(s"create index idx_name on $tableName using secondary_index(name)")
+          // drop index should work now
+          checkAnswer(s"drop index idx_name on $tableName")()
+          checkAnswer(s"show indexes from $tableName")(
+            Seq("secondary_index_idx_price", "secondary_index", "price"),
+            Seq("record_index", "record_index", "")
+          )
+
+          // Drop the second index and show index should show no index
+          // Try a partial delete scenario where table config does not have the partition path
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(HoodieTestUtils.getDefaultStorageConf)
+            .build()
+          val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.values().stream().findFirst().get()
+          metaClient.getTableConfig.setMetadataPartitionState(metaClient, indexDefinition.getIndexName, false)
           checkAnswer(s"drop index idx_price on $tableName")()
+          checkAnswer(s"show indexes from $tableName")(
+            Seq("record_index", "record_index", "")
+          )
+
+          // Drop the record index and show index should show no index
+          checkAnswer(s"drop index record_index on $tableName")()
           checkAnswer(s"show indexes from $tableName")()
 
-          checkException(s"drop index idx_price on $tableName")("Secondary index not exists: idx_price")
+          checkException(s"drop index idx_price on $tableName")("Index does not exist: idx_price")
 
-          checkExceptionContain(s"create index idx_price_1 on $tableName using lucene (field_not_exist)")(
+          checkExceptionContain(s"create index idx_price_1 on $tableName using secondary_index(field_not_exist)")(
             "Missing field field_not_exist"
           )
         }

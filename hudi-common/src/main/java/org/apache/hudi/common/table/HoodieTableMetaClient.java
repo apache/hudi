@@ -195,23 +195,28 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieTableMetaClient() {
   }
 
+  public String getIndexDefinitionPath() {
+    return tableConfig.getIndexDefinitionPath()
+        .orElseGet(() -> metaPath + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FOLDER_NAME
+            + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FILE_NAME);
+  }
+
   /**
    * Builds functional index definition and writes to index definition file.
    *
-   * @param indexMetaPath Path to index definition file
    * @param indexName     Name of the index
    * @param indexType     Type of the index
    * @param columns       Columns on which index is built
    * @param options       Options for the index
    */
-  public void buildIndexDefinition(String indexMetaPath,
-                                   String indexName,
+  public void buildIndexDefinition(String indexName,
                                    String indexType,
                                    Map<String, Map<String, String>> columns,
                                    Map<String, String> options) {
     checkState(
         !indexMetadataOpt.isPresent() || !indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName),
         "Index metadata is already present");
+    String indexMetaPath = getIndexDefinitionPath();
     List<String> columnNames = new ArrayList<>(columns.keySet());
     HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, indexType, options.get("func"), columnNames, options);
     if (indexMetadataOpt.isPresent()) {
@@ -219,6 +224,22 @@ public class HoodieTableMetaClient implements Serializable {
     } else {
       indexMetadataOpt = Option.of(new HoodieIndexMetadata(Collections.singletonMap(indexName, indexDefinition)));
     }
+    try {
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
+    }
+  }
+
+  /**
+   * Deletes index definition and writes to index definition file.
+   *
+   * @param indexName Name of the index
+   */
+  public void deleteIndexDefinition(String indexName) {
+    checkState(indexMetadataOpt.isPresent(), "Index metadata is not present");
+    indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
+    String indexMetaPath = getIndexDefinitionPath();
     try {
       FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
     } catch (IOException e) {

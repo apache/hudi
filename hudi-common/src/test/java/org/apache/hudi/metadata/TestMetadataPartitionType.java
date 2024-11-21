@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -220,5 +222,43 @@ public class TestMetadataPartitionType {
 
     assertThrows(IllegalArgumentException.class,
         () -> partitionType.getPartitionPath(metaClient, "testIndex"));
+  }
+
+  @Test
+  public void testIndexNameWithoutPrefix() {
+    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
+      String userIndexName = MetadataPartitionType.isGenericIndex(partitionType.getPartitionPath()) ? "idx" : "";
+      HoodieIndexDefinition indexDefinition = createIndexDefinition(partitionType, userIndexName);
+      assertEquals(partitionType.getIndexNameWithoutPrefix(indexDefinition), userIndexName);
+    }
+
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieIndexDefinition indexDefinition = createIndexDefinition(MetadataPartitionType.RECORD_INDEX, "");
+      MetadataPartitionType.FUNCTIONAL_INDEX.getIndexNameWithoutPrefix(indexDefinition);
+    });
+  }
+
+  private HoodieIndexDefinition createIndexDefinition(MetadataPartitionType partitionType, String userIndexName) {
+    String indexSuffix = StringUtils.nonEmpty(userIndexName) ? userIndexName : "";
+    return new HoodieIndexDefinition(partitionType.getPartitionPath() + indexSuffix, null, null, null, null);
+  }
+
+  @Test
+  public void testIsGenericIndex() {
+    assertTrue(MetadataPartitionType.isGenericIndex("func_index_"));
+    assertTrue(MetadataPartitionType.isGenericIndex("func_index_idx"));
+    assertTrue(MetadataPartitionType.isGenericIndex("secondary_index_"));
+    assertTrue(MetadataPartitionType.isGenericIndex("secondary_index_idx"));
+
+    assertFalse(MetadataPartitionType.isGenericIndex("func_index"));
+    assertFalse(MetadataPartitionType.isGenericIndex("func_indexidx"));
+    assertFalse(MetadataPartitionType.isGenericIndex("secondary_index"));
+    assertFalse(MetadataPartitionType.isGenericIndex("secondary_indexidx"));
+
+    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
+      if (partitionType != MetadataPartitionType.FUNCTIONAL_INDEX && partitionType != MetadataPartitionType.SECONDARY_INDEX) {
+        assertFalse(MetadataPartitionType.isGenericIndex(partitionType.getPartitionPath()));
+      }
+    }
   }
 }
