@@ -778,6 +778,10 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           spark.sql("set hoodie.enable.data.skipping=true")
           spark.sql("set hoodie.metadata.enable=true")
 
+          if (HoodieSparkUtils.gteqSpark3_4) {
+            spark.sql("spark.sql.defaultColumn.enabled=false")
+          }
+
           spark.sql(
             s"""
                |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
