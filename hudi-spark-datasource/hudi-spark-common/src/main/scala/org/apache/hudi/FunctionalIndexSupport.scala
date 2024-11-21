@@ -125,13 +125,14 @@ class FunctionalIndexSupport(spark: SparkSession,
       val functionDefinitions = indexDefinitions.values
         .filter(definition => MetadataPartitionType.fromPartitionPath(definition.getIndexName).equals(MetadataPartitionType.FUNCTIONAL_INDEX))
         .toList
+      var indexPartitionAndLiteralsOpt: Option[Tuple2[String, List[String]]] = Option.empty
       functionDefinitions.foreach(indexDefinition => {
         val queryInfoOpt = extractQueryAndLiterals(queryFilters, indexDefinition)
         if (queryInfoOpt.isDefined) {
-          return Option.apply(Tuple2.apply(indexDefinition.getIndexName, queryInfoOpt.get._2))
+          indexPartitionAndLiteralsOpt = Option.apply(Tuple2.apply(indexDefinition.getIndexName, queryInfoOpt.get._2))
         }
       })
-      Option.empty
+      indexPartitionAndLiteralsOpt
     } else {
       Option.empty
     }
@@ -148,15 +149,16 @@ class FunctionalIndexSupport(spark: SparkSession,
    */
   private def extractQueryAndLiterals(queryFilters: Seq[Expression], indexDefinition: HoodieIndexDefinition): Option[(Expression, List[String])] = {
     val functionalIndexQueries = filterQueriesWithFunctionalFilterKey(queryFilters, Option.apply(indexDefinition.getSourceFields.get(0)))
+    var queryAndLiteralsOpt: Option[(Expression, List[String])] = Option.empty
     functionalIndexQueries.foreach { tuple =>
       val (expr, literals) = (tuple._1, tuple._2)
       val functionNameOption = SPARK_FUNCTION_MAP.asScala.keys.find(expr.toString.contains)
       val functionName = functionNameOption.getOrElse("identity")
       if (indexDefinition.getIndexFunction.equals(functionName)) {
-        return Option.apply(Tuple2.apply(expr, literals))
+        queryAndLiteralsOpt = Option.apply(Tuple2.apply(expr, literals))
       }
     }
-    Option.empty
+    queryAndLiteralsOpt
   }
 
   def loadFunctionalIndexDataFrame(indexPartition: String,
@@ -220,7 +222,7 @@ class FunctionalIndexSupport(spark: SparkSession,
   }
 
   def getPrunedPartitionsAndFileNamesMap(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
-                                                 includeLogFiles: Boolean = false): Map[String, Set[String]] = {
+                                         includeLogFiles: Boolean = false): Map[String, Set[String]] = {
     prunedPartitionsAndFileSlices.foldLeft(Map.empty[String, Set[String]]) {
       case (partitionToFileMap, (partitionPathOpt, fileSlices)) =>
         partitionPathOpt match {
