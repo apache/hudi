@@ -23,11 +23,13 @@ import org.apache.hudi.DataSourceWriteOptions.{INSERT_OPERATION_OPT_VAL, OPERATI
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.client.utils.SparkMetadataWriterUtils
 import org.apache.hudi.{DataSourceReadOptions, FunctionalIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
@@ -36,7 +38,8 @@ import org.apache.hudi.hive.HiveSyncConfigHolder._
 import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.index.HoodieIndex
-import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartitionType}
+import org.apache.hudi.index.functional.HoodieFunctionalIndex
+import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, HoodieMetadataPayload, MetadataPartitionType}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -47,10 +50,11 @@ import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, FromUnixTime, Literal}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{BinaryType, ByteType, DateType, DecimalType, IntegerType, ShortType, StringType, StructType, TimestampType}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.scalatest.Ignore
 
@@ -1123,8 +1127,51 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         assertTrue(prunedPartitionAndFileNames._1.size == 1) // partition
         assertTrue(prunedPartitionAndFileNames._2.size == 1) // log file
         assertTrue(FSUtils.isLogFile(prunedPartitionAndFileNames._2.head))
+
+        val prunedPartitionAndFileNamesMap = functionalIndexSupport.getPrunedPartitionsAndFileNamesMap(prunedPaths, includeLogFiles = true)
+        assertTrue(prunedPartitionAndFileNamesMap.keySet.size == 1) // partition
+        assertTrue(prunedPartitionAndFileNamesMap.values.head.size == 1) // log file
+        assertTrue(FSUtils.isLogFile(prunedPartitionAndFileNamesMap.values.head.head))
       }
     }
+  }
+
+  test("testGetFunctionalIndexRecordsUsingBloomFilter") {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP.key -> "true"
+    )
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "testGetFunctionalIndexRecordsUsingBloomFilter",
+      TABLE_TYPE.key -> "MERGE_ON_READ",
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      PARTITIONPATH_FIELD.key() -> "c8",
+      // setting IndexType to be INMEMORY to simulate Global Index nature
+      HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.INMEMORY.name()
+    )
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json-partition-pruning").toString
+
+    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
+    val sourceTableSchema: StructType = new StructType()
+      .add("c1", IntegerType)
+      .add("c2", StringType)
+      .add("c3", DecimalType(9, 3))
+      .add("c4", TimestampType)
+      .add("c5", ShortType)
+      .add("c6", DateType)
+      .add("c7", BinaryType)
+      .add("c8", ByteType)
+    var df = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+    df = df.withColumn(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION, lit("c/d"))
+      .withColumn(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_RELATIVE_FILE_PATH, lit("c/d/123141ab-701b-4ba4-b60b-e6acd9e9103e-0_329-224134-258390_2131313124.parquet"))
+      .withColumn(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE, lit(100))
+    val bloomFilterRecords = SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingBloomFilter(df, "c5", HoodieWriteConfig.newBuilder().withPath("a/b").build(), "", "random")
+    // Since there is only one partition file pair there is only one bloom filter record
+    assertEquals(1, bloomFilterRecords.collectAsList().size())
+    assertFalse(bloomFilterRecords.isEmpty)
   }
 
   private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient, isDataSkippingExpected: Boolean = false, isNoScanExpected: Boolean = false): Unit = {

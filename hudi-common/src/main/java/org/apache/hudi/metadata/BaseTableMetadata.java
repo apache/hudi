@@ -168,7 +168,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   @Override
   public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName, final String metadataPartitionName) throws HoodieMetadataException {
     if (!dataMetaClient.getTableConfig().getMetadataPartitions().contains(metadataPartitionName)) {
-      LOG.error("Metadata partition not found {}", metadataPartitionName);
+      LOG.error("Metadata bloom filter index is disabled!");
       return Option.empty();
     }
 
@@ -187,7 +187,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList, final String metadataPartitionName)
       throws HoodieMetadataException {
     if (!dataMetaClient.getTableConfig().getMetadataPartitions().contains(metadataPartitionName)) {
-      LOG.error("Metadata partition not found {}", metadataPartitionName);
+      LOG.error("Metadata bloom filter index is disabled!");
       return Collections.emptyMap();
     }
     if (partitionNameFileNameList.isEmpty()) {

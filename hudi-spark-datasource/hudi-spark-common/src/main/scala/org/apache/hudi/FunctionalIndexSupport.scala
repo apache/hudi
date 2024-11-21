@@ -219,7 +219,7 @@ class FunctionalIndexSupport(spark: SparkSession,
     columnStatsRecords
   }
 
-  private def getPrunedPartitionsAndFileNamesMap(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+  def getPrunedPartitionsAndFileNamesMap(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
                                                  includeLogFiles: Boolean = false): Map[String, Set[String]] = {
     prunedPartitionsAndFileSlices.foldLeft(Map.empty[String, Set[String]]) {
       case (partitionToFileMap, (partitionPathOpt, fileSlices)) =>

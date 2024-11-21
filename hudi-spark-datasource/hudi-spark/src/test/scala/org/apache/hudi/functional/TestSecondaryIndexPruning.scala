@@ -1250,14 +1250,20 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas"),
         Seq(1695516137, "trip4", "rider-F", "driver-P", 34.15, "houston", "texas"))
 
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
       spark.sql(s"create index idx_rider_$tableName ON $tableName USING secondary_index(rider)")
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where rider = 'rider-E'")(
         Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas"))
+      verifyQueryPredicate(hudiOpts, "rider")
 
       spark.sql(s"create index idx_driver_$tableName ON $tableName USING secondary_index(driver)")
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where driver = 'driver-P'")(
         Seq(1695516137, "trip4", "rider-F", "driver-P", 34.15, "houston", "texas")
       )
+      verifyQueryPredicate(hudiOpts, "driver")
 
       // update such that there are two rider-E records
       spark.sql(s"update $tableName set rider = 'rider-E' where rider = 'rider-F'")
@@ -1265,6 +1271,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas"),
         Seq(1695516137, "trip4", "rider-E", "driver-P", 34.15, "houston", "texas")
       )
+      verifyQueryPredicate(hudiOpts, "rider")
 
       // delete one of those records
       spark.sql(s"delete from $tableName where id = 'trip4'")
@@ -1288,6 +1295,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where driver = 'driver-Q'")(
         Seq(1695516137, "trip4", "rider-E", "driver-Q", 34.15, "houston", "texas")
       )
+      verifyQueryPredicate(hudiOpts, "rider")
     }
   }
 

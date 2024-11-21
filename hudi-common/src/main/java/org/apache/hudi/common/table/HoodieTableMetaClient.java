@@ -223,7 +223,9 @@ public class HoodieTableMetaClient implements Serializable {
     if (indexMetadataOpt.isPresent()) {
       indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
     } else {
-      indexMetadataOpt = Option.of(new HoodieIndexMetadata(Collections.singletonMap(indexName, indexDefinition)));
+      Map<String, HoodieIndexDefinition> indexDefinitionMap = new HashMap<>();
+      indexDefinitionMap.put(indexName, indexDefinition);
+      indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
     }
     try {
       FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
