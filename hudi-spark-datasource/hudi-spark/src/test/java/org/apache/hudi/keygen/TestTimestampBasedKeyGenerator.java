@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 
 import org.apache.avro.Conversions;
@@ -35,6 +36,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
+import org.apache.spark.sql.execution.datasources.BetterParsePartitionUtil;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Assertions;
@@ -143,6 +145,8 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", 1578283932000L);
     properties = getBaseKeyConfig("createTime", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
     TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieDateTimeParser dateTimeParser = new HoodieDateTimeParser(properties);
+    Long idk = BetterParsePartitionUtil.getMicrosFromGeneratedTimestamp(dateTimeParser, "2020-01-06 12");
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 12", hk1.getPartitionPath());
     baseRow = genericRecordToRow(baseRecord);

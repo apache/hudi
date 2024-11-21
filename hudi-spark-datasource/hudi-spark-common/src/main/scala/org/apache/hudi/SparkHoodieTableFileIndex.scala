@@ -42,8 +42,8 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
+import org.apache.spark.sql.catalyst.util.{DateTimeUtils, SparkDateTimeUtils}
+import org.apache.spark.sql.execution.datasources.{BetterParsePartitionUtil, FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -122,31 +122,23 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val nameFieldMap = generateFieldMap(schema)
 
     if (partitionColumns.isPresent) {
-      // Note that key generator class name could be null
-      val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
-      if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
-        || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
-        val partitionFields: Array[StructField] = partitionColumns.get().map(column => StructField(column, StringType))
-        StructType(partitionFields)
-      } else {
-        val partitionFields: Array[StructField] = partitionColumns.get().filter(column => nameFieldMap.contains(column))
-          .map(column => nameFieldMap.apply(column))
+      val partitionFields: Array[StructField] = partitionColumns.get().filter(column => nameFieldMap.contains(column))
+        .map(column => nameFieldMap.apply(column))
 
-        if (partitionFields.length != partitionColumns.get().length) {
-          val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
-          if (isBootstrapTable) {
-            // For bootstrapped tables its possible the schema does not contain partition field when source table
-            // is hive style partitioned. In this case we would like to treat the table as non-partitioned
-            // as opposed to failing
-            new StructType()
-          } else {
-            throw new IllegalArgumentException(s"Cannot find columns: " +
-              s"'${partitionColumns.get().filter(col => !nameFieldMap.contains(col)).mkString(",")}' " +
-              s"in the schema[${schema.fields.mkString(",")}]")
-          }
+      if (partitionFields.length != partitionColumns.get().length) {
+        val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
+        if (isBootstrapTable) {
+          // For bootstrapped tables its possible the schema does not contain partition field when source table
+          // is hive style partitioned. In this case we would like to treat the table as non-partitioned
+          // as opposed to failing
+          new StructType()
         } else {
-          new StructType(partitionFields)
+          throw new IllegalArgumentException(s"Cannot find columns: " +
+            s"'${partitionColumns.get().filter(col => !nameFieldMap.contains(col)).mkString(",")}' " +
+            s"in the schema[${schema.fields.mkString(",")}]")
         }
+      } else {
+        new StructType(partitionFields)
       }
     } else {
       // If the partition columns have not stored in hoodie.properties(the table that was
@@ -408,15 +400,12 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @VisibleForTesting
    */
   def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
-    HoodieSparkUtils.parsePartitionColumnValues(
-      partitionColumns,
-      partitionPath,
-      getBasePath,
-      schema,
-      metaClient.getTableConfig.propsMap,
-      configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      sparkParsePartitionUtil,
-      shouldValidatePartitionColumns(spark))
+    BetterParsePartitionUtil.parsePartition(partitionPath,
+      partitionSchema,
+      metaClient.getTableConfig,
+      SparkDateTimeUtils.getZoneId(configProperties
+        .getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone))
+    )
   }
 
   private def arePartitionPathsUrlEncoded: Boolean =
