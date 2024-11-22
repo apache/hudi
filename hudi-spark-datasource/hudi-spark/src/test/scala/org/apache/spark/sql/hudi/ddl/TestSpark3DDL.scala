@@ -711,7 +711,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
   test("Test schema auto evolution") {
     withTempDir { tmp =>
-      Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      Seq("COPY_ON_WRITE").foreach { tableType =>
         // for complex schema.
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"

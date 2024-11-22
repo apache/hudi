@@ -385,9 +385,13 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   ) throws IOException {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     HoodieArchivedTimeline mockArchivedTimeline = mock(HoodieArchivedTimeline.class);
+    HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
     when(mockMetaClient.getBasePath()).thenReturn(new StoragePath("file://dummy/path"));
     when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), any(), eq(true)))
         .thenReturn(activeInstants);
+    when(mockMetaClient.getMetaPath()).thenReturn(new StoragePath("file://dummy/path/.hoodie"));
+    when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
+    when(mockMetaClient.getTableConfig().getTimelineFolder()).thenReturn("timeline");
     HoodieActiveTimeline activeTimeline = new ActiveTimelineV2(mockMetaClient);
     when(mockMetaClient.getActiveTimeline())
         .thenReturn(activeTimeline);
@@ -493,9 +497,13 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   private HoodieActiveTimeline prepareActiveTimeline(
       List<HoodieInstant> activeInstants) throws IOException {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
     when(mockMetaClient.getBasePath()).thenReturn(new StoragePath("file://dummy/path"));
     when(mockMetaClient.scanHoodieInstantsFromFileSystem(any(), any(), eq(true)))
         .thenReturn(activeInstants);
+    when(mockMetaClient.getMetaPath()).thenReturn(new StoragePath("file://dummy/path/.hoodie"));
+    when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
+    when(mockMetaClient.getTableConfig().getTimelineFolder()).thenReturn("timeline");
     return new ActiveTimelineV2(mockMetaClient);
   }
 
