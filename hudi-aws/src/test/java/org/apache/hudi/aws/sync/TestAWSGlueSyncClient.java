@@ -19,6 +19,9 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.aws.testutils.GlueTestUtil;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.config.GlueCatalogSyncClientConfig;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 
 import org.apache.parquet.schema.MessageType;
@@ -27,6 +30,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -43,12 +48,16 @@ import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
 import software.amazon.awssdk.services.glue.model.UpdateTableResponse;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
@@ -60,19 +69,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TestAWSGlueSyncClient {
+  private static final String CATALOG_ID = "DEFAULT_AWS_ACCOUNT_ID";
 
   @Mock
   private GlueAsyncClient mockAwsGlue;
+  @Mock
+  private StsClient mockSts;
 
   private AWSGlueCatalogSyncClient awsGlueSyncClient;
 
   @BeforeEach
   void setUp() throws IOException {
     GlueTestUtil.setUp();
-    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, GlueTestUtil.getHiveSyncConfig(), GlueTestUtil.getMetaClient());
+    when(mockSts.getCallerIdentity(GetCallerIdentityRequest.builder().build())).thenReturn(GetCallerIdentityResponse.builder().account(CATALOG_ID).build());
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, GlueTestUtil.getHiveSyncConfig(), GlueTestUtil.getMetaClient());
   }
 
   @AfterEach
@@ -112,7 +126,7 @@ class TestAWSGlueSyncClient {
         .table(table)
         .build();
 
-    GetTableRequest getTableRequestForTable = GetTableRequest.builder().databaseName(databaseName).name(tableName).build();
+    GetTableRequest getTableRequestForTable = GetTableRequest.builder().catalogId(CATALOG_ID).databaseName(databaseName).name(tableName).build();
     // Mock methods
     CompletableFuture<GetTableResponse> tableResponseFuture = CompletableFuture.completedFuture(tableResponse);
     CompletableFuture<GetTableResponse> mockTableNotFoundResponse = Mockito.mock(CompletableFuture.class);
@@ -225,6 +239,29 @@ class TestAWSGlueSyncClient {
     Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponse);
     String basePath = awsGlueSyncClient.getTableLocation(tableName);
     // verify if table base path is correct
+    assertEquals(glueSyncProps.get(META_SYNC_BASE_PATH.key()), basePath, "table base path should match");
+  }
+  
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testGetTableLocationUsingCatalogId(boolean useConfiguredCatalogId) {
+    String catalogId = useConfiguredCatalogId ? UUID.randomUUID().toString() : CATALOG_ID;
+    TypedProperties properties = GlueTestUtil.getHiveSyncConfig().getProps();
+    if (useConfiguredCatalogId) {
+      properties.setProperty(GlueCatalogSyncClientConfig.GLUE_CATALOG_ID.key(), catalogId);
+    }
+    when(mockSts.getCallerIdentity(GetCallerIdentityRequest.builder().build())).thenReturn(GetCallerIdentityResponse.builder().account(CATALOG_ID).build());
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, new HiveSyncConfig(properties), GlueTestUtil.getMetaClient());
+
+    String testdb = "testdb";
+    String tableName = "testTable";
+    List<Column> columns = Arrays.asList(Column.builder().name("name").type("string").comment("person's name").build(),
+        Column.builder().name("age").type("int").comment("person's age").build());
+    CompletableFuture<GetTableResponse> tableResponse = getTableWithDefaultProps(tableName, columns, Collections.emptyList());
+    // mock aws glue get table call
+    GetTableRequest getTableRequestForTable = GetTableRequest.builder().catalogId(catalogId).databaseName(testdb).name(tableName).build();
+    Mockito.when(mockAwsGlue.getTable(getTableRequestForTable)).thenReturn(tableResponse);
+    String basePath = awsGlueSyncClient.getTableLocation(tableName);
     assertEquals(glueSyncProps.get(META_SYNC_BASE_PATH.key()), basePath, "table base path should match");
   }
 
