@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDat
 import org.apache.hudi.DataSourceWriteOptions.{STREAMING_CHECKPOINT_IDENTIFIER, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
-import org.apache.hudi.common.config.{HoodieStorageConfig, RecordMergeMode}
+import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -39,7 +39,7 @@ import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.{BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -512,24 +512,28 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testStructuredStreamingWithMergeMode(isCow: Boolean): Unit = {
+  @CsvSource(Array(
+    "COPY_ON_WRITE,EVENT_TIME_ORDERING",
+    "MERGE_ON_READ,EVENT_TIME_ORDERING",
+    "COPY_ON_WRITE,COMMIT_TIME_ORDERING",
+    "MERGE_ON_READ,COMMIT_TIME_ORDERING",
+    "COPY_ON_WRITE,CUSTOM",
+    "MERGE_ON_READ,CUSTOM"))
+  def testStructuredStreamingWithMergeMode(tableType: String, mergerType: String): Unit = {
     val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
     // First chunk of data
     val records1 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
-    val tableType = if (isCow) {
-      "COPY_ON_WRITE"
-    } else {
-      "MERGE_ON_READ"
-    }
-    val opts = commonOpts ++ Map(DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+    var opts = commonOpts ++ Map(DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.TABLE_TYPE.key() -> tableType,
-      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
-      DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key() -> HoodieSparkDeleteRecordMerger.DELETE_MERGER_STRATEGY,
-      DataSourceWriteOptions.RECORD_MERGE_IMPL_CLASSES.key() -> classOf[HoodieSparkDeleteRecordMerger].getName,
-      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key() -> "parquet")
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> mergerType,
+      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key() -> "parquet",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "weight")
+    if (mergerType == "CUSTOM") {
+      opts = opts ++ Map(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key() -> HoodieSparkDeleteRecordMerger.DELETE_MERGER_STRATEGY,
+        DataSourceWriteOptions.RECORD_MERGE_IMPL_CLASSES.key() -> classOf[HoodieSparkDeleteRecordMerger].getName)
+    }
     streamingWrite(inputDF1.schema, sourcePath, destPath, opts)
 
 
@@ -538,12 +542,33 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
     streamingWrite(inputDF2.schema, sourcePath, destPath, opts)
 
-    //merger will delete any records in records2 so we remove those from the original batch using except
-    val expectedFinalRecords = inputDF1.select("_row_key", "partition_path").except(inputDF2.select("_row_key", "partition_path"))
-    val finalRecords = spark.read.format("hudi")
-      .option(DataSourceWriteOptions.RECORD_MERGE_IMPL_CLASSES.key(), classOf[HoodieSparkDeleteRecordMerger].getName)
-      .load(destPath).select("_row_key", "partition_path")
-    assertEquals(expectedFinalRecords.count(), finalRecords.count())
-    assertEquals(0, expectedFinalRecords.except(finalRecords).count())
+    if (mergerType == "CUSTOM") {
+      //merger will delete any records in records2 so we remove those from the original batch using except
+      val expectedFinalRecords = inputDF1.select("_row_key", "partition_path").except(inputDF2.select("_row_key", "partition_path"))
+      val finalRecords = spark.read.format("hudi")
+        .option(DataSourceWriteOptions.RECORD_MERGE_IMPL_CLASSES.key(), classOf[HoodieSparkDeleteRecordMerger].getName)
+        .load(destPath).select("_row_key", "partition_path")
+      assertEquals(expectedFinalRecords.count(), finalRecords.count())
+      assertEquals(0, expectedFinalRecords.except(finalRecords).count())
+    } else {
+      val metaClient = HoodieTestUtils.createMetaClient(destPath)
+      val instants = metaClient.getActiveTimeline.getCommitsTimeline.getInstants
+      assertEquals(2, instants.size())
+      spark.read.format("hudi").load(destPath).createOrReplaceTempView("finalRecords")
+      val updatedRecords = spark.sql(s"select _row_key, partition_path, weight from finalRecords "
+        + s"where _hoodie_commit_time = ${instants.get(1).requestedTime()}")
+      if (mergerType == "COMMIT_TIME_ORDERING") {
+        assertEquals(inputDF2.count(), updatedRecords.count())
+        assertEquals(0, inputDF2.select("_row_key", "partition_path", "weight").except(updatedRecords).count())
+      } else if (mergerType == "EVENT_TIME_ORDERING") {
+        inputDF1.createOrReplaceTempView("input1")
+        inputDF2.createOrReplaceTempView("input2")
+        val expectedUpdatedRecords = spark.sql("SELECT input2._row_key, input2.partition_path, input2.weight FROM "
+          + "input1 JOIN input2 ON input1._row_key = input2._row_key AND input1.partition_path = input2.partition_path "
+          + "WHERE input1.weight < input2.weight")
+        assertEquals(expectedUpdatedRecords.count(), updatedRecords.count())
+        assertEquals(0, expectedUpdatedRecords.except(updatedRecords).count())
+      }
+    }
   }
 }
