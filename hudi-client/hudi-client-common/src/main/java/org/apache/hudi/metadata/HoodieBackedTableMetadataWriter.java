@@ -939,8 +939,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   public void dropMetadataPartitions(List<String> metadataPartitions) throws IOException {
     for (String partitionPath : metadataPartitions) {
-      // first update table config
+      // first update table config and index definitions
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
+      if (MetadataPartitionType.isGenericIndex(partitionPath)) {
+        dataMetaClient.deleteIndexDefinition(partitionPath);
+      }
+
       LOG.warn("Deleting Metadata Table partition: {}", partitionPath);
       dataMetaClient.getStorage()
           .deleteDirectory(new StoragePath(metadataWriteConfig.getBasePath(), partitionPath));
@@ -1128,10 +1132,15 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap, HoodieData<WriteStatus> writeStatus) {
+    if (!dataWriteConfig.isSecondaryIndexEnabled()) {
+      return;
+    }
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
-    if (commitMetadata.getOperationType() == WriteOperationType.COMPACT
-        || commitMetadata.getOperationType() == WriteOperationType.CLUSTER) {
+    WriteOperationType operationType = commitMetadata.getOperationType();
+    if (operationType.isInsertOverwriteOrDeletePartition() && MetadataPartitionType.SECONDARY_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
+      throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
+    } else if (operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.CLUSTER) {
       return;
     }
 
