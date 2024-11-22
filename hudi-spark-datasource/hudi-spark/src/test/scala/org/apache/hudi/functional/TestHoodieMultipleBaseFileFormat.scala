@@ -100,7 +100,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     inputDF2.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
-      .option(HoodieTableConfig.BASE_FILE_FORMAT.key, HoodieFileFormat.ORC.name())
+      .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, HoodieFileFormat.ORC.name())
       .mode(SaveMode.Append)
       .save(basePath)
 
