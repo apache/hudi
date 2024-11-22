@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.storage.StoragePath
@@ -1026,24 +1026,35 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .save(basePath)
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testClusteringSamePrecombine(recordType: HoodieRecordType): Unit = {
+  def testClusteringCompactionHelper(recordType: HoodieRecordType,
+                                     hasPrecombine: Boolean,
+                                     isClustering: Boolean,
+                                     withRowWriter: Boolean = false): Unit = {
     var writeOpts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.OPERATION.key() -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.TABLE_TYPE.key()-> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
-      "hoodie.clustering.inline"-> "true",
-      "hoodie.clustering.inline.max.commits" -> "2",
-      "hoodie.clustering.plan.strategy.sort.columns" -> "_row_key",
       "hoodie.metadata.enable" -> "false",
-      "hoodie.datasource.write.row.writer.enable" -> "false"
+      "hoodie.datasource.write.row.writer.enable" -> withRowWriter.toString
     )
+
+    if (hasPrecombine) {
+      writeOpts = writeOpts ++ Map(DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp")
+    }
+
+    if (isClustering) {
+      writeOpts = writeOpts ++ Map(HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
+        HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2",
+        HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> "_row_key")
+    } else {
+      writeOpts = writeOpts ++ Map(HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
+        HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2")
+    }
+
     if (recordType.equals(HoodieRecordType.SPARK)) {
       writeOpts = Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet") ++ writeOpts
@@ -1066,6 +1077,40 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       spark.read.format("hudi").load(basePath)
         .select("_row_key", "partition", "rider")
         .except(inputDF2.select("_row_key", "partition", "rider")).count())
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testClusteringSamePrecombine(recordType: HoodieRecordType): Unit = {
+    testClusteringCompactionHelper(recordType, hasPrecombine = true, isClustering = true)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testClusteringNoPrecombine(recordType: HoodieRecordType): Unit = {
+    testClusteringCompactionHelper(recordType, hasPrecombine = false, isClustering = true)
+  }
+
+  @Test
+  def testClusteringSamePrecombineWithRowWriter(): Unit = {
+    testClusteringCompactionHelper(HoodieRecordType.SPARK, hasPrecombine = true, isClustering = true, withRowWriter = true)
+  }
+
+  @Test
+  def testClusteringNoPrecombineWithRowWriter(): Unit = {
+    testClusteringCompactionHelper(HoodieRecordType.SPARK, hasPrecombine = false, isClustering = true, withRowWriter = true)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testCompactionSamePrecombine(recordType: HoodieRecordType): Unit = {
+    testClusteringCompactionHelper(recordType, hasPrecombine = true, isClustering = false)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testCompactionNoPrecombine(recordType: HoodieRecordType): Unit = {
+    testClusteringCompactionHelper(recordType, hasPrecombine = false, isClustering = false)
   }
 
   @ParameterizedTest

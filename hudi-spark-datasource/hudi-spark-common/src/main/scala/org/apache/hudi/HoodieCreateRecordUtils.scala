@@ -143,9 +143,11 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine && !precombineEmpty) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, precombine,
-                false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
+            // lazy so that we don't evaluate if we short circuit the boolean expression in the if below
+            lazy val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, precombine,
+              true, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
+
+            val hoodieRecord = if (shouldCombine && !precombineEmpty && orderingVal != null) {
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, recordLocation)
             } else {

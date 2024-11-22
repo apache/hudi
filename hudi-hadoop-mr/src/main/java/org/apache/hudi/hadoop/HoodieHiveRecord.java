@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
@@ -101,9 +102,8 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
     String orderingField = ConfigUtils.getOrderingField(props);
-    if (orderingField == null) {
+    if (StringUtils.isNullOrEmpty(orderingField)) {
       return 0;
-      //throw new IllegalArgumentException("Ordering Field is not set. Precombine must be set. (If you are using a custom record merger it might be something else)");
     }
     return (Comparable<?>) getValue(ConfigUtils.getOrderingField(props));
   }
