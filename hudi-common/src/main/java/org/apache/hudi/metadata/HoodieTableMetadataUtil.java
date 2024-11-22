@@ -172,6 +172,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
   public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
+  public static final String PARTITION_NAME_FUNCTIONAL_INDEX = "func_index";
   public static final String PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX = "func_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
@@ -183,9 +184,6 @@ public class HoodieTableMetadataUtil {
       IntWrapper.class, BooleanWrapper.class, DateWrapper.class,
       DoubleWrapper.class, FloatWrapper.class, LongWrapper.class,
       StringWrapper.class, TimeMicrosWrapper.class, TimestampMicrosWrapper.class));
-
-  // we have max of 4 partitions (FILES, COL_STATS, BLOOM, RLI)
-  private static final List<String> VALID_PARTITION_INITIALIZATION_TIME_SUFFIXES = Arrays.asList("010", "011", "012", "013");
 
   /**
    * Returns whether the files partition of metadata table is ready for read.

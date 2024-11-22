@@ -154,6 +154,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     assertResult(true)(hasException)
   }
 
+  protected def checkException(runnable: Runnable)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      runnable.run()
+    } catch {
+      case e: Throwable =>
+        assertResult(errorMsg.trim)(e.getMessage.trim)
+        hasException = true
+    }
+    assertResult(true)(hasException)
+  }
+
   protected def checkExceptionContain(sql: String)(errorMsg: String): Unit = {
     var hasException = false
     try {

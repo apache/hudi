@@ -43,6 +43,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -742,6 +743,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
             .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
+    client.setOperationType(WriteOperationType.UPSERT);
     Pair<StoragePath, List<WriteStatus>> result = testConsistencyCheck(context, metaClient, instantTime,
               enableOptimisticConsistencyGuard, getHoodieTableFn, transformInputFn, transformOutputFn);
 

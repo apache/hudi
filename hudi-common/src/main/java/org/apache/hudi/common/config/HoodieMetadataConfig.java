@@ -360,7 +360,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable secondary index within the Metadata Table.");
 

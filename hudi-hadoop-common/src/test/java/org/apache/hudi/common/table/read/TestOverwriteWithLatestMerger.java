@@ -59,8 +59,8 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
   @Override
   protected Properties getMetaProps() {
     Properties metaProps =  super.getMetaProps();
-    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.OVERWRITE_WITH_LATEST.name());
-    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.OVERWRITE_MERGE_STRATEGY_UUID);
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.COMMIT_TIME_ORDERING.name());
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
     metaProps.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), OverwriteWithLatestAvroPayload.class.getName());
     return metaProps;
   }
@@ -71,7 +71,7 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
     readerContext = new HoodieTestReaderContext(
         Option.of(merger),
         Option.of(OverwriteWithLatestAvroPayload.class.getName()));
-    properties.setProperty("hoodie.write.record.merge.mode", RecordMergeMode.OVERWRITE_WITH_LATEST.name());
+    properties.setProperty("hoodie.write.record.merge.mode", RecordMergeMode.COMMIT_TIME_ORDERING.name());
 
     // -------------------------------------------------------------
     // The test logic is as follows:
