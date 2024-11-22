@@ -2391,7 +2391,7 @@ public class HoodieTableMetadataUtil {
     final List<String> columnsToIndex = getColumnsToIndex(
         metadataConfig.isPartitionStatsIndexEnabled(),
         metadataConfig.getColumnsEnabledForColumnStatsIndex(),
-        metadataConfig.getMaximumColumnsForColumnStats(),
+        metadataConfig.maxColumnsToIndexForColStats(),
         lazyWriterSchemaOpt);
     if (columnsToIndex.isEmpty()) {
       LOG.warn("No columns to index for partition stats index");
@@ -2466,7 +2466,7 @@ public class HoodieTableMetadataUtil {
       Lazy<Option<Schema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
       List<String> columnsToIndex = getColumnsToIndex(metadataConfig.isPartitionStatsIndexEnabled(),
           metadataConfig.getColumnsEnabledForColumnStatsIndex(),
-          metadataConfig.getMaximumColumnsForColumnStats(),
+          metadataConfig.maxColumnsToIndexForColStats(),
           writerSchemaOpt);
       if (columnsToIndex.isEmpty()) {
         return engineContext.emptyHoodieData();
@@ -2746,11 +2746,11 @@ public class HoodieTableMetadataUtil {
   }
 
   public static List<String> getColumnsToIndex(HoodieMetadataConfig metadataConfig, Schema tableSchema) {
-    List<String> userSetStrings = metadataConfig.getColumnsEnabledForColumnStatsIndex();
-    if (!userSetStrings.isEmpty()) {
-      return userSetStrings;
+    List<String> userConfiguredColsToIndex = metadataConfig.getColumnsEnabledForColumnStatsIndex();
+    if (!userConfiguredColsToIndex.isEmpty()) {
+      return userConfiguredColsToIndex;
     } else {
-      return getFirstNFieldNames(tableSchema, metadataConfig.getMaximumColumnsForColumnStats());
+      return getFirstNFieldNames(tableSchema, metadataConfig.maxColumnsToIndexForColStats());
     }
   }
 
@@ -2760,11 +2760,11 @@ public class HoodieTableMetadataUtil {
   }
 
   public static List<String> getColumnsToIndex(HoodieMetadataConfig metadataConfig, List<String> tableFieldNames) {
-    List<String> userSetStrings = metadataConfig.getColumnsEnabledForColumnStatsIndex();
-    if (!userSetStrings.isEmpty()) {
-      return userSetStrings;
+    List<String> userConfiguredColsToIndex = metadataConfig.getColumnsEnabledForColumnStatsIndex();
+    if (!userConfiguredColsToIndex.isEmpty()) {
+      return userConfiguredColsToIndex;
     } else {
-      return getFirstNFieldNames(tableFieldNames, metadataConfig.getMaximumColumnsForColumnStats());
+      return getFirstNFieldNames(tableFieldNames, metadataConfig.maxColumnsToIndexForColStats());
     }
   }
 

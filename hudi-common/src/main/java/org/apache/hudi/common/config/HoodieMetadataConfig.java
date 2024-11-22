@@ -174,7 +174,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
 
   public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_MAX_COLUMNS = ConfigProperty
-      .key(METADATA_PREFIX + ".index.column.stats.max.columns")
+      .key(METADATA_PREFIX + ".index.column.stats.max.columns.to.index")
       .defaultValue(32)
       .markAdvanced()
       .sinceVersion("1.0.0")
@@ -421,7 +421,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return StringUtils.split(getString(COLUMN_STATS_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
   }
 
-  public Integer getMaximumColumnsForColumnStats() {
+  public Integer maxColumnsToIndexForColStats() {
     return getIntOrDefault(COLUMN_STATS_INDEX_MAX_COLUMNS);
   }
 
