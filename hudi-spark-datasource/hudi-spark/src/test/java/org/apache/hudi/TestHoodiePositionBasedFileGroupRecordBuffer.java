@@ -78,7 +78,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
     writeConfigs.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     writeConfigs.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
-    writeConfigs.put("hoodie.datasource.write.precombine.field",mergeMode.equals(RecordMergeMode.OVERWRITE_WITH_LATEST) ? "" : "timestamp");
+    writeConfigs.put("hoodie.datasource.write.precombine.field",mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING) ? "" : "timestamp");
     writeConfigs.put("hoodie.payload.ordering.field", "timestamp");
     writeConfigs.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "hoodie_test");
     writeConfigs.put("hoodie.insert.shuffle.parallelism", "4");
@@ -180,7 +180,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
 
   @Test
   public void testProcessDeleteBlockWithPositions() throws Exception {
-    prepareBuffer(RecordMergeMode.OVERWRITE_WITH_LATEST);
+    prepareBuffer(RecordMergeMode.COMMIT_TIME_ORDERING);
     HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions();
     buffer.processDeleteBlock(deleteBlock);
     assertEquals(50, buffer.getLogRecords().size());
@@ -199,7 +199,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
 
   @Test
   public void testProcessDeleteBlockWithoutPositions() throws Exception {
-    prepareBuffer(RecordMergeMode.OVERWRITE_WITH_LATEST);
+    prepareBuffer(RecordMergeMode.COMMIT_TIME_ORDERING);
     HoodieDeleteBlock deleteBlock = getDeleteBlockWithoutPositions();
     buffer.processDeleteBlock(deleteBlock);
     assertEquals(50, buffer.getLogRecords().size());

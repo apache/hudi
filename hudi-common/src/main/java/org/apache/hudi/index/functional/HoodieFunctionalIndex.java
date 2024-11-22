@@ -31,7 +31,7 @@ import java.util.List;
  */
 public interface HoodieFunctionalIndex<S, T> extends Serializable {
 
-  String HOODIE_FUNCTIONAL_INDEX_FILE_PATH = "_hoodie_functional_index_file_path";
+  String HOODIE_FUNCTIONAL_INDEX_RELATIVE_FILE_PATH = "_hoodie_functional_index_relative_file_path";
   String HOODIE_FUNCTIONAL_INDEX_PARTITION = "_hoodie_functional_index_partition";
   String HOODIE_FUNCTIONAL_INDEX_FILE_SIZE = "_hoodie_functional_index_file_size";
   String SPARK_DATE_FORMAT = "date_format";

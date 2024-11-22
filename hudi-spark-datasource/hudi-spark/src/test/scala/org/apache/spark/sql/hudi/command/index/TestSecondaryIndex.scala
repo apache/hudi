@@ -22,6 +22,7 @@ package org.apache.spark.sql.hudi.command.index
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, INSERT_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
@@ -30,7 +31,8 @@ import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY
 import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
+
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
 
@@ -70,7 +72,10 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
                | options (
                |  primaryKey ='id',
                |  type = '$tableType',
-               |  preCombineField = 'ts'
+               |  preCombineField = 'ts',
+               |  hoodie.metadata.enable = 'true',
+               |  hoodie.metadata.record.index.enable = 'true',
+               |  hoodie.metadata.index.secondary.enable = 'true'
                | )
                | partitioned by(ts)
                | location '$basePath'
@@ -78,42 +83,70 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-          checkAnswer(s"show indexes from default.$tableName")()
+          checkAnswer(s"show indexes from default.$tableName")(
+            Seq("record_index", "record_index", "")
+          )
 
-          checkAnswer(s"create index idx_name on $tableName using lucene (name) options(block_size=1024)")()
-          checkAnswer(s"create index idx_price on $tableName using lucene (price options(order='desc')) options(block_size=512)")()
+          spark.sql(s"create index idx_name on $tableName using secondary_index(name)")
+          checkAnswer(s"show indexes from default.$tableName")(
+            Seq("secondary_index_idx_name", "secondary_index", "name"),
+            Seq("record_index", "record_index", "")
+          )
 
-          // Create an index with multiple columns
-          checkException(s"create index idx_id_ts on $tableName using lucene (id, ts)")("Lucene index only support single column")
-
+          spark.sql(s"create index idx_price on $tableName using secondary_index(price)")
           // Create an index with the occupied name
-          checkException(s"create index idx_price on $tableName using lucene (price)")(
-            "Secondary index already exists: idx_price"
+          checkException(s"create index idx_price on $tableName using secondary_index(price)")(
+            "Index already exists: idx_price"
           )
 
-          // Create indexes repeatedly on columns(index name is different, but the index type and involved column is same)
-          checkException(s"create index idx_price_1 on $tableName using lucene (price)")(
-            "Secondary index already exists: idx_price_1"
-          )
-
+          // Both indexes should be shown
           checkAnswer(s"show indexes from $tableName")(
-            Seq("idx_name", "name", "lucene", "", "{\"block_size\":\"1024\"}"),
-            Seq("idx_price", "price", "lucene", "{\"price\":{\"order\":\"desc\"}}", "{\"block_size\":\"512\"}")
+            Seq("secondary_index_idx_name", "secondary_index", "name"),
+            Seq("secondary_index_idx_price", "secondary_index", "price"),
+            Seq("record_index", "record_index", "")
           )
 
           checkAnswer(s"drop index idx_name on $tableName")()
-          checkException(s"drop index idx_name on $tableName")("Secondary index not exists: idx_name")
-
+          // show index shows only one index after dropping
           checkAnswer(s"show indexes from $tableName")(
-            Seq("idx_price", "price", "lucene", "{\"price\":{\"order\":\"desc\"}}", "{\"block_size\":\"512\"}")
+            Seq("secondary_index_idx_price", "secondary_index", "price"),
+            Seq("record_index", "record_index", "")
           )
 
+          // can not drop already dropped index
+          checkException(s"drop index idx_name on $tableName")("Index does not exist: idx_name")
+          // create index again
+          spark.sql(s"create index idx_name on $tableName using secondary_index(name)")
+          // drop index should work now
+          checkAnswer(s"drop index idx_name on $tableName")()
+          checkAnswer(s"show indexes from $tableName")(
+            Seq("secondary_index_idx_price", "secondary_index", "price"),
+            Seq("record_index", "record_index", "")
+          )
+
+          // Drop the second index and show index should show no index
+          // Try a partial delete scenario where table config does not have the partition path
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(HoodieTestUtils.getDefaultStorageConf)
+            .build()
+          assertFalse(metaClient.getTableConfig.getRelativeIndexDefinitionPath.get().contains(metaClient.getBasePath))
+          assertTrue(metaClient.getIndexDefinitionPath.contains(metaClient.getBasePath.toString))
+          val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.values().stream().findFirst().get()
+
+          metaClient.getTableConfig.setMetadataPartitionState(metaClient, indexDefinition.getIndexName, false)
           checkAnswer(s"drop index idx_price on $tableName")()
+          checkAnswer(s"show indexes from $tableName")(
+            Seq("record_index", "record_index", "")
+          )
+
+          // Drop the record index and show index should show no index
+          checkAnswer(s"drop index record_index on $tableName")()
           checkAnswer(s"show indexes from $tableName")()
 
-          checkException(s"drop index idx_price on $tableName")("Secondary index not exists: idx_price")
+          checkException(s"drop index idx_price on $tableName")("Index does not exist: idx_price")
 
-          checkExceptionContain(s"create index idx_price_1 on $tableName using lucene (field_not_exist)")(
+          checkExceptionContain(s"create index idx_price_1 on $tableName using secondary_index(field_not_exist)")(
             "Missing field field_not_exist"
           )
         }
@@ -280,6 +313,57 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         validateSecondaryIndex(basePath, tableName, nonDeletedKeys)
         validateSecondaryIndex(basePath, tableName, finalUpdateKeys)
         dataGen.close()
+      }
+    }
+  }
+
+  test("Test Secondary Index With Overwrite and Delete Partition") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        Seq(
+          WriteOperationType.INSERT_OVERWRITE.value(),
+          WriteOperationType.INSERT_OVERWRITE_TABLE.value(),
+          WriteOperationType.DELETE_PARTITION.value()
+        ).foreach { operationType =>
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          // Step 1: Initial Insertion of Records
+          val dataGen = new HoodieTestDataGenerator()
+          val initialRecords = recordsToStrings(dataGen.generateInserts(getInstantTime, 50, true)).asScala
+          val initialDf = spark.read.json(spark.sparkContext.parallelize(initialRecords.toSeq, 2))
+          val hudiOpts = commonOpts ++ Map(TABLE_TYPE.key -> "MERGE_ON_READ", HoodieWriteConfig.TBL_NAME.key -> tableName)
+          initialDf.write.format("hudi")
+            .options(hudiOpts)
+            .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)
+            .mode(SaveMode.Overwrite)
+            .save(basePath)
+
+          // Step 2: Create table and secondary index on 'rider' column
+          spark.sql(s"CREATE TABLE $tableName USING hudi LOCATION '$basePath'")
+          spark.sql(s"create index idx_rider on $tableName using secondary_index(rider)")
+
+          // Verify initial state of secondary index
+          val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
+          validateSecondaryIndex(basePath, tableName, initialKeys)
+
+          // Step 3: Perform Update Operations on Subset of Records
+          val records = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
+          val df = spark.read.json(spark.sparkContext.parallelize(records.toSeq, 2))
+          // Verify secondary index update fails
+          checkException(() => df.write.format("hudi")
+            .options(hudiOpts)
+            .option(OPERATION.key, operationType)
+            .mode(SaveMode.Append)
+            .save(basePath)) (
+            "Can not perform operation " + WriteOperationType.fromValue(operationType) + " on secondary index")
+          // disable secondary index and retry
+          df.write.format("hudi")
+            .options(hudiOpts)
+            .option(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key, "false")
+            .option(OPERATION.key, operationType)
+            .mode(SaveMode.Append)
+            .save(basePath)
+        }
       }
     }
   }

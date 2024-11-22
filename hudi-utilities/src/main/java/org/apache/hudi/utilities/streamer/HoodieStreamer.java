@@ -270,7 +270,7 @@ public class HoodieStreamer implements Serializable {
     public String sourceOrderingField = "ts";
 
     @Parameter(names = {"--payload-class"}, description = "Deprecated. "
-        + "Use --merge-mode for overwrite with latest or event time merging. "
+        + "Use --merge-mode for commit time or event time merging. "
         + "Subclass of HoodieRecordPayload, that works off a GenericRecord. Implement your own, if you want to do something "
         + "other than overwriting existing value")
     public String payloadClassName = null;

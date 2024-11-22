@@ -24,7 +24,9 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -45,6 +47,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -198,9 +201,7 @@ public enum MetadataPartitionType {
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      // Secondary index is created via sql and not via write path.
-      // HUDI-7662 tracks adding a separate config to enable/disable secondary index.
-      return false;
+      return getBooleanWithAltKeys(writeConfig, SECONDARY_INDEX_ENABLE_PROP);
     }
 
     @Override
@@ -310,6 +311,35 @@ public enum MetadataPartitionType {
           .setIsTightBound((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_TIGHT_BOUND))
           .build();
     }
+  }
+
+  /**
+   * Returns the index definition name without the prefix of the partition type. This name
+   * is what's provided by user while creating the index. This function is useful for partition
+   * types like functional and secondary index which use a prefix.
+   */
+  public String getIndexNameWithoutPrefix(HoodieIndexDefinition indexDefinition) {
+    String indexName = indexDefinition.getIndexName();
+    ValidationUtils.checkArgument(indexName.startsWith(partitionPath), String.format("Index Name %s does not start with partition path %s", indexName, partitionPath));
+    if (indexDefinition.getIndexName().length() > partitionPath.length()) {
+      return indexDefinition.getIndexName().substring(partitionPath.length());
+    }
+    return "";
+  }
+
+  /**
+   * Returns true if partition type is functional or secondary.
+   */
+  public static boolean isGenericIndex(String metadataPartitionPath) {
+    return metadataPartitionPath.startsWith(SECONDARY_INDEX.getPartitionPath())
+        || metadataPartitionPath.startsWith(FUNCTIONAL_INDEX.getPartitionPath());
+  }
+
+  public static String getGenericIndexNameWithoutPrefix(String indexName) {
+    String prefix = indexName.startsWith(SECONDARY_INDEX.getPartitionPath())
+        ? SECONDARY_INDEX.getPartitionPath()
+        : FUNCTIONAL_INDEX.getPartitionPath();
+    return indexName.substring(prefix.length());
   }
 
   // Partition path in metadata table.

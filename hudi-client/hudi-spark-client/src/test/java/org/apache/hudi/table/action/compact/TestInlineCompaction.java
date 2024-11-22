@@ -66,6 +66,14 @@ public class TestInlineCompaction extends CompactionTestBase {
           .build();
   }
 
+  private void waitForMs(long timeMs) {
+    try {
+      Thread.sleep(timeMs);
+    } catch (InterruptedException e) {
+      throw new RuntimeException("Interrupted while killing time", e);
+    }
+  }
+
   @Test
   public void testCompactionIsNotScheduledEarly() throws Exception {
     // Given: make two commits
@@ -179,7 +187,8 @@ public class TestInlineCompaction extends CompactionTestBase {
       runNextDeltaCommits(writeClient, readClient, Arrays.asList(instantTime), records, cfg, true, new ArrayList<>());
 
       // after 10s, that will trigger compaction
-      String finalInstant = writeClient.createNewInstantTime(10000);
+      waitForMs(10000);
+      String finalInstant = writeClient.createNewInstantTime();
       HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), writeClient, metaClient, cfg, false);
 
@@ -208,7 +217,8 @@ public class TestInlineCompaction extends CompactionTestBase {
       assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
       // 4th commit, that will trigger compaction because reach the time elapsed
       metaClient = createMetaClient(cfg.getBasePath());
-      finalInstant = writeClient.createNewInstantTime(60000);
+      waitForMs(60000);
+      finalInstant = writeClient.createNewInstantTime();
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 10), writeClient, metaClient, cfg, false);
 
       metaClient = createMetaClient(cfg.getBasePath());
@@ -231,7 +241,8 @@ public class TestInlineCompaction extends CompactionTestBase {
       assertEquals(2, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
       // 3d commit, that will trigger compaction
       metaClient = createMetaClient(cfg.getBasePath());
-      String finalInstant = writeClient.createNewInstantTime(20000);
+      waitForMs(20000);
+      String finalInstant = writeClient.createNewInstantTime();
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 10), writeClient, metaClient, cfg, false);
 
       metaClient = createMetaClient(cfg.getBasePath());
@@ -289,7 +300,8 @@ public class TestInlineCompaction extends CompactionTestBase {
       SparkRDDReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
       // Schedule compaction instantTime, make it in-flight (simulates inline compaction failing)
-      instantTime = writeClient.createNewInstantTime(10000);
+      waitForMs(10000);
+      instantTime = writeClient.createNewInstantTime();
       scheduleCompaction(instantTime, writeClient, cfg);
       moveCompactionFromRequestedToInflight(instantTime, cfg);
     }

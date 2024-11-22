@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.action.index.functional;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.StoragePath;
@@ -44,15 +45,12 @@ public abstract class BaseHoodieIndexClient {
    */
   public void register(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) {
     LOG.info("Registering index {} of using {}", indexName, indexType);
-    String indexMetaPath = metaClient.getTableConfig().getIndexDefinitionPath()
-        .orElseGet(() -> metaClient.getMetaPath()
-            + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FOLDER_NAME
-            + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FILE_NAME);
-    // build HoodieFunctionalIndexMetadata and then add to index definition file
-    metaClient.buildIndexDefinition(indexMetaPath, indexName, indexType, columns, options);
+    // build HoodieIndexMetadata and then add to index definition file
+    metaClient.buildIndexDefinition(indexName, indexType, columns, options);
     // update table config if necessary
-    if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.INDEX_DEFINITION_PATH) || !metaClient.getTableConfig().getIndexDefinitionPath().isPresent()) {
-      metaClient.getTableConfig().setValue(HoodieTableConfig.INDEX_DEFINITION_PATH, indexMetaPath);
+    String indexMetaPath = metaClient.getIndexDefinitionPath();
+    if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH) || !metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()) {
+      metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(indexMetaPath)));
       HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
     }
   }
