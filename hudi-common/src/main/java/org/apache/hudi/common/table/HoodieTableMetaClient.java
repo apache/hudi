@@ -611,22 +611,24 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     // if anything other than default archive log folder is specified, create that too
+    String timelinePropVal = new HoodieConfig(props).getStringOrDefault(TIMELINE_FOLDER);
+    StoragePath timelineDir = metaPathDir;
+    if (!StringUtils.isNullOrEmpty(timelinePropVal)) {
+      timelineDir = new StoragePath(metaPathDir, timelinePropVal);
+      if (!storage.exists(timelineDir)) {
+        storage.createDirectory(timelineDir);
+      }
+    }
+
+    // if anything other than default archive log folder is specified, create that too
     String archiveLogPropVal = new HoodieConfig(props).getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER);
     if (!StringUtils.isNullOrEmpty(archiveLogPropVal)) {
-      StoragePath archiveLogDir = new StoragePath(metaPathDir, archiveLogPropVal);
+      StoragePath archiveLogDir = new StoragePath(timelineDir, archiveLogPropVal);
       if (!storage.exists(archiveLogDir)) {
         storage.createDirectory(archiveLogDir);
       }
     }
 
-    // if anything other than default archive log folder is specified, create that too
-    String timelinePropVal = new HoodieConfig(props).getStringOrDefault(TIMELINE_FOLDER);
-    if (!StringUtils.isNullOrEmpty(timelinePropVal)) {
-      StoragePath timelineDir = new StoragePath(metaPathDir, timelinePropVal);
-      if (!storage.exists(timelineDir)) {
-        storage.createDirectory(timelineDir);
-      }
-    }
     // Always create temporaryFolder which is needed for finalizeWrite for Hoodie tables
     final StoragePath temporaryFolder = new StoragePath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
     if (!storage.exists(temporaryFolder)) {
