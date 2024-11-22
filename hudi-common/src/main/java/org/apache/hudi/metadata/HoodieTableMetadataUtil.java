@@ -817,23 +817,34 @@ public class HoodieTableMetadataUtil {
 
       // there are chances that same record key from data table has 2 entries (1 delete from older partition and 1 insert to newer partition)
       // lets do reduce by key to ignore the deleted entry.
-      return recordIndexRecords.mapToPair(
-              (SerializablePairFunction<HoodieRecord, HoodieKey, HoodieRecord>) t -> Pair.of(t.getKey(), t))
-          .reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
-            boolean isRecord1Deleted = record1.getData() instanceof EmptyHoodieRecordPayload;
-            boolean isRecord2Deleted = record2.getData() instanceof EmptyHoodieRecordPayload;
-            if (isRecord1Deleted && !isRecord2Deleted) {
-              return record2;
-            } else if (!isRecord1Deleted && isRecord2Deleted) {
-              return record1;
-            } else {
-              throw new HoodieIOException("Two HoodieRecord updates to RLI is seen for same record key " + record2.getRecordKey() + ", record 1 : "
-                  + record1.getData().toString() + ", record 2 : " + record2.getData().toString());
-            }
-          }, parallelism).values();
+      return reduceByKeys(recordIndexRecords, parallelism);
     } catch (Exception e) {
-      throw new HoodieException("Failed to generate column stats records for metadata table", e);
+      throw new HoodieException("Failed to generate RLI records for metadata table", e);
     }
+  }
+
+  /**
+   * There are chances that same record key from data table has 2 entries (1 delete from older partition and 1 insert to newer partition)
+   * So, this method performs reduce by key to ignore the deleted entry.
+   * @param recordIndexRecords hoodie records after rli index lookup.
+   * @param parallelism parallelism to use.
+   * @return
+   */
+  private static HoodieData<HoodieRecord> reduceByKeys(HoodieData<HoodieRecord> recordIndexRecords, int parallelism) {
+    return recordIndexRecords.mapToPair(
+            (SerializablePairFunction<HoodieRecord, HoodieKey, HoodieRecord>) t -> Pair.of(t.getKey(), t))
+        .reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
+          boolean isRecord1Deleted = record1.getData() instanceof EmptyHoodieRecordPayload;
+          boolean isRecord2Deleted = record2.getData() instanceof EmptyHoodieRecordPayload;
+          if (isRecord1Deleted && !isRecord2Deleted) {
+            return record2;
+          } else if (!isRecord1Deleted && isRecord2Deleted) {
+            return record1;
+          } else {
+            throw new HoodieIOException("Two HoodieRecord updates to RLI is seen for same record key " + record2.getRecordKey() + ", record 1 : "
+                + record1.getData().toString() + ", record 2 : " + record2.getData().toString());
+          }
+        }, parallelism).values();
   }
 
   static List<String> getRecordKeysDeletedOrUpdated(HoodieEngineContext engineContext,
@@ -877,7 +888,7 @@ public class HoodieTableMetadataUtil {
             }
           }).collectAsList();
     } catch (Exception e) {
-      throw new HoodieException("Failed to generate column stats records for metadata table", e);
+      throw new HoodieException("Failed to fetch deleted record keys while preparing MDT records", e);
     }
   }
 
@@ -1439,7 +1450,7 @@ public class HoodieTableMetadataUtil {
                                                  String latestCommitTimestamp) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       // read log file records without merging
-      List<String> deletedKeys = new ArrayList<>();
+      Set<String> deletedKeys = new HashSet<>();
       HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
           .withStorage(datasetMetaClient.getStorage())
           .withBasePath(datasetMetaClient.getBasePath())
@@ -1451,7 +1462,7 @@ public class HoodieTableMetadataUtil {
           .withLogRecordScannerCallbackForDeletedKeys(deletedKey -> deletedKeys.add(deletedKey.getRecordKey()))
           .build();
       scanner.scan();
-      return deletedKeys.stream().collect(Collectors.toSet());
+      return deletedKeys;
     }
     return Collections.emptySet();
   }
