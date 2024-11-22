@@ -152,7 +152,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
       default:
       case EVENT_TIME_ORDERING:
         return DefaultHoodieRecordPayload.class.getName();
-      case OVERWRITE_WITH_LATEST:
+      case COMMIT_TIME_ORDERING:
         return OverwriteWithLatestAvroPayload.class.getName();
     }
   }

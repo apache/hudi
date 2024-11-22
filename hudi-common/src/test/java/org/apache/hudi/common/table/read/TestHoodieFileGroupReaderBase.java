@@ -103,8 +103,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private static Stream<Arguments> testArguments() {
     return Stream.of(
-        arguments(RecordMergeMode.OVERWRITE_WITH_LATEST, "avro"),
-        arguments(RecordMergeMode.OVERWRITE_WITH_LATEST, "parquet"),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro"),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet"),
         arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro"),
         arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet"),
         arguments(RecordMergeMode.CUSTOM, "avro"),

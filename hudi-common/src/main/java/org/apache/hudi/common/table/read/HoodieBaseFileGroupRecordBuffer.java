@@ -112,7 +112,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       this.payloadClass = Option.empty();
     }
     this.orderingFieldName = Option.ofNullable(ConfigUtils.getOrderingField(props)).orElseGet(() -> hoodieTableMetaClient.getTableConfig().getPreCombineField());
-    this.orderingFieldTypeOpt = recordMergeMode == RecordMergeMode.OVERWRITE_WITH_LATEST ? Option.empty() : AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName);
+    this.orderingFieldTypeOpt = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING ? Option.empty() : AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName);
     this.orderingFieldDefault = orderingFieldTypeOpt.map(type -> readerContext.castValue(0, type)).orElse(0);
     this.props = props;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
@@ -218,7 +218,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         return Option.empty();
       } else {
         switch (recordMergeMode) {
-          case OVERWRITE_WITH_LATEST:
+          case COMMIT_TIME_ORDERING:
             return Option.empty();
           case EVENT_TIME_ORDERING:
             Comparable existingOrderingValue = readerContext.getOrderingValue(
@@ -295,7 +295,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                                             Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) {
     if (existingRecordMetadataPair != null) {
       switch (recordMergeMode) {
-        case OVERWRITE_WITH_LATEST:
+        case COMMIT_TIME_ORDERING:
           return Option.empty();
         case EVENT_TIME_ORDERING:
         case CUSTOM:
@@ -400,7 +400,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       return Option.empty();
     } else {
       switch (recordMergeMode) {
-        case OVERWRITE_WITH_LATEST:
+        case COMMIT_TIME_ORDERING:
           return newer;
         case EVENT_TIME_ORDERING:
           Comparable oldOrderingValue = readerContext.getOrderingValue(

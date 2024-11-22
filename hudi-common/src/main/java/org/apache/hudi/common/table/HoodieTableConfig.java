@@ -78,7 +78,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
-import static org.apache.hudi.common.config.RecordMergeMode.OVERWRITE_WITH_LATEST;
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
@@ -89,7 +89,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
@@ -740,8 +740,8 @@ public class HoodieTableConfig extends HoodieConfig {
         }
 
         // set merger strategy based on merge mode
-        if (inferredRecordMergeMode == OVERWRITE_WITH_LATEST) {
-          inferredRecordMergeStrategyId = OVERWRITE_MERGE_STRATEGY_UUID;
+        if (inferredRecordMergeMode == COMMIT_TIME_ORDERING) {
+          inferredRecordMergeStrategyId = COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
         } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
           inferredRecordMergeStrategyId = DEFAULT_MERGE_STRATEGY_UUID;
         } else {
@@ -754,10 +754,10 @@ public class HoodieTableConfig extends HoodieConfig {
           checkArgument(recordMergeMode == null || recordMergeMode == EVENT_TIME_ORDERING,
               "Default merge strategy ID can only be used with the merge mode of EVENT_TIME_ORDERING");
           inferredRecordMergeMode = EVENT_TIME_ORDERING;
-        } else if (recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID)) {
-          checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST,
-              "Overwrite with latest merger strategy ID can only be used with the merge mode of OVERWRITE_WITH_LATEST");
-          inferredRecordMergeMode = OVERWRITE_WITH_LATEST;
+        } else if (recordMergeStrategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+          checkArgument(recordMergeMode == null || recordMergeMode == COMMIT_TIME_ORDERING,
+              "Commit time ordering merger strategy ID can only be used with the merge mode of COMMIT_TIME_ORDERING");
+          inferredRecordMergeMode = COMMIT_TIME_ORDERING;
         } else {
           checkArgument(!recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
               "Payload based strategy should only be used if you have a custom payload class set");
@@ -786,18 +786,18 @@ public class HoodieTableConfig extends HoodieConfig {
           // currently for the custom case. This block will be moved below and check if the payload class name is dummy
           checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM, "Record merge mode, payload class, and merge strategy are in an illegal configuration");
           checkArgument(
-              !recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID) && !recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+              !recordMergeStrategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID) && !recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
               "Record merger strategy is incompatible with payload class");
           inferredRecordMergeMode = CUSTOM;
           inferredRecordMergeStrategyId = recordMergeStrategyId;
         }
       } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
         // strategy and merge mode must be unset or align with overwrite
-        checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(OVERWRITE_MERGE_STRATEGY_UUID),
+        checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
             "Record merge strategy cannot be set if a merge payload is used");
-        checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST, "Only overwrite with latest record merge mode can be used with overwrite payload");
-        inferredRecordMergeMode = OVERWRITE_WITH_LATEST;
-        inferredRecordMergeStrategyId = OVERWRITE_MERGE_STRATEGY_UUID;
+        checkArgument(recordMergeMode == null || recordMergeMode == COMMIT_TIME_ORDERING, "Only commit time ordering merge mode can be used with overwrite payload");
+        inferredRecordMergeMode = COMMIT_TIME_ORDERING;
+        inferredRecordMergeStrategyId = COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
       } else {
         // using custom avro payload
         checkArgument(isNullOrEmpty(recordMergeStrategyId) || recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID),
