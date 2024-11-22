@@ -25,8 +25,15 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -35,7 +42,7 @@ import static org.mockito.Mockito.mock;
 class TestTimelineService {
 
   @Test
-  void createServerUsesRandomPortIfProvidedInUse() throws Exception {
+  void createServerUsesRandomPortIfAnotherTimelineServiceRunningOnSamePort() throws Exception {
     TimelineService timelineService = null;
     TimelineService secondTimelineService = null;
     try {
@@ -56,6 +63,45 @@ class TestTimelineService {
       }
       if (secondTimelineService != null) {
         secondTimelineService.close();
+      }
+    }
+  }
+
+  @Test
+  void createServerUsesRandomPortIfProvidedPortInUse() throws Exception {
+    TimelineService timelineService = null;
+    HttpServer server = null;
+    try {
+      int originalServerPort = 8888;
+      server = HttpServer.create(new InetSocketAddress(originalServerPort), 0);
+      server.createContext("/", new MyHandler());
+      server.setExecutor(null);
+      server.start();
+
+      TimelineService.Config config = TimelineService.Config.builder().enableMarkerRequests(true).serverPort(originalServerPort).build();
+      HoodieStorage storage = HoodieTestUtils.getDefaultStorage();
+      FileSystemViewManager viewManager = mock(FileSystemViewManager.class);
+      StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
+      HoodieEngineContext engineContext = new HoodieLocalEngineContext(HoodieTestUtils.getDefaultStorageConf());
+      timelineService = new TimelineService(engineContext, conf, config, storage, viewManager);
+      assertNotEquals(originalServerPort, timelineService.startService());
+    } finally {
+      if (timelineService != null) {
+        timelineService.close();
+      }
+      if (server != null) {
+        server.stop(0);
+      }
+    }
+  }
+
+  static class MyHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange t) throws IOException {
+      String response = "Hello World!";
+      t.sendResponseHeaders(200, response.length());
+      try (OutputStream os = t.getResponseBody()) {
+        os.write(response.getBytes());
       }
     }
   }
