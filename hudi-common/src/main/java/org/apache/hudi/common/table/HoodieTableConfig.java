@@ -331,11 +331,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("The metadata of secondary indexes");
 
-  public static final ConfigProperty<String> INDEX_DEFINITION_PATH = ConfigProperty
+  public static final ConfigProperty<String> RELATIVE_INDEX_DEFINITION_PATH = ConfigProperty
       .key("hoodie.table.index.defs.path")
       .noDefaultValue()
       .sinceVersion("1.0.0")
-      .withDocumentation("Absolute path where the index definitions are stored");
+      .withDocumentation("Relative path to table base path where the index definitions are stored");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
@@ -970,8 +970,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * @returns the index definition path.
    */
-  public Option<String> getIndexDefinitionPath() {
-    return Option.ofNullable(getString(INDEX_DEFINITION_PATH));
+  public Option<String> getRelativeIndexDefinitionPath() {
+    return Option.ofNullable(getString(RELATIVE_INDEX_DEFINITION_PATH));
   }
 
   /**

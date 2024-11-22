@@ -94,7 +94,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       throw new HoodieMetadataIndexException("Not eligible for indexing: " + indexType + ", indexName: " + userIndexName);
     }
 
-    if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
+    if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
         || !metaClient.getIndexMetadata().isPresent()
         || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(fullIndexName)) {
       LOG.info("Index definition is not present. Registering the index first");

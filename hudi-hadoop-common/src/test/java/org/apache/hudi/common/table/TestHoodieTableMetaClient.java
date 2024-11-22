@@ -240,7 +240,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals(metaClient.getMetaPath() + "/.index_defs/index.json", metaClient.getIndexDefinitionPath());
 
     String randomDefinitionPath = "/a/b/c";
-    metaClient.getTableConfig().setValue(HoodieTableConfig.INDEX_DEFINITION_PATH.key(), "/a/b/c");
+    metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "/a/b/c");
     assertEquals(randomDefinitionPath, metaClient.getIndexDefinitionPath());
   }
 }
