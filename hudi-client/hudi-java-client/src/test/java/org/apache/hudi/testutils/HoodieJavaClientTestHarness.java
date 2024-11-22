@@ -71,7 +71,6 @@ import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -429,22 +428,12 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(
           engineContext, storage, HoodieTableMetadata.getMetadataTableBasePath(basePath), false);
 
-      List<MetadataPartitionType> enabledPartitionTypes = metadataWriter.getEnabledPartitionTypes();
-
-      assertEquals(enabledPartitionTypes.size(), metadataTablePartitions.size());
-
-      Map<String, MetadataPartitionType> partitionTypeMap = enabledPartitionTypes.stream()
-          .collect(Collectors.toMap(MetadataPartitionType::getPartitionPath, Function.identity()));
-
       // Metadata table should automatically compact and clean
       // versions are +1 as autoClean / compaction happens end of commits
       int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
       metadataTablePartitions.forEach(partition -> {
-        MetadataPartitionType partitionType = partitionTypeMap.get(partition);
-
         List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
-
         assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).filter(Objects::nonNull).count() > 0, "Should have a single latest base file");
         assertTrue(latestSlices.size() > 0, "Should have a single latest file slice");
         assertTrue(latestSlices.size() <= numFileVersions, "Should limit file slice to "

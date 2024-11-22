@@ -19,22 +19,22 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkIndexClient
+import org.apache.hudi.common.model.HoodieIndexDefinition
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.exception.HoodieIndexException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.index.secondary.SecondaryIndexManager
-import org.apache.hudi.metadata.MetadataPartitionType
+import org.apache.hudi.metadata.{HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util
-
+import java.util.stream.Collectors
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
 case class CreateIndexCommand(table: CatalogTable,
@@ -51,13 +51,14 @@ case class CreateIndexCommand(table: CatalogTable,
       new util.LinkedHashMap[String, java.util.Map[String, String]]()
     columns.map(c => columnsMap.put(c._1.mkString("."), c._2.asJava))
 
-    if (options.contains("func") || indexType.equals("secondary_index")) {
+    if (indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX)
+      || indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+      || indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
       val extraOpts = options ++ table.properties
       HoodieSparkIndexClient.getInstance(sparkSession).create(
         metaClient, indexName, indexType, columnsMap, extraOpts.asJava)
     } else {
-      SecondaryIndexManager.getInstance().create(
-        metaClient, indexName, indexType, ignoreIfExists, columnsMap, options.asJava)
+      throw new HoodieIndexException(String.format("%s is not supported", indexType));
     }
 
     // Invalidate cached table for queries do not access related table
@@ -74,13 +75,24 @@ case class DropIndexCommand(table: CatalogTable,
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val tableId = table.identifier
     val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
-    try {
-      // need to ensure that the index name is for a valid partition type
-      MetadataPartitionType.fromPartitionPath(indexName)
+    // need to ensure that the index name is for a valid partition type
+    val indexMetadataOpt = metaClient.getIndexMetadata
+    if (metaClient.getTableConfig.getMetadataPartitions.contains(indexName)) {
       HoodieSparkIndexClient.getInstance(sparkSession).drop(metaClient, indexName, ignoreIfNotExists)
-    } catch {
-      case _: IllegalArgumentException =>
-        SecondaryIndexManager.getInstance().drop(metaClient, indexName, ignoreIfNotExists)
+    } else if (indexMetadataOpt.isPresent) {
+      val indexMetadata = indexMetadataOpt.get
+      val indexDefinitions = indexMetadata.getIndexDefinitions.values().stream()
+        .filter(definition => {
+          val partitionType = MetadataPartitionType.fromPartitionPath(definition.getIndexName)
+          partitionType.getIndexNameWithoutPrefix(definition).equals(indexName)
+        })
+        .collect(Collectors.toList[HoodieIndexDefinition])
+      if (indexDefinitions.isEmpty && !ignoreIfNotExists) {
+        throw new HoodieIndexException(String.format("Index does not exist: %s", indexName))
+      }
+      indexDefinitions.forEach(definition => HoodieSparkIndexClient.getInstance(sparkSession).drop(metaClient, definition.getIndexName, ignoreIfNotExists))
+    } else if (!ignoreIfNotExists) {
+      throw new HoodieIndexException(String.format("Index does not exist: %s", indexName))
     }
 
     // Invalidate cached table for queries do not access related table
@@ -90,22 +102,29 @@ case class DropIndexCommand(table: CatalogTable,
   }
 }
 
+/**
+ * Command to show available indexes in hudi. The corresponding logical plan is available at
+ * org.apache.spark.sql.catalyst.plans.logical.ShowIndexes
+ */
 case class ShowIndexesCommand(table: CatalogTable,
                               override val output: Seq[Attribute]) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val metaClient = createHoodieTableMetaClient(table.identifier, sparkSession)
-    val secondaryIndexes = SecondaryIndexManager.getInstance().show(metaClient)
-
-    val mapper = JsonUtils.getObjectMapper
-    toScalaOption(secondaryIndexes).map(x =>
-      x.asScala.map(i => {
-        val colOptions =
-          if (i.getColumns.values().asScala.forall(_.isEmpty)) "" else mapper.writeValueAsString(i.getColumns)
-        val options = if (i.getOptions.isEmpty) "" else mapper.writeValueAsString(i.getOptions)
-        Row(i.getIndexName, i.getColumns.keySet().asScala.mkString(","),
-          i.getIndexType.name().toLowerCase, colOptions, options)
-      }).toSeq).getOrElse(Seq.empty[Row])
+    // need to ensure that the index name is for a valid partition type
+    metaClient.getTableConfig.getMetadataPartitions.asScala.map(
+      partition => {
+        if (MetadataPartitionType.isGenericIndex(partition)) {
+          val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(partition)
+          Row(partition, indexDefinition.getIndexType.toLowerCase, indexDefinition.getSourceFields.asScala.mkString(","))
+        } else if (!partition.equals(MetadataPartitionType.FILES.getPartitionPath)) {
+          Row(partition, partition, "")
+        } else {
+          Row.empty
+        }
+      }
+    ).filter(row => row.length != 0)
+     .toSeq
   }
 }
 
@@ -113,8 +132,6 @@ case class RefreshIndexCommand(table: CatalogTable,
                                indexName: String) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val metaClient = createHoodieTableMetaClient(table.identifier, sparkSession)
-    SecondaryIndexManager.getInstance().refresh(metaClient, indexName)
     Seq.empty
   }
 }

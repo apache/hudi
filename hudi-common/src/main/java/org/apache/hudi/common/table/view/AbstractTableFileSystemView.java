@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -522,8 +523,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // Filter base files if:
       // 1. file extension equals to table configured file extension
       // 2. file is not .hoodie_partition_metadata
-      return pathName.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension())
-          && !pathName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+      if (pathName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
+        return false;
+      } else if (metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled()) {
+        return pathName.contains(HoodieFileFormat.PARQUET.getFileExtension())
+            || pathName.contains(HoodieFileFormat.ORC.getFileExtension());
+      } else {
+        return pathName.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+      }
     };
     return pathInfoList.stream().filter(roFilePredicate).map(HoodieBaseFile::new);
   }

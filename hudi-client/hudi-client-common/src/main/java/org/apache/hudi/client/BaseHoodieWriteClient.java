@@ -239,7 +239,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
-      preCommit(inflightInstant, metadata);
+      preCommit(metadata);
       if (extraPreCommitFunc.isPresent()) {
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
@@ -368,10 +368,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Any pre-commit actions like conflict resolution goes here.
-   * @param inflightInstant instant of inflight operation.
    * @param metadata commit metadata for which pre commit is being invoked.
    */
-  protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
+  protected void preCommit(HoodieCommitMetadata metadata) {
     // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config);
@@ -390,7 +389,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Main API to run bootstrap to hudi.
    */
   public void bootstrap(Option<Map<String, String>> extraMetadata) {
-    // TODO : MULTIWRITER -> check if failed bootstrap files can be cleaned later
     if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
       throw new HoodieException("Cannot bootstrap the table in multi-writer mode");
     }
@@ -1446,6 +1444,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (!instantsToRollback.isEmpty()) {
         Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = tableServiceClient.getPendingRollbackInfos(metaClient);
         instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+        // already called within a lock.
         tableServiceClient.rollbackFailedWrites(pendingRollbacks, true, true);
       }
 

@@ -153,9 +153,9 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         }), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
-    LOG.info("Total of " + operations.size() + " compaction operations are retrieved");
-    LOG.info("Total number of log files " + totalLogFiles.value());
-    LOG.info("Total number of file slices " + totalFileSlices.value());
+    LOG.info("Total of {} compaction operations are retrieved", operations.size());
+    LOG.info("Total number of log files {}", totalLogFiles.value());
+    LOG.info("Total number of file slices {}", totalFileSlices.value());
 
     if (operations.isEmpty()) {
       LOG.warn("No operations are retrieved for {}", metaClient.getBasePath());

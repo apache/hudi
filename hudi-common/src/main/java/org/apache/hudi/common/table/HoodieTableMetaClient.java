@@ -71,7 +71,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,6 +89,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.index.functional.HoodieFunctionalIndex.SPARK_IDENTITY;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
@@ -195,30 +195,54 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieTableMetaClient() {
   }
 
+  public String getIndexDefinitionPath() {
+    return tableConfig.getRelativeIndexDefinitionPath()
+        .map(definitionPath -> new StoragePath(basePath, definitionPath).toString())
+        .orElseGet(() -> metaPath + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FOLDER_NAME
+            + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FILE_NAME);
+  }
+
   /**
    * Builds functional index definition and writes to index definition file.
    *
-   * @param indexMetaPath Path to index definition file
    * @param indexName     Name of the index
    * @param indexType     Type of the index
    * @param columns       Columns on which index is built
    * @param options       Options for the index
    */
-  public void buildIndexDefinition(String indexMetaPath,
-                                   String indexName,
+  public void buildIndexDefinition(String indexName,
                                    String indexType,
                                    Map<String, Map<String, String>> columns,
                                    Map<String, String> options) {
     checkState(
         !indexMetadataOpt.isPresent() || !indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName),
         "Index metadata is already present");
+    String indexMetaPath = getIndexDefinitionPath();
     List<String> columnNames = new ArrayList<>(columns.keySet());
-    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, indexType, options.get("func"), columnNames, options);
+    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, indexType, options.getOrDefault("func", SPARK_IDENTITY), columnNames, options);
     if (indexMetadataOpt.isPresent()) {
       indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
     } else {
-      indexMetadataOpt = Option.of(new HoodieIndexMetadata(Collections.singletonMap(indexName, indexDefinition)));
+      Map<String, HoodieIndexDefinition> indexDefinitionMap = new HashMap<>();
+      indexDefinitionMap.put(indexName, indexDefinition);
+      indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
     }
+    try {
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
+    }
+  }
+
+  /**
+   * Deletes index definition and writes to index definition file.
+   *
+   * @param indexName Name of the index
+   */
+  public void deleteIndexDefinition(String indexName) {
+    checkState(indexMetadataOpt.isPresent(), "Index metadata is not present");
+    indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
+    String indexMetaPath = getIndexDefinitionPath();
     try {
       FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
     } catch (IOException e) {
@@ -233,14 +257,14 @@ public class HoodieTableMetaClient implements Serializable {
     if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
       return indexMetadataOpt;
     }
-    if (tableConfig.getIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getIndexDefinitionPath().get())) {
+    if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
       StoragePath indexDefinitionPath =
-          new StoragePath(tableConfig.getIndexDefinitionPath().get());
+          new StoragePath(basePath, tableConfig.getRelativeIndexDefinitionPath().get());
       try {
         return Option.of(HoodieIndexMetadata.fromJson(
             new String(FileIOUtils.readDataFromPath(storage, indexDefinitionPath).get())));
       } catch (IOException e) {
-        throw new HoodieIOException("Could not load functional index metadata at path: " + tableConfig.getIndexDefinitionPath().get(), e);
+        throw new HoodieIOException("Could not load functional index metadata at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
       }
     }
     return Option.empty();
@@ -1281,8 +1305,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE)) {
         setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE));
       }
-      if (hoodieConfig.contains(HoodieTableConfig.INDEX_DEFINITION_PATH)) {
-        setIndexDefinitionPath(hoodieConfig.getString(HoodieTableConfig.INDEX_DEFINITION_PATH));
+      if (hoodieConfig.contains(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH)) {
+        setIndexDefinitionPath(hoodieConfig.getString(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH));
       }
       return this;
     }
@@ -1399,7 +1423,7 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE, Boolean.toString(multipleBaseFileFormatsEnabled));
       }
       if (null != indexDefinitionPath) {
-        tableConfig.setValue(HoodieTableConfig.INDEX_DEFINITION_PATH, indexDefinitionPath);
+        tableConfig.setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, indexDefinitionPath);
       }
       return tableConfig.getProps();
     }

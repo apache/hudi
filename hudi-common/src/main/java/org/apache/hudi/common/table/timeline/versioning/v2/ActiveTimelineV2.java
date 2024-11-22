@@ -732,7 +732,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   protected void createCompleteFileInMetaPath(boolean shouldLock, HoodieInstant instant, Option<byte[]> content) {
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(metaClient.getTimeGeneratorConfig(), metaClient.getStorageConf());
-    timeGenerator.consumeTimestamp(!shouldLock, currentTimeMillis -> {
+    timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
       String completionTime = HoodieInstantTimeGenerator.formatDate(new Date(currentTimeMillis));
       String fileName = instantFileNameGenerator.getFileName(completionTime, instant);
       StoragePath fullPath = getInstantFileNamePath(fileName);

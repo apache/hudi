@@ -25,18 +25,18 @@ import org.apache.hudi.storage.StorageConfiguration;
 import java.util.function.Consumer;
 
 /**
- * Time generator that waits for some time for each time generation to resolve the clock skew issue.
+ * Time generator that ensures all clocks pass an expected max clock skew to ensure TrueTime semantics.
  */
-public class WaitBasedTimeGenerator extends TimeGeneratorBase {
+public class SkewAdjustingTimeGenerator extends TimeGeneratorBase {
   private final long maxExpectedClockSkewMs;
 
-  public WaitBasedTimeGenerator(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf) {
+  public SkewAdjustingTimeGenerator(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf) {
     super(config, storageConf);
     this.maxExpectedClockSkewMs = config.getMaxExpectedClockSkewMs();
   }
 
   @Override
-  public long currentTimeMillis(boolean skipLocking) {
+  public long generateTime(boolean skipLocking) {
     try {
       if (!skipLocking) {
         lock();
@@ -54,12 +54,12 @@ public class WaitBasedTimeGenerator extends TimeGeneratorBase {
   }
 
   @Override
-  public void consumeTimestamp(boolean skipLocking, Consumer<Long> func) {
+  public void consumeTime(boolean skipLocking, Consumer<Long> func) {
     try {
       if (!skipLocking) {
         lock();
       }
-      long currentTimeMillis = currentTimeMillis(true);
+      long currentTimeMillis = generateTime(true);
       func.accept(currentTimeMillis);
     } finally {
       if (!skipLocking) {

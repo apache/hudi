@@ -25,6 +25,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
+import java.util.Objects;
+
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 
 /**
@@ -42,12 +44,10 @@ public class TimeGenerators {
     ValidationUtils.checkArgument(storageConf != null, "Hadoop configuration is required");
     return TIME_GENERATOR_CACHE.get(timeGeneratorConfig.getBasePath(), s -> {
       TimeGeneratorType type = timeGeneratorConfig.getTimeGeneratorType();
-      switch (type) {
-        case WAIT_TO_ADJUST_SKEW:
-          return new WaitBasedTimeGenerator(timeGeneratorConfig, storageConf);
-        default:
-          throw new IllegalArgumentException("Unsupported TimeGenerator Type " + type);
+      if (Objects.requireNonNull(type) == TimeGeneratorType.WAIT_TO_ADJUST_SKEW) {
+        return new SkewAdjustingTimeGenerator(timeGeneratorConfig, storageConf);
       }
+      throw new IllegalArgumentException("Unsupported TimeGenerator Type " + type);
     });
   }
 }
