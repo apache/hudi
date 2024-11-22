@@ -20,10 +20,9 @@
 package org.apache.spark.sql.execution.datasources
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.config.{TimestampKeyGeneratorConfig, TypedProperties}
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{ConfigUtils, DateTimeUtils, StringUtils}
-import org.apache.hudi.keygen.parser.HoodieDateTimeParser
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.JavaScalaConverters
@@ -33,10 +32,13 @@ import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.{DEFAULT_PARTI
 import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
 import org.apache.spark.sql.types.{AnsiIntervalType, AnyTimestampType, BinaryType, BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, NullType, ShortType, StringType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
+import org.joda.time.DateTimeZone
+import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
 import java.lang.{Double => JDouble, Long => JLong}
 import java.math.{BigDecimal => JBigDecimal}
-import java.time.{Instant, ZoneId}
+import java.time.Instant
+import java.util.TimeZone
 
 import scala.util.Try
 
@@ -45,7 +47,7 @@ object BetterParsePartitionUtil extends Logging {
   def parsePartition(partitionPath: String,
                      partitionSchema: StructType,
                      tableConfig: HoodieTableConfig,
-                     zoneId: ZoneId): Array[Object] = {
+                     timeZone: TimeZone): Array[Object] = {
     val keyGenerator = tableConfig.getKeyGeneratorClassName
     lazy val isTimestampKeygen = keyGenerator.equals(classOf[TimestampBasedKeyGenerator].getCanonicalName) ||
       keyGenerator.equals(classOf[TimestampBasedAvroKeyGenerator].getCanonicalName)
@@ -54,16 +56,16 @@ object BetterParsePartitionUtil extends Logging {
     lazy val timestampFieldsOpt = toScalaOption(CustomAvroKeyGenerator.getTimestampFields(tableConfig)).map(JavaScalaConverters.convertJavaListToScalaList)
 
     if (keyGenerator != null && (isTimestampKeygen || (isCustomKeygen && timestampFieldsOpt.isDefined))) {
-      doParsePartition(partitionPath, partitionSchema, tableConfig, zoneId, timestampFieldsOpt)
+      doParsePartition(partitionPath, partitionSchema, tableConfig, timeZone, timestampFieldsOpt)
     } else {
-      doParsePartition(partitionPath, partitionSchema, tableConfig, zoneId, None)
+      doParsePartition(partitionPath, partitionSchema, tableConfig, timeZone, None)
     }
   }
 
   def doParsePartition(partitionPath: String,
                        partitionSchema: StructType,
                        tableConfig: HoodieTableConfig,
-                       zoneId: ZoneId,
+                       timeZone: TimeZone,
                        timestampFields: Option[List[String]]): Array[Object] = {
     if (partitionSchema.isEmpty) {
       Array.empty
@@ -72,12 +74,12 @@ object BetterParsePartitionUtil extends Logging {
       if (partitionFragments.length != partitionSchema.length) {
         // at least 1 field has extra slashes
         if (partitionSchema.length == 1) {
-          parseSingleFieldWithSlashes(partitionPath, partitionSchema, tableConfig, zoneId, timestampFields)
+          parseSingleFieldWithSlashes(partitionPath, partitionSchema, tableConfig, timeZone, timestampFields)
         } else {
-          parseMultipleFieldsWithExtraSlashes(partitionPath, partitionSchema, tableConfig, zoneId, timestampFields, partitionFragments)
+          parseMultipleFieldsWithExtraSlashes(partitionPath, partitionSchema, tableConfig, timeZone, timestampFields, partitionFragments)
         }
       } else {
-        parseMultipleFields(partitionSchema, tableConfig, zoneId, timestampFields, partitionFragments)
+        parseMultipleFields(partitionSchema, tableConfig, timeZone, timestampFields, partitionFragments)
       }
     }
   }
@@ -85,11 +87,11 @@ object BetterParsePartitionUtil extends Logging {
   def parseSingleFieldWithSlashes(partitionPath: String,
                                   partitionSchema: StructType,
                                   tableConfig: HoodieTableConfig,
-                                  zoneId: ZoneId,
+                                  timeZone: TimeZone,
                                   timestampFields: Option[List[String]]): Array[Object] = {
     val rawFieldVal = getRawFieldVal(partitionPath, partitionSchema.head.name)
     if (timestampFields.isDefined) {
-      Array(parseTimestampKeygenField(rawFieldVal, tableConfig, zoneId).asInstanceOf[Object])
+      Array(parseTimestampKeygenField(rawFieldVal, tableConfig, timeZone).asInstanceOf[Object])
     } else {
       // If the partition column size is not equal to the partition fragment size
       // and the partition column size is 1, we map the whole partition path
@@ -101,7 +103,7 @@ object BetterParsePartitionUtil extends Logging {
   def parseMultipleFieldsWithExtraSlashes(partitionPath: String,
                                           partitionSchema: StructType,
                                           tableConfig: HoodieTableConfig,
-                                          zoneId: ZoneId,
+                                          timeZone: TimeZone,
                                           timestampFields: Option[List[String]],
                                           partitionFragments: Array[String]): Array[Object] = {
     val prefix = s"${partitionSchema.head.name}="
@@ -110,11 +112,11 @@ object BetterParsePartitionUtil extends Logging {
       val rawFieldVals = splitHiveSlashPartitions(partitionFragments, partitionSchema.length)
       partitionSchema.fields.zip(rawFieldVals).map(col => {
         if (timestampFields.isDefined && timestampFields.get.contains(col._1.name)) {
-          parseTimestampKeygenField(col._2, tableConfig, zoneId).asInstanceOf[Object]
+          parseTimestampKeygenField(col._2, tableConfig, timeZone).asInstanceOf[Object]
         } else if (col._2.contains(StoragePath.SEPARATOR_CHAR)) {
           UTF8String.fromString(col._2)
         } else {
-          castPartValueToDesiredType(col._1.dataType, col._2, zoneId).asInstanceOf[Object]
+          castPartValueToDesiredType(col._1.dataType, col._2, timeZone).asInstanceOf[Object]
         }
       })
     } else if (timestampFields.isDefined) {
@@ -137,9 +139,9 @@ object BetterParsePartitionUtil extends Logging {
       })
       partitionSchema.fields.zip(rawFieldVals).map(col => {
         if (timestampFields.get.contains(col._1.name)) {
-          parseTimestampKeygenField(col._2, tableConfig, zoneId).asInstanceOf[Object]
+          parseTimestampKeygenField(col._2, tableConfig, timeZone).asInstanceOf[Object]
         } else {
-          castPartValueToDesiredType(col._1.dataType, col._2, zoneId).asInstanceOf[Object]
+          castPartValueToDesiredType(col._1.dataType, col._2, timeZone).asInstanceOf[Object]
         }
       })
     } else {
@@ -159,15 +161,15 @@ object BetterParsePartitionUtil extends Logging {
 
   def parseMultipleFields(partitionSchema: StructType,
                           tableConfig: HoodieTableConfig,
-                          zoneId: ZoneId,
+                          timeZone: TimeZone,
                           timestampFields: Option[List[String]],
                           partitionFragments: Array[String]): Array[Object] = {
     partitionSchema.fields.zip(partitionFragments).map(col => {
       val rawFieldVal = getRawFieldVal(col._2, col._1.name)
       if (timestampFields.isDefined && timestampFields.get.contains(col._1.name)) {
-        parseTimestampKeygenField(rawFieldVal, tableConfig, zoneId).asInstanceOf[Object]
+        parseTimestampKeygenField(rawFieldVal, tableConfig, timeZone).asInstanceOf[Object]
       } else {
-        castPartValueToDesiredType(col._1.dataType, rawFieldVal, zoneId).asInstanceOf[Object]
+        castPartValueToDesiredType(col._1.dataType, rawFieldVal, timeZone).asInstanceOf[Object]
       }
     })
   }
@@ -204,38 +206,26 @@ object BetterParsePartitionUtil extends Logging {
 
     def parseTimestampKeygenField(rawFieldVal: String,
                                   tableConfig: HoodieTableConfig,
-                                  zoneId: ZoneId): Any = {
+                                  timeZone: TimeZone): Any = {
       val outputFormat = ConfigUtils.getStringWithAltKeys(tableConfig.getProps,
         TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT)
       if (StringUtils.isNullOrEmpty(outputFormat)) {
         UTF8String.fromString(rawFieldVal)
       } else {
-        val propsForTimestampParser = new TypedProperties(tableConfig.getProps)
-        propsForTimestampParser.setProperty(
-          TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT.key, outputFormat)
-        val outputTimezone = ConfigUtils.getStringWithAltKeys(tableConfig.getProps,
-          TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT)
-        if (!StringUtils.isNullOrEmpty(outputTimezone)) {
-          propsForTimestampParser.setProperty(
-            TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_TIMEZONE_FORMAT.key,
-            outputTimezone)
-        }
-        propsForTimestampParser.setProperty(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key,
-          TimestampBasedAvroKeyGenerator.TimestampType.DATE_STRING.name())
-
-        val dtParser = new HoodieDateTimeParser(propsForTimestampParser)
-        getMicrosFromGeneratedTimestamp(dtParser, rawFieldVal)
+        val formatter = DateTimeFormat.forPattern(outputFormat)
+          .withZone(DateTimeZone.forTimeZone(timeZone))
+        getMicrosFromGeneratedTimestamp(formatter, rawFieldVal)
       }
     }
 
-  def getMicrosFromGeneratedTimestamp(parser: HoodieDateTimeParser, timestamp: String): Long = {
-    DateTimeUtils.instantToMicros(Instant.ofEpochMilli(parser.getInputFormatter.get().parseDateTime(timestamp).getMillis))
+  def getMicrosFromGeneratedTimestamp(formatter: DateTimeFormatter, timestamp: String): Long = {
+    DateTimeUtils.instantToMicros(Instant.ofEpochMilli(formatter.parseDateTime(timestamp).getMillis))
   }
 
     def castPartValueToDesiredType(
                                     desiredType: DataType,
                                     value: String,
-                                    zoneId: ZoneId): Any = desiredType match {
+                                    timeZone: TimeZone): Any = desiredType match {
       case _ if value == DEFAULT_PARTITION_NAME => null
       case NullType => null
       case StringType => UTF8String.fromString(unescapePathName(value))
@@ -247,13 +237,13 @@ object BetterParsePartitionUtil extends Logging {
       case DoubleType => JDouble.parseDouble(value)
       case _: DecimalType => Literal(new JBigDecimal(value)).value
       case DateType =>
-        Cast(Literal(value), DateType, Some(zoneId.getId)).eval()
+        Cast(Literal(value), DateType, Some(timeZone.toZoneId.getId)).eval()
       // Timestamp types
       case dt if AnyTimestampType.acceptsType(dt) =>
         Try {
-          Cast(Literal(unescapePathName(value)), dt, Some(zoneId.getId)).eval()
+          Cast(Literal(unescapePathName(value)), dt, Some(timeZone.toZoneId.getId)).eval()
         }.getOrElse {
-          Cast(Cast(Literal(value), DateType, Some(zoneId.getId)), dt).eval()
+          Cast(Cast(Literal(value), DateType, Some(timeZone.toZoneId.getId)), dt).eval()
         }
       case it: AnsiIntervalType =>
         Cast(Literal(unescapePathName(value)), it).eval()

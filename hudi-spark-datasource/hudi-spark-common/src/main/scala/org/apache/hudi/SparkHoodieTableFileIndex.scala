@@ -403,7 +403,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     BetterParsePartitionUtil.parsePartition(partitionPath,
       partitionSchema,
       metaClient.getTableConfig,
-      SparkDateTimeUtils.getZoneId(configProperties
+      SparkDateTimeUtils.getTimeZone(configProperties
         .getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone))
     )
   }
