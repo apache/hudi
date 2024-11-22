@@ -38,14 +38,55 @@ import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Test cases for {@link ColumnStatsIndices}.
+ * Test cases for {@link ColumnStatsIndex}.
  */
-public class TestColumnStatsIndices {
+public class TestColumnStatsIndex {
   @TempDir
   File tempFile;
+
+  @Test
+  void testReadPartitionStatsIndex() throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    Configuration conf = TestConfigurations.getDefaultConf(path);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.setString("hoodie.metadata.index.partition.stats.enable", "true");
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withMetadataIndexColumnStats(true)
+        .build();
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    String[] queryColumns = {"uuid", "age"};
+    PartitionStatsIndex indexSupport = new PartitionStatsIndex(path, TestConfigurations.ROW_TYPE, metadataConfig);
+    List<RowData> indexRows = indexSupport.readColumnStatsIndexByColumns(queryColumns);
+    List<String> results = indexRows.stream().map(Object::toString).sorted(String::compareTo).collect(Collectors.toList());
+    List<String> expected = Arrays.asList(
+        "+I(par1,+I(23),+I(33),0,2,age)",
+        "+I(par1,+I(id1),+I(id2),0,2,uuid)",
+        "+I(par2,+I(31),+I(53),0,2,age)",
+        "+I(par2,+I(id3),+I(id4),0,2,uuid)",
+        "+I(par3,+I(18),+I(20),0,2,age)",
+        "+I(par3,+I(id5),+I(id6),0,2,uuid)",
+        "+I(par4,+I(44),+I(56),0,2,age)",
+        "+I(par4,+I(id7),+I(id8),0,2,uuid)");
+    assertEquals(expected, results);
+
+    Pair<List<RowData>, String[]> transposedIndexTable = indexSupport.transposeColumnStatsIndex(indexRows, queryColumns);
+    List<String> transposed = transposedIndexTable.getLeft().stream().map(Object::toString).sorted(String::compareTo).collect(Collectors.toList());
+    assertThat(transposed.size(), is(4));
+    assertArrayEquals(new String[] {"age", "uuid"}, transposedIndexTable.getRight());
+    List<String> expected1 = Arrays.asList(
+        "+I(par1,2,23,33,0,id1,id2,0)",
+        "+I(par2,2,31,53,0,id3,id4,0)",
+        "+I(par3,2,18,20,0,id5,id6,0)",
+        "+I(par4,2,44,56,0,id7,id8,0)");
+    assertEquals(expected1, transposed);
+  }
 
   @Test
   void testTransposeColumnStatsIndex() throws Exception {
@@ -63,9 +104,9 @@ public class TestColumnStatsIndices {
 
     // explicit query columns
     String[] queryColumns1 = {"uuid", "age"};
-    List<RowData> indexRows1 = ColumnStatsIndices.readColumnStatsIndex(path, metadataConfig, queryColumns1);
-    Pair<List<RowData>, String[]> transposedIndexTable1 = ColumnStatsIndices
-        .transposeColumnStatsIndex(indexRows1, queryColumns1, TestConfigurations.ROW_TYPE);
+    FileStatsIndex indexSupport = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, metadataConfig);
+    List<RowData> indexRows1 = indexSupport.readColumnStatsIndexByColumns(queryColumns1);
+    Pair<List<RowData>, String[]> transposedIndexTable1 = indexSupport.transposeColumnStatsIndex(indexRows1, queryColumns1);
     assertThat("The schema columns should sort by natural order",
         Arrays.toString(transposedIndexTable1.getRight()), is("[age, uuid]"));
     List<RowData> transposed1 = filterOutFileNames(transposedIndexTable1.getLeft());
@@ -79,7 +120,7 @@ public class TestColumnStatsIndices {
 
     // no query columns, only for tests
     assertThrows(IllegalArgumentException.class,
-        () -> ColumnStatsIndices.readColumnStatsIndex(path, metadataConfig, new String[0]));
+        () -> indexSupport.readColumnStatsIndexByColumns(new String[0]));
   }
 
   private static List<RowData> filterOutFileNames(List<RowData> indexRows) {

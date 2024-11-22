@@ -28,9 +28,10 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{ActionType, HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.functional.PartitionStatsIndexTestBase.{checkIfOverlapped}
+import org.apache.hudi.functional.PartitionStatsIndexTestBase.checkIfOverlapped
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -95,7 +96,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
 
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
     val lastInstant = String.format("%03d", new Integer(instantTime.incrementAndGet()))
-    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInstant) < 0) {
+    if (enforce || metaClient.getActiveTimeline.lastInstant().get().requestedTime.compareTo(lastInstant) < 0) {
       println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
       metaClient
@@ -114,7 +115,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     }
     val writeConfig = getWriteConfig(hudiOpts)
     new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
-      .rollback(lastInstant.getTimestamp)
+      .rollback(lastInstant.requestedTime)
 
     if (lastInstant.getAction != ActionType.clean.name()) {
       assertEquals(ActionType.rollback.name(), getLatestMetaClient(true).getActiveTimeline.lastInstant().get().getAction)
@@ -133,15 +134,15 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
     val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
-    assertTrue(storage.deleteFile(new StoragePath(metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName)))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
+    assertTrue(storage.deleteFile(new StoragePath(metadataTableMetaClient.getMetaPath, INSTANT_FILE_NAME_GENERATOR.getFileName(metadataTableLastInstant))))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
   protected def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
@@ -184,6 +185,15 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     } else {
       latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
     }
+    doWriteAndValidateDataAndPartitionStats(latestBatch, hudiOpts, operation, saveMode, validate)
+  }
+
+  protected def doWriteAndValidateDataAndPartitionStats(records: mutable.Buffer[String],
+                                                        hudiOpts: Map[String, String],
+                                                        operation: String,
+                                                        saveMode: SaveMode,
+                                                        validate: Boolean): DataFrame = {
+    val latestBatch: mutable.Buffer[String] = records
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()
     latestBatchDf.write.format("org.apache.hudi")
@@ -191,6 +201,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
       .option(OPERATION.key, operation)
       .mode(saveMode)
       .save(basePath)
+    latestBatchDf.show(false)
     val deletedDf = calculateMergedDf(latestBatchDf, operation)
     deletedDf.cache()
     if (validate) {
@@ -296,6 +307,6 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
 object PartitionStatsIndexTestBase {
   // Check if two completed instants are overlapped in time.
   def checkIfOverlapped(a: HoodieInstant, b: HoodieInstant): Boolean = {
-    !(a.getCompletionTime.compareTo(b.getTimestamp) < 0 || a.getTimestamp.compareTo(b.getCompletionTime) > 0)
+    !(a.getCompletionTime.compareTo(b.requestedTime) < 0 || a.requestedTime.compareTo(b.getCompletionTime) > 0)
   }
 }

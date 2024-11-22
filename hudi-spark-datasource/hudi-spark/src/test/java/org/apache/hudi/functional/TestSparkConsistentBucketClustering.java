@@ -24,6 +24,7 @@ import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClus
 import org.apache.hudi.client.clustering.run.strategy.SparkConsistentBucketClusteringExecutionStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkConsistentBucketDuplicateUpdateStrategy;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -181,7 +182,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     writeClient.clean();
-    HoodieTimelineArchiver hoodieTimelineArchiver = new HoodieTimelineArchiver(writeClient.getConfig(), table);
+    HoodieTimelineArchiver hoodieTimelineArchiver = new TimelineArchiverV2(writeClient.getConfig(), table);
     hoodieTimelineArchiver.archiveIfRequired(context);
     Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
       if (!isCommitFilePresent) {

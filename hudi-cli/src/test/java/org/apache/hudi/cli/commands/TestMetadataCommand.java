@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -73,7 +72,6 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
         .setTableName(tableName())
         .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName("org.apache.hudi.common.model.HoodieAvroPayload")
-        .setTimelineLayoutVersion(TimelineLayoutVersion.VERSION_1)
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
@@ -97,7 +95,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     HoodieTableMetaClient metaClient = createMetaClient(jsc(), tablePath);
     assertFalse(metaClient.getTableConfig().getMetadataPartitions().isEmpty());
 
-    new TableCommand().connect(tablePath, null, false, 0, 0, 0,
+    new TableCommand().connect(tablePath,  false, 0, 0, 0,
         "WAIT_TO_ADJUST_SKEW", 200L, false);
     Object result = shell.evaluate(() -> "metadata delete");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));

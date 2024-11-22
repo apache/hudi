@@ -79,6 +79,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -490,16 +493,16 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     commitMetadata.setOperationType(writeOperationType);
     extraMetadata.forEach((k, v) -> commitMetadata.getExtraMetadata().put(k, v));
     String commitTime = metaClient.createNewInstantTime();
-    metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
-    HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime);
+    metaClient.getActiveTimeline().createNewInstant(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
+    HoodieInstant inflightInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
     if (commitActiontype.equals(HoodieTimeline.CLUSTERING_ACTION)) {
       metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant,
-          TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
+          TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
     } else {
       metaClient.getActiveTimeline().saveAsComplete(
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
-          TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
+          TimelineMetadataUtils.serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMetadata));
     }
   }
 
@@ -686,7 +689,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       HoodieInstant lastInstant = timeline.lastInstant().get();
       HoodieCommitMetadata commitMetadata =
-          HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(lastInstant).get(), HoodieCommitMetadata.class);
+          meta.getCommitMetadataSerDe().deserialize(lastInstant, timeline.getInstantDetails(lastInstant).get(), HoodieCommitMetadata.class);
       assertEquals(totalCommits, timeline.countInstants());
       assertEquals(expected, commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));
       return lastInstant;
@@ -766,7 +769,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       HoodieInstant firstRollback = timeline.getInstants().get(0);
       //
       HoodieTimeline commitsTimeline = meta.getActiveTimeline().filterCompletedInstants()
-          .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, firstRollback.getTimestamp()));
+          .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN, firstRollback.requestedTime()));
       int numCommits = commitsTimeline.countInstants();
       assertTrue(minExpectedCommits <= numCommits, "Got=" + numCommits + ", exp >=" + minExpectedCommits);
     }

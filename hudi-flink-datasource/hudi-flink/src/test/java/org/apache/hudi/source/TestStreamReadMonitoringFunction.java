@@ -19,9 +19,13 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
@@ -42,6 +46,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -51,6 +56,8 @@ import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -144,6 +151,48 @@ public class TestStreamReadMonitoringFunction {
   }
 
   @Test
+  public void testConsumeForSpeedLimitWhenEmptyCommitExists() throws Exception {
+    // Step1 : create 4 empty commit
+    Configuration conf = new Configuration(this.conf);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+
+    TestData.writeData(Collections.EMPTY_LIST, conf);
+    TestData.writeData(Collections.EMPTY_LIST, conf);
+    TestData.writeData(Collections.EMPTY_LIST, conf);
+    TestData.writeData(Collections.EMPTY_LIST, conf);
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(conf.get(FlinkOptions.PATH), HoodieTableType.COPY_ON_WRITE);
+    HoodieTimeline commitsTimeline = metaClient.reloadActiveTimeline()
+        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    HoodieInstant firstInstant = commitsTimeline.firstInstant().get();
+
+    // Step2: trigger streaming read from first instant and set READ_COMMITS_LIMIT 2
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
+    conf.set(FlinkOptions.READ_COMMITS_LIMIT, 2);
+    conf.set(FlinkOptions.READ_START_COMMIT, String.valueOf((Long.valueOf(firstInstant.requestedTime()) - 100)));
+    StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
+    try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
+      harness.setup();
+      harness.open();
+
+      CountDownLatch latch = new CountDownLatch(0);
+      CollectingSourceContext sourceContext = new CollectingSourceContext(latch);
+      function.monitorDirAndForwardSplits(sourceContext);
+      assertEquals(0, sourceContext.splits.size(), "There should be no inputSplits");
+
+      // Step3: assert current IssuedOffset couldn't be null.
+      // Base on "IncrementalInputSplits#inputSplits => .startCompletionTime(issuedOffset != null ? issuedOffset : this.conf.getString(FlinkOptions.READ_START_COMMIT))"
+      // If IssuedOffset still was null, hudi would take FlinkOptions.READ_START_COMMIT again, which means streaming read is blocked.
+      assertNotNull(function.getIssuedOffset());
+      // Stop the stream task.
+      function.close();
+    }
+  }
+
+  @Test
   public void testConsumeFromSpecifiedCommit() throws Exception {
     // write 2 commits first, use the second commit time as the specified start instant,
     // all the splits should come from the second commit.
@@ -231,9 +280,9 @@ public class TestStreamReadMonitoringFunction {
     List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(instants.size(), is(2));
 
-    String c2 = oriInstants.get(1).getTimestamp();
-    String c3 = oriInstants.get(2).getTimestamp();
-    String c4 = instants.get(1).getTimestamp();
+    String c2 = oriInstants.get(1).requestedTime();
+    String c3 = oriInstants.get(2).requestedTime();
+    String c4 = instants.get(1).requestedTime();
 
     conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);

@@ -80,7 +80,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
 
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     StreamSync service = getDeltaSync();
-    service.refreshTimeline();
+    service.initializeMetaClientAndRefreshTimeline();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(service.getStorage().getConf().newInstance())
         .setBasePath(service.getCfg().targetBasePath)

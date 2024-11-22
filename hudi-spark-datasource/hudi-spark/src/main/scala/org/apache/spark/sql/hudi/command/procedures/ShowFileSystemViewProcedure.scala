@@ -20,19 +20,17 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{CompletionTimeQueryView, HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantComparison}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.{Function, Supplier}
 import java.util.stream.{Collectors, Stream => JStream}
 import java.util.{ArrayList => JArrayList, List => JList}
-
 import scala.collection.JavaConverters._
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
@@ -109,11 +107,11 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     var instants = timeline.getInstants.iterator().asScala
     if (maxInstant.nonEmpty) {
       val predicate = if (includeMaxInstant) {
-        HoodieTimeline.GREATER_THAN_OR_EQUALS
+        InstantComparison.GREATER_THAN_OR_EQUALS
       } else {
-        HoodieTimeline.GREATER_THAN
+        InstantComparison.GREATER_THAN
       }
-      instants = instants.filter(instant => predicate.test(maxInstant, instant.getTimestamp))
+      instants = instants.filter(instant => predicate.test(maxInstant, instant.requestedTime))
     }
 
     val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
@@ -123,7 +121,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       }
     }
 
-    val filteredTimeline = new HoodieDefaultTimeline(
+    val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
       new JArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }
@@ -156,7 +154,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
                                    maxInstant: String,
                                    merge: Boolean): JList[Row] = {
     var fileSliceStream: JStream[FileSlice] = JStream.empty()
-    val completionTimeQueryView = new CompletionTimeQueryView(metaClient)
+    val completionTimeQueryView =metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient)
     if (merge) {
       partitions.foreach(p => fileSliceStream = JStream.concat(fileSliceStream, fsView.getLatestMergedFileSlicesBeforeOrOn(p, maxInstant)))
     } else {
@@ -250,7 +248,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       val maxInstantForMerge = if (merge && maxInstant.isEmpty) {
         val lastInstant = metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant()
         if (lastInstant.isPresent) {
-          lastInstant.get().getTimestamp
+          lastInstant.get().requestedTime
         } else {
           // scalastyle:off return
           return Seq.empty

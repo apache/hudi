@@ -26,8 +26,10 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -56,6 +58,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -101,7 +104,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     hoodieTestTable = hoodieTestTable.addCommit(instant1);
     String instant2 = "20230918121110000";
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
-    List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList = new ArrayList<>();
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
@@ -129,11 +132,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             engineContext);
         HoodieBaseFile baseFile2 = new HoodieBaseFile(hoodieTestTable.getBaseFilePath(p, fileId2).toString());
         fileSlice2.setBaseFile(baseFile2);
-        partitionInfoList.add(new HoodieTableMetadataUtil.DirectoryInfo(
-            p,
-            metaClient.getStorage().listDirectEntries(Arrays.asList(partitionMetadataPath, storagePath1, storagePath2)),
-            instant2,
-            Collections.emptySet()));
+        partitionFileSlicePairs.add(Pair.of(p, fileSlice1));
+        partitionFileSlicePairs.add(Pair.of(p, fileSlice2));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -142,7 +142,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     List<String> columnsToIndex = Arrays.asList("rider", "driver");
     HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
         engineContext,
-        partitionInfoList,
+        partitionFileSlicePairs,
         HoodieMetadataConfig.newBuilder().enable(true)
             .withMetadataIndexColumnStats(true)
             .withMetadataIndexPartitionStats(true)
@@ -206,10 +206,15 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
   public void testGetLogFileColumnRangeMetadata() throws Exception {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     String instant1 = "20230918120000000";
-    hoodieTestTable = hoodieTestTable.addCommit(instant1);
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addMetadata("test", "test");
+    commitMetadata.setOperationType(WriteOperationType.INSERT);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS.toString());
+    hoodieTestTable = hoodieTestTable.addCommit(instant1, Option.of(commitMetadata));
     String instant2 = "20230918121110000";
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
-    List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList = new ArrayList<>();
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
     List<String> columnsToIndex = Arrays.asList("rider", "driver");
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
@@ -230,11 +235,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, dataGen.generateInsertsForPartition(instant2, 10, p), 1,
             metaClient.getStorage(), new Properties(), fileId1, instant2);
         fileSlice2.addLogFile(new HoodieLogFile(storagePath2.toUri().toString()));
-        partitionInfoList.add(new HoodieTableMetadataUtil.DirectoryInfo(
-            p,
-            metaClient.getStorage().listDirectEntries(Arrays.asList(partitionMetadataPath, storagePath1, storagePath2)),
-            instant2,
-            Collections.emptySet()));
+        partitionFileSlicePairs.add(Pair.of(p, fileSlice1));
+        partitionFileSlicePairs.add(Pair.of(p, fileSlice2));
         // NOTE: we need to set table config as we are not using write client explicitly and these configs are needed for log record reader
         metaClient.getTableConfig().setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
         metaClient.getTableConfig().setValue(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
@@ -243,7 +245,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             storagePath2.toString(),
             metaClient,
             columnsToIndex,
-            Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS));
+            Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
+            HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue());
         // there must be two ranges for rider and driver
         assertEquals(2, columnRangeMetadataLogFile.size());
       } catch (Exception e) {
@@ -253,7 +256,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // collect partition stats, this will collect stats for log files as well
     HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
         engineContext,
-        partitionInfoList,
+        partitionFileSlicePairs,
         HoodieMetadataConfig.newBuilder().enable(true)
             .withMetadataIndexColumnStats(true)
             .withMetadataIndexPartitionStats(true)
@@ -303,5 +306,26 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
       writer.writeWithMetadata(record.getKey(), record, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS);
     }
     writer.close();
+  }
+
+  @Test
+  public void testGetFileGroupIndexFromFileId() {
+    String result = getFileIDForFileGroup(MetadataPartitionType.FILES, 1, "test_partition");
+    assertEquals("files-0001-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.COLUMN_STATS, 2, "stats_partition");
+    assertEquals("col-stats-0002-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.BLOOM_FILTERS, 3, "bloom_partition");
+    assertEquals("bloom-filters-0003-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.RECORD_INDEX, 4, "record_partition");
+    assertEquals("record-index-0004-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.SECONDARY_INDEX, 6, "secondary_index_idx_ts");
+    assertEquals("secondary-index-idx-ts-0006-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.FUNCTIONAL_INDEX, 5, "func_index_ts");
+    assertEquals("func-index-ts-0005-0", result);
   }
 }

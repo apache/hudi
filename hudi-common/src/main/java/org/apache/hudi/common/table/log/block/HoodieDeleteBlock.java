@@ -72,14 +72,13 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private static final Lazy<HoodieDeleteRecord.Builder> HOODIE_DELETE_RECORD_BUILDER_STUB =
       Lazy.lazily(HoodieDeleteRecord::newBuilder);
 
-  private final boolean shouldWriteRecordPositions;
   // Records to delete, sorted based on the record position if writing record position to the log block header
   private DeleteRecord[] recordsToDelete;
 
   public HoodieDeleteBlock(List<Pair<DeleteRecord, Long>> recordsToDelete,
                            boolean shouldWriteRecordPositions,
                            Map<HeaderMetadataType, String> header) {
-    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>(), shouldWriteRecordPositions);
+    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
     if (shouldWriteRecordPositions && !recordsToDelete.isEmpty()) {
       recordsToDelete.sort((o1, o2) -> {
         long v1 = o1.getRight();
@@ -100,16 +99,8 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
 
   public HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-                           Map<HeaderMetadataType, String> footer) {
-    // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
-    this(content, inputStreamSupplier, readBlockLazily, blockContentLocation, header, footer, false);
-  }
-
-  HoodieDeleteBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
-                    Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-                    Map<HeaderMetadataType, String> footer, boolean shouldWriteRecordPositions) {
+                           Map<FooterMetadataType, String> footer) {
     super(header, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
-    this.shouldWriteRecordPositions = shouldWriteRecordPositions;
   }
 
   @Override

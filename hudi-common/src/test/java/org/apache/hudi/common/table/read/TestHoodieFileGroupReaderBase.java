@@ -103,8 +103,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private static Stream<Arguments> testArguments() {
     return Stream.of(
-        arguments(RecordMergeMode.OVERWRITE_WITH_LATEST, "avro"),
-        arguments(RecordMergeMode.OVERWRITE_WITH_LATEST, "parquet"),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro"),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet"),
         arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro"),
         arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet"),
         arguments(RecordMergeMode.CUSTOM, "avro"),
@@ -219,7 +219,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getHoodieReaderContext(tablePath, avroSchema, storageConf),
           metaClient.getStorage(),
           tablePath,
-          metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
+          metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
           fileSlice,
           avroSchema,
           avroSchema,
@@ -234,7 +234,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         getHoodieReaderContext(tablePath, avroSchema, storageConf),
         metaClient.getStorage(),
         tablePath,
-        metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
+        metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
         fileSlice,
         avroSchema,
         avroSchema,
@@ -259,7 +259,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         getHoodieReaderContext(tablePath, avroSchema, storageConf),
         metaClient.getStorage(),
         tablePath,
-        metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
+        metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
         fileSlice,
         avroSchema,
         avroSchema,

@@ -34,7 +34,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -351,84 +350,77 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  // TODO(HUDI-8430): revisit the explicit config setting of recordMergeStrategyId
   test("Test Insert Into Non Partitioned Table") {
-   withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK), Map(HoodieRecordType.SPARK ->
-     // SparkMerger should use "HoodieSparkValidateDuplicateKeyRecordMerger"
-     // with "hoodie.sql.insert.mode=strict"
-     Map(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key ->
-       classOf[HoodieSparkValidateDuplicateKeyRecordMerger].getName)))(withTempDir { tmp =>
-     val tableName = generateTableName
-     spark.sql(s"set hoodie.sql.insert.mode=strict")
-     // Create none partitioned cow table
-     spark.sql(
-       s"""
-          |create table $tableName (
-          |  id int,
-          |  name string,
-          |  price double,
-          |  ts long
-          |) using hudi
-          | location '${tmp.getCanonicalPath}/$tableName'
-          | tblproperties (
-          |  type = 'cow',
-          |  primaryKey = 'id',
-          |  preCombineField = 'ts',
-          |  recordMergeStrategyId = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
-          | )
-         """.stripMargin)
-     spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-     checkAnswer(s"select id, name, price, ts from $tableName")(
-       Seq(1, "a1", 10.0, 1000)
-     )
-     spark.sql(s"insert into $tableName select 2, 'a2', 12, 1000")
-     checkAnswer(s"select id, name, price, ts from $tableName")(
-       Seq(1, "a1", 10.0, 1000),
-       Seq(2, "a2", 12.0, 1000)
-     )
+    withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))(withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      // Create none partitioned cow table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+          """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+      spark.sql(s"insert into $tableName select 2, 'a2', 12, 1000")
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000),
+        Seq(2, "a2", 12.0, 1000)
+      )
 
-     assertThrows[HoodieDuplicateKeyException] {
-       try {
-         spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-       } catch {
-         case e: Exception =>
-           var root: Throwable = e
-           while (root.getCause != null) {
-             root = root.getCause
-           }
-           throw root
-       }
-     }
+      assertThrows[HoodieDuplicateKeyException] {
+        try {
+          spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+        } catch {
+          case e: Exception =>
+            var root: Throwable = e
+            while (root.getCause != null) {
+              root = root.getCause
+            }
+            throw root
+        }
+      }
 
-     // Create table with dropDup is true
-     val tableName2 = generateTableName
-     spark.sql("set hoodie.datasource.write.insert.drop.duplicates = true")
-     spark.sql(
-       s"""
-          |create table $tableName2 (
-          |  id int,
-          |  name string,
-          |  price double,
-          |  ts long
-          |) using hudi
-          | location '${tmp.getCanonicalPath}/$tableName2'
-          | tblproperties (
-          |  type = 'mor',
-          |  primaryKey = 'id',
-          |  preCombineField = 'ts',
-          |  recordMergeStrategyId = '${HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID}'
-          | )
-         """.stripMargin)
-     spark.sql(s"insert into $tableName2 select 1, 'a1', 10, 1000")
-     // This record will be drop when dropDup is true
-     spark.sql(s"insert into $tableName2 select 1, 'a1', 12, 1000")
-     checkAnswer(s"select id, name, price, ts from $tableName2")(
-       Seq(1, "a1", 10.0, 1000)
-     )
-     // disable this config to avoid affect other test in this class.
-     spark.sql("set hoodie.datasource.write.insert.drop.duplicates = false")
-     spark.sql(s"set hoodie.sql.insert.mode=upsert")
-   })
+      // Create table with dropDup is true
+      val tableName2 = generateTableName
+      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = true")
+      spark.sql(
+        s"""
+           |create table $tableName2 (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName2'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+          """.stripMargin)
+      spark.sql(s"insert into $tableName2 select 1, 'a1', 10, 1000")
+      // This record will be drop when dropDup is true
+      spark.sql(s"insert into $tableName2 select 1, 'a1', 12, 1000")
+      checkAnswer(s"select id, name, price, ts from $tableName2")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+      // disable this config to avoid affect other test in this class.
+      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = false")
+      spark.sql(s"set hoodie.sql.insert.mode=upsert")
+    })
   }
 
   test("Test Insert Into None Partitioned Table strict mode with no preCombineField") {
@@ -1705,7 +1697,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | (6, 'a1,1', 10, 1000, "2021-01-05"),
                  | (7, 'a1,1', 10, 1000, "2021-01-05"),
                  | (8, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (9, 'a3,3', 30, 3000, "2021-01-05")
+                 | (10, 'a3,3', 30, 3000, "2021-01-05")
                """.stripMargin)
 
             checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(

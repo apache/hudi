@@ -49,6 +49,7 @@ import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
+import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -108,6 +109,36 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
     assertEquals("partition", fileIndex.partitionSchema.fields.map(_.name).mkString(","))
+  }
+
+  /**
+   * Unit test for `parsePartitionColumnValues` method in `SparkHoodieTableFileIndex`.
+   *
+   * This test verifies that the `parsePartitionColumnValues` method correctly returns
+   * partition values when the `propsMap` in the table configuration does not contain the
+   * expected timestamp configuration key, simulating a `null` scenario. Specifically,
+   * this test validates the behavior for the `TIMESTAMP` key generator type, ensuring
+   * that the partition path string is passed as `UTF8String` in the result array.
+   */
+  @Test
+  def testParsePartitionValues(): Unit = {
+    // Set up table configuration and schema to use TIMESTAMP key generator
+    val tableConfig = metaClient.getTableConfig
+    tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.TIMESTAMP.name())
+    tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "col1")
+    // Define schema with one partition column (col1)
+    val fields = List(
+      StructField.apply("f1", DataTypes.DoubleType, nullable = true),
+      StructField.apply("col1", DataTypes.LongType, nullable = true))
+    val schema = StructType.apply(fields)
+    // Set partition column and partition path for testing
+    val partitionColumns = Array("col1")
+    val partitionPath = "2023/10/28"
+    val fileIndex = HoodieFileIndex(spark, metaClient, Some(schema), queryOpts)
+    // Create file index and validate the result
+    val result = fileIndex.parsePartitionColumnValues(partitionColumns, partitionPath)
+    assertEquals(1, result.length)
+    assertEquals(UTF8String.fromString(partitionPath), result(0))
   }
 
   @ParameterizedTest
@@ -275,7 +306,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
     val listFilesAfterFirstWrite = fileIndexFirstWrite.listFiles(Nil, Nil)
     val distinctListOfCommitTimesAfterFirstWrite = getDistinctCommitTimeFromAllFilesInIndex(listFilesAfterFirstWrite)
-    val firstWriteCommitTime = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+    val firstWriteCommitTime = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
     assertEquals(1, distinctListOfCommitTimesAfterFirstWrite.size, "Should have only one commit")
     assertEquals(firstWriteCommitTime, distinctListOfCommitTimesAfterFirstWrite.head, "All files should belong to the first existing commit")
 
@@ -295,7 +326,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val fileSlicesAfterSecondWrite = fileIndexFirstWrite.listFiles(Nil, Nil)
     val distinctListOfCommitTimesAfterSecondWrite = getDistinctCommitTimeFromAllFilesInIndex(fileSlicesAfterSecondWrite)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val lastCommitTime = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+    val lastCommitTime = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     assertEquals(1, distinctListOfCommitTimesAfterSecondWrite.size, "All basefiles affected so all have same commit time")
     assertEquals(lastCommitTime, distinctListOfCommitTimesAfterSecondWrite.head, "All files should be of second commit after index refresh")
