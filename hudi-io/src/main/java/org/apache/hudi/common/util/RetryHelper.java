@@ -139,7 +139,13 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
       return initialIntervalTime;
     }
 
-    return (long) Math.pow(2, retryCount) * initialIntervalTime + random.nextInt(100);
+    // avoid long type overflow
+    long waitTime = (long) Math.pow(2, retryCount) * initialIntervalTime;
+    if (waitTime < 0) {
+      return Long.MAX_VALUE;
+    }
+    waitTime += random.nextInt(100);
+    return waitTime < 0 ? Long.MAX_VALUE : waitTime;
   }
 
   /**
