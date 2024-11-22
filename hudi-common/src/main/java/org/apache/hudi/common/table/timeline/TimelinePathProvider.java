@@ -21,12 +21,24 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.storage.StoragePath;
 
+/**
+ * Provides paths for active and archive timelines
+ */
 public interface TimelinePathProvider {
   /**
-   * Provide Timeline path
+   * Provide Active Timeline path.
    * @param tableConfig HoodieTableConfig
    * @param basePath BasePath of the Table
    * @return
    */
-  StoragePath getTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath);
+  StoragePath getActiveTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath);
+
+  /**
+   * Provides archived timeline path.
+   * @param tableConfig HoodieTableConfig
+   * @param basePath BasePath of the Table
+   * @return
+   */
+  StoragePath getArchiveTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath);
+
 }

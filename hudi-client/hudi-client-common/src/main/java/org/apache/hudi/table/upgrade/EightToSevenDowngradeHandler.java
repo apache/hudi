@@ -110,7 +110,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     List<HoodieInstant> instants = new ArrayList<>();
     try {
       // We need to move all the instants - not just completed ones.
-      instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
+      instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getActiveTimelinePath(),
           ActiveTimelineV2.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
     } catch (IOException ioe) {
       LOG.error("Failed to get instants from filesystem", ioe);
@@ -125,10 +125,10 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       context.map(instants, instant -> {
         String fileName = instantFileNameGenerator.getFileName(instant);
         // Rename the metadata file name from the ${instant_time}_${completion_time}.action[.state] format in version 1.x to the ${instant_time}.action[.state] format in version 0.x.
-        StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getTimelinePath(
+        StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getActiveTimelinePath(
             metaClient.getTableConfig(), metaClient.getBasePath()), fileName);
         long modificationTime = instant.isCompleted() ? convertCompletionTimeToEpoch(instant) : -1;
-        StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePathProvider().getTimelinePath(
+        StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePathProvider().getActiveTimelinePath(
             metaClient.getTableConfig(), metaClient.getBasePath()), fileName.replaceAll(UNDERSCORE + "\\d+", ""));
         boolean success = true;
         if (fileName.contains(UNDERSCORE)) {

@@ -86,13 +86,13 @@ public class TimelineCommand {
         HoodieTableMetaClient mtMetaClient = getMetadataTableMetaClient(metaClient);
         return printTimelineInfoWithMetadataTable(
             metaClient.getActiveTimeline(), mtMetaClient.getActiveTimeline(),
-            getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getTimelinePath()),
-            getInstantInfoFromTimeline(mtMetaClient, mtMetaClient.getStorage(), mtMetaClient.getTimelinePath()),
+            getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getActiveTimelinePath()),
+            getInstantInfoFromTimeline(mtMetaClient, mtMetaClient.getStorage(), mtMetaClient.getActiveTimelinePath()),
             limit, sortByField, descending, headerOnly, true, showTimeSeconds, showRollbackInfo);
       }
       return printTimelineInfo(
           metaClient.getActiveTimeline(),
-          getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getTimelinePath()),
+          getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getActiveTimelinePath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, showRollbackInfo);
     } catch (IOException e) {
       e.printStackTrace();
@@ -115,7 +115,7 @@ public class TimelineCommand {
     try {
       return printTimelineInfo(
           metaClient.getActiveTimeline().filterInflightsAndRequested(),
-          getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getTimelinePath()),
+          getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getActiveTimelinePath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, showRollbackInfo);
     } catch (IOException e) {
       e.printStackTrace();
@@ -137,7 +137,7 @@ public class TimelineCommand {
     try {
       return printTimelineInfo(
           metaClient.getActiveTimeline(),
-          getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getTimelinePath()),
+          getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getActiveTimelinePath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, false);
     } catch (IOException e) {
       e.printStackTrace();
@@ -159,7 +159,7 @@ public class TimelineCommand {
     try {
       return printTimelineInfo(
           metaClient.getActiveTimeline().filterInflightsAndRequested(),
-          getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getTimelinePath()),
+          getInstantInfoFromTimeline(metaClient, metaClient.getStorage(), metaClient.getActiveTimelinePath()),
           limit, sortByField, descending, headerOnly, true, showTimeSeconds, false);
     } catch (IOException e) {
       e.printStackTrace();

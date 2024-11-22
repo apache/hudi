@@ -1205,7 +1205,7 @@ public class TestInputFormat {
     assertTrue(firstCommit.isPresent());
     assertThat(firstCommit.get().getAction(), is(HoodieTimeline.DELTA_COMMIT_ACTION));
 
-    java.nio.file.Path metaFilePath = Paths.get(metaClient.getTimelinePath().toString(), INSTANT_FILE_NAME_GENERATOR.getFileName(firstCommit.get()));
+    java.nio.file.Path metaFilePath = Paths.get(metaClient.getActiveTimelinePath().toString(), INSTANT_FILE_NAME_GENERATOR.getFileName(firstCommit.get()));
     String newCompletionTime = TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().requestedTime());
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));

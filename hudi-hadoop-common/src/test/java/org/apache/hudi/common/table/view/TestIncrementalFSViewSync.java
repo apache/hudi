@@ -683,7 +683,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     }
     StoragePath instantPath = HoodieTestUtils
         .getCompleteInstantPath(metaClient.getStorage(),
-            metaClient.getTimelinePath(),
+            metaClient.getActiveTimelinePath(),
             instant.requestedTime(), instant.getAction());
     boolean deleted = metaClient.getStorage().deleteFile(instantPath);
     assertTrue(deleted);
@@ -786,7 +786,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstantTime);
     boolean deleted =
         metaClient.getStorage().deleteFile(
-            new StoragePath(metaClient.getTimelinePath(), INSTANT_FILE_NAME_GENERATOR.getFileName(instant)));
+            new StoragePath(metaClient.getActiveTimelinePath(), INSTANT_FILE_NAME_GENERATOR.getFileName(instant)));
     ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
 
     view.sync();
@@ -809,7 +809,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         INSTANT_GENERATOR.createNewInstant(State.REQUESTED, LOG_COMPACTION_ACTION, logCompactionInstantTime);
     boolean deleted =
         metaClient.getStorage().deleteFile(
-            new StoragePath(metaClient.getTimelinePath(), INSTANT_FILE_NAME_GENERATOR.getFileName(instant)));
+            new StoragePath(metaClient.getActiveTimelinePath(), INSTANT_FILE_NAME_GENERATOR.getFileName(instant)));
     ValidationUtils.checkArgument(deleted, "Unable to delete log compaction instant.");
 
     view.sync();

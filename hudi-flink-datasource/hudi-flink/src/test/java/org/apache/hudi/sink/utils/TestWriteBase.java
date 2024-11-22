@@ -535,7 +535,7 @@ public class TestWriteBase {
       Option<HoodieInstant> lastCompletedInstant =
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
       TimelineUtils.deleteInstantFile(
-          metaClient.getStorage(), metaClient.getTimelinePath(), lastCompletedInstant.get(),
+          metaClient.getStorage(), metaClient.getActiveTimelinePath(), lastCompletedInstant.get(),
           metaClient.getInstantFileNameGenerator());
       // refresh the heartbeat in case it is timed out.
       OutputStream outputStream = metaClient.getStorage().create(new StoragePath(

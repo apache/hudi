@@ -145,7 +145,8 @@ public class HoodieTableMetaClient implements Serializable {
   private HoodieTableType tableType;
   private TimelineLayoutVersion timelineLayoutVersion;
   private TimelineLayout timelineLayout;
-  private StoragePath timelinePath;
+  private StoragePath activeTimelinePath;
+  private StoragePath archivedTimelinePath;
   protected HoodieTableConfig tableConfig;
   protected HoodieActiveTimeline activeTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
@@ -182,7 +183,8 @@ public class HoodieTableMetaClient implements Serializable {
     }
     this.timelineLayoutVersion = layoutVersion.orElseGet(() -> tableConfig.getTimelineLayoutVersion().get());
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
-    this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
+    this.activeTimelinePath = timelineLayout.getTimelinePathProvider().getActiveTimelinePath(tableConfig, this.basePath);
+    this.archivedTimelinePath = timelineLayout.getTimelinePathProvider().getArchiveTimelinePath(tableConfig, this.basePath);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
     LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
@@ -330,8 +332,8 @@ public class HoodieTableMetaClient implements Serializable {
     return metaPath;
   }
 
-  public StoragePath getTimelinePath() {
-    return timelinePath;
+  public StoragePath getActiveTimelinePath() {
+    return activeTimelinePath;
   }
 
   /**
@@ -396,9 +398,8 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * @return path where archived timeline is stored
    */
-  public String getArchivePath() {
-    String archiveFolder = tableConfig.getArchivelogFolder();
-    return getMetaPath() + StoragePath.SEPARATOR + archiveFolder;
+  public StoragePath getArchivePath() {
+    return archivedTimelinePath;
   }
 
   /**
@@ -498,7 +499,8 @@ public class HoodieTableMetaClient implements Serializable {
   private void reloadTimelineLayout() {
     this.timelineLayoutVersion = tableConfig.getTimelineLayoutVersion().get();
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
-    this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, basePath);
+    this.activeTimelinePath = timelineLayout.getTimelinePathProvider().getActiveTimelinePath(tableConfig, basePath);
+    this.archivedTimelinePath = timelineLayout.getTimelinePathProvider().getArchiveTimelinePath(tableConfig, basePath);
   }
 
   /**
