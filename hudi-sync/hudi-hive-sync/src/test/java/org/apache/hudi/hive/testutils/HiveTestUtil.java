@@ -101,6 +101,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
@@ -313,7 +314,7 @@ public class HiveTestUtil {
 
   public static void removeCommitFromActiveTimeline(String instantTime, String actionType) {
     List<StoragePath> pathsToDelete = new ArrayList<>();
-    StoragePath metaFolderPath = new StoragePath(basePath, METAFOLDER_NAME);
+    StoragePath metaFolderPath = new StoragePath(new StoragePath(basePath, METAFOLDER_NAME), TIMELINEFOLDER_NAME);
     String actionSuffix = "." + actionType;
     try {
       StoragePath completeInstantPath = HoodieTestUtils
@@ -807,7 +808,7 @@ public class HiveTestUtil {
 
   private static void createMetaFile(String basePath, String fileName, byte[] bytes)
       throws IOException {
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
+    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + TIMELINEFOLDER_NAME + "/" + fileName);
     OutputStream out = fileSystem.create(fullPath, true);
     out.write(bytes);
     out.close();
