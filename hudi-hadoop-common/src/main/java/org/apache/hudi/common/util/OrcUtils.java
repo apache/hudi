@@ -139,7 +139,7 @@ public class OrcUtils extends FileFormatUtils {
       if (keyCol == -1 || partitionCol == -1) {
         throw new HoodieException(String.format("Couldn't find row keys or partition path in %s.", filePath));
       }
-      return ParquetUtils.HoodieKeyIterator.getInstance(
+      return HoodieKeyIterator.getInstance(
           new OrcReaderIterator<>(recordReader, readSchema, orcSchema), keyGeneratorOpt);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to open reader from ORC file:" + filePath, e);
