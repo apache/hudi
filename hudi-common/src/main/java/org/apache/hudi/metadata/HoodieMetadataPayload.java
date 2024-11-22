@@ -288,6 +288,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return new HoodieAvroRecord<>(key, payload);
   }
 
+  public static HoodieRecord<HoodieMetadataPayload> createBloomFilterMetadataRecord(final String partitionName,
+                                                                                    final String baseFileName,
+                                                                                    final String timestamp,
+                                                                                    final String bloomFilterType,
+                                                                                    final ByteBuffer bloomFilter,
+                                                                                    final boolean isDeleted) {
+    return createBloomFilterMetadataRecord(partitionName, baseFileName, timestamp, bloomFilterType, bloomFilter, isDeleted, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+  }
+
   /**
    * Create bloom filter metadata record.
    *
@@ -303,12 +312,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                     final String timestamp,
                                                                                     final String bloomFilterType,
                                                                                     final ByteBuffer bloomFilter,
-                                                                                    final boolean isDeleted) {
+                                                                                    final boolean isDeleted,
+                                                                                    String metadataPartitionName) {
     checkArgument(!baseFileName.contains(StoragePath.SEPARATOR)
             && FSUtils.isBaseFile(new StoragePath(baseFileName)),
         "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
     final String bloomFilterIndexKey = getBloomFilterRecordKey(partitionName, baseFileName);
-    HoodieKey key = new HoodieKey(bloomFilterIndexKey, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+    HoodieKey key = new HoodieKey(bloomFilterIndexKey, metadataPartitionName);
 
     HoodieMetadataBloomFilter metadataBloomFilter =
         new HoodieMetadataBloomFilter(bloomFilterType, timestamp, bloomFilter, isDeleted);

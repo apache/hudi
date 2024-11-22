@@ -129,10 +129,16 @@ object RecordLevelIndexSupport {
    * @param queryFilter The query that need to be filtered.
    * @return Tuple of filtered query and list of record key literals that need to be matched
    */
+
   def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String]): Option[(Expression, List[String])] = {
+    filterQueryWithRecordKey(queryFilter, recordKeyOpt, attributeFetcher = expr => expr)
+  }
+
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], attributeFetcher: Function1[Expression, Expression]
+                              ): Option[(Expression, List[String])] = {
     queryFilter match {
       case equalToQuery: EqualTo =>
-        val attributeLiteralTuple = getAttributeLiteralTuple(equalToQuery.left, equalToQuery.right).orNull
+        val attributeLiteralTuple = getAttributeLiteralTuple(attributeFetcher.apply(equalToQuery.left), attributeFetcher.apply(equalToQuery.right)).orNull
         if (attributeLiteralTuple != null) {
           val attribute = attributeLiteralTuple._1
           val literal = attributeLiteralTuple._2
@@ -147,7 +153,7 @@ object RecordLevelIndexSupport {
 
       case inQuery: In =>
         var validINQuery = true
-        inQuery.value match {
+        attributeFetcher.apply(inQuery.value) match {
           case attribute: AttributeReference =>
             if (!attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
               validINQuery = false

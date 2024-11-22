@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions.{INSERT_OPERATION_OPT_VAL, OPERATI
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.client.utils.SparkMetadataWriterUtils
 import org.apache.hudi.{DataSourceReadOptions, FunctionalIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
@@ -36,6 +37,7 @@ import org.apache.hudi.hive.HiveSyncConfigHolder._
 import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.index.functional.HoodieFunctionalIndex
 import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
@@ -45,12 +47,14 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Column, SaveMode}
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, FromUnixTime, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, FromUnixTime, Literal, Upper}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{BinaryType, ByteType, DateType, DecimalType, IntegerType, ShortType, StringType, StructType, TimestampType}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 import org.scalatest.Ignore
 
 import java.util.stream.Collectors
@@ -249,8 +253,9 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
           assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
 
-          // Verify one can create more than one functional index
-          createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(func='identity')"
+          // Verify one can create more than one functional index. When function is not provided,
+          // default identity function is used
+          createIndexSql = s"create index name_lower on $tableName using column_stats(ts)"
           spark.sql(createIndexSql)
           metaClient = createMetaClient(spark, basePath)
           functionalIndexMetadata = metaClient.getIndexMetadata.get()
@@ -327,7 +332,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         assert(mdtPartitions.contains("func_index_name_lower") && mdtPartitions.contains("func_index_idx_datestr"))
 
         // drop functional index
-        spark.sql(s"drop index func_index_idx_datestr on $tableName")
+        spark.sql(s"drop index idx_datestr on $tableName")
         // validate table config
         metaClient = HoodieTableMetaClient.reload(metaClient)
         assert(!metaClient.getTableConfig.getMetadataPartitions.contains("func_index_idx_datestr"))
@@ -685,10 +690,8 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                  | $partitionByClause
                  | location '$basePath'
        """.stripMargin)
-            if (tableType == "mor") {
-              spark.sql("set hoodie.compact.inline=true")
-              spark.sql("set hoodie.compact.inline.max.delta.commits=2")
-            }
+
+            setCompactionConfigs(tableType)
             if (!isPartitioned) {
               // setting this for non-partitioned table to ensure multiple file groups are created
               spark.sql(s"set ${HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()}=0")
@@ -741,6 +744,100 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     }
   }
 
+  @Test
+  def testBloomFiltersIndexPruning(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName + s"_bloom_pruning_$tableType"
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+          spark.sql(
+            s"""
+           CREATE TABLE $tableName (
+               |    ts BIGINT,
+               |    id STRING,
+               |    rider STRING,
+               |    driver STRING,
+               |    fare DOUBLE,
+               |    city STRING,
+               |    state STRING
+               |) USING HUDI
+               |options(
+               |    primaryKey ='id',
+               |    type = '$tableType',
+               |    hoodie.metadata.enable = 'true',
+               |    hoodie.datasource.write.recordkey.field = 'id',
+               |    hoodie.enable.data.skipping = 'true'
+               |)
+               |PARTITIONED BY (state)
+               |location '$basePath'
+       """.stripMargin)
+
+          spark.sql("set hoodie.parquet.small.file.limit=0")
+          spark.sql("set hoodie.enable.data.skipping=true")
+          spark.sql("set hoodie.metadata.enable=true")
+          if (HoodieSparkUtils.gteqSpark3_4) {
+            spark.sql("set spark.sql.defaultColumn.enabled=false")
+          }
+
+          spark.sql(
+            s"""
+               |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
+               |  (1695159649,'trip1','rider-A','driver-K',19.10,'san_francisco','california'),
+               |  (1695414531,'trip6','rider-C','driver-K',17.14,'san_diego','california'),
+               |  (1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas'),
+               |  (1695516137,'trip4','rider-F','driver-P',34.15,'houston','texas')
+               |""".stripMargin)
+
+          spark.sql(
+            s"""
+               |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
+               |  (1695091554,'trip2','rider-C','driver-M',27.70,'sunnyvale','california'),
+               |  (1699349649,'trip5','rider-A','driver-Q',3.32,'san_diego','texas')
+               |""".stripMargin)
+
+          // create index using bloom filters on city column with upper() function
+          spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(func='upper', numHashFunctions=1, fpp=0.00000000001)")
+
+          // Pruning takes place only if query uses upper function on city
+          checkAnswer(s"select id, rider from $tableName where upper(city) in ('sunnyvale', 'sg')")()
+          checkAnswer(s"select id, rider from $tableName where lower(city) = 'sunny'")()
+          checkAnswer(s"select id, rider from $tableName where upper(city) = 'SUNNYVALE'")(
+            Seq("trip2", "rider-C")
+          )
+          // verify file pruning
+          var metaClient = createMetaClient(spark, basePath)
+          val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
+          val cityColumn = AttributeReference("city", StringType)()
+          val upperCityExpr = Upper(cityColumn) // Apply the `upper` function to the city column
+          val targetCityUpper = Literal.create("SUNNYVALE")
+          val dataFilterUpperCityEquals = EqualTo(upperCityExpr, targetCityUpper)
+          verifyFilePruning(opts, dataFilterUpperCityEquals, metaClient, isDataSkippingExpected = true)
+
+          // drop index and recreate without upper() function
+          spark.sql(s"drop index idx_bloom_$tableName on $tableName")
+          spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(numHashFunctions=1, fpp=0.00000000001)")
+          // Pruning takes place only if query uses no function on city
+          checkAnswer(s"select id, rider from $tableName where city = 'sunnyvale'")(
+            Seq("trip2", "rider-C")
+          )
+          metaClient = createMetaClient(spark, basePath)
+          // verify file pruning
+          val targetCity = Literal.create("sunnyvale")
+          val dataFilterCityEquals = EqualTo(cityColumn, targetCity)
+          verifyFilePruning(opts, dataFilterCityEquals, metaClient, isDataSkippingExpected = true)
+          // validate IN query
+          checkAnswer(s"select id, rider from $tableName where city in ('san_diego', 'sunnyvale')")(
+            Seq("trip2", "rider-C"),
+            Seq("trip5", "rider-A"),
+            Seq("trip6", "rider-C")
+          )
+        }
+      }
+    }
+  }
+
   private def assertTableIdentifier(catalogTable: CatalogTable,
                                     expectedDatabaseName: String,
                                     expectedTableName: String): Unit = {
@@ -756,6 +853,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           val tableName = generateTableName + s"_init_$tableType$isPartitioned"
           val partitionByClause = if (isPartitioned) "partitioned by(price)" else ""
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          setCompactionConfigs(tableType)
           spark.sql(
             s"""
                |create table $tableName (
@@ -773,7 +871,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                | location '$basePath'
        """.stripMargin)
 
-          writeRecordsAndValidateFunctionalIndex(tableName, basePath, "update", isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = false)
+          writeRecordsAndValidateFunctionalIndex(tableName, basePath, isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = false)
         }
       }
     }
@@ -787,6 +885,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           val tableName = generateTableName + s"_rollback_$tableType$isPartitioned"
           val partitionByClause = if (isPartitioned) "partitioned by(price)" else ""
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          setCompactionConfigs(tableType)
           spark.sql(
             s"""
                |create table $tableName (
@@ -804,9 +903,16 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                | location '$basePath'
        """.stripMargin)
 
-          writeRecordsAndValidateFunctionalIndex(tableName, basePath, "update", isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = true)
+          writeRecordsAndValidateFunctionalIndex(tableName, basePath, isDelete = false, shouldCompact = false, shouldCluster = false, shouldRollback = true)
         }
       }
+    }
+  }
+
+  private def setCompactionConfigs(tableType: String): Unit = {
+    spark.sql(s"set hoodie.compact.inline= ${if (tableType == "mor") "true" else "false"}")
+    if (tableType == "mor") {
+      spark.sql("set hoodie.compact.inline.max.delta.commits=2")
     }
   }
 
@@ -815,12 +921,10 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
    */
   private def writeRecordsAndValidateFunctionalIndex(tableName: String,
                                                      basePath: String,
-                                                     operationType: String,
                                                      isDelete: Boolean,
                                                      shouldCompact: Boolean,
                                                      shouldCluster: Boolean,
-                                                     shouldRollback: Boolean,
-                                                     shouldValidate: Boolean = true): Unit = {
+                                                     shouldRollback: Boolean): Unit = {
     // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2020-09-26
     spark.sql(s"insert into $tableName values(1, 'a1', 1601098924, 10)")
     // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2021-09-26
@@ -1034,8 +1138,51 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         assertTrue(prunedPartitionAndFileNames._1.size == 1) // partition
         assertTrue(prunedPartitionAndFileNames._2.size == 1) // log file
         assertTrue(FSUtils.isLogFile(prunedPartitionAndFileNames._2.head))
+
+        val prunedPartitionAndFileNamesMap = functionalIndexSupport.getPrunedPartitionsAndFileNamesMap(prunedPaths, includeLogFiles = true)
+        assertTrue(prunedPartitionAndFileNamesMap.keySet.size == 1) // partition
+        assertTrue(prunedPartitionAndFileNamesMap.values.head.size == 1) // log file
+        assertTrue(FSUtils.isLogFile(prunedPartitionAndFileNamesMap.values.head.head))
       }
     }
+  }
+
+  test("testGetFunctionalIndexRecordsUsingBloomFilter") {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP.key -> "true"
+    )
+    val opts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "testGetFunctionalIndexRecordsUsingBloomFilter",
+      TABLE_TYPE.key -> "MERGE_ON_READ",
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      PARTITIONPATH_FIELD.key() -> "c8",
+      // setting IndexType to be INMEMORY to simulate Global Index nature
+      HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.INMEMORY.name()
+    )
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json-partition-pruning").toString
+
+    // NOTE: Schema here is provided for validation that the input date is in the appropriate format
+    val sourceTableSchema: StructType = new StructType()
+      .add("c1", IntegerType)
+      .add("c2", StringType)
+      .add("c3", DecimalType(9, 3))
+      .add("c4", TimestampType)
+      .add("c5", ShortType)
+      .add("c6", DateType)
+      .add("c7", BinaryType)
+      .add("c8", ByteType)
+    var df = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+    df = df.withColumn(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION, lit("c/d"))
+      .withColumn(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_RELATIVE_FILE_PATH, lit("c/d/123141ab-701b-4ba4-b60b-e6acd9e9103e-0_329-224134-258390_2131313124.parquet"))
+      .withColumn(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE, lit(100))
+    val bloomFilterRecords = SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingBloomFilter(df, "c5", HoodieWriteConfig.newBuilder().withPath("a/b").build(), "", "random")
+    // Since there is only one partition file pair there is only one bloom filter record
+    assertEquals(1, bloomFilterRecords.collectAsList().size())
+    assertFalse(bloomFilterRecords.isEmpty)
   }
 
   private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient, isDataSkippingExpected: Boolean = false, isNoScanExpected: Boolean = false): Unit = {
