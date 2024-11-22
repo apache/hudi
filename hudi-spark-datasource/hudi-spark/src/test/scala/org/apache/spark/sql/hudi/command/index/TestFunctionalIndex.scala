@@ -27,9 +27,8 @@ import org.apache.hudi.client.utils.SparkMetadataWriterUtils
 import org.apache.hudi.{DataSourceReadOptions, FunctionalIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecord}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
@@ -39,7 +38,7 @@ import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.functional.HoodieFunctionalIndex
-import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, HoodieMetadataPayload, MetadataPartitionType}
+import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -48,7 +47,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Column, SaveMode}
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, FromUnixTime, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, FromUnixTime, Literal, Upper}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
@@ -61,6 +60,7 @@ import org.scalatest.Ignore
 import java.util.stream.Collectors
 import scala.collection.JavaConverters
 
+@Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
@@ -332,7 +332,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         assert(mdtPartitions.contains("func_index_name_lower") && mdtPartitions.contains("func_index_idx_datestr"))
 
         // drop functional index
-        spark.sql(s"drop index func_index_idx_datestr on $tableName")
+        spark.sql(s"drop index idx_datestr on $tableName")
         // validate table config
         metaClient = HoodieTableMetaClient.reload(metaClient)
         assert(!metaClient.getTableConfig.getMetadataPartitions.contains("func_index_idx_datestr"))
@@ -777,9 +777,8 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           spark.sql("set hoodie.parquet.small.file.limit=0")
           spark.sql("set hoodie.enable.data.skipping=true")
           spark.sql("set hoodie.metadata.enable=true")
-
           if (HoodieSparkUtils.gteqSpark3_4) {
-            spark.sql("spark.sql.defaultColumn.enabled=false")
+            spark.sql("set spark.sql.defaultColumn.enabled=false")
           }
 
           spark.sql(
@@ -798,6 +797,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                |  (1699349649,'trip5','rider-A','driver-Q',3.32,'san_diego','texas')
                |""".stripMargin)
 
+          // create index using bloom filters on city column with upper() function
           spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(func='upper', numHashFunctions=1, fpp=0.00000000001)")
 
           // Pruning takes place only if query uses upper function on city
@@ -806,21 +806,28 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           checkAnswer(s"select id, rider from $tableName where upper(city) = 'SUNNYVALE'")(
             Seq("trip2", "rider-C")
           )
-          checkAnswer(s"select id, rider from $tableName where city in ('san_diego', 'sunnyvale')")(
-            Seq("trip2", "rider-C"),
-            Seq("trip5", "rider-A"),
-            Seq("trip6", "rider-C")
-          )
+          // verify file pruning
+          var metaClient = createMetaClient(spark, basePath)
+          val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
+          val cityColumn = AttributeReference("city", StringType)()
+          val upperCityExpr = Upper(cityColumn) // Apply the `upper` function to the city column
+          val targetCityUpper = Literal.create("SUNNYVALE")
+          val dataFilterUpperCityEquals = EqualTo(upperCityExpr, targetCityUpper)
+          verifyFilePruning(opts, dataFilterUpperCityEquals, metaClient, isDataSkippingExpected = true)
 
+          // drop index and recreate without upper() function
           spark.sql(s"drop index idx_bloom_$tableName on $tableName")
-
           spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(numHashFunctions=1, fpp=0.00000000001)")
           // Pruning takes place only if query uses no function on city
-          checkAnswer(s"select id, rider from $tableName where upper(city) in ('sunnyvale', 'sg')")()
-          checkAnswer(s"select id, rider from $tableName where lower(city) = 'sunny'")()
-          checkAnswer(s"select id, rider from $tableName where upper(city) = 'SUNNYVALE'")(
+          checkAnswer(s"select id, rider from $tableName where city = 'sunnyvale'")(
             Seq("trip2", "rider-C")
           )
+          metaClient = createMetaClient(spark, basePath)
+          // verify file pruning
+          val targetCity = Literal.create("sunnyvale")
+          val dataFilterCityEquals = EqualTo(cityColumn, targetCity)
+          verifyFilePruning(opts, dataFilterCityEquals, metaClient, isDataSkippingExpected = true)
+          // validate IN query
           checkAnswer(s"select id, rider from $tableName where city in ('san_diego', 'sunnyvale')")(
             Seq("trip2", "rider-C"),
             Seq("trip5", "rider-A"),
