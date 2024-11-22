@@ -851,7 +851,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     HoodieInstant commitInstant = timeline.lastInstant().get();
-    String commitFileName = tableBasePath + "/.hoodie/" + INSTANT_FILE_NAME_GENERATOR.getFileName(commitInstant);
+    String commitFileName = tableBasePath + "/.hoodie/timeline/" + INSTANT_FILE_NAME_GENERATOR.getFileName(commitInstant);
     fs.delete(new Path(commitFileName), false);
 
     // sync again
@@ -2189,7 +2189,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
 
     if (testInitFailure) {
-      FileStatus[] fileStatuses = fs.listStatus(new Path(tableBasePath + "/.hoodie/"));
+      FileStatus[] fileStatuses = fs.listStatus(new Path(tableBasePath + "/.hoodie/timeline/"));
       Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains("commit") || entry.getPath().getName().contains("inflight")).forEach(entry -> {
         try {
           fs.delete(entry.getPath());

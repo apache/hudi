@@ -864,7 +864,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())).build();
     // moving out the completed commit meta file to a temp location
     HoodieInstant lastInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get();
-    String latestCompletedCommitMetaFile = basePath + "/.hoodie/" + INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant);
+    String latestCompletedCommitMetaFile = basePath + "/.hoodie/timeline/" + INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant);
     String tempDir = getTempLocation();
     String destFilePath = tempDir + "/" + INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant);
     FileUtil.move(latestCompletedCommitMetaFile, destFilePath);

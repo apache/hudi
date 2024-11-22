@@ -919,6 +919,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   private void prepForDowngradeFromVersion(HoodieTableVersion fromVersion) throws IOException {
     metaClient.getTableConfig().setTableVersion(fromVersion);
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+    metaClient.reloadTableConfig();
     StoragePath propertyFile = new StoragePath(
         metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     try (OutputStream os = metaClient.getStorage().create(propertyFile)) {

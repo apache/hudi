@@ -324,7 +324,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     }
 
     val latestCompletedFileName = INSTANT_FILE_NAME_GENERATOR.getFileName(lastCompletedCommit)
-    metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/" + latestCompletedFileName))
+    metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/timeline/" + latestCompletedFileName))
 
     // re-create marker for the deleted file.
     if (tableType == HoodieTableType.MERGE_ON_READ) {

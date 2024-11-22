@@ -121,7 +121,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
   }
 
   private void prepareFiles(String baseMarkerDir, String instant, Set<String> markers, HoodieStorage storage) throws IOException {
-    storage.create(new StoragePath(basePath + "/.hoodie/" + instant + ".commit"), true);
+    storage.create(new StoragePath(basePath + "/.hoodie/timeline/" + instant + ".commit"), true);
     String markerDir = baseMarkerDir + "/" + instant;
     storage.createDirectory(new StoragePath(markerDir));
     BufferedWriter out = new BufferedWriter(new FileWriter(markerDir + "/MARKERS0"));
