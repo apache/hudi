@@ -544,12 +544,11 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
     val overWritePayload2 = new OverwriteWithLatestAvroPayload(laterRecord, 2)
 
-    // it will provide the record with greatest combine value
+    // It always returns the later value disregarding the ordering value.
     val combinedPayload12 = overWritePayload1.preCombine(overWritePayload2)
     val combinedGR12 = combinedPayload12.getInsertValue(schema).get().asInstanceOf[GenericRecord]
-    assertEquals("field2", combinedGR12.get("field1").toString)
+    assertEquals("field1", combinedGR12.get("field1").toString)
 
-    // and it will be deterministic, to order of processing.
     val combinedPayload21 = overWritePayload2.preCombine(overWritePayload1)
     val combinedGR21 = combinedPayload21.getInsertValue(schema).get().asInstanceOf[GenericRecord]
     assertEquals("field2", combinedGR21.get("field1").toString)
@@ -570,8 +569,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val laterOrderingVal: Object = laterRecord.get("favoriteIntNumber")
     val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
 
-    // it will provide the record with greatest combine value
-    val preCombinedPayload = basePayload.preCombine(newerPayload)
+    // It always returns the later record based on commit time.
+    val preCombinedPayload = newerPayload.preCombine(basePayload)
     val precombinedGR = preCombinedPayload.getInsertValue(schema).get().asInstanceOf[GenericRecord]
     assertEquals("field2", precombinedGR.get("field1").toString)
   }
