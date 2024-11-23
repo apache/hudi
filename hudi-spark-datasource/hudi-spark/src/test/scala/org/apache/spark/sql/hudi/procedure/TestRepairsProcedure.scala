@@ -134,7 +134,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
       // overwrite hoodie props
       val expectedOutput ="""
-          |[hoodie.archivelog.folder,null,archive]
+          |[hoodie.archivelog.folder,null,history]
           |[hoodie.compaction.payload.class,org.apache.hudi.common.model.DefaultHoodieRecordPayload,null]
           |[hoodie.database.name,default,null]
           |[hoodie.datasource.write.drop.partition.columns,false,false]
