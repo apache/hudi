@@ -140,7 +140,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // step to commit the 1st txn
     client1.commitStats(
         insertTime1,
-        context().parallelize(writeStatuses1, 1),
         writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(),
         metaClient.getCommitActionType());
@@ -148,7 +147,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // step to commit the 2nd txn
     client2.commitStats(
         insertTime2,
-        context().parallelize(writeStatuses2, 1),
         writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(),
         metaClient.getCommitActionType());
@@ -185,7 +183,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // step to commit the 1st txn
     client1.commitStats(
         insertTime1,
-        context().parallelize(writeStatuses1, 1),
         writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(),
         metaClient.getCommitActionType());
@@ -199,7 +196,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     List<WriteStatus> writeStatuses3 = writeData(client1, insertTime3, dataset3, false, WriteOperationType.INSERT);
     client1.commitStats(
         insertTime3,
-        context().parallelize(writeStatuses3, 1),
         writeStatuses3.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(),
         metaClient.getCommitActionType());
@@ -233,7 +229,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
       List<WriteStatus> writeStatuses0 = writeData(client0, insertTime0, dataset0, false, WriteOperationType.BULK_INSERT, true);
       client0.commitStats(
           insertTime0,
-          context().parallelize(writeStatuses0, 1),
           writeStatuses0.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
           Option.empty(),
           metaClient.getCommitActionType());
@@ -273,7 +268,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // step to commit the 1st txn
     client1.commitStats(
         insertTime1,
-        context().parallelize(writeStatuses1, 1),
         writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(),
         metaClient.getCommitActionType());
@@ -281,7 +275,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // step to commit the 2nd txn
     client2.commitStats(
         insertTime2,
-        context().parallelize(writeStatuses2, 1),
         writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(),
         metaClient.getCommitActionType());
@@ -330,7 +323,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // step to commit the 1st txn
     client1.commitStats(
         insertTime1,
-        context().parallelize(writeStatuses1, 1),
         writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(),
         metaClient.getCommitActionType());
@@ -339,7 +331,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     assertThrows(HoodieWriteConflictException.class, () -> {
       client2.commitStats(
           insertTime2,
-          context().parallelize(writeStatuses2, 1),
           writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
           Option.empty(),
           metaClient.getCommitActionType());
@@ -552,7 +543,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     if (doCommit) {
       List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      boolean committed = client.commitStats(instant, context().parallelize(writeStatuses, 1), writeStats, Option.empty(), metaClient.getCommitActionType());
+      boolean committed = client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(committed);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);

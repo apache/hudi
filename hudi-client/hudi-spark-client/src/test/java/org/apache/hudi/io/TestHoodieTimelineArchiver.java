@@ -431,7 +431,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       });
       commitMeta = generateCommitMetadata(instantTime, partToFileIds);
       metadataWriter.performTableServices(Option.of(instantTime));
-      metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
+      metadataWriter.update(commitMeta, instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
           serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMeta));

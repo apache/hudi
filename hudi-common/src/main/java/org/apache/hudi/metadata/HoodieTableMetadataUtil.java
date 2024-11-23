@@ -883,8 +883,8 @@ public class HoodieTableMetadataUtil {
               return BaseFileRecordParsingUtils.getRecordKeysDeletedOrUpdated(basePath, writeStat, storage).iterator();
             } else {
               // for logs, every entry is either an update or a delete
-                StoragePath fullFilePath = new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath());
-                return getRecordKeys(fullFilePath.toString(), dataTableMetaClient, finalWriterSchemaOpt, maxBufferSize, instantTime).iterator();
+              StoragePath fullFilePath = new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath());
+              return getRecordKeys(fullFilePath.toString(), dataTableMetaClient, finalWriterSchemaOpt, maxBufferSize, instantTime).iterator();
             }
           }).collectAsList();
     } catch (Exception e) {

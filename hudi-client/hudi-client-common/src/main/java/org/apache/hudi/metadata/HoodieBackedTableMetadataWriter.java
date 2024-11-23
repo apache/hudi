@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
@@ -1042,12 +1041,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   /**
    * Update from {@code HoodieCommitMetadata}.
-   *
    * @param commitMetadata {@code HoodieCommitMetadata}
    * @param instantTime    Timestamp at which the commit was performed
    */
   @Override
-  public void updateFromWriteStatuses(HoodieCommitMetadata commitMetadata, HoodieData<WriteStatus> writeStatus, String instantTime) {
+  public void update(HoodieCommitMetadata commitMetadata, String instantTime) {
     processAndCommit(instantTime, () -> {
       Map<String, HoodieData<HoodieRecord>> partitionToRecordMap =
           HoodieTableMetadataUtil.convertMetadataToRecords(
