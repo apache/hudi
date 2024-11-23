@@ -24,7 +24,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.model.{ActionType, FileSlice, HoodieBaseFile, HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
@@ -44,7 +44,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, E
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.{BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
@@ -72,7 +72,9 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     RECORDKEY_FIELD.key -> "record_key_col",
     PARTITIONPATH_FIELD.key -> "partition_key_col",
     HIVE_STYLE_PARTITIONING.key -> "true",
-    PRECOMBINE_FIELD.key -> "ts"
+    PRECOMBINE_FIELD.key -> "ts",
+    HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+    DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.OVERWRITE_WITH_LATEST.name()
   ) ++ metadataOpts
   var mergedDfList: List[DataFrame] = List.empty
   var tableName = "hoodie_"
@@ -97,7 +99,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  primaryKey ='record_key_col',
            |  hoodie.metadata.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -141,7 +144,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | $partitionedByClause
            | location '$basePath'
@@ -218,7 +222,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -280,7 +285,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | $partitionedByClause
            | location '$basePath'
@@ -363,7 +369,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  $partitionStatsEnable
            |  $columnsToIndex
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | $partitionedByClause
            | location '$basePath'
@@ -452,7 +459,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | PARTITIONED BY (partition_key_col)
            | LOCATION '$basePath'
@@ -550,7 +558,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key} = '1'
+           |  ${HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key} = '1',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -634,7 +643,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '2'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '2',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -712,7 +722,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -783,7 +794,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -847,7 +859,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -922,7 +935,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -1003,7 +1017,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key} = '1'
+           |  ${HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key} = '1',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -1129,7 +1144,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'

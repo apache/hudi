@@ -20,8 +20,9 @@
 package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, INSERT_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
-import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
@@ -31,6 +32,7 @@ import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertTrue
+
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
 
@@ -50,7 +52,9 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
     HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "4",
     HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
-    HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "3"
+    HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "3",
+    HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+    DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.OVERWRITE_WITH_LATEST.name()
   ) ++ metadataOpts
 
   test("Test Create/Show/Drop Secondary Index") {
@@ -387,7 +391,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.metadata.index.secondary.enable = 'true',
-         |  hoodie.datasource.write.recordkey.field = 'id'
+         |  hoodie.datasource.write.recordkey.field = 'id',
+         |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
          | )
          | partitioned by(state)
          | location '$basePath'

@@ -1357,6 +1357,7 @@ public class HoodieTableMetaClient implements Serializable {
       createTableLayoutOnStorage(storageConf, basePath, props);
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(basePath)
           .setMetaserverConfig(props)
+          .setPayloadClassName((String) props.getOrDefault(PAYLOAD_CLASS_NAME.key(), "org.apache.hudi.common.model.DefaultHoodieRecordPayload"))
           .build();
       LOG.info("Finished initializing Table of type {} from {}", metaClient.getTableConfig().getTableType(), basePath);
       return metaClient;
