@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +67,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION,
       REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, SAVE_SCHEMA_ACTION_EXTENSION));
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieActiveTimeline.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ActiveTimelineV1.class);
   protected HoodieTableMetaClient metaClient;
   private final InstantFileNameGenerator instantFileNameGenerator = new InstantFileNameGeneratorV1();
 
