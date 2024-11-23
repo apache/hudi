@@ -65,6 +65,19 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     return Option.ofNullable(value != null ? (Long) value : null);
   }
 
+  public PostgresDebeziumAvroPayload preCombine(PostgresDebeziumAvroPayload oldValue) {
+    if (oldValue.recordBytes.length == 0) {
+      // use natural order for delete record
+      return this;
+    }
+    if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
+      // pick the payload with greatest ordering value
+      return oldValue;
+    } else {
+      return this;
+    }
+  }
+
   @Override
   protected boolean shouldPickCurrentRecord(IndexedRecord currentRecord, IndexedRecord insertRecord, Schema schema) throws IOException {
     Long insertSourceLSN = extractLSN(insertRecord)
