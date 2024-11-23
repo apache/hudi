@@ -443,12 +443,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         .toArray(StoragePath[]::new);
 
     HashMap<String, String> params = new HashMap<>();
-    if (hasLogFiles) {
-      params.put("hoodie.datasource.query.type", "snapshot");
-    } else {
-      params.put("hoodie.datasource.query.type", "read_optimized");
-    }
-
     StoragePath[] paths;
     if (hasLogFiles) {
       String rawFractionConfig = getWriteConfig().getString(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION);
