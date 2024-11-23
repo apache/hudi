@@ -287,7 +287,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
          """.stripMargin)
         if (withPrecombine) {
           checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 20.0, 100)
+            Seq(1, "a1", 30.0, 100)
           )
         } else {
           checkAnswer(s"select id, name, price, ts from $tableName")(
