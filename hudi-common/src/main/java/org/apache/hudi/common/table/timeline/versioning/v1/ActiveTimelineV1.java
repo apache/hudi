@@ -53,7 +53,6 @@ import java.util.stream.Stream;
 
 public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTimeline {
 
-  public static final String TIMELINE_FOLDER_NAME = HoodieTableMetaClient.METAFOLDER_NAME;
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
       DELTA_COMMIT_EXTENSION, INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION,
@@ -70,15 +69,14 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   private static final Logger LOG = LoggerFactory.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
   private final InstantFileNameGenerator instantFileNameGenerator = new InstantFileNameGeneratorV1();
-  private StoragePath timelinePath;
 
   protected ActiveTimelineV1(HoodieTableMetaClient metaClient, Set<String> includedExtensions,
                              boolean applyLayoutFilters) {
-    timelinePath = metaClient.getMetaPath();
     // Filter all the filter in the metapath and include only the extensions passed and
     // convert them into HoodieInstant
     try {
-      this.setInstants(metaClient.scanHoodieInstantsFromFileSystem(timelinePath, includedExtensions, applyLayoutFilters));
+      this.setInstants(metaClient.scanHoodieInstantsFromFileSystem(metaClient.getActiveTimelinePath(),
+          includedExtensions, applyLayoutFilters));
     } catch (IOException e) {
       throw new HoodieIOException("Failed to scan metadata", e);
     }
@@ -152,7 +150,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
-    transitionState(instant, instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime()), data);
+    transitionState(instant, instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(),instant.requestedTime()), data);
     LOG.info("Completed " + instant);
   }
 
@@ -294,7 +292,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   @Override
   public Option<byte[]> readRestoreInfoAsBytes(HoodieInstant instant) {
     // Rollback metadata are always stored only in timeline .hoodie
-    return readDataFromPath(new StoragePath(timelinePath, instantFileNameGenerator.getFileName(instant)));
+    return readDataFromPath(new StoragePath(metaClient.getActiveTimelinePath(), instantFileNameGenerator.getFileName(instant)));
   }
 
   //-----------------------------------------------------------------
@@ -302,12 +300,12 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   //-----------------------------------------------------------------
   @Override
   public Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant) {
-    return readDataFromPath(new StoragePath(timelinePath, instantFileNameGenerator.getFileName(instant)));
+    return readDataFromPath(new StoragePath(metaClient.getActiveTimelinePath(), instantFileNameGenerator.getFileName(instant)));
   }
 
   @Override
   public Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant) {
-    return readDataFromPath(new StoragePath(timelinePath, instantFileNameGenerator.getFileName(instant)));
+    return readDataFromPath(new StoragePath(metaClient.getActiveTimelinePath(), instantFileNameGenerator.getFileName(instant)));
   }
 
   @Override
@@ -538,7 +536,8 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   private StoragePath getInstantFileNamePath(String fileName) {
-    return new StoragePath(fileName.contains(SCHEMA_COMMIT_ACTION) ? metaClient.getSchemaFolderName() : timelinePath.toString(), fileName);
+    return new StoragePath(fileName.contains(SCHEMA_COMMIT_ACTION)
+        ? metaClient.getSchemaFolderName() : metaClient.getActiveTimelinePath().toString(), fileName);
   }
 
   @Override
@@ -666,9 +665,9 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   public void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
     StoragePath fullPath = getInstantFileNamePath(filename);
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      FileIOUtils.createFileInPath(metaClient.getStorage(timelinePath), fullPath, content);
+      FileIOUtils.createFileInPath(metaClient.getStorage(metaClient.getActiveTimelinePath()), fullPath, content);
     } else {
-      metaClient.getStorage(timelinePath).createImmutableFileInPath(fullPath, content);
+      metaClient.getStorage(metaClient.getActiveTimelinePath()).createImmutableFileInPath(fullPath, content);
     }
   }
 
@@ -687,7 +686,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public void copyInstant(HoodieInstant instant, StoragePath dstDir) {
-    StoragePath srcPath = new StoragePath(timelinePath, instantFileNameGenerator.getFileName(instant));
+    StoragePath srcPath = new StoragePath(metaClient.getActiveTimelinePath(), instantFileNameGenerator.getFileName(instant));
     StoragePath dstPath = new StoragePath(dstDir, instantFileNameGenerator.getFileName(instant));
     try {
       HoodieStorage storage = metaClient.getStorage();
