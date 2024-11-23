@@ -48,9 +48,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,6 +64,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.convertCompletionTimeToEpoch;
 
 /**
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
@@ -76,28 +74,6 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
-
-  /**
-   * Extract Epoch time from completion time string
-   * @param instant : HoodieInstant
-   * @return
-   */
-  public static long convertCompletionTimeToEpoch(HoodieInstant instant) {
-    try {
-      String completionTime = instant.getCompletionTime();
-      // In Java 8, no direct API to convert to epoch in millis.
-      // Strip off millis
-      String completionTimeInSecs = completionTime.substring(0, completionTime.length() - 3);
-      DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
-      ZoneId zoneId = ZoneId.systemDefault();
-      LocalDateTime ldtInSecs = LocalDateTime.parse(completionTimeInSecs, inputFormatter);
-      long millis = Long.parseLong(completionTime.substring(completionTime.length() - 3));
-      return ldtInSecs.atZone(zoneId).toEpochSecond() * 1000 + millis;
-    } catch (Exception e) {
-      LOG.warn("Failed to parse completion time string for instant " + instant, e);
-      return -1;
-    }
-  }
 
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
@@ -110,7 +86,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     List<HoodieInstant> instants = new ArrayList<>();
     try {
       // We need to move all the instants - not just completed ones.
-      instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getActiveTimelinePath(),
+      instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
           ActiveTimelineV2.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
     } catch (IOException ioe) {
       LOG.error("Failed to get instants from filesystem", ioe);
@@ -125,10 +101,10 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       context.map(instants, instant -> {
         String fileName = instantFileNameGenerator.getFileName(instant);
         // Rename the metadata file name from the ${instant_time}_${completion_time}.action[.state] format in version 1.x to the ${instant_time}.action[.state] format in version 0.x.
-        StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getActiveTimelinePath(
+        StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getTimelinePath(
             metaClient.getTableConfig(), metaClient.getBasePath()), fileName);
         long modificationTime = instant.isCompleted() ? convertCompletionTimeToEpoch(instant) : -1;
-        StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePathProvider().getActiveTimelinePath(
+        StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePathProvider().getTimelinePath(
             metaClient.getTableConfig(), metaClient.getBasePath()), fileName.replaceAll(UNDERSCORE + "\\d+", ""));
         boolean success = true;
         if (fileName.contains(UNDERSCORE)) {

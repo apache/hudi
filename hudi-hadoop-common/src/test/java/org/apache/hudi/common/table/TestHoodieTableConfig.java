@@ -124,7 +124,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   @Test
   public void testDelete() throws IOException {
-    Set<String> deletedProps = CollectionUtils.createSet(HoodieTableConfig.ARCHIVELOG_FOLDER.key(),
+    Set<String> deletedProps = CollectionUtils.createSet(HoodieTableConfig.TIMELINE_HISTORY_PATH.key(),
         "hoodie.invalid.config");
     HoodieTableConfig.delete(storage, metaPath, deletedProps);
 
@@ -133,7 +133,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
     assertEquals(6, config.getProps().size());
     assertNull(config.getProps().getProperty("hoodie.invalid.config"));
-    assertFalse(config.getProps().contains(HoodieTableConfig.ARCHIVELOG_FOLDER.key()));
+    assertFalse(config.getProps().contains(HoodieTableConfig.TIMELINE_HISTORY_PATH.key()));
   }
 
   @Test

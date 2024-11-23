@@ -391,7 +391,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .thenReturn(activeInstants);
     when(mockMetaClient.getMetaPath()).thenReturn(new StoragePath("file://dummy/path/.hoodie"));
     when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
-    when(mockMetaClient.getTableConfig().getTimelineFolder()).thenReturn("timeline");
+    when(mockMetaClient.getTableConfig().getTimelinePath()).thenReturn("timeline");
     HoodieActiveTimeline activeTimeline = new ActiveTimelineV2(mockMetaClient);
     when(mockMetaClient.getActiveTimeline())
         .thenReturn(activeTimeline);
@@ -503,7 +503,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .thenReturn(activeInstants);
     when(mockMetaClient.getMetaPath()).thenReturn(new StoragePath("file://dummy/path/.hoodie"));
     when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
-    when(mockMetaClient.getTableConfig().getTimelineFolder()).thenReturn("timeline");
+    when(mockMetaClient.getTableConfig().getTimelinePath()).thenReturn("timeline");
     return new ActiveTimelineV2(mockMetaClient);
   }
 

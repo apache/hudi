@@ -134,7 +134,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
       // overwrite hoodie props
       val expectedOutput ="""
-          |[hoodie.archivelog.folder,history,archive]
+          |[hoodie.archivelog.folder,null,archive]
           |[hoodie.compaction.payload.class,org.apache.hudi.common.model.DefaultHoodieRecordPayload,null]
           |[hoodie.database.name,default,null]
           |[hoodie.datasource.write.drop.partition.columns,false,false]
@@ -151,8 +151,9 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.table.recordkey.fields,id,null]
           |[hoodie.table.type,COPY_ON_WRITE,COPY_ON_WRITE]
           |[hoodie.table.version,,]
-          |[hoodie.timeline.folder,timeline,timeline]
-          |[hoodie.timeline.layout.version,,]""".stripMargin.trim
+          |[hoodie.timeline.history.path,history,history]
+          |[hoodie.timeline.layout.version,,]
+          |[hoodie.timeline.path,timeline,timeline]""".stripMargin.trim
 
       val actual = spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${newProps.getPath}')""")
         .collect()

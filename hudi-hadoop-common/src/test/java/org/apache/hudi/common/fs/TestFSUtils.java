@@ -63,6 +63,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -592,6 +593,17 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         FSUtils.makeQualified(storage, new StoragePath("s3://x/y")));
     assertEquals(new StoragePath("s3://x/y"),
         FSUtils.makeQualified(wrapperStorage, new StoragePath("s3://x/y")));
+  }
+
+  @Test
+  public void testSetModificationTime() throws IOException {
+    StoragePath path = new StoragePath(basePath, "dummy.txt");
+    FileSystem fs = HadoopFSUtils.getFs(basePath, new Configuration());
+    HoodieStorage storage = new HoodieHadoopStorage(fs);
+    storage.create(path);
+    long modificationTime = System.currentTimeMillis();
+    storage.setModificationTime(path, modificationTime);
+    assertEquals((modificationTime / 1000) * 1000, fs.getFileStatus(convertToHadoopPath(path)).getModificationTime());
   }
 
   @Test

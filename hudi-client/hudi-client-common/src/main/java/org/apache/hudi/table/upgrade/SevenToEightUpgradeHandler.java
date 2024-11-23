@@ -63,7 +63,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
 
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
-    tablePropsToAdd.put(HoodieTableConfig.TIMELINE_FOLDER, HoodieTableConfig.TIMELINE_FOLDER.defaultValue());
+    tablePropsToAdd.put(HoodieTableConfig.TIMELINE_PATH, HoodieTableConfig.TIMELINE_PATH.defaultValue());
     upgradePartitionFields(config, tableConfig, tablePropsToAdd);
 
     // Handle timeline upgrade:
@@ -72,7 +72,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     List<HoodieInstant> instants = new ArrayList<>();
     try {
       // We need to move all the instants - not just completed ones.
-      instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getActiveTimelinePath(),
+      instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
           ActiveTimelineV1.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
     } catch (IOException ioe) {
       LOG.error("Failed to get instants from filesystem", ioe);

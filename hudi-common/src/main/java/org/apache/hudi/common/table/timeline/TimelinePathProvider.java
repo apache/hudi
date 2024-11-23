@@ -31,7 +31,7 @@ public interface TimelinePathProvider {
    * @param basePath BasePath of the Table
    * @return
    */
-  StoragePath getActiveTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath);
+  StoragePath getTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath);
 
   /**
    * Provides archived timeline path.
@@ -39,6 +39,6 @@ public interface TimelinePathProvider {
    * @param basePath BasePath of the Table
    * @return
    */
-  StoragePath getArchiveTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath);
+  StoragePath getTimelineHistoryPath(HoodieTableConfig tableConfig, StoragePath basePath);
 
 }

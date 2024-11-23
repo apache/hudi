@@ -86,7 +86,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     tableName = tableName();
     tablePath = tablePath(tableName);
     metaPath = Paths.get(tablePath, METAFOLDER_NAME).toString();
-    archivePath = Paths.get(metaPath, HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue()).toString();
+    archivePath = Paths.get(metaPath, HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue()).toString();
   }
 
   /**

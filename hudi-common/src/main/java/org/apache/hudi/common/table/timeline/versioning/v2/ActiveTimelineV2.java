@@ -81,7 +81,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     // Filter all the filter in the metapath and include only the extensions passed and
     // convert them into HoodieInstant
     try {
-      this.setInstants(metaClient.scanHoodieInstantsFromFileSystem(metaClient.getActiveTimelinePath(),
+      this.setInstants(metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
           includedExtensions, applyLayoutFilters));
     } catch (IOException e) {
       throw new HoodieIOException("Failed to scan metadata", e);
@@ -260,17 +260,8 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    try {
-      StoragePath detailPath = getInstantFileNamePath(getInstantFileName(instant));
-      return readDataFromPath(detailPath);
-    } catch (NullPointerException npe) {
-      LOG.error("NPE. instant=" + instant);
-      LOG.error("NPE. timelinePath=" + metaClient.getActiveTimelinePath());
-      LOG.error("NPE. FileName=" + getInstantFileName(instant));
-      LOG.error("NPE. Timeline Instants=" +  getInstants());
-      LOG.error("NPE. Metaclient Table Version=" + metaClient.getTableConfig().getTableVersion());
-      throw npe;
-    }
+    StoragePath detailPath = getInstantFileNamePath(getInstantFileName(instant));
+    return readDataFromPath(detailPath);
   }
 
   @Override
@@ -334,12 +325,12 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant) {
-    return readDataFromPath(new StoragePath(metaClient.getActiveTimelinePath(), getInstantFileName(instant)));
+    return readDataFromPath(new StoragePath(metaClient.getTimelinePath(), getInstantFileName(instant)));
   }
 
   @Override
   public Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant) {
-    return readDataFromPath(new StoragePath(metaClient.getActiveTimelinePath(), getInstantFileName(instant)));
+    return readDataFromPath(new StoragePath(metaClient.getTimelinePath(), getInstantFileName(instant)));
   }
 
   @Override
@@ -614,7 +605,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   private StoragePath getInstantFileNamePath(String fileName) {
     return new StoragePath(fileName.contains(SCHEMA_COMMIT_ACTION)
-        ? metaClient.getSchemaFolderName() : metaClient.getActiveTimelinePath().toString(), fileName);
+        ? metaClient.getSchemaFolderName() : metaClient.getTimelinePath().toString(), fileName);
   }
 
   public void transitionRequestedToInflight(String commitType, String inFlightInstant) {
@@ -735,9 +726,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   public void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
     StoragePath fullPath = getInstantFileNamePath(filename);
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      FileIOUtils.createFileInPath(metaClient.getStorage(metaClient.getActiveTimelinePath()), fullPath, content);
+      FileIOUtils.createFileInPath(metaClient.getStorage(metaClient.getTimelinePath()), fullPath, content);
     } else {
-      metaClient.getStorage(metaClient.getActiveTimelinePath()).createImmutableFileInPath(fullPath, content);
+      metaClient.getStorage(metaClient.getTimelinePath()).createImmutableFileInPath(fullPath, content);
     }
   }
 
@@ -770,7 +761,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   public void copyInstant(HoodieInstant instant, StoragePath dstDir) {
-    StoragePath srcPath = new StoragePath(metaClient.getActiveTimelinePath(), getInstantFileName(instant));
+    StoragePath srcPath = new StoragePath(metaClient.getTimelinePath(), getInstantFileName(instant));
     StoragePath dstPath = new StoragePath(dstDir, getInstantFileName(instant));
     try {
       HoodieStorage storage = metaClient.getStorage();

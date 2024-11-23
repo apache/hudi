@@ -225,7 +225,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME));
     this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
     this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME));
-    this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue()));
+    this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue()));
     this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME
         + Path.SEPARATOR + "hoodie.properties"));
   }

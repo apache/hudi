@@ -26,15 +26,15 @@ import org.apache.hudi.storage.StoragePath;
 public class TimelinePathProviderV2 implements TimelinePathProvider {
 
   @Override
-  public StoragePath getActiveTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath) {
+  public StoragePath getTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath) {
     return new StoragePath(
         new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME),
-        tableConfig.getTimelineFolder());
+        tableConfig.getTimelinePath());
   }
 
   @Override
-  public StoragePath getArchiveTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath) {
-    String archiveFolder = tableConfig.getArchivelogFolder();
-    return new StoragePath(getActiveTimelinePath(tableConfig, basePath), archiveFolder);
+  public StoragePath getTimelineHistoryPath(HoodieTableConfig tableConfig, StoragePath basePath) {
+    String archiveFolder = tableConfig.getTimelineHistoryPath();
+    return new StoragePath(getTimelinePath(tableConfig, basePath), archiveFolder);
   }
 }

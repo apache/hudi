@@ -29,13 +29,13 @@ import org.apache.hudi.storage.StoragePath;
 public class TimelinePathProviderV1 implements TimelinePathProvider {
 
   @Override
-  public StoragePath getActiveTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath) {
+  public StoragePath getTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath) {
     return new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
   }
 
   @Override
-  public StoragePath getArchiveTimelinePath(HoodieTableConfig tableConfig, StoragePath basePath) {
+  public StoragePath getTimelineHistoryPath(HoodieTableConfig tableConfig, StoragePath basePath) {
     String archiveFolder = tableConfig.getArchivelogFolder();
-    return new StoragePath(getActiveTimelinePath(tableConfig, basePath), archiveFolder);
+    return new StoragePath(getTimelinePath(tableConfig, basePath), archiveFolder);
   }
 }
