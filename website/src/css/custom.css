@@ -536,7 +536,3 @@ div[class^="announcementBar"][role="banner"] {
 .tagsListInline ul li a{
   padding: 0.3rem 5px 0.3rem;
 }
-
-.markdown a {
-  font-size: 1rem;
-}
