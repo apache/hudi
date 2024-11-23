@@ -722,6 +722,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             option(RECORDKEY_FIELD_OPT_KEY, "uuid").
             option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
             option("hoodie.schema.on.read.enable","true").
+            option("hoodie.datasource.write.payload.class","org.apache.hudi.common.model.OverwriteWithLatestAvroPayload").
             option(TABLE_NAME.key(), tableName).
             option("hoodie.table.name", tableName).
             mode("overwrite").
@@ -742,6 +743,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             option("hoodie.schema.on.read.enable","true").
             option("hoodie.datasource.write.reconcile.schema","true").
             option(TABLE_NAME.key(), tableName).
+            option("hoodie.datasource.write.payload.class","org.apache.hudi.common.model.OverwriteWithLatestAvroPayload").
             option("hoodie.table.name", tableName).
             mode("append").
             save(tablePath)
@@ -772,6 +774,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
             option("hoodie.schema.on.read.enable","true").
             option("hoodie.datasource.write.reconcile.schema","true").
+            option("hoodie.datasource.write.payload.class","org.apache.hudi.common.model.OverwriteWithLatestAvroPayload").
             option(TABLE_NAME.key(), tableName).
             option("hoodie.table.name", tableName).
             mode("append").
@@ -787,6 +790,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
             option("hoodie.schema.on.read.enable","true").
             option("hoodie.datasource.write.reconcile.schema","true").
+            option("hoodie.datasource.write.payload.class","org.apache.hudi.common.model.OverwriteWithLatestAvroPayload").
             option(TABLE_NAME.key(), tableName).
             option("hoodie.table.name", tableName).
             mode("append").

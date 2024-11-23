@@ -121,7 +121,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieSparkClientTes
         assertEquals(writeStatus.getTotalRecords(), sizeMap.get(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]));
       }
       assertNull(writeStatus.getGlobalError());
-      assertEquals(writeStatus.getTotalErrorRecords(), 0);
+      assertEquals(0, writeStatus.getTotalErrorRecords());
       assertEquals(writeStatus.getTotalErrorRecords(), 0);
       assertFalse(writeStatus.hasErrors());
       assertNotNull(writeStatus.getFileId());

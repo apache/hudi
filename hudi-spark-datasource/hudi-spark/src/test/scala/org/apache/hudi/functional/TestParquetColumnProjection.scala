@@ -49,7 +49,8 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieMetadataConfig.ENABLE.key -> "true"
+    HoodieMetadataConfig.ENABLE.key -> "true",
+    "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
     // NOTE: It's critical that we use non-partitioned table, since the way we track amount of bytes read
     //       is not robust, and works most reliably only when we read just a single file. As such, making table
     //       non-partitioned makes it much more likely just a single file will be written
@@ -112,10 +113,12 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
         fail("Only Spark 3 and Spark 2 are currently supported")
 
     // Test MOR / Snapshot / Skip-merge
-    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
+      DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
 
     // Test MOR / Snapshot / Payload-combine
-    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, projectedColumnsReadStats)
+    runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
+      DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL, projectedColumnsReadStats)
 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns) in Read Optimized mode (which is essentially equivalent to COW)

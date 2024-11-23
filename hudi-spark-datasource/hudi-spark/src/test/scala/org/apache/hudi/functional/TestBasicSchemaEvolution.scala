@@ -23,11 +23,13 @@ import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperati
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.functional.TestBasicSchemaEvolution.{dropColumn, injectColumnAt}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
+import org.apache.spark.SparkException
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions, functions}
@@ -389,11 +391,16 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       assertThrows(classOf[SchemaCompatibilityException]) {
         appendData(sixthSchema, sixthBatch)
       }
+    } else if (tableType.equals(HoodieTableType.COPY_ON_WRITE) && opType.equals("upsert")) {
+      // Without reconciling schema we cannot really guarantee the data is written as on the writer path we may end up
+      // with working with non cast-able data types especially for pre-combined field
+      val ex = assertThrows(classOf[SparkException]) {
+        appendData(sixthSchema, sixthBatch)
+      }
+      assertTrue(getRootCause(ex).getMessage.contains("org.apache.avro.util.Utf8 cannot be cast to java.lang.String"))
     } else {
       appendData(sixthSchema, sixthBatch)
     }
-
-
     // TODO add test w/ overlapping updates
   }
 }

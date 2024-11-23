@@ -48,7 +48,9 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-          createTableWithNestedStructSchema(tableType, tableName, tablePath)
+          createTableWithNestedStructSchema(tableType, tableName, tablePath
+            , Map("payloadClass" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload")
+          )
 
           val selectDF = spark.sql(s"SELECT id, item.name FROM $tableName")
 

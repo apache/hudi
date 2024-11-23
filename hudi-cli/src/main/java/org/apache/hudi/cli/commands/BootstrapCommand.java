@@ -70,7 +70,7 @@ public class BootstrapCommand {
           help = "Class for Full bootstrap input provider") final String fullBootstrapInputProvider,
       @ShellOption(value = {"--schemaProviderClass"}, defaultValue = "",
           help = "SchemaProvider to attach schemas to bootstrap source data") final String schemaProviderClass,
-      @ShellOption(value = {"--payloadClass"}, defaultValue = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+      @ShellOption(value = {"--payloadClass"}, defaultValue = "org.apache.hudi.common.model.DefaultHoodieRecordPayload",
           help = "Payload Class") final String payloadClass,
       @ShellOption(value = {"--parallelism"}, defaultValue = "1500", help = "Bootstrap writer parallelism") final int parallelism,
       @ShellOption(value = {"--sparkMaster"}, defaultValue = "", help = "Spark Master") String master,
