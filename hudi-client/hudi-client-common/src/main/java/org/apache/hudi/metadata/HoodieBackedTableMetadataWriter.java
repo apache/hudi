@@ -1486,7 +1486,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param writeStatuses {@code WriteStatus} from the write operation
    */
   protected HoodieData<HoodieRecord> getRecordIndexUpserts(HoodieData<WriteStatus> writeStatuses, HoodieCommitMetadata commitMetadata) {
-    boolean validatedForFileIds = dataWriteConfig.getRecordIndexValidateAgainstFilesPartition();
+    boolean validatedForFileIds = dataWriteConfig.getRecordIndexValidateAgainstFilesPartitionOnWrites();
     HashMap<String, HashSet<String>> commitMetadataFileIds = new HashMap<>();
     if (validatedForFileIds) {
       // collect all fileIDs from commit metadata and validate the RLI updates only references fileIds from the current commit metadata.

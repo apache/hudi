@@ -3369,7 +3369,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(true).withRecordIndexFileGroupCount(1,1).build())
         .withAutoCommit(false)
-        .withOnehouseInternalConfig(OnehouseInternalConfig.newBuilder().withRecordIndexValidateAgainstFilesPartitions(true).build())
+        .withOnehouseInternalConfig(OnehouseInternalConfig.newBuilder().withRecordIndexValidateAgainstFilesPartitionsOnWrites(true).build())
         .build();
     init(COPY_ON_WRITE);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);

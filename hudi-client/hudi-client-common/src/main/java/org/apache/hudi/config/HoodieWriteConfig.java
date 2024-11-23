@@ -2112,8 +2112,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
-  public boolean getRecordIndexValidateAgainstFilesPartition() {
-    return getBoolean(OnehouseInternalConfig.RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION);
+  public boolean getRecordIndexValidateAgainstFilesPartitionOnWrites() {
+    return getBoolean(OnehouseInternalConfig.RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION_ON_WRITES);
+  }
+
+  public boolean getRecordIndexValidateAgainstFilesPartitionOnReads() {
+    return getBoolean(OnehouseInternalConfig.RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION_ON_READS);
   }
 
   /**

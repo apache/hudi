@@ -54,8 +54,16 @@ public class OnehouseInternalConfig extends HoodieConfig {
       .sinceVersion("0.14.1")
       .withDocumentation("Controls the number of marker entries to print when we fetch all markers during reconciliation or commit metadata validation");
 
-  public static final ConfigProperty<String> RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION = ConfigProperty
-      .key(ONEHOUSE_INTERNAL_CONFIG_PREFIX + "hoodie.record.index.validate.against.files.partition")
+  public static final ConfigProperty<String> RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION_ON_WRITES = ConfigProperty
+      .key(ONEHOUSE_INTERNAL_CONFIG_PREFIX + "hoodie.record.index.validate.against.files.partition.on.writes")
+      .defaultValue("false")
+      .withAlternatives(ONEHOUSE_INTERNAL_CONFIG_PREFIX + "hoodie.record.index.validate.against.files.partition")
+      .markAdvanced()
+      .sinceVersion("0.14.1")
+      .withDocumentation("Validates that all fileIds from RLI records during write are part of the HoodieCommitMetadata");
+
+  public static final ConfigProperty<String> RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION_ON_READS = ConfigProperty
+      .key(ONEHOUSE_INTERNAL_CONFIG_PREFIX + "hoodie.record.index.validate.against.files.partition.on.reads")
       .defaultValue("false")
       .markAdvanced()
       .sinceVersion("0.14.1")
@@ -86,8 +94,13 @@ public class OnehouseInternalConfig extends HoodieConfig {
       return this;
     }
 
-    public OnehouseInternalConfig.Builder withRecordIndexValidateAgainstFilesPartitions(boolean validateAgainstFilesPartitions) {
-      this.onehouseInternalConfig.setValue(RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION, String.valueOf(validateAgainstFilesPartitions));
+    public OnehouseInternalConfig.Builder withRecordIndexValidateAgainstFilesPartitionsOnWrites(boolean validateAgainstFilesPartitions) {
+      this.onehouseInternalConfig.setValue(RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION_ON_WRITES, String.valueOf(validateAgainstFilesPartitions));
+      return this;
+    }
+
+    public OnehouseInternalConfig.Builder withRecordIndexValidateAgainstFilesPartitionsOnReads(boolean validateAgainstFilesPartitionsOnReads) {
+      this.onehouseInternalConfig.setValue(RECORD_INDEX_VALIDATE_AGAINST_FILES_PARTITION_ON_READS, String.valueOf(validateAgainstFilesPartitionsOnReads));
       return this;
     }
 

@@ -134,7 +134,7 @@ public class TestSparkMetadataTableRecordIndex extends SparkClientFunctionalTest
         .withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(true).withRecordIndexFileGroupCount(1,1).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build())
-        .withOnehouseInternalConfig(OnehouseInternalConfig.newBuilder().withRecordIndexValidateAgainstFilesPartitions(true).build())
+        .withOnehouseInternalConfig(OnehouseInternalConfig.newBuilder().withRecordIndexValidateAgainstFilesPartitionsOnReads(true).build())
         .build();
   }
 
@@ -150,7 +150,7 @@ public class TestSparkMetadataTableRecordIndex extends SparkClientFunctionalTest
         .withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(true).withRecordIndexFileGroupCount(1,1).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build())
-        .withOnehouseInternalConfig(OnehouseInternalConfig.newBuilder().withRecordIndexValidateAgainstFilesPartitions(false).build())
+        .withOnehouseInternalConfig(OnehouseInternalConfig.newBuilder().withRecordIndexValidateAgainstFilesPartitionsOnReads(false).build())
         .build();
   }
 }

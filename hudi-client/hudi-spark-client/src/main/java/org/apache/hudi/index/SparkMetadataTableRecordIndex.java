@@ -134,8 +134,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
   @VisibleForTesting
   protected HoodiePairData<String, HoodieRecordGlobalLocation> mayBeValidateAgainstFilesPartition(HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations,
                                                                                                 HoodieTable hoodieTable) {
-    if (config.getRecordIndexValidateAgainstFilesPartition()) {
-
+    if (config.getRecordIndexValidateAgainstFilesPartitionOnReads()) {
       List<List<String>> outOfSyncFileIdListOfLists =
           keyAndExistingLocations.mapValues((SerializableFunction<HoodieRecordGlobalLocation, Pair<String, String>>) v1 -> Pair.of(v1.getPartitionPath(), v1.getFileId()))
               .values().distinct()
