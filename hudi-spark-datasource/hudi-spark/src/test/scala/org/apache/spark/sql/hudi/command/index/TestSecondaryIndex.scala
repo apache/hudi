@@ -19,9 +19,8 @@
 
 package org.apache.spark.sql.hudi.command.index
 
-import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, INSERT_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata
@@ -31,6 +30,7 @@ import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, H
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -54,7 +54,9 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
     HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "4",
     HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
-    HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "3"
+    HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "3",
+    HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+    DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name()
   ) ++ metadataOpts
 
   test("Test Create/Show/Drop Secondary Index") {
@@ -77,7 +79,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
                |  preCombineField = 'ts',
                |  hoodie.metadata.enable = 'true',
                |  hoodie.metadata.record.index.enable = 'true',
-               |  hoodie.metadata.index.secondary.enable = 'true'
+               |  hoodie.metadata.index.secondary.enable = 'true',
+               |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
                | )
                | partitioned by(ts)
                | location '$basePath'
@@ -564,7 +567,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.metadata.index.secondary.enable = 'true',
-         |  hoodie.datasource.write.recordkey.field = 'id'
+         |  hoodie.datasource.write.recordkey.field = 'id',
+         |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
          | )
          | partitioned by(state)
          | location '$basePath'
