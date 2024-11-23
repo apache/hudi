@@ -79,4 +79,8 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   public Comparable<?> getOrderingValue() {
     return this.orderingVal;
   }
+
+  public byte[] getRecordBytes() {
+    return recordBytes;
+  }
 }
