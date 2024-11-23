@@ -261,8 +261,17 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    StoragePath detailPath = getInstantFileNamePath(getInstantFileName(instant));
-    return readDataFromPath(detailPath);
+    try {
+      StoragePath detailPath = getInstantFileNamePath(getInstantFileName(instant));
+      return readDataFromPath(detailPath);
+    } catch (NullPointerException npe) {
+      LOG.error("NPE. instant=" + instant);
+      LOG.error("NPE. timelinePath=" + timelinePath);
+      LOG.error("NPE. FileName=" + getInstantFileName(instant));
+      LOG.error("NPE. Timeline Instants=" +  getInstants());
+      LOG.error("NPE. Metaclient Table Version=" + metaClient.getTableConfig().getTableVersion());
+      throw npe;
+    }
   }
 
   @Override
