@@ -89,6 +89,7 @@ public class TestPostgresDebeziumAvroPayload {
 
     assertEquals(insertPayload, insertPayload.preCombine(updatePayload));
     assertEquals(deletePayload, deletePayload.preCombine(updatePayload));
+    assertEquals(insertPayload, deletePayload.preCombine(insertPayload));
   }
 
   @Test

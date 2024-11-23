@@ -63,8 +63,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieCompactionConfig.INLINE_COMPACT.key -> "false"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
     HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
@@ -295,10 +294,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     // Sixth Operation:
     // Insert 2 records and trigger compaction.
-    val commit5CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val records6 = recordsToStrings(newDataGen.generateInserts("006", 2)).asScala.toSeq
     val inputDF6: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records6, 2))
-    inputDF6.show(false)
     inputDF6.write.format("org.apache.hudi")
       .options(writeOpts)
       .option("hoodie.compact.inline", "true")
@@ -313,7 +310,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF6 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, (commit5CompletionTime.toLong + 1).toString)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit6CompletionTime)
       .option(DataSourceReadOptions.END_COMMIT.key, commit6CompletionTime)
       .load(basePath)
     // even though compaction updated 150 rows, since preserve commit metadata is true, they won't be part of incremental query.
