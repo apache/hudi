@@ -604,7 +604,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     long modificationTime = System.currentTimeMillis();
     storage.setModificationTime(path, modificationTime);
     //  Modification from local FS is in seconds precision.
-    assertEquals((modificationTime / 1000), fs.getFileStatus(convertToHadoopPath(path)).getModificationTime()/1000);
+    assertEquals((modificationTime / 1000), fs.getFileStatus(convertToHadoopPath(path)).getModificationTime() / 1000);
   }
 
   @Test
