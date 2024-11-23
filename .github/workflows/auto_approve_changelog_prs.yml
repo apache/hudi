@@ -1,0 +1,56 @@
+# Copied from onehouse-dataplane
+name: "Auto approve changelog PRs"
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - labeled
+      - unlabeled
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{github.event.pull_request.head.ref}}
+          repository: ${{github.event.pull_request.head.repo.full_name}}
+      - name: Auto approve changelog PR
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.number }}
+        run: |
+          branch_name=$(git rev-parse --abbrev-ref HEAD)
+          echo "Running on branch: ${branch_name}"
+          # check branch name
+          if [[ "${branch_name}" =~ ^changelog-release-v[0-9]+.[0-9]+.[0-9]+$ ]]; then
+            release_branch_version="${branch_name:10}"
+            echo "Release version: ${release_branch_version}"
+            # check PR title
+            if [[ "${PR_TITLE}" =~ \[AUDIT-[0-9]+\]:\ Changelog\ for\ ${release_branch_version}$ ]]; then
+              # check changed files
+              git fetch origin master
+              files_modified=$(git diff --name-only HEAD origin/master | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
+              if [[ ${files_modified} == "CHANGELOG" ]]; then
+                echo "Auto approving of PR"
+                latest_commit_id=$(git rev-parse HEAD)
+                payload="{\"commit_id\":\"${latest_commit_id}\",\"body\":\"Auto approving the changelog PR\",\"event\":\"APPROVE\"}"
+                curl -L \
+                  -X POST \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "Authorization: Bearer ${{ secrets.AUTO_APPROVE_PR_PAT }}" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "https://api.github.com/repos/onehouseinc/hudi-internal/pulls/${PR_NUMBER}/reviews" \
+                  -d "${payload}"
+              else
+                echo "Skipping auto approving of PR due to unwanted changed files: ${files_modified}"
+              fi
+            else
+              echo "Skipping auto approval due to invalid PR title: ${PR_TITLE}"
+            fi
+          else
+            echo "Skipping auto approval for branch: ${branch_name}"
+          fi
