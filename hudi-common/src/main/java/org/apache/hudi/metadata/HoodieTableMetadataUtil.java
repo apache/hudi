@@ -847,7 +847,8 @@ public class HoodieTableMetadataUtil {
         }, parallelism).values();
   }
 
-  static List<String> getRecordKeysDeletedOrUpdated(HoodieEngineContext engineContext,
+  @VisibleForTesting
+  public static List<String> getRecordKeysDeletedOrUpdated(HoodieEngineContext engineContext,
                                                                       HoodieCommitMetadata commitMetadata,
                                                                       HoodieMetadataConfig metadataConfig,
                                                                       HoodieTableMetaClient dataTableMetaClient,
