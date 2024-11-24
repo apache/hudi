@@ -184,7 +184,7 @@ public class ArchivedCommitsCommand {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     StoragePath basePath = metaClient.getBasePath();
     StoragePath archivePath =
-        new StoragePath(metaClient.getArchivePath() + "/.commits_.archive*");
+        new StoragePath(metaClient.getArchivePath(), ".commits_.archive*");
     List<StoragePathInfo> pathInfoList =
         HoodieStorageUtils.getStorage(basePath, HoodieCLI.conf).globEntries(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();

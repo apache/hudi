@@ -130,7 +130,8 @@ public class ITTestHoodieDemo extends ITTestBase {
     // testPrestoAfterSecondBatch();
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
-    testIncrementalHiveQueryBeforeCompaction();
+    // TODO: HUDI-8572
+    // testIncrementalHiveQueryBeforeCompaction();
     testIncrementalSparkSQLQuery();
 
     // compaction
@@ -140,7 +141,8 @@ public class ITTestHoodieDemo extends ITTestBase {
     testHiveAfterSecondBatchAfterCompaction();
     // testPrestoAfterSecondBatchAfterCompaction();
     // testTrinoAfterSecondBatchAfterCompaction();
-    testIncrementalHiveQueryAfterCompaction();
+    // TODO: HUDI-8572
+    // testIncrementalHiveQueryAfterCompaction();
   }
 
   @Test

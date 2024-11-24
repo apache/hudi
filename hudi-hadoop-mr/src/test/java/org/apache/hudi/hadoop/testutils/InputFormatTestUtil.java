@@ -153,12 +153,12 @@ public class InputFormatTestUtil {
 
   public static void commit(java.nio.file.Path basePath, String commitNumber) throws IOException {
     // create the commit
-    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".commit")));
+    Files.createFile(basePath.resolve(Paths.get(".hoodie/timeline", commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".commit")));
   }
 
   public static void deltaCommit(java.nio.file.Path basePath, String commitNumber) throws IOException {
     // create the commit
-    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".deltacommit")));
+    Files.createFile(basePath.resolve(Paths.get(".hoodie/timeline", commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".deltacommit")));
   }
 
   public static void setupIncremental(JobConf jobConf, String startCommit, int numberOfCommitsToPull) {

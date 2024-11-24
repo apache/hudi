@@ -21,6 +21,7 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,8 +31,13 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
+import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
+import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -41,9 +47,28 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
+import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
 
 public class UpgradeDowngradeUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(UpgradeDowngradeUtils.class);
+
+  // Map of actions that were renamed in table version 8
+  static final Map<String, String> SIX_TO_EIGHT_TIMELINE_ACTION_MAP = CollectionUtils.createImmutableMap(
+      Pair.of(REPLACE_COMMIT_ACTION, CLUSTERING_ACTION)
+  );
 
   /**
    * Utility method to run compaction for MOR table as part of downgrade step.
@@ -86,7 +111,7 @@ public class UpgradeDowngradeUtils {
       try {
         if (!metaClient.getStorage().exists(new StoragePath(metaClient.getMetaAuxiliaryPath(), fileName))) {
           FileIOUtils.copy(metaClient.getStorage(),
-              new StoragePath(metaClient.getMetaPath(), fileName),
+              new StoragePath(metaClient.getTimelinePath(), fileName),
               new StoragePath(metaClient.getMetaAuxiliaryPath(), fileName));
         }
       } catch (IOException e) {
@@ -108,6 +133,51 @@ public class UpgradeDowngradeUtils {
       }
     } catch (IOException e) {
       throw new HoodieIOException("Error while updating metadata table version", e);
+    }
+  }
+
+  static boolean renameTimelineV1InstantFileToV2Format(HoodieInstant instant, HoodieTableMetaClient metaClient, String originalFileName, String replacedFileName,
+                                                       CommitMetadataSerDeV1 commitMetadataSerDeV1, CommitMetadataSerDeV2 commitMetadataSerDeV2, ActiveTimelineV2 activeTimelineV2)
+      throws IOException {
+    StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePathProvider().getTimelinePath(metaClient.getTableConfig(), metaClient.getBasePath()), originalFileName);
+    StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getTimelinePath(metaClient.getTableConfig(), metaClient.getBasePath()), replacedFileName);
+    boolean success = true;
+    if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
+      HoodieCommitMetadata commitMetadata =
+          commitMetadataSerDeV1.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      Option<byte[]> data = commitMetadataSerDeV2.serialize(commitMetadata);
+      String toPathStr = toPath.toUri().toString();
+      activeTimelineV2.createFileInMetaPath(toPathStr, data, true);
+      metaClient.getStorage().deleteFile(fromPath);
+    } else {
+      success = metaClient.getStorage().rename(fromPath, toPath);
+    }
+    if (!success) {
+      throw new HoodieIOException("an error that occurred while renaming " + fromPath + " to: " + toPath);
+    }
+    return true;
+  }
+
+  /**
+   * Extract Epoch time from completion time string
+   *
+   * @param instant : HoodieInstant
+   * @return
+   */
+  public static long convertCompletionTimeToEpoch(HoodieInstant instant) {
+    try {
+      String completionTime = instant.getCompletionTime();
+      // In Java 8, no direct API to convert to epoch in millis.
+      // Strip off millis
+      String completionTimeInSecs = Long.parseLong(completionTime) / 1000 + "";
+      DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+      ZoneId zoneId = ZoneId.systemDefault();
+      LocalDateTime ldtInSecs = LocalDateTime.parse(completionTimeInSecs, inputFormatter);
+      long millis = Long.parseLong(completionTime.substring(completionTime.length() - 3));
+      return ldtInSecs.atZone(zoneId).toEpochSecond() * 1000 + millis;
+    } catch (Exception e) {
+      LOG.warn("Failed to parse completion time string for instant " + instant, e);
+      return -1;
     }
   }
 }

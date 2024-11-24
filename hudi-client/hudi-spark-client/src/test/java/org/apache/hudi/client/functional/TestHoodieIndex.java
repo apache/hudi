@@ -378,7 +378,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
     // upsert will not run into conflicts.
     metaClient.getStorage().deleteDirectory(
-        new StoragePath(metaClient.getMetaPath(), newCommitTime + ".inflight"));
+        new StoragePath(metaClient.getTimelinePath(), newCommitTime + ".inflight"));
 
     writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());

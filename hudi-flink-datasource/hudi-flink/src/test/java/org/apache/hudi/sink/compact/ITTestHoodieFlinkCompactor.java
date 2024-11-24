@@ -23,6 +23,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -223,28 +224,32 @@ public class ITTestHoodieFlinkCompactor {
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
-      HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
       String compactionInstantTime = scheduleCompactionPlan(writeClient);
 
       // try to upgrade or downgrade
       if (upgrade) {
         metaClient.getTableConfig().setTableVersion(HoodieTableVersion.SIX);
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
         new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, "none");
       } else {
         metaClient.getTableConfig().setTableVersion(HoodieTableVersion.EIGHT);
         new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.SIX, "none");
+        // set table version
+        conf.setString("hoodie.write.table.version", "6");
       }
+      // Refresh the meta client
+      metaClient.reloadTableConfig();
+      metaClient.reloadActiveTimeline();
 
-      table = writeClient.getHoodieTable();
       // generate compaction plan
       // should support configurable commit metadata
       HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
-          table.getMetaClient(), compactionInstantTime);
+          metaClient, compactionInstantTime);
 
       HoodieInstant instant = INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
-      table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+      metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 
       conf.set(FlinkOptions.WRITE_TABLE_VERSION, upgrade ? HoodieTableVersion.EIGHT.versionCode() : HoodieTableVersion.SIX.versionCode());
       env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan)), conf))

@@ -814,13 +814,13 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public Path getInflightCommitFilePath(String instantTime) {
-    return new Path(Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME,
+    return new Path(Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableMetaClient.TIMELINEFOLDER_NAME,
         instantTime + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION).toUri());
   }
 
   public StoragePath getCommitFilePath(String instantTime) {
-    return HoodieTestUtils.getCompleteInstantPath(storage, new StoragePath(basePath,
-        HoodieTableMetaClient.METAFOLDER_NAME), instantTime, HoodieTimeline.COMMIT_ACTION);
+    return HoodieTestUtils.getCompleteInstantPath(storage, new StoragePath(new StoragePath(basePath,
+        HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableMetaClient.TIMELINEFOLDER_NAME), instantTime, HoodieTimeline.COMMIT_ACTION);
   }
 
   public Path getRequestedCompactionFilePath(String instantTime) {

@@ -154,6 +154,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     if (preTableVersion8) {
       metaClient.getTableConfig().setTableVersion(HoodieTableVersion.SIX);
       HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+      metaClient.reloadTableConfig();
     }
     fsView = getFileSystemView(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
     roView = fsView;
@@ -221,15 +222,15 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     // Now create a scenario where archiving deleted replace commits (requested,inflight and replacecommit)
     StoragePath completeInstantPath = HoodieTestUtils.getCompleteInstantPath(
-        metaClient.getStorage(), metaClient.getMetaPath(),
+        metaClient.getStorage(), metaClient.getTimelinePath(),
         clusteringInstantTime3,
         HoodieTimeline.REPLACE_COMMIT_ACTION);
 
     boolean deleteReplaceCommit = metaClient.getStorage().deleteDirectory(completeInstantPath);
     boolean deleteClusterCommitRequested = new File(
-        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".clustering.requested").delete();
+        this.basePath + "/.hoodie/timeline/" + clusteringInstantTime3 + ".clustering.requested").delete();
     boolean deleteClusterCommitInflight = new File(
-        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".clustering.inflight").delete();
+        this.basePath + "/.hoodie/timeline/" + clusteringInstantTime3 + ".clustering.inflight").delete();
 
     // confirm deleted
     assertTrue(deleteReplaceCommit && deleteClusterCommitInflight && deleteClusterCommitRequested);
@@ -1329,11 +1330,12 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
             .createNewFile();
 
     // Create commit/clean files
-    new File(basePath + "/.hoodie/" + cleanTime1 + ".clean").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime3 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime5 + ".commit").createNewFile();
+    String relativeTimelinePath = preTableVersion8 ? "/.hoodie/" : "/.hoodie/timeline/";
+    new File(basePath +  relativeTimelinePath  + cleanTime1 + ".clean").createNewFile();
+    new File(basePath +  relativeTimelinePath + commitTime2 + ".commit").createNewFile();
+    new File(basePath +  relativeTimelinePath  + commitTime3 + ".commit").createNewFile();
+    new File(basePath +  relativeTimelinePath  + commitTime4 + ".commit").createNewFile();
+    new File(basePath +  relativeTimelinePath  + commitTime5 + ".commit").createNewFile();
 
     assertStreamLatestVersionInPartition(isLatestFileSliceOnly, fullPartitionPath, commitTime2,
         commitTime3, commitTime4, commitTime5, fileId1, fileId2, fileId3, fileId4, preTableVersion8);
@@ -1343,9 +1345,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     // Now create a scenario where archiving deleted commits (2,3, and 4) but retained cleaner clean1. Now clean1 is
     // the lowest commit time. Scenario for HUDI-162 - Here clean is the earliest action in active timeline
-    new File(basePath + "/.hoodie/" + commitTime2 + ".commit").delete();
-    new File(basePath + "/.hoodie/" + commitTime3 + ".commit").delete();
-    new File(basePath + "/.hoodie/" + commitTime4 + ".commit").delete();
+    new File(basePath +  relativeTimelinePath + commitTime2 + ".commit").delete();
+    new File(basePath +  relativeTimelinePath  + commitTime3 + ".commit").delete();
+    new File(basePath +  relativeTimelinePath  + commitTime4 + ".commit").delete();
 
     assertStreamLatestVersionInPartition(isLatestFileSliceOnly, fullPartitionPath, commitTime2, commitTime3, commitTime4,
         commitTime5, fileId1, fileId2, fileId3, fileId4, preTableVersion8);
@@ -1455,10 +1457,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileId3, BASE_FILE_EXTENSION)).createNewFile();
     new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileId3, BASE_FILE_EXTENSION)).createNewFile();
 
-    new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime3 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime1 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime2 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime3 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime4 + ".commit").createNewFile();
 
     // Now we list the entire partition
     List<StoragePathInfo> partitionFileList =
@@ -1534,10 +1536,11 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileIdC, BASE_FILE_EXTENSION)).createNewFile();
     new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileIdC, BASE_FILE_EXTENSION)).createNewFile();
 
-    new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime3 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
+    String relativeTimelinePath = preTableVersion8 ? "/.hoodie/" : "/.hoodie/timeline/";
+    new File(basePath + relativeTimelinePath + commitTime1 + ".commit").createNewFile();
+    new File(basePath + relativeTimelinePath + commitTime2 + ".commit").createNewFile();
+    new File(basePath + relativeTimelinePath + commitTime3 + ".commit").createNewFile();
+    new File(basePath + relativeTimelinePath + commitTime4 + ".commit").createNewFile();
 
     // Now we list the entire partition
     List<StoragePathInfo> partitionFileList =
@@ -1605,10 +1608,11 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime3, TEST_WRITE_TOKEN, fileIdC, BASE_FILE_EXTENSION)).createNewFile();
     new File(fullPartitionPath + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileIdC, BASE_FILE_EXTENSION)).createNewFile();
 
-    new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime3 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
+    String relativeTimelinePath = preTableVersion8 ? "/.hoodie/" : "/.hoodie/timeline/";
+    new File(basePath + relativeTimelinePath + commitTime1 + ".commit").createNewFile();
+    new File(basePath + relativeTimelinePath + commitTime2 + ".commit").createNewFile();
+    new File(basePath + relativeTimelinePath + commitTime3 + ".commit").createNewFile();
+    new File(basePath + relativeTimelinePath + commitTime4 + ".commit").createNewFile();
 
     // Now we list the entire partition
     List<StoragePathInfo> partitionFileList =
@@ -1673,10 +1677,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     new File(fullPartitionPath + "/" + FSUtils.makeBaseFileName(commitTime4, TEST_WRITE_TOKEN, fileIdC, BASE_FILE_EXTENSION))
         .createNewFile();
 
-    new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime3 + ".commit").createNewFile();
-    new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime1 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime2 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime3 + ".commit").createNewFile();
+    new File(basePath + "/.hoodie/timeline/" + commitTime4 + ".commit").createNewFile();
 
     // Now we list the entire partition
     List<StoragePathInfo> partitionFileList =
@@ -2333,13 +2337,13 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieStorage storage = metaClient.getStorage();
     StoragePath instantPath1 = HoodieTestUtils
-        .getCompleteInstantPath(storage, metaClient.getMetaPath(), "1",
+        .getCompleteInstantPath(storage, metaClient.getTimelinePath(), "1",
             HoodieTimeline.COMMIT_ACTION);
     storage.deleteFile(instantPath1);
-    storage.deleteFile(new StoragePath(basePath + "/.hoodie", "1.inflight"));
-    storage.deleteFile(new StoragePath(basePath + "/.hoodie", "1.commit.requested"));
+    storage.deleteFile(new StoragePath(basePath + "/.hoodie/timeline/", "1.inflight"));
+    storage.deleteFile(new StoragePath(basePath + "/.hoodie/timeline/", "1.commit.requested"));
     StoragePath instantPath2 = HoodieTestUtils
-        .getCompleteInstantPath(storage, metaClient.getMetaPath(), "2",
+        .getCompleteInstantPath(storage, metaClient.getTimelinePath(), "2",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
     storage.deleteFile(instantPath2);
 

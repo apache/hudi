@@ -434,7 +434,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
     metaClient.getStorage()
-        .create(new StoragePath(Paths.get(basePath, ".hoodie", "000.commit").toString()))
+        .create(new StoragePath(Paths.get(basePath, ".hoodie/timeline", "000.commit").toString()))
         .close();
     //TODO : Find race condition that causes the timeline sometime to reflect 000.commit and sometimes not
     final HoodieJavaCopyOnWriteTable reloadedTable = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, HoodieTableMetaClient.reload(metaClient));

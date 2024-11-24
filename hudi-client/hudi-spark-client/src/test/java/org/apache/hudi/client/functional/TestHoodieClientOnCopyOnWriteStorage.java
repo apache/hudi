@@ -630,10 +630,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
               .getInstants().get(0);
       completeRestoreFile = new StoragePath(
           config.getBasePath() + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME
-              + StoragePath.SEPARATOR + INSTANT_FILE_NAME_GENERATOR.getFileName(restoreCompleted));
+              + StoragePath.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME + StoragePath.SEPARATOR + INSTANT_FILE_NAME_GENERATOR.getFileName(restoreCompleted));
       backupCompletedRestoreFile = new StoragePath(
           config.getBasePath() + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME
-              + StoragePath.SEPARATOR + INSTANT_FILE_NAME_GENERATOR.getFileName(restoreCompleted) + ".backup");
+              + StoragePath.SEPARATOR + HoodieTableMetaClient.TIMELINEFOLDER_NAME + StoragePath.SEPARATOR + INSTANT_FILE_NAME_GENERATOR.getFileName(restoreCompleted) + ".backup");
       metaClient.getStorage().rename(completeRestoreFile, backupCompletedRestoreFile);
     }
 

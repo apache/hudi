@@ -104,7 +104,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertTrue(
         storage.exists(new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(6, config.getProps().size());
+    assertEquals(7, config.getProps().size());
   }
 
   @Test
@@ -117,23 +117,23 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(7, config.getProps().size());
+    assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertEquals("new_field", config.getPreCombineField());
   }
 
   @Test
   public void testDelete() throws IOException {
-    Set<String> deletedProps = CollectionUtils.createSet(HoodieTableConfig.ARCHIVELOG_FOLDER.key(),
+    Set<String> deletedProps = CollectionUtils.createSet(HoodieTableConfig.TIMELINE_HISTORY_PATH.key(),
         "hoodie.invalid.config");
     HoodieTableConfig.delete(storage, metaPath, deletedProps);
 
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(5, config.getProps().size());
+    assertEquals(6, config.getProps().size());
     assertNull(config.getProps().getProperty("hoodie.invalid.config"));
-    assertFalse(config.getProps().contains(HoodieTableConfig.ARCHIVELOG_FOLDER.key()));
+    assertFalse(config.getProps().contains(HoodieTableConfig.TIMELINE_HISTORY_PATH.key()));
   }
 
   @Test
@@ -155,7 +155,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertFalse(storage.exists(cfgPath));
     assertTrue(storage.exists(backupCfgPath));
     config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(6, config.getProps().size());
+    assertEquals(7, config.getProps().size());
   }
 
   @ParameterizedTest
@@ -173,7 +173,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
     config = new HoodieTableConfig(storage, metaPath, null, null, null);
-    assertEquals(6, config.getProps().size());
+    assertEquals(7, config.getProps().size());
   }
 
   @Test
@@ -288,7 +288,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   public void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(36, configProperties.size());
+    assertEquals(38, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());

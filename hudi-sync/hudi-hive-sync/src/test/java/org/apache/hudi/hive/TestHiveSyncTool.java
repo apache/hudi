@@ -88,6 +88,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
@@ -1781,7 +1782,7 @@ public class TestHiveSyncTool {
     HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, getHiveConf());
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + INSTANT_FILE_NAME_GENERATOR.getFileName(hiveClient.getActiveTimeline().getInstantsAsStream()
+        + TIMELINEFOLDER_NAME + "/" + INSTANT_FILE_NAME_GENERATOR.getFileName(hiveClient.getActiveTimeline().getInstantsAsStream()
         .filter(inst -> inst.requestedTime().equals(commitTime2))
         .findFirst().get()));
     assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));
@@ -1825,7 +1826,7 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + INSTANT_FILE_NAME_GENERATOR.getFileName(hiveClient.getActiveTimeline().getInstantsAsStream()
+        + TIMELINEFOLDER_NAME + "/" + INSTANT_FILE_NAME_GENERATOR.getFileName(hiveClient.getActiveTimeline().getInstantsAsStream()
         .filter(inst -> inst.requestedTime().equals(commitTime2))
         .findFirst().get()));
     assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));
