@@ -318,9 +318,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
   // FIXME-vc: does this need to be turned on for having basic date-partitioned workloads working?
+  // Why do we need a config for this. We can't enable functional index via spark-ds or by other means. only way to enable functioanl index is via sql.
+  // So, I don't see a necessity for this config.
   public static final ConfigProperty<Boolean> FUNCTIONAL_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.functional.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable functional index within the Metadata Table. Note that this config is to enable/disable all functional indexes. "
           + "To enable or disable each functional index individually, users still need to use CREATE/DROP INDEX SQL commands.");
