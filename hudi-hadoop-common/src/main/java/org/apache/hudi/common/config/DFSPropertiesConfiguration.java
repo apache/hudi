@@ -123,7 +123,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       LOG.warn("Cannot load default config file: " + DEFAULT_PATH, e);
     }
     Option<StoragePath> defaultConfPath = getConfPathFromEnv();
-    if (defaultConfPath.isPresent()) {
+    if (defaultConfPath.isPresent() && !defaultConfPath.get().equals(DEFAULT_PATH)) {
       conf.addPropsFromFile(defaultConfPath.get());
     }
     return conf.getProps();
