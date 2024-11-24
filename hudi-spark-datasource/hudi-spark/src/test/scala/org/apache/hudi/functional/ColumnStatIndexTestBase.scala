@@ -234,10 +234,15 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
     val indexedColumns: Set[String] = HoodieTableMetadataUtil
-      .getColumnsToIndex(metadataConfig, convertScalaListToJavaList(sourceTableSchema.fieldNames)).asScala.toSet
+      .getColumnsToIndex(false, metadataConfig, convertScalaListToJavaList(sourceTableSchema.fieldNames)).asScala.toSet
+
     val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
-    val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue",
+    val validationSortColumns = if (expectedColStatsSchema.fieldNames.contains("c5")) {
+      Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue",
       "c3_minValue", "c5_maxValue", "c5_minValue")
+    } else {
+      Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue", "c3_minValue")
+    }
 
     columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>
       // Match against expected column stats table

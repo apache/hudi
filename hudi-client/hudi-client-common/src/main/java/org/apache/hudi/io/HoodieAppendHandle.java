@@ -60,6 +60,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -433,7 +434,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
 
     if (config.isMetadataColumnStatsIndexEnabled()) {
-      Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil.getColumnsToIndex(config.getMetadataConfig(), writeSchemaWithMetaFields));
+      Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
+          .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
+              config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields))));
       final List<Schema.Field> fieldsToIndex = writeSchemaWithMetaFields.getFields().stream()
           .filter(field -> columnsToIndexSet.contains(field.name()))
           .collect(Collectors.toList());

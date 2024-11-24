@@ -73,7 +73,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.key() -> "8"
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.key() -> "3"
     )
 
     val commonOpts = Map(
