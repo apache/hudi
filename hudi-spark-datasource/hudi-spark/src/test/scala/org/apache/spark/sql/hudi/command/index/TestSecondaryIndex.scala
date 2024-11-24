@@ -24,11 +24,13 @@ import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.hudi.metadata.SecondaryIndexKeyUtils
+import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -400,6 +402,37 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         // rider field (secondary key) should point to previous value
         val secondaryKey = timeTravelDF.where(s"_row_key = '$recordKeyToUpdate'").select("rider").collect().head.getString(0)
         assertEquals(initialSecondaryKey, secondaryKey)
+
+        // Perform Deletes on Records and Validate Secondary Index
+        val deleteDf = spark.read.format("hudi").load(basePath).filter(s"_row_key in ('${updateKeys.mkString("','")}')")
+        // Get fileId for the delete record
+        val deleteFileId = deleteDf.select("_hoodie_file_name").collect().head.getString(0)
+        deleteDf.write.format("hudi")
+          .options(hudiOpts)
+          .option(OPERATION.key, DELETE_OPERATION_OPT_VAL)
+          .mode(SaveMode.Append)
+          .save(basePath)
+        // Verify secondary index for deletes
+        validateSecondaryIndex(basePath, tableName, updateKeys, hasDeleteKeys = true)
+        // Corrupt the data file that was written for the delete key in the first instant
+        val firstCommitMetadata = deserializeCommitMetadata(metaClient.reloadActiveTimeline().getInstantDetails(firstInstant).get())
+        val partitionToWriteStats = firstCommitMetadata.getPartitionToWriteStats.asScala.mapValues(_.asScala.toList)
+        // Find the path for the given fileId
+        val matchingPath: Option[String] = partitionToWriteStats.values.flatten
+          .find(_.getFileId == deleteFileId)
+          .map(_.getPath)
+        assertTrue(matchingPath.isDefined)
+        // Corrupt the data file
+        val dataFile = new StoragePath(basePath, matchingPath.get)
+        val storage = metaClient.getStorage
+        storage.deleteFile(dataFile)
+        storage.createNewFile(dataFile)
+        // Time travel query should now throw an exception
+        checkExceptionContain(() => spark.read.format("hudi")
+          .options(readOpts)
+          .option("as.of.instant", firstInstant.requestedTime)
+          .load(basePath).count())(s"${dataFile.toString} is not a Parquet file")
+
         dataGen.close()
       }
     }
