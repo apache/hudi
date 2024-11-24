@@ -86,7 +86,6 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
         String orderingVal = null;
         if (hasPrecombine) {
           //TODO [HUDI-8574] we can throw exception if field doesn't exist
-          // lazy so that we don't evaluate if we short circuit the boolean expression in the if below
           orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
               gr, precombineKey, true, props.getBoolean(
                   KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
