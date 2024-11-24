@@ -208,6 +208,10 @@ public class AvroSchemaUtils {
   }
 
   public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
+    return findNestedFieldType(schema, fieldName, true);
+  }
+
+  public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName, boolean throwOnNotFound) {
     if (StringUtils.isNullOrEmpty(fieldName)) {
       return Option.empty();
     }
@@ -216,7 +220,11 @@ public class AvroSchemaUtils {
     for (String part : parts) {
       Schema.Field foundField = resolveNullableSchema(schema).getField(part);
       if (foundField == null) {
-        throw new HoodieAvroSchemaException(fieldName + " not a field in " + schema);
+        if (throwOnNotFound) {
+          throw new HoodieAvroSchemaException(fieldName + " not a field in " + schema);
+        } else {
+          return Option.empty();
+        }
       }
       schema = foundField.schema();
     }

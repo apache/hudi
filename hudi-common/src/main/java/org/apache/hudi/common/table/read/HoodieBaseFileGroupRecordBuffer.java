@@ -112,7 +112,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       this.payloadClass = Option.empty();
     }
     this.orderingFieldName = Option.ofNullable(ConfigUtils.getOrderingField(props)).orElseGet(() -> hoodieTableMetaClient.getTableConfig().getPreCombineField());
-    this.orderingFieldTypeOpt = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING ? Option.empty() : AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName);
+
+    // Don't throw exception due to [HUDI-8574]
+    this.orderingFieldTypeOpt = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING ? Option.empty() : AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName, false);
     this.orderingFieldDefault = orderingFieldTypeOpt.map(type -> readerContext.castValue(0, type)).orElse(0);
     this.props = props;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();

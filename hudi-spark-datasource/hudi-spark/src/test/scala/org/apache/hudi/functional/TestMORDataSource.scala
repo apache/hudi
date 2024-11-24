@@ -26,13 +26,14 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPU
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
@@ -1111,6 +1112,136 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testCompactionNoPrecombine(recordType: HoodieRecordType): Unit = {
     testClusteringCompactionHelper(recordType, hasPrecombine = false, isClustering = false)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testPrecombineBehavior(recordType: HoodieRecordType): Unit = {
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      val basicOpts = if (recordType == HoodieRecordType.SPARK) {
+        Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+          DataSourceWriteOptions.TABLE_TYPE.key() -> tableType,
+          DataSourceWriteOptions.OPERATION.key() -> UPSERT_OPERATION_OPT_VAL,
+          DataSourceWriteOptions.RECORDKEY_FIELD.key()-> "id")
+      } else {
+        sparkOpts ++ Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+          DataSourceWriteOptions.TABLE_TYPE.key() -> tableType,
+          DataSourceWriteOptions.OPERATION.key() -> UPSERT_OPERATION_OPT_VAL,
+          DataSourceWriteOptions.RECORDKEY_FIELD.key()-> "id")
+      }
+
+      val _spark = spark
+      import _spark.implicits._
+
+      // precombine is ts, table schema has ts
+      // result: tableconfig precombine is ts
+      val table1Path = basePath + "/table1"
+      val df1: Dataset[Row] = Seq((1, "a1", 10, 1000)).toDF("id", "name", "price", "ts")
+      df1.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .mode(SaveMode.Overwrite)
+        .save(table1Path)
+      spark.read.format("hudi").load(table1Path).show(100, false)
+      df1.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .mode(SaveMode.Append)
+        .save(table1Path)
+      spark.read.format("hudi").load(table1Path).show(100, false)
+      assertPrecombine("ts", table1Path)
+
+      // precombine is not set, table schema has ts
+      // result: ts is used as precombine but not set in tableconfig
+      val table2Path = basePath + "/table2"
+      val df2: Dataset[Row] = Seq((1, "a1", 10, 1000)).toDF("id", "name", "price", "ts")
+      df2.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .mode(SaveMode.Overwrite)
+        .save(table2Path)
+      spark.read.format("hudi").load(table2Path).show(100, false)
+      df2.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .mode(SaveMode.Append)
+        .save(table2Path)
+      spark.read.format("hudi").load(table2Path).show(100, false)
+      assertPrecombine(null, table2Path)
+
+      // precombine is price, table schema has price
+      // result: tableconfig precombine is price
+      val table3Path = basePath + "/table3"
+      val df3: Dataset[Row] = Seq((1, "a1", 10, 1000)).toDF("id", "name", "price", "ts")
+      df3.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "price")
+        .mode(SaveMode.Overwrite)
+        .save(table3Path)
+      spark.read.format("hudi").load(table3Path).show(100, false)
+      df3.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "price")
+        .mode(SaveMode.Append)
+        .save(table3Path)
+      spark.read.format("hudi").load(table3Path).show(100, false)
+      assertPrecombine("price", table3Path)
+
+      // precombine is not notexist, table schema does not have notexist
+      // TODO [HUDI-8574] this should fail
+      // result: exception
+      val table4Path = basePath + "/table4"
+      val df4: Dataset[Row] = Seq((1, "a1", 10, 1000)).toDF("id", "name", "price", "ts")
+      df4.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "noexist")
+        .mode(SaveMode.Overwrite)
+        .save(table4Path)
+      spark.read.format("hudi").load(table4Path).show(100, false)
+      df4.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "noexist")
+        .mode(SaveMode.Append)
+        .save(table4Path)
+      spark.read.format("hudi").load(table4Path).show(100, false)
+
+      // precombine is not set, table schema does not have ts
+      // result: precombine is not used and tableconfig does not have precombine set
+      val table5Path = basePath + "/table5"
+      val df5: Dataset[Row] = Seq((1, "a1", 10)).toDF("id", "name", "price")
+      df5.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .mode(SaveMode.Overwrite)
+        .save(table5Path)
+      spark.read.format("hudi").load(table5Path).show(100, false)
+      df5.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .mode(SaveMode.Append)
+        .save(table5Path)
+      spark.read.format("hudi").load(table5Path).show(100, false)
+      assertPrecombine(null, table5Path)
+
+      // precombine is ts, table schema does not have ts
+      // TODO [HUDI-8574] this should fail
+      val table6Path = basePath + "/table6"
+      val df6: Dataset[Row] = Seq((1, "a1", 10)).toDF("id", "name", "price")
+      df6.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .mode(SaveMode.Overwrite)
+        .save(table6Path)
+      spark.read.format("hudi").load(table6Path).show(100, false)
+      df6.write.format("org.apache.hudi")
+        .options(basicOpts)
+        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .mode(SaveMode.Append)
+        .save(table6Path)
+      spark.read.format("hudi").load(table6Path).show(100, false)
+    }
+  }
+
+  def assertPrecombine(expected: String, tableBasePath: String): Unit = {
+    assertEquals(expected, HoodieTestUtils
+      .createMetaClient(new HadoopStorageConfiguration(spark.sessionState.newHadoopConf), tableBasePath)
+      .getTableConfig.getPreCombineField)
   }
 
   @ParameterizedTest

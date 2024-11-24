@@ -34,7 +34,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
 
@@ -1553,6 +1553,109 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | location '$parentPath/$tableName1'
      """.stripMargin
       )("Failed to create catalog table in metastore")
+    }
+  }
+
+  test("Test Precombine Behavior With Create Table As Select") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+
+        // precombine is ts, table schema has ts
+        // result: tableconfig precombine is ts
+        val tableName1 = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName1 using hudi
+             | tblproperties(
+             |    type = '$tableType',
+             |    preCombineField = 'ts'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName1'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+       """.stripMargin)
+        assertEquals("ts", createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName1").getTableConfig.getPreCombineField)
+
+        // precombine is not set, table schema has ts
+        // result: ts is used as precombine but not set in tableconfig
+        val tableName2 = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName2 using hudi
+             | tblproperties(
+             |    type = '$tableType'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName2'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+       """.stripMargin)
+        assertEquals(null, createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName2").getTableConfig.getPreCombineField)
+
+        // precombine is price, table schema has price
+        // result: tableconfig precombine is price
+        val tableName3 = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName3 using hudi
+             | tblproperties(
+             |    type = '$tableType',
+             |    preCombineField = 'price'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName3'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+       """.stripMargin)
+        assertEquals("price", createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName3").getTableConfig.getPreCombineField)
+
+        // precombine is not notexist, table schema does not have notexist
+        // result: exception
+        val tableName4 = generateTableName
+        assertThrows[IllegalArgumentException] {
+          spark.sql(
+            s"""
+               | create table $tableName4 using hudi
+               | tblproperties(
+               |    type = '$tableType',
+               |    preCombineField = 'notexist'
+               | )
+               | location '${tmp.getCanonicalPath}/$tableName4'
+               | AS
+               | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+            """.stripMargin)
+        }
+
+        // precombine is not set, table schema does not have ts
+        // result: precombine is not used and tableconfig does not have precombine set
+        val tableName5 = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName5 using hudi
+             | tblproperties(
+             |    type = '$tableType'
+             | )
+             | location '${tmp.getCanonicalPath}/$tableName5'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price
+       """.stripMargin)
+        assertEquals(null, createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName5").getTableConfig.getPreCombineField)
+
+        // precombine is ts, table schema does not have ts
+        // result: exception
+        val tableName6 = generateTableName
+        assertThrows[IllegalArgumentException] {
+          spark.sql(
+            s"""
+               | create table $tableName6 using hudi
+               | tblproperties(
+               |    type = '$tableType',
+               |    preCombineField = 'ts'
+               | )
+               | location '${tmp.getCanonicalPath}/$tableName6'
+               | AS
+               | select 1 as id, 'a1' as name, 10 as price
+       """.stripMargin)
+        }
+      }
     }
   }
 }

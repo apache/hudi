@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -49,6 +50,8 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.List;
+
+import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
 
 public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBootstrapDataProvider<JavaRDD<HoodieRecord>> {
 
@@ -72,20 +75,31 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
     HoodieRecordType recordType =  config.getRecordMerger().getRecordType();
     Dataset inputDataset = sparkSession.read().format(getFormat()).option("basePath", sourceBasePath).load(filePaths);
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-    String precombineKey = props.getString("hoodie.datasource.write.precombine.field");
+    String precombineKey = ConfigUtils.getStringWithAltKeys(props, PRECOMBINE_FIELD_NAME);
+    boolean hasPrecombine = !StringUtils.isNullOrEmpty(precombineKey);
     String structName = tableName + "_record";
     String namespace = "hoodie." + tableName;
     if (recordType == HoodieRecordType.AVRO) {
       RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace, false,
           Option.empty());
       return genericRecords.toJavaRDD().map(gr -> {
-        String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
-            gr, precombineKey, false, props.getBoolean(
-                KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-                Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
+        String orderingVal = null;
+        if (hasPrecombine) {
+          //TODO [HUDI-8574] we can throw exception if field doesn't exist
+          // lazy so that we don't evaluate if we short circuit the boolean expression in the if below
+          orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
+              gr, precombineKey, true, props.getBoolean(
+                  KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+                  Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
+        }
         try {
-          return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
-              ConfigUtils.getPayloadClass(props), scala.Option.apply(null));
+          if (hasPrecombine && !StringUtils.isNullOrEmpty(orderingVal)) {
+            return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
+                ConfigUtils.getPayloadClass(props), scala.Option.apply(null));
+          } else {
+            return DataSourceUtils.createHoodieRecord(gr, keyGenerator.getKey(gr),
+                ConfigUtils.getPayloadClass(props), scala.Option.apply(null));
+          }
         } catch (IOException ioe) {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }

@@ -19,10 +19,13 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector;
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.DecodedBootstrapPartitionPathTranslator;
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieBootstrapConfig;
@@ -70,6 +73,8 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
   protected Boolean dashPartitions;
   protected HoodieTableType tableType;
   protected Integer nPartitions;
+  protected Boolean hasPrecombine = true;
+  protected HoodieRecord.HoodieRecordType recordType = HoodieRecord.HoodieRecordType.AVRO;
 
   protected String[] partitionCols;
   protected static String[] dropColumns = {"_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",  "_hoodie_file_name", "city_to_state"};
@@ -104,7 +109,13 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
         options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), ComplexKeyGenerator.class.getName());
       }
     }
-    options.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    if (hasPrecombine) {
+      options.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    }
+    if (recordType == HoodieRecord.HoodieRecordType.SPARK) {
+      options.put(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), DefaultSparkRecordMerger.class.getName());
+      options.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
+    }
     if (tableType.equals(MERGE_ON_READ)) {
       options.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
     }

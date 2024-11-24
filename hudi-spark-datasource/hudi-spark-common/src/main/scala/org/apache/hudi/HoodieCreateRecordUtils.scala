@@ -143,6 +143,7 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
+            //TODO [HUDI-8574] we can throw exception if field doesn't exist
             // lazy so that we don't evaluate if we short circuit the boolean expression in the if below
             lazy val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, precombine,
               true, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]

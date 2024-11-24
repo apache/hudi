@@ -167,6 +167,7 @@ public interface HoodieRecordMerger extends Serializable {
 
     String preCombine = cfg.getPreCombineField();
     if (!StringUtils.isNullOrEmpty(preCombine)) {
+
       requiredFields.add(preCombine);
     }
     return requiredFields.toArray(new String[0]);

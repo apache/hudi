@@ -160,12 +160,16 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     List<Schema.Field> addedFields = new ArrayList<>();
     for (String field : getMandatoryFieldsForMerging(hoodieTableConfig, properties, dataSchema, recordMerger)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
-        Option<Schema.Field> foundFieldOpt  = findNestedField(dataSchema, field);
+        Option<Schema.Field> foundFieldOpt = findNestedField(dataSchema, field);
         if (!foundFieldOpt.isPresent()) {
-          throw new IllegalArgumentException("Field: " + field + " does not exist in the table schema");
+          //see [HUDI-8574]
+          if (!field.equals(hoodieTableConfig.getPreCombineField())) {
+            throw new IllegalArgumentException("Field: " + field + " does not exist in the table schema");
+          }
+        } else {
+          Schema.Field foundField = foundFieldOpt.get();
+          addedFields.add(foundField);
         }
-        Schema.Field foundField = foundFieldOpt.get();
-        addedFields.add(foundField);
       }
     }
 
