@@ -166,12 +166,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
-   * @param shouldInitialize           Determines whether metadata writer should be initialized by reading the metadata
    */
-  protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig,
+  protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
+                                            HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                            HoodieEngineContext engineContext, Option<String> inflightInstantTimestamp,
-                                            boolean shouldInitialize) {
+                                            HoodieEngineContext engineContext,
+                                            Option<String> inflightInstantTimestamp) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.storageConf = storageConf;
@@ -184,9 +184,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
       try {
         initRegistry();
-        if (shouldInitialize) {
-          initialized = initializeIfNeeded(dataMetaClient, inflightInstantTimestamp);
-        }
+        initialized = initializeIfNeeded(dataMetaClient, inflightInstantTimestamp);
       } catch (IOException e) {
         LOG.error("Failed to initialize metadata table", e);
       }
@@ -583,13 +581,17 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     if (dataMetaClient.getIndexMetadata().isEmpty()) {
       return Collections.emptySet();
     }
-    Set<String> secondaryIndexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+
+    Set<String> inflightMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitionsInflight();
+    Set<String> indexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
         .map(HoodieIndexDefinition::getIndexName)
         .filter(indexName -> indexName.startsWith(partitionType.getPartitionPath()))
+        // Only the inflight metadata partitions need to be initialized
+        .filter(inflightMetadataPartitions::contains)
         .collect(Collectors.toSet());
     Set<String> completedMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
-    secondaryIndexPartitions.removeAll(completedMetadataPartitions);
-    return secondaryIndexPartitions;
+    indexPartitions.removeAll(completedMetadataPartitions);
+    return indexPartitions;
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeSecondaryIndexPartition(String indexName) throws IOException {
@@ -941,12 +943,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   public void dropMetadataPartitions(List<String> metadataPartitions) throws IOException {
     for (String partitionPath : metadataPartitions) {
-      // first update table config and index definitions
-      dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
-      if (MetadataPartitionType.isGenericIndex(partitionPath)) {
-        dataMetaClient.deleteIndexDefinition(partitionPath);
-      }
-
       LOG.warn("Deleting Metadata Table partition: {}", partitionPath);
       dataMetaClient.getStorage()
           .deleteDirectory(new StoragePath(metadataWriteConfig.getBasePath(), partitionPath));

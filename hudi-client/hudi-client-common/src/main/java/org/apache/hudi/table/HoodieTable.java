@@ -963,11 +963,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, EAGER, true);
-  }
-
-  public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, boolean shouldInitialize) {
-    return getMetadataWriter(triggeringInstantTimestamp, EAGER, shouldInitialize);
+    return getMetadataWriter(triggeringInstantTimestamp, EAGER);
   }
 
   /**
@@ -977,7 +973,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return An instance of {@link HoodieTableMetadataWriter}.
    */
   public Option<HoodieTableMetadataWriter> getIndexingMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, LAZY, true);
+    return getMetadataWriter(triggeringInstantTimestamp, LAZY);
   }
 
   /**
@@ -998,11 +994,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    *
    * @param triggeringInstantTimestamp The instant that is triggering this metadata write
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
-   * @param shouldInitialize           Determines whether metadata writer should be initialized
    * @return instance of {@link HoodieTableMetadataWriter}
    */
-  protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                boolean shouldInitialize) {
+  protected Option<HoodieTableMetadataWriter> getMetadataWriter(
+      String triggeringInstantTimestamp,
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();

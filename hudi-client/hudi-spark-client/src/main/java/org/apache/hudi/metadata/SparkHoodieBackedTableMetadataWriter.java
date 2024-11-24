@@ -97,7 +97,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, inflightInstantTimestamp, true);
+        conf, writeConfig, EAGER, context, inflightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
@@ -106,16 +106,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp, true);
-  }
-
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
-                                                 HoodieWriteConfig writeConfig,
-                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                 HoodieEngineContext context,
-                                                 Option<String> inflightInstantTimestamp, boolean shouldInitialize) {
-    return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp, shouldInitialize);
+        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
@@ -127,8 +118,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
-                                       Option<String> inflightInstantTimestamp, boolean shouldInitialize) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, shouldInitialize);
+                                       Option<String> inflightInstantTimestamp) {
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
   }
 
   @Override

@@ -60,7 +60,6 @@ import org.scalatest.Ignore
 import java.util.stream.Collectors
 import scala.collection.JavaConverters
 
-@Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {

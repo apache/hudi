@@ -94,8 +94,9 @@ public abstract class HoodieSparkTable<T>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                boolean shouldInitialize) {
+  protected Option<HoodieTableMetadataWriter> getMetadataWriter(
+      String triggeringInstantTimestamp,
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     if (config.isMetadataTableEnabled()) {
       // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
       // to reflect the delete mdt partitions.
@@ -106,7 +107,7 @@ public abstract class HoodieSparkTable<T>
       // existence after the creation is needed.
       HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
-          Option.of(triggeringInstantTimestamp), shouldInitialize);
+          Option.of(triggeringInstantTimestamp));
       try {
         if (isMetadataTableExists || metaClient.getStorage().exists(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))) {

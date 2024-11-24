@@ -1025,7 +1025,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
-      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant, false);
+      HoodieTableMetaClient metaClient = table.getMetaClient();
+      // first update table config and index definitions. Metadata writer initializes the inflight metadata
+      // partitions so we need to first remove the metadata before creating the writer
+      metadataPartitions.forEach(partition -> {
+        metaClient.getTableConfig().setMetadataPartitionState(metaClient, partition, false);
+        if (MetadataPartitionType.isGenericIndex(partition)) {
+          metaClient.deleteIndexDefinition(partition);
+        }
+      });
+
+      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant);
       if (metadataWriterOpt.isPresent()) {
         try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
           metadataWriter.dropMetadataPartitions(metadataPartitions);
