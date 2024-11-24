@@ -1933,6 +1933,13 @@ public class HoodieTableMetadataUtil {
     return addMetadataFields(getSchemaForFields(tableSchema, mergedFields));
   }
 
+  public static boolean isSecondaryIndexSupportedForSchema(List<String> sourceFields, Schema tableSchema) {
+    return sourceFields.stream().anyMatch(fieldToIndex -> {
+      Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
+      return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
+    });
+  }
+
   public static HoodieData<HoodieRecord> readSecondaryKeysFromBaseFiles(HoodieEngineContext engineContext,
                                                                         List<Pair<String, Pair<String, List<String>>>> partitionFiles,
                                                                         int secondaryIndexMaxParallelism,

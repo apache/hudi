@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{HoodieMetadataIndexException, HoodieWriteConflictException}
+import org.apache.hudi.exception.{HoodieMetadataException, HoodieMetadataIndexException, HoodieWriteConflictException}
 import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, MetadataPartitionType, SparkHoodieBackedTableMetadataWriter}
@@ -1301,6 +1301,142 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       verifyQueryPredicate(hudiOpts, "rider")
     }
   }
+
+  @Test
+  def testSecondaryIndexWithPrimitiveDataTypes(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts ++ Map(
+        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      tableName += "test_secondary_index_with_primitive_data_types"
+
+      // Create table with different data types
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  record_key_col string,
+           |  string_col string,
+           |  int_col int,
+           |  bigint_col bigint,
+           |  double_col double,
+           |  decimal_col decimal(10,2),
+           |  timestamp_col timestamp,
+           |  boolean_col boolean,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+
+      // Insert dummy records
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 10, 100, 1.1, 100.01, timestamp('2023-01-01 12:00:00'), true, 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'def', 20, 200, 2.2, 200.02, timestamp('2023-01-02 12:00:00'), false, 'p1')")
+
+      // Create secondary indexes for different data types
+      val secondaryIndexColumns = Seq("string_col", "int_col", "bigint_col", "double_col", "decimal_col", "timestamp_col", "boolean_col")
+      secondaryIndexColumns.foreach { col =>
+        spark.sql(s"create index idx_$col on $tableName using secondary_index($col)")
+      }
+
+      // Validate indexes created successfully
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+
+      secondaryIndexColumns.foreach { col =>
+        assert(metaClient.getTableConfig.getMetadataPartitions.contains(s"secondary_index_idx_$col"))
+      }
+
+      // Validate secondary index records for each column
+      checkAnswer(s"select key from hudi_metadata('$basePath') where type=7 AND key LIKE '%${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1'")(
+        Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"1.1${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"10${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"100${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"100.01${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"1672554600000000${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"true${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1")
+      )
+
+      // Validate data skipping for each secondary index
+      spark.sql("set hoodie.metadata.enable=true")
+      spark.sql("set hoodie.enable.data.skipping=true")
+      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+
+      secondaryIndexColumns.foreach { col =>
+        val (queryFilter, value) = col match {
+          case "string_col" => (s"$col = 'abc'", "abc")
+          case "int_col" => (s"$col = 10", "10")
+          case "bigint_col" => (s"$col = 100", "100")
+          case "double_col" => (s"$col = 1.1", "1.1")
+          case "decimal_col" => (s"$col = 100.01", "100.01")
+          case "timestamp_col" => (s"$col = '2023-01-01 12:00:00'", "2023-01-01 12:00:00")
+          case "boolean_col" => (s"$col = true", "true")
+        }
+        checkAnswer(s"select ts, record_key_col, cast($col AS STRING), partition_key_col from $tableName where $queryFilter and record_key_col='row1'")(
+          Seq(1, "row1", value, "p1")
+        )
+        if (col != "timestamp_col") {
+          verifyQueryPredicate(hudiOpts, col)
+        }
+      }
+    }
+  }
+
+  @Test
+  def testSecondaryIndexWithComplexTypes(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts ++ Map(
+        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      tableName += "test_secondary_index_with_complex_data_types"
+
+      // Create table with complex data types
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  record_key_col string,
+           |  array_col array<int>,
+           |  map_col map<string, int>,
+           |  struct_col struct<field1:int, field2:string>,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+
+      // Insert dummy records
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values ('row1', array(1, 2, 3), map('key1', 10, 'key2', 20), named_struct('field1', 1, 'field2', 'value1'), 'p1')")
+      spark.sql(s"insert into $tableName values ('row2', array(4, 5, 6), map('key1', 30, 'key2', 40), named_struct('field1', 2, 'field2', 'value2'), 'p2')")
+
+      // Creation of secondary indexes for complex columns should fail
+      val secondaryIndexColumns = Seq("struct_col", "array_col", "map_col")
+      secondaryIndexColumns.foreach { col =>
+        assertThrows[HoodieMetadataIndexException] {
+          spark.sql(s"create index idx_$col on $tableName using secondary_index($col)")
+        }
+      }
+    }
+  }
+
 
   private def checkAnswer(query: String)(expects: Seq[Any]*): Unit = {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(query).collect().sortBy(_.toString()))
