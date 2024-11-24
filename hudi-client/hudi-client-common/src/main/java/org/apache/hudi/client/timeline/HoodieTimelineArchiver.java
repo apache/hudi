@@ -36,5 +36,5 @@ public interface HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public int archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException;
+  int archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException;
 }

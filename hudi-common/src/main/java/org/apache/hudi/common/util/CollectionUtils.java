@@ -261,6 +261,11 @@ public class CollectionUtils {
     return Collections.unmodifiableMap(map);
   }
 
+  public static <K, V> Map<V, K> reverseMap(final Map<K, V> map) {
+    return map.entrySet().stream().collect(Collectors.collectingAndThen(
+        Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey), Collections::unmodifiableMap));
+  }
+
   public static <K, V> Map<K, V> createImmutableMap(final Map<K, V> map) {
     return Collections.unmodifiableMap(map);
   }
