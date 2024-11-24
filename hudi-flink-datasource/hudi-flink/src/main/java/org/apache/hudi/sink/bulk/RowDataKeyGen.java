@@ -215,12 +215,12 @@ public class RowDataKeyGen implements Serializable {
       String partField = partFields[i];
       String partValue = StringUtils.objToString(partValues[i]);
       if (partValue == null || partValue.isEmpty()) {
-        partitionPath.append(hiveStylePartitioning ? String.format(HIVE_PARTITION_TEMPLATE, partField, DEFAULT_PARTITION_PATH) : DEFAULT_PARTITION_PATH);
+        partitionPath.append(hiveStylePartitioning ? HIVE_PARTITION_TEMPLATE + partField + DEFAULT_PARTITION_PATH : DEFAULT_PARTITION_PATH);
       } else {
         if (encodePartitionPath) {
           partValue = escapePathName(partValue);
         }
-        partitionPath.append(hiveStylePartitioning ? String.format(HIVE_PARTITION_TEMPLATE, partField, partValue) : partValue);
+        partitionPath.append(hiveStylePartitioning ? HIVE_PARTITION_TEMPLATE + partField + partValue : partValue);
       }
       if (i != partFields.length - 1) {
         partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
@@ -259,7 +259,7 @@ public class RowDataKeyGen implements Serializable {
       partitionPath = escapePathName(partitionPath);
     }
     if (hiveStylePartitioning) {
-      partitionPath = String.format(HIVE_PARTITION_TEMPLATE, partField, partitionPath);
+      partitionPath = HIVE_PARTITION_TEMPLATE + partField + partitionPath;
     }
     return partitionPath;
   }
