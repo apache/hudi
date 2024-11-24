@@ -225,7 +225,6 @@ public class ITTestHoodieFlinkCompactor {
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
-      HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
       String compactionInstantTime = scheduleCompactionPlan(writeClient);
 
@@ -240,16 +239,18 @@ public class ITTestHoodieFlinkCompactor {
         // set table version
         conf.setString("hoodie.write.table.version", "6");
       }
-      // Recreate write config with updated configs to construct table.
-      table = (HoodieFlinkTable<?>) FlinkWriteClients.createWriteClient(conf).initTable(WriteOperationType.INSERT, Option.empty());
+      // Refresh the meta client
+      metaClient.reloadTableConfig();
+      metaClient.reloadActiveTimeline();
+
       // generate compaction plan
       // should support configurable commit metadata
       HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
-          table.getMetaClient(), compactionInstantTime);
+          metaClient, compactionInstantTime);
 
       HoodieInstant instant = INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
-      table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+      metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 
       conf.set(FlinkOptions.WRITE_TABLE_VERSION, upgrade ? HoodieTableVersion.EIGHT.versionCode() : HoodieTableVersion.SIX.versionCode());
       env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan)), conf))

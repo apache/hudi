@@ -151,7 +151,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
-    transitionState(instant, instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(),instant.requestedTime()), data);
+    transitionState(instant, instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime()), data);
     LOG.info("Completed " + instant);
   }
 
