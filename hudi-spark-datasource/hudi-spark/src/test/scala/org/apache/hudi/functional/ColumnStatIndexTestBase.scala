@@ -234,7 +234,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
     val indexedColumns: Set[String] = HoodieTableMetadataUtil
-      .getColumnsToIndex(false, metadataConfig, convertScalaListToJavaList(sourceTableSchema.fieldNames)).asScala.toSet
+      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, convertScalaListToJavaList(sourceTableSchema.fieldNames)).asScala.toSet
 
     val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
     val validationSortColumns = if (expectedColStatsSchema.fieldNames.contains("c5")) {

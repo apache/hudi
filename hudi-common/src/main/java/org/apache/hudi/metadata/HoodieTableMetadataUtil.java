@@ -1340,12 +1340,6 @@ public class HoodieTableMetadataUtil {
     return getColumnsToIndex(tableConfig, metadataConfig, Either.left(columnNames));
   }
 
-  public static List<String> getColumnsToIndex(boolean populateMetaFields,
-                                               HoodieMetadataConfig metadataConfig,
-                                               List<String> columnNames) {
-    return getColumnsToIndex(populateMetaFields, metadataConfig, Either.left(columnNames));
-  }
-
   public static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                HoodieMetadataConfig metadataConfig,
                                                Lazy<Option<Schema>> tableSchema) {
@@ -1355,20 +1349,13 @@ public class HoodieTableMetadataUtil {
   private static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                 HoodieMetadataConfig metadataConfig,
                                                 Either<List<String>, Lazy<Option<Schema>>> tableSchema) {
-    return getColumnsToIndex(tableConfig.populateMetaFields(), metadataConfig, tableSchema);
-  }
-
-  private static List<String> getColumnsToIndex(boolean populateMetaFields,
-                                                HoodieMetadataConfig metadataConfig,
-                                                Either<List<String>, Lazy<Option<Schema>>> tableSchema) {
     checkState(metadataConfig.isColumnStatsIndexEnabled());
     Stream<String> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetas(metadataConfig, tableSchema);
-    if (!populateMetaFields) {
+    if (!tableConfig.populateMetaFields()) {
       return columnsToIndexWithoutRequiredMetas.collect(Collectors.toList());
     }
 
-    List<String> ret = Stream.concat(META_COL_SET_TO_INDEX.stream(), columnsToIndexWithoutRequiredMetas).collect(Collectors.toList());
-    return ret;
+    return Stream.concat(META_COL_SET_TO_INDEX.stream(), columnsToIndexWithoutRequiredMetas).collect(Collectors.toList());
   }
 
   private static Stream<String> getColumnsToIndexWithoutRequiredMetas(HoodieMetadataConfig metadataConfig, Either<List<String>, Lazy<Option<Schema>>> tableSchema) {
