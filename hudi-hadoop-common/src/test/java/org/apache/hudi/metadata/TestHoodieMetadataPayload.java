@@ -35,8 +35,10 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -125,7 +127,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     expectedDeleteFileList.add("file1.parquet");
     expectedDeleteFileList.add("file3.parquet");
     expectedDeleteFileList.add("file4.parquet");
-    
+
     assertEquals(
         HoodieMetadataPayload.createPartitionFilesRecord(PARTITION_NAME,
             Collections.emptyMap(),
@@ -291,5 +293,86 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     HoodieMetadataPayload overwrittenCombinedPartitionStatsRecordPayload =
         firstPartitionStatsRecord.getData().preCombine(deletedPartitionStatsRecord.getData());
     assertEquals(firstPartitionStatsRecord.getData(), overwrittenCombinedPartitionStatsRecordPayload);
+  }
+
+  @Test
+  public void testSecondaryIndexPayloadMerging() {
+    // test delete and combine
+    String secondaryIndexPartition = MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "secondaryCol";
+    String recordKey = "rk1";
+    String initialSecondaryKey = "sk1";
+    String updatedSecondaryKey = "sk2";
+    // test creation
+    String expectedPayloadKey = initialSecondaryKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + recordKey;
+    HoodieRecord<HoodieMetadataPayload> oldSecondaryIndexRecord =
+        HoodieMetadataPayload.createSecondaryIndexRecord(recordKey, initialSecondaryKey, secondaryIndexPartition, false);
+    assertEquals(expectedPayloadKey, oldSecondaryIndexRecord.getRecordKey());
+    // test delete and combine
+    HoodieRecord<HoodieMetadataPayload> oldSecondaryIndexRecordDeleted =
+        HoodieMetadataPayload.createSecondaryIndexRecord(recordKey, initialSecondaryKey, secondaryIndexPartition, true);
+    Option<HoodieRecord<HoodieMetadataPayload>> combinedSecondaryIndexRecord =
+        HoodieMetadataPayload.combineSecondaryIndexRecord(oldSecondaryIndexRecord, oldSecondaryIndexRecordDeleted);
+    assertFalse(combinedSecondaryIndexRecord.isPresent());
+    // test update and combine
+    HoodieRecord<HoodieMetadataPayload> newSecondaryIndexRecord =
+        HoodieMetadataPayload.createSecondaryIndexRecord(recordKey, updatedSecondaryKey, secondaryIndexPartition, false);
+    expectedPayloadKey = updatedSecondaryKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + recordKey;
+    assertEquals(expectedPayloadKey, newSecondaryIndexRecord.getRecordKey());
+    combinedSecondaryIndexRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldSecondaryIndexRecord, newSecondaryIndexRecord);
+    assertTrue(combinedSecondaryIndexRecord.isPresent());
+    assertEquals(newSecondaryIndexRecord.getData(), combinedSecondaryIndexRecord.get().getData());
+  }
+
+  @Test
+  public void testConstructSecondaryIndexKey() {
+    // Simple case
+    String secondaryKey = "part1";
+    String recordKey = "key1";
+    String constructedKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
+    assertEquals("part1$key1", constructedKey);
+    assertEquals(secondaryKey, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(constructedKey));
+    assertEquals(recordKey, SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(constructedKey));
+
+    // Case with escape characters
+    secondaryKey = "part\\one";
+    recordKey = "key$two";
+    constructedKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
+    assertEquals("part\\\\one$key\\$two", constructedKey);
+    assertEquals(secondaryKey, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(constructedKey));
+    assertEquals(recordKey, SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(constructedKey));
+
+    // Complex case with multiple `$` and `\` characters
+    secondaryKey = "comp\\lex$sec";
+    recordKey = "prim\\ary$k\\ey";
+    constructedKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
+    assertEquals("comp\\\\lex\\$sec$prim\\\\ary\\$k\\\\ey", constructedKey);
+
+    // Verify correct extraction
+    String extractedSecondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(constructedKey);
+    String extractedPrimaryKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(constructedKey);
+    assertEquals(secondaryKey, extractedSecondaryKey);
+    assertEquals(recordKey, extractedPrimaryKey);
+
+    // Edge case: only secondary key with no primary key
+    String key = "secondaryOnly$";
+    recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(key);
+    assertEquals("", recordKey);
+
+    // Edge case: only primary key with no secondary key
+    key = "$primaryOnly";
+    secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(key);
+    assertEquals("", secondaryKey);
+
+    // Edge case: empty string, invalid key format
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(""));
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(""));
+
+    // Case with no separator
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey("invalidKey"));
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey("invalidKey"));
+
+    // Case with only escape characters but no actual separator
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey("part\\one"));
+    assertThrows(IllegalStateException.class, () -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey("part\\one"));
   }
 }
