@@ -56,11 +56,11 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   @Override
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     // TODO(HUDI-7843):
-    // get rid of event time and overwrite with latest. Just return Option.empty
+    // get rid of event time and commit time ordering. Just return Option.empty
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
         return Option.of(new DefaultSparkRecordMerger());
-      case OVERWRITE_WITH_LATEST:
+      case COMMIT_TIME_ORDERING:
         return Option.of(new OverwriteWithLatestSparkRecordMerger());
       case CUSTOM:
       default:

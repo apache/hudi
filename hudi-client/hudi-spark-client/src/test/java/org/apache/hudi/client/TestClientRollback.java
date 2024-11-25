@@ -195,15 +195,14 @@ public class TestClientRollback extends HoodieClientTestBase {
       if (testFailedRestore) {
         //test to make sure that restore commit is reused when the restore fails and is re-ran
         HoodieInstant inst =  table.getActiveTimeline().getRestoreTimeline().getInstants().get(0);
-        String restoreFileName = table.getMetaClient().getBasePath() + "/.hoodie/" + INSTANT_FILE_NAME_GENERATOR.getFileName(inst);
-
+        String restoreFileName = table.getMetaClient().getBasePath() + "/.hoodie/timeline/"  + INSTANT_FILE_NAME_GENERATOR.getFileName(inst);
         //delete restore commit file
         assertTrue((new File(restoreFileName)).delete());
 
         if (!failedRestoreInflight) {
           //delete restore inflight file
           HoodieInstant inflightInst = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, inst.getAction(), inst.requestedTime());
-          assertTrue((new File(table.getMetaClient().getBasePath() + "/.hoodie/" + INSTANT_FILE_NAME_GENERATOR.getFileName(inflightInst))).delete());
+          assertTrue((new File(table.getMetaClient().getBasePath() + "/.hoodie/timeline/" + INSTANT_FILE_NAME_GENERATOR.getFileName(inflightInst))).delete());
         }
         try (SparkRDDWriteClient newClient = getHoodieWriteClient(cfg)) {
           //restore again

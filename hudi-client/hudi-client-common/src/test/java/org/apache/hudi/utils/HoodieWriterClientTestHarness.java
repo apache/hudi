@@ -586,15 +586,15 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieActiveTimeline activeTimeline = TIMELINE_FACTORY.createActiveTimeline(metaClient, false);
     List<HoodieInstant> instants = activeTimeline.getCommitAndReplaceTimeline().getInstants();
     assertEquals(9, instants.size());
-    // Should be corresponding to table version 6
+    // Timeline should be as per new format corresponding to table version 8
     assertEquals(INSTANT_GENERATOR.createNewInstant(REQUESTED, COMMIT_ACTION, "001"), instants.get(0));
     assertEquals(INSTANT_GENERATOR.createNewInstant(INFLIGHT, COMMIT_ACTION, "001"), instants.get(1));
     assertEquals(INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, "001"), instants.get(2));
-    assertTrue(instants.get(2).isLegacy());
+    assertFalse(instants.get(2).isLegacy());
     assertEquals(INSTANT_GENERATOR.createNewInstant(REQUESTED, COMMIT_ACTION, "004"), instants.get(3));
     assertEquals(INSTANT_GENERATOR.createNewInstant(INFLIGHT, COMMIT_ACTION, "004"), instants.get(4));
     assertEquals(INSTANT_GENERATOR.createNewInstant(COMPLETED, COMMIT_ACTION, "004"), instants.get(5));
-    assertTrue(instants.get(5).isLegacy());
+    assertFalse(instants.get(5).isLegacy());
     // New Format should have all states of instants
     // Should be corresponding to table version 8
     assertFalse(instants.get(8).isLegacy());
@@ -1220,6 +1220,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     new UpgradeDowngrade(metaClient, newConfig, client.getEngineContext(), upgradeDowngrade)
         .run(HoodieTableVersion.EIGHT, null);
 
+    client = getHoodieWriteClient(newConfig);
     client.savepoint("004", "user1", "comment1");
     client.restoreToInstant("004", config.isMetadataTableEnabled());
     metaClient = HoodieTestUtils.createMetaClient(storageConf, new StoragePath(basePath), HoodieTableVersion.EIGHT);

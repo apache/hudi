@@ -335,6 +335,13 @@ public enum MetadataPartitionType {
         || metadataPartitionPath.startsWith(FUNCTIONAL_INDEX.getPartitionPath());
   }
 
+  public static String getGenericIndexNameWithoutPrefix(String indexName) {
+    String prefix = indexName.startsWith(SECONDARY_INDEX.getPartitionPath())
+        ? SECONDARY_INDEX.getPartitionPath()
+        : FUNCTIONAL_INDEX.getPartitionPath();
+    return indexName.substring(prefix.length());
+  }
+
   // Partition path in metadata table.
   private final String partitionPath;
   // FileId prefix used for all file groups in this partition.
