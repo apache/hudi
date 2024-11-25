@@ -289,7 +289,7 @@ then
   fi
   echo "::warning::validate.sh done validating utilities bundle"
 else
-  echo "::warning::validate.sh skip validating utilities bundle for non-spark3.5 build
+  echo "::warning::validate.sh skip validating utilities bundle for non-spark3.5 build"
 fi
 
 echo "::warning::validate.sh validating utilities slim bundle"
