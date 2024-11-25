@@ -56,6 +56,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -178,8 +179,10 @@ public class HoodieTableMetaClient implements Serializable {
       checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
           "Layout Version defined in hoodie properties has higher version (" + tableConfigVersion.get()
               + ") than the one passed in config (" + layoutVersion.get() + ")");
+    } else if (layoutVersion.isEmpty() && tableConfigVersion.isEmpty()) {
+      throw new TableNotFoundException("Table does not exist");
     }
-    this.timelineLayoutVersion = layoutVersion.orElseGet(() -> tableConfig.getTimelineLayoutVersion().get());
+    this.timelineLayoutVersion = layoutVersion.orElseGet(tableConfigVersion::get);
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, this.basePath);
