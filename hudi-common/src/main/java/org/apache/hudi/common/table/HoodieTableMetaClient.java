@@ -70,7 +70,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,7 +89,6 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.index.functional.HoodieFunctionalIndex.SPARK_IDENTITY;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
@@ -210,22 +208,13 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Builds functional index definition and writes to index definition file.
-   *
-   * @param indexName     Name of the index
-   * @param indexType     Type of the index
-   * @param columns       Columns on which index is built
-   * @param options       Options for the index
    */
-  public void buildIndexDefinition(String indexName,
-                                   String indexType,
-                                   Map<String, Map<String, String>> columns,
-                                   Map<String, String> options) {
+  public void buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
+    String indexName = indexDefinition.getIndexName();
     checkState(
         !indexMetadataOpt.isPresent() || !indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName),
         "Index metadata is already present");
     String indexMetaPath = getIndexDefinitionPath();
-    List<String> columnNames = new ArrayList<>(columns.keySet());
-    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, indexType, options.getOrDefault("func", SPARK_IDENTITY), columnNames, options);
     if (indexMetadataOpt.isPresent()) {
       indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
     } else {

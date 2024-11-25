@@ -54,6 +54,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.index.functional.HoodieFunctionalIndex.IDENTITY_FUNCTION;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
@@ -97,17 +98,19 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       throw new HoodieMetadataIndexException("Not eligible for indexing: " + indexType + ", indexName: " + userIndexName);
     }
 
+    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(fullIndexName, indexType, options.getOrDefault("func", IDENTITY_FUNCTION),
+        new ArrayList<>(columns.keySet()), options);
     if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
         || !metaClient.getIndexMetadata().isPresent()
         || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(fullIndexName)) {
       LOG.info("Index definition is not present. Registering the index first");
-      register(metaClient, fullIndexName, indexType, columns, options);
+      register(metaClient, indexDefinition);
     }
 
     ValidationUtils.checkState(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
 
     LOG.info("Creating index {} of using {}", fullIndexName, indexType);
-    Option<HoodieIndexDefinition> functionalIndexDefinitionOpt = Option.ofNullable(metaClient.getIndexMetadata().get().getIndexDefinitions().get(fullIndexName));
+    Option<HoodieIndexDefinition> functionalIndexDefinitionOpt = Option.ofNullable(indexDefinition);
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinitionOpt)), toScalaOption(Option.empty()))) {
       // generate index plan
@@ -118,6 +121,18 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       } else {
         throw new HoodieMetadataIndexException("Scheduling of index action did not return any instant.");
       }
+    } catch (Throwable t) {
+      drop(metaClient, fullIndexName, indexDefinition);
+      throw t;
+    }
+  }
+
+  private void drop(HoodieTableMetaClient metaClient, String indexName, HoodieIndexDefinition indexDefinition) {
+    LOG.info("Dropping index {}", indexName);
+    Option<HoodieIndexDefinition> indexDefinitionOpt = Option.ofNullable(indexDefinition);
+    try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
+        sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, indexDefinitionOpt)), toScalaOption(Option.empty()))) {
+      writeClient.dropIndex(Collections.singletonList(indexName));
     }
   }
 

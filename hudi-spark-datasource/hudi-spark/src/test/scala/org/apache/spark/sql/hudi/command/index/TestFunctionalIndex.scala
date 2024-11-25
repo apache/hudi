@@ -255,6 +255,10 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
           // Verify one can create more than one functional index. When function is not provided,
           // default identity function is used
+          createIndexSql = s"create index name_lower on $tableName using column_stat(ts)"
+          checkException(createIndexSql)("column_stat is not supported")
+          createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(func='random')"
+          checkNestedException(createIndexSql) ("Unsupported Spark function: random")
           createIndexSql = s"create index name_lower on $tableName using column_stats(ts)"
           spark.sql(createIndexSql)
           metaClient = createMetaClient(spark, basePath)

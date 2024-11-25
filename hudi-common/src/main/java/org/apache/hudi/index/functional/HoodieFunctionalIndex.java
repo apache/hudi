@@ -56,7 +56,7 @@ public interface HoodieFunctionalIndex<S, T> extends Serializable {
   String SPARK_REGEXP_REPLACE = "regexp_replace";
   String SPARK_REGEXP_EXTRACT = "regexp_extract";
   String SPARK_SPLIT = "split";
-  String SPARK_IDENTITY = "identity";
+  String IDENTITY_FUNCTION = "identity";
 
   /**
    * Get the name of the index.

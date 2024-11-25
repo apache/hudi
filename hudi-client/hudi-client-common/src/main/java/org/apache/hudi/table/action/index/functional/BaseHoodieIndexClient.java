@@ -20,6 +20,7 @@
 package org.apache.hudi.table.action.index.functional;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.StoragePath;
@@ -43,10 +44,10 @@ public abstract class BaseHoodieIndexClient {
    * For the second time, the index definition file will be updated if exists.
    * Table Config is updated if necessary.
    */
-  public void register(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) {
-    LOG.info("Registering index {} of using {}", indexName, indexType);
+  public void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
+    LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
     // build HoodieIndexMetadata and then add to index definition file
-    metaClient.buildIndexDefinition(indexName, indexType, columns, options);
+    metaClient.buildIndexDefinition(indexDefinition);
     // update table config if necessary
     String indexMetaPath = metaClient.getIndexDefinitionPath();
     if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH) || !metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()) {
