@@ -2830,7 +2830,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // delete the metadata table partitions to check, whether rollback of pending commit succeeds and
     // metadata table partitions are rebootstrapped.
-    metadataWriter.dropMetadataPartitions(Arrays.asList(RECORD_INDEX.getPartitionPath(), FILES.getPartitionPath()));
+    client.dropIndex(Arrays.asList(RECORD_INDEX.getPartitionPath(), FILES.getPartitionPath()));
     assertFalse(storage.exists(new StoragePath(
         getMetadataTableBasePath(basePath) + StoragePath.SEPARATOR + FILES.getPartitionPath())));
     assertFalse(storage.exists(new StoragePath(getMetadataTableBasePath(basePath)
