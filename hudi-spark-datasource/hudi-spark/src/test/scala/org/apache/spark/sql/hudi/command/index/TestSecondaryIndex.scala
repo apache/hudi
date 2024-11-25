@@ -414,7 +414,14 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .save(basePath)
         // Verify secondary index for deletes
         validateSecondaryIndex(basePath, tableName, updateKeys, hasDeleteKeys = true)
-        // Corrupt the data file that was written for the delete key in the first instant
+        // Corrupt the data file that was written for the delete key in the first instant.
+        // We are doing it to guard against a scenario where time travel query unintentionally looks up secondary index,
+        // according to which the data file is supposed to be skipped. Consider following scenario:
+        // 1. A record is deleted that was inserted in the first instant.
+        // 2. Secondary index gets updated and as per the latest snapshot of the index should not have the deleted record.
+        // 3. A time travel query is performed with data skipping enabled.
+        // 4. If it was to look up the secondary index, it would have skipped the data file, but the data file is still present.
+        // 5. Time travel query should throw an exception in this case.
         val firstCommitMetadata = deserializeCommitMetadata(metaClient.reloadActiveTimeline().getInstantDetails(firstInstant).get())
         val partitionToWriteStats = firstCommitMetadata.getPartitionToWriteStats.asScala.mapValues(_.asScala.toList)
         // Find the path for the given fileId

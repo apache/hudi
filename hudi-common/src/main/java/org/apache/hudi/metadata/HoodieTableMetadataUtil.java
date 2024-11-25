@@ -1933,7 +1933,14 @@ public class HoodieTableMetadataUtil {
     return addMetadataFields(getSchemaForFields(tableSchema, mergedFields));
   }
 
-  public static boolean isSecondaryIndexSupportedForSchema(List<String> sourceFields, Schema tableSchema) {
+  /**
+   * Given table schema and fields to index, checks if each field's data type are supported.
+   *
+   * @param sourceFields fields to index
+   * @param tableSchema  table schema
+   * @return true if each field's data type are supported, false otherwise
+   */
+  public static boolean validateDataTypeForSecondaryIndex(List<String> sourceFields, Schema tableSchema) {
     return sourceFields.stream().anyMatch(fieldToIndex -> {
       Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
       return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;

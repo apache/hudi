@@ -61,7 +61,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isSecondaryIndexSupportedForSchema;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryIndex;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -334,7 +334,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testIsSecondaryIndexSupportedForSchema() {
+  public void testValidateDataTypeForSecondaryIndex() {
     // Create a dummy schema with both complex and primitive types
     Schema schema = SchemaBuilder.record("TestRecord")
         .fields()
@@ -350,9 +350,9 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .endRecord();
 
     // Test for primitive fields
-    assertTrue(isSecondaryIndexSupportedForSchema(Arrays.asList("stringField", "intField"), schema));
+    assertTrue(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "intField"), schema));
 
     // Test for complex fields
-    assertFalse(isSecondaryIndexSupportedForSchema(Arrays.asList("arrayField", "mapField", "structField"), schema));
+    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("arrayField", "mapField", "structField"), schema));
   }
 }
