@@ -519,30 +519,29 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     "MERGE_ON_READ,COMMIT_TIME_ORDERING",
     "COPY_ON_WRITE,CUSTOM",
     "MERGE_ON_READ,CUSTOM"))
-  def testStructuredStreamingWithMergeMode(tableType: String, mergerType: String): Unit = {
+  def testStructuredStreamingWithMergeMode(tableType: String, mergeMode: String): Unit = {
     val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
     // First chunk of data
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
     var opts = commonOpts ++ Map(DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.TABLE_TYPE.key() -> tableType,
-      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> mergerType,
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> mergeMode,
       HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key() -> "parquet",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "weight")
-    if (mergerType == "CUSTOM") {
+    if (mergeMode == "CUSTOM") {
       opts = opts ++ Map(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key() -> HoodieSparkDeleteRecordMerger.DELETE_MERGER_STRATEGY,
         DataSourceWriteOptions.RECORD_MERGE_IMPL_CLASSES.key() -> classOf[HoodieSparkDeleteRecordMerger].getName)
     }
     streamingWrite(inputDF1.schema, sourcePath, destPath, opts)
 
-
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("001", 5)).asScala.toList
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("001", 50)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
     streamingWrite(inputDF2.schema, sourcePath, destPath, opts)
 
-    if (mergerType == "CUSTOM") {
+    if (mergeMode == "CUSTOM") {
       //merger will delete any records in records2 so we remove those from the original batch using except
       val expectedFinalRecords = inputDF1.select("_row_key", "partition_path").except(inputDF2.select("_row_key", "partition_path"))
       val finalRecords = spark.read.format("hudi")
@@ -557,10 +556,10 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       spark.read.format("hudi").load(destPath).createOrReplaceTempView("finalRecords")
       val updatedRecords = spark.sql(s"select _row_key, partition_path, weight from finalRecords "
         + s"where _hoodie_commit_time = ${instants.get(1).requestedTime()}")
-      if (mergerType == "COMMIT_TIME_ORDERING") {
+      if (mergeMode == "COMMIT_TIME_ORDERING") {
         assertEquals(inputDF2.count(), updatedRecords.count())
         assertEquals(0, inputDF2.select("_row_key", "partition_path", "weight").except(updatedRecords).count())
-      } else if (mergerType == "EVENT_TIME_ORDERING") {
+      } else if (mergeMode == "EVENT_TIME_ORDERING") {
         inputDF1.createOrReplaceTempView("input1")
         inputDF2.createOrReplaceTempView("input2")
         val expectedUpdatedRecords = spark.sql("SELECT input2._row_key, input2.partition_path, input2.weight FROM "
