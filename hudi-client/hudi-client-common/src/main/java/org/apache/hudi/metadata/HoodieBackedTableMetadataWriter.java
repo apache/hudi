@@ -582,12 +582,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       return Collections.emptySet();
     }
 
-    Set<String> inflightMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitionsInflight();
     Set<String> indexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
         .map(HoodieIndexDefinition::getIndexName)
         .filter(indexName -> indexName.startsWith(partitionType.getPartitionPath()))
-        // Only the inflight metadata partitions need to be initialized
-        .filter(inflightMetadataPartitions::contains)
         .collect(Collectors.toSet());
     Set<String> completedMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
     indexPartitions.removeAll(completedMetadataPartitions);

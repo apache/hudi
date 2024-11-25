@@ -1026,16 +1026,23 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
       HoodieTableMetaClient metaClient = table.getMetaClient();
-      // first update table config and index definitions. Metadata writer initializes the inflight metadata
-      // partitions so we need to first remove the metadata before creating the writer
+      // For secondary index and functional index with wrong parameters, index definition for the MDT partition is
+      // removed so that such indices are not recreated while initializing the writer.
       metadataPartitions.forEach(partition -> {
-        metaClient.getTableConfig().setMetadataPartitionState(metaClient, partition, false);
         if (MetadataPartitionType.isGenericIndex(partition)) {
           metaClient.deleteIndexDefinition(partition);
         }
       });
 
       Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant);
+      // first update table config. Metadata writer initializes the inflight metadata
+      // partitions so we need to first remove the metadata before creating the writer
+      // Also the partitions need to be removed after creating the metadata writer since the writer
+      // recreates enabled partitions
+      metadataPartitions.forEach(partition -> {
+        metaClient.getTableConfig().setMetadataPartitionState(metaClient, partition, false);
+      });
+
       if (metadataWriterOpt.isPresent()) {
         try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
           metadataWriter.dropMetadataPartitions(metadataPartitions);
