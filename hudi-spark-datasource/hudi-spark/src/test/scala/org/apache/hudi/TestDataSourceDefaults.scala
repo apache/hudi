@@ -571,9 +571,9 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
 
     // it always returns the latest payload.
-    val preCombinedPayload = newerPayload.preCombine(basePayload)
+    val preCombinedPayload = basePayload.preCombine(newerPayload)
     val precombinedGR = preCombinedPayload.getInsertValue(schema).get().asInstanceOf[GenericRecord]
-    assertEquals("field2", precombinedGR.get("field1").toString)
+    assertEquals("field1", precombinedGR.get("field1").toString)
   }
 
   @Test def testDefaultHoodieRecordPayloadCombineAndGetUpdateValue(): Unit = {
