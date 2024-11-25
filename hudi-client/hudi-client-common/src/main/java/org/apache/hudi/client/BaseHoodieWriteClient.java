@@ -1450,9 +1450,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
       UpgradeDowngrade handler = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
       handler.run(HoodieTableVersion.current(), instantTime.orElse(null));
-      metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      metaClient.reloadTableConfig();
+      metaClient.reloadTableConfig(handler.getMetaClient().getTableConfig());
       metaClient.reloadActiveTimeline();
     }
   }

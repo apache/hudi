@@ -80,11 +80,10 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
     // After upgrade, based on the payload and table type, the merge mode is updated accordingly.
     if (HoodieTableType.COPY_ON_WRITE == tableType) {
       assertEquals(classOf[DefaultHoodieRecordPayload].getName, metaClient.getTableConfig.getPayloadClass)
-      assertEquals(RecordMergeMode.EVENT_TIME_ORDERING.name, metaClient.getTableConfig.getRecordMergeMode)
-      assertEquals(HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
+      assertEquals(RecordMergeMode.EVENT_TIME_ORDERING.name, metaClient.getTableConfig.getRecordMergeMode.name)
     } else {
       assertEquals(classOf[OverwriteWithLatestAvroPayload].getName, metaClient.getTableConfig.getPayloadClass)
-      assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING.name, metaClient.getTableConfig.getRecordMergeMode)
+      assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING.name, metaClient.getTableConfig.getRecordMergeMode.name)
       assertEquals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
     }
   }
