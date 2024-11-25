@@ -65,6 +65,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       validate = false)
+
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())

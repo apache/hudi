@@ -1448,8 +1448,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         tableServiceClient.rollbackFailedWrites(pendingRollbacks, true, true);
       }
 
-      new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper)
-          .run(HoodieTableVersion.current(), instantTime.orElse(null));
+      UpgradeDowngrade handler = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
+      handler.run(HoodieTableVersion.current(), instantTime.orElse(null));
+      metaClient = HoodieTableMetaClient.reload(metaClient);
 
       metaClient.reloadTableConfig();
       metaClient.reloadActiveTimeline();
