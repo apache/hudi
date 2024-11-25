@@ -1355,7 +1355,7 @@ public class HoodieTableMetadataUtil {
       return columnsToIndexWithoutRequiredMetas.collect(Collectors.toList());
     }
 
-    return Stream.concat(META_COL_SET_TO_INDEX.stream(), columnsToIndexWithoutRequiredMetas).collect(Collectors.toList());
+    return Stream.concat(Arrays.stream(META_COLS_TO_ALWAYS_INDEX), columnsToIndexWithoutRequiredMetas).collect(Collectors.toList());
   }
 
   private static Stream<String> getColumnsToIndexWithoutRequiredMetas(HoodieMetadataConfig metadataConfig, Either<List<String>, Lazy<Option<Schema>>> tableSchema) {

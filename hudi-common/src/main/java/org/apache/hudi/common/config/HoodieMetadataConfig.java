@@ -607,6 +607,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMaxColumnsToIndexForColStats(int maxCols) {
+      metadataConfig.setValue(COLUMN_STATS_INDEX_MAX_COLUMNS, String.valueOf(maxCols));
+      return this;
+    }
+
     public Builder withBloomFilterIndexForColumns(String columns) {
       metadataConfig.setValue(BLOOM_FILTER_INDEX_FOR_COLUMNS, columns);
       return this;

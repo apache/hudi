@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
@@ -41,6 +42,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -60,6 +62,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryIndex;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -354,5 +357,157 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
     // Test for complex fields
     assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("arrayField", "mapField", "structField"), schema));
+  }
+
+  @Test
+  public void testGetColumnsToIndex() {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+
+    //test default
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .build();
+    List<String> colNames = new ArrayList<>();
+    addNColumns(colNames, HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue() + 10);
+    List<String> expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    addNColumns(expected, HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue());
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+
+    //test with table schema < default
+    int tableSchemaSize = HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue() - 10;
+    assertTrue(tableSchemaSize > 0);
+    colNames = new ArrayList<>();
+    addNColumns(colNames, tableSchemaSize);
+    expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    addNColumns(expected, tableSchemaSize);
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+
+    //test with max val < tableSchema
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withMaxColumnsToIndexForColStats(3)
+        .build();
+    colNames = new ArrayList<>();
+    addNColumns(colNames, HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue() + 10);
+    expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    addNColumns(expected, 3);
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+
+    //test with max val > tableSchema
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withMaxColumnsToIndexForColStats(HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue() + 10)
+        .build();
+    colNames = new ArrayList<>();
+    addNColumns(colNames, tableSchemaSize);
+    expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    addNColumns(expected, tableSchemaSize);
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+
+    //test with list of cols
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withColumnStatsIndexForColumns("col_1,col_7,col_11")
+        .build();
+    colNames = new ArrayList<>();
+    addNColumns(colNames, 15);
+    expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    expected.add("col_1");
+    expected.add("col_7");
+    expected.add("col_11");
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+
+    //test with list of cols longer than config
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withMaxColumnsToIndexForColStats(1)
+        .withColumnStatsIndexForColumns("col_1,col_7,col_11")
+        .build();
+    colNames = new ArrayList<>();
+    addNColumns(colNames, 15);
+    expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    expected.add("col_1");
+    expected.add("col_7");
+    expected.add("col_11");
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+
+    //test with list of cols including meta cols than config
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withColumnStatsIndexForColumns("col_1,col_7,_hoodie_commit_time,col_11,_hoodie_commit_seqno")
+        .build();
+    colNames = new ArrayList<>();
+    addNColumns(colNames, 15);
+    expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    expected.add("col_1");
+    expected.add("col_7");
+    expected.add("col_11");
+    expected.add("_hoodie_commit_seqno");
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+
+    //test with avro schema
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES);
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withColumnStatsIndexForColumns("booleanField,decimalField,localTimestampMillisField")
+        .build();
+    expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    expected.add("booleanField");
+    expected.add("decimalField");
+    expected.add("localTimestampMillisField");
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(schema))));
+
+    //test with avro schema with max cols set
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withMaxColumnsToIndexForColStats(2)
+        .build();
+    expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    expected.add("booleanField");
+    expected.add("intField");
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(schema))));
+    //test with avro schema with meta cols
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(HoodieAvroUtils.addMetadataFields(schema)))));
+
+    //test with meta cols disabled
+    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .build();
+    colNames = new ArrayList<>();
+    addNColumns(colNames, tableSchemaSize);
+    expected = new ArrayList<>();
+    addNColumns(expected, tableSchemaSize);
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+
+    //test with meta cols disabled with col list
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withColumnStatsIndexForColumns("col_1,col_7,col_11")
+        .build();
+    colNames = new ArrayList<>();
+    addNColumns(colNames, 15);
+    expected = new ArrayList<>();
+    expected.add("col_1");
+    expected.add("col_7");
+    expected.add("col_11");
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+
+    //test with meta cols disabled with avro schema
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withColumnStatsIndexForColumns("booleanField,decimalField,localTimestampMillisField")
+        .build();
+    expected = new ArrayList<>();
+    expected.add("booleanField");
+    expected.add("decimalField");
+    expected.add("localTimestampMillisField");
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(schema))));
+  }
+
+  private void addNColumns(List<String> list, int n) {
+    for (int i = 0; i < n; i++) {
+      list.add("col_" + i);
+    }
   }
 }
