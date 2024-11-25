@@ -1,7 +1,7 @@
 # Presto Hudi Connector
 
 ##Overview
-The **Presto Hudi Connector** enables querying Hudi tables synced to Hive metastore. The connector usesthe metastore only to track partition locations. It makes use of the underlying Hudi filesystem and input formats to list data files. To learn more about the design of the connector, please check out [RFC-40](https://github.com/apache/hudi/blob/master/rfc/rfc-44/rfc-44.md).
+The **Presto Hudi Connector** enables querying Hudi tables synced to Hive metastore. The connector usesthe **metastore** only to track partition locations. It makes use of the underlying Hudi filesystem and input formats to list data files. To learn more about the design of the connector, please check out [RFC-40](https://github.com/apache/hudi/blob/master/rfc/rfc-44/rfc-44.md).
 
 ##Requirements
 To use Hudi, we need:
