@@ -1357,6 +1357,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         assert(metaClient.getTableConfig.getMetadataPartitions.contains(s"secondary_index_idx_$col"))
       }
 
+      // get the timestamp_col for row1 (do not use hardcoded value as it may change in system where this test is executed)
+      val timestampCol = spark.sql(s"select timestamp_col from $tableName where record_key_col = 'row1'").collect().head.getAs[java.sql.Timestamp](0).getTime * 1000
       // Validate secondary index records for each column
       checkAnswer(s"select key from hudi_metadata('$basePath') where type=7 AND key LIKE '%${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1'")(
         Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
@@ -1364,7 +1366,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         Seq(s"10${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
         Seq(s"100${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
         Seq(s"100.01${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
-        Seq(s"1672554600000000${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
+        Seq(s"$timestampCol${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
         Seq(s"true${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1")
       )
 
