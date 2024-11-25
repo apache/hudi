@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
-import scala.jdk.CollectionConverters.asScalaSetConverter
+import scala.collection.JavaConverters._
 
 class TestTruncateTableProcedure extends HoodieSparkProcedureTestBase {
 
