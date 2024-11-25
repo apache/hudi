@@ -207,7 +207,6 @@ public class UpgradeDowngrade {
   }
 
   public HoodieTableMetaClient getMetaClient() {
-    metaClient.reloadActiveTimeline();
     return metaClient;
   }
 }
