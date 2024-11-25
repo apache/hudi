@@ -8,8 +8,12 @@ import TwitterIcon from "@site/src/components/JoinCommunity/Icons/twitter.svg";
 import MailIcon from "@site/src/components/JoinCommunity/Icons/mail.svg";
 import YoutubeIcon from "@site/src/components/JoinCommunity/Icons/youtube.svg";
 import Title from "@site/src/components/Title";
+import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 
 const JoinCommunity = () => {
+  const { siteConfig } = useDocusaurusContext();
+  const { slackUrl } = siteConfig.customFields;
+
   const communityData = [
     {
       icon: GitHubIcon,
@@ -21,7 +25,7 @@ const JoinCommunity = () => {
       icon: SlackIcon,
       title: "Slack",
       linkText: "Join community",
-      url: "https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g",
+      url: slackUrl,
     },
     {
       icon: LinkedinIcon,
@@ -49,8 +53,8 @@ const JoinCommunity = () => {
     },
   ];
 
-  const firstRow = communityData.slice(0,3);
-  const secondRow = communityData.slice(3,6);
+  const firstRow = communityData.slice(0, 3);
+  const secondRow = communityData.slice(3, 6);
 
   return (
     <div className={styles.joinCommunityWrapper}>
@@ -59,15 +63,20 @@ const JoinCommunity = () => {
           <div className={styles.leftSideWrapper}>
             <Title primaryText="Join our" secondaryText="Community" />
             <p className={styles.communityDescription}>
-              Get technical help, influence the product roadmap & see what’s new with Hudi!
+              Get technical help, influence the product roadmap & see what’s new
+              with Hudi!
             </p>
           </div>
           <div className={styles.communityCardWrapper}>
             <div className={styles.communityCardChildWrapper}>
-              {firstRow.map((media, i) => <CommunityCard key={i} media={media} />)}
+              {firstRow.map((media, i) => (
+                <CommunityCard key={i} media={media} />
+              ))}
             </div>
             <div className={styles.communityCardChildWrapper}>
-              {secondRow.map((media, i) => <CommunityCard key={i} media={media} />)}
+              {secondRow.map((media, i) => (
+                <CommunityCard key={i} media={media} />
+              ))}
             </div>
           </div>
         </div>

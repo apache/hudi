@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
+const { slackUrl } = require('./constants');
 module.exports = {
     docs: [
         {
@@ -163,7 +163,7 @@ module.exports = {
         {
             type: 'link',
             label: 'Chat with us on Slack',
-            href: 'https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g',
+            href: slackUrl
         },
     ],
 };
