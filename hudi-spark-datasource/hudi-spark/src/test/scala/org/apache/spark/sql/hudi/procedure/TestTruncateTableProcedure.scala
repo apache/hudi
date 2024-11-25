@@ -18,12 +18,16 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.DataFrameUtil
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+
+import scala.jdk.CollectionConverters.asScalaSetConverter
 
 class TestTruncateTableProcedure extends HoodieSparkProcedureTestBase {
 
-  test("Test Call truncate_table Procedure") {
+  test("Test Call truncate_table Procedure：truncate table") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = tmp.getCanonicalPath + "/" + tableName
@@ -58,4 +62,64 @@ class TestTruncateTableProcedure extends HoodieSparkProcedureTestBase {
       assertTrue(files.size == 1)
     }
   }
+
+  test("Test Call truncate_table Procedure：truncate given partitions") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath + "/" + tableName
+      //Step1: create table and insert data
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  year string,
+           |  month string,
+           |  day string
+           |) using hudi
+           |tblproperties (
+           | primaryKey = 'id',
+           | preCombineField = 'ts'
+           |)
+           |partitioned by(year, month, day)
+           |location '$tablePath'
+           |
+     """.stripMargin)
+      insertData(tableName)
+      //Step2: call truncate_table procedure, truncate given partitions:year=2019/month=08/day=31,30,29
+      spark.sql(s"""call truncate_table(table => '$tableName', partitions => 'year=2019/month=08/day=31,year=2019/month=08/day=30,year=2019/month=08/day=29')""")
+      val metaClient = getTableMetaClient(tablePath)
+      val replaceCommitInstant = metaClient.getActiveTimeline.getWriteTimeline
+        .getCompletedReplaceTimeline.getReverseOrderedInstants.findFirst()
+        .get()
+      val partitions = HoodieReplaceCommitMetadata
+        .fromBytes(metaClient.getActiveTimeline.getInstantDetails(replaceCommitInstant).get(), classOf[HoodieReplaceCommitMetadata])
+        .getPartitionToReplaceFileIds
+        .keySet()
+      //Step3: check number of truncated partitions and location startWith
+      assertEquals(3, partitions.size())
+      assertTrue(partitions.asScala.forall(_.startsWith("year=2019/month=08")))
+      // clean
+      //Step4: call clean and check result: left only 1 record
+      spark.sql(s"""call run_clean(table => '$tableName', clean_policy => 'KEEP_LATEST_FILE_VERSIONS', file_versions_retained => 1)""")
+      val result = spark.sql(s"""select * from $tableName""").collect()
+      assertEquals(1, result.length)
+    }
+  }
+
+  private def insertData(tableName: String): Unit = {
+    spark.sql(s"""insert into $tableName values (1, 'n1', 1, 1, '2019', '08', '31')""")
+    spark.sql(s"""insert into $tableName values (2, 'n2', 2, 2, '2019', '08', '30')""")
+    spark.sql(s"""insert into $tableName values (3, 'n3', 3, 3, '2019', '08', '29')""")
+    spark.sql(s"""insert into $tableName values (4, 'n4', 4, 4, '2019', '07', '31')""")
+  }
+  private def getTableMetaClient(tablePath: String): HoodieTableMetaClient = {
+    HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+      .build()
+  }
+
 }

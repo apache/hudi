@@ -17,30 +17,36 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.{HoodieCLIUtils, HoodieSparkSqlWriter}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{AnalysisException, Row, SaveMode}
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.CatalogTableType
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.util.Properties
 import java.util.function.Supplier
-import scala.collection.JavaConverters._
 
 class TruncateTableProcedure extends BaseProcedure
   with ProcedureBuilder
+  with ProvidesHoodieConfig
   with Logging {
-  override def build: Procedure = new TruncateTableProcedure
+  def build: Procedure = new TruncateTableProcedure()
 
-  override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter] (
-    ProcedureParameter.required(0, "table", DataTypes.StringType)
+  private val PARAMETERS = Array[ProcedureParameter](
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "partitions", DataTypes.StringType)
   )
 
-  override def outputType: StructType = StructType(Array[StructField](
+  def parameters: Array[ProcedureParameter] = PARAMETERS
+
+  def outputType: StructType = StructType(Array[StructField](
     StructField("result", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("time_cost", DataTypes.LongType, nullable = true, Metadata.empty)
   ))
@@ -48,54 +54,69 @@ class TruncateTableProcedure extends BaseProcedure
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(parameters, args)
 
-    val tableName = getArgValueOrDefault(args, parameters(0)).get.asInstanceOf[String]
-    logInfo(s"start execute truncate table procedure for $tableName")
+    val tableNameStr = getArgValueOrDefault(args, parameters(0)).get.asInstanceOf[String]
+    logInfo(s"start execute truncate table procedure for $tableNameStr")
 
-    val basePath: String = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, tableName).tableLocation
+    val partitionsStr = getArgValueOrDefault(args, parameters(1)).getOrElse("").asInstanceOf[String]
 
-    val context = sparkSession.sparkContext
-    val conf = context.hadoopConfiguration
+    val catalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, tableNameStr)
 
-    val targetPath = new StoragePath(basePath)
-    val engineContext = new HoodieSparkEngineContext(context)
+    val (db, tableName) = getDbAndTableName(tableNameStr)
 
-    val metaClient = HoodieTableMetaClient
-      .builder()
-      .setBasePath(basePath)
-      .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
-      .build()
+    val catalog = sparkSession.sessionState.catalog
+    val table = catalog.getTableMetadata(TableIdentifier(tableName, Some(db)))
+    val tableId = table.identifier.quotedString
 
-    val tableConfig = metaClient.getTableConfig
+    if (table.tableType == CatalogTableType.VIEW) {
+      throw new AnalysisException(
+        s"Operation not allowed: TRUNCATE TABLE on views: $tableId")
+    }
 
-    val properties: Properties = generateProperties(tableConfig)
+    if (table.partitionColumnNames.isEmpty && partitionsStr.nonEmpty) {
+      throw new AnalysisException(
+        s"Operation not allowed: TRUNCATE TABLE ... PARTITION is not supported " +
+          s"for tables that are not partitioned: $tableId")
+    }
 
-    val startTime = System.currentTimeMillis()
-    try {
+    val basePath = catalogTable.tableLocation
+    val properties = catalogTable.tableConfig.getProps
+
+    if (partitionsStr.isEmpty) {
+      val targetPath = new StoragePath(basePath)
+      val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
       val storage = HoodieStorageUtils.getStorage(
         basePath, HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf))
 
-      FSUtils.deleteDir(engineContext, storage, targetPath, context.defaultParallelism)
+      val startTime = System.currentTimeMillis()
+      FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
 
       // ReInit hoodie.properties
-      HoodieTableMetaClient.newTableBuilder()
+      val metaClient = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
-        .initTable(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration), basePath)
+        .initTable(HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf), catalogTable.tableLocation)
 
-      logInfo(s"Success to execute truncate table procedure for ${tableName}")
+      catalogTable.tableConfig.clearMetadataPartitions(metaClient)
+      logInfo(s"Success to execute truncate table procedure for ${tableNameStr}")
       Seq(Row("SUCCESS", System.currentTimeMillis() - startTime))
-    } catch {
-      case e: Exception =>
-        logError(s"Fail to execute truncate table procedure for ${tableName}", e)
-        Seq(Row("FAILED", System.currentTimeMillis() - startTime))
-    }
-  }
 
-  private def generateProperties(config: HoodieTableConfig): Properties = {
-    val properties = new Properties()
-    config.getProps.entrySet().asScala.foreach { entry =>
-      properties.setProperty(entry.getKey.toString, entry.getValue.toString)
+
+    } else {
+      val parameters = buildHoodieDropPartitionsConfig(sparkSession, catalogTable, partitionsStr)
+      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
+        sparkSession.sqlContext,
+        SaveMode.Append,
+        parameters,
+        sparkSession.emptyDataFrame)
+      if (!success) {
+        throw new HoodieException("Truncate Hoodie Table procedure failed")
+      }
     }
-    properties
+
+    // After deleting the data, refresh the table to make sure we don't keep around a stale
+    // file relation in the metastore cache and cached table data in the cache manager.
+    sparkSession.catalog.refreshTable(table.identifier.quotedString)
+    logInfo(s"Finish execute truncate table procedure for $tableNameStr")
+    Seq.empty[Row]
   }
 }
 
