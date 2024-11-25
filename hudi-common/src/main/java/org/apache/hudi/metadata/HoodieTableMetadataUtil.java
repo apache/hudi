@@ -1423,9 +1423,7 @@ public class HoodieTableMetadataUtil {
   }
 
   private static boolean canCompare(Schema schema, HoodieRecordType recordType) {
-    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
-        && schema.getType() != Schema.Type.FIXED && schema.getType() != Schema.Type.BYTES
-        && !(schema.getType() == Schema.Type.INT && schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date"));
+    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
