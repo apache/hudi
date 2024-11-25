@@ -204,7 +204,7 @@ public class RowDataKeyGen implements Serializable {
   }
 
   // reference: org.apache.hudi.keygen.KeyGenUtils.getRecordPartitionPath
-  public static String getRecordPartitionPath(
+  private static String getRecordPartitionPath(
       Object[] partValues,
       String[] partFields,
       boolean hiveStylePartitioning,
