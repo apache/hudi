@@ -490,12 +490,6 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Reload the table config properties.
    */
-  public synchronized void reloadTableConfig() {
-    this.tableConfig = new HoodieTableConfig(this.storage, metaPath,
-        this.tableConfig.getRecordMergeMode(), this.tableConfig.getPayloadClass(), this.tableConfig.getRecordMergeStrategyId());
-    reloadTimelineLayoutAndPath();
-  }
-
   public synchronized void reloadTableConfig(HoodieTableConfig tableConfig) {
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath,
         tableConfig.getRecordMergeMode(), tableConfig.getPayloadClass(), tableConfig.getRecordMergeStrategyId());
