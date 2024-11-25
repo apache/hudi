@@ -1574,7 +1574,15 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | AS
              | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
        """.stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName1")(
+          Seq(1, "a1", 10, 1000)
+        )
         assertEquals("ts", createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName1").getTableConfig.getPreCombineField)
+        spark.sql(s"update $tableName1 set name = 'a2', ts = 1001 where id = 1")
+        checkAnswer(s"select id, name, price, ts from $tableName1")(
+          Seq(1, "a2", 10, 1001)
+        )
+
 
         // precombine is not set, table schema has ts
         // result: ts is used as precombine but not set in tableconfig
@@ -1589,7 +1597,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | AS
              | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
        """.stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName2")(
+          Seq(1, "a1", 10, 1000)
+        )
         assertEquals(null, createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName2").getTableConfig.getPreCombineField)
+        spark.sql(s"update $tableName2 set name = 'a2', ts = 1001 where id = 1")
+        checkAnswer(s"select id, name, price, ts from $tableName2")(
+          Seq(1, "a2", 10, 1001)
+        )
 
         // precombine is price, table schema has price
         // result: tableconfig precombine is price
@@ -1605,7 +1620,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | AS
              | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
        """.stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName3")(
+          Seq(1, "a1", 10, 1000)
+        )
         assertEquals("price", createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName3").getTableConfig.getPreCombineField)
+        spark.sql(s"update $tableName3 set name = 'a2', price = 11 where id = 1")
+        checkAnswer(s"select id, name, price, ts from $tableName3")(
+          Seq(1, "a2", 11, 1000)
+        )
 
         // precombine is not notexist, table schema does not have notexist
         // result: exception
@@ -1637,8 +1659,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | AS
              | select 1 as id, 'a1' as name, 10 as price
        """.stripMargin)
+        checkAnswer(s"select id, name, price from $tableName5")(
+          Seq(1, "a1", 10)
+        )
         assertEquals(null, createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName5").getTableConfig.getPreCombineField)
-
+        spark.sql(s"update $tableName5 set name = 'a2', price = 11 where id = 1")
+        checkAnswer(s"select id, name, price from $tableName5")(
+          Seq(1, "a2", 11)
+        )
         // precombine is ts, table schema does not have ts
         // result: exception
         val tableName6 = generateTableName
