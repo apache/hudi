@@ -205,8 +205,4 @@ public class UpgradeDowngrade {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }
   }
-
-  public HoodieTableMetaClient getMetaClient() {
-    return metaClient;
-  }
 }
