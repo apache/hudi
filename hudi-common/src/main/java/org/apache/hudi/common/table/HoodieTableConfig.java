@@ -367,8 +367,28 @@ public class HoodieTableConfig extends HoodieConfig {
         .collect(Collectors.toList());
   }
 
+  /**
+   * Loads the table config from properties file.
+   *
+   * @param storage  The storage.
+   * @param basePath The table base path.
+   *
+   * @return The reloaded table config.
+   */
   public static HoodieTableConfig loadFromHoodieProps(HoodieStorage storage, String basePath) {
     StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    return new HoodieTableConfig(storage, metaPath);
+  }
+
+  /**
+   * Loads the table config from properties file.
+   *
+   * @param storage  The storage.
+   * @param metaPath The table metadata path.
+   *
+   * @return The reloaded table config.
+   */
+  public static HoodieTableConfig loadFromHoodieProps(HoodieStorage storage, StoragePath metaPath) {
     return new HoodieTableConfig(storage, metaPath);
   }
 

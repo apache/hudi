@@ -19,7 +19,11 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -65,6 +69,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     tablePropsToAdd.put(HoodieTableConfig.TIMELINE_PATH, HoodieTableConfig.TIMELINE_PATH.defaultValue());
     upgradePartitionFields(config, tableConfig, tablePropsToAdd);
+    upgradeMergeMode(config, tableConfig, tablePropsToAdd);
 
     // Handle timeline upgrade:
     //  - Rewrite instants in active timeline to new format
@@ -118,6 +123,24 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     if (keyGenerator != null && partitionPathField != null
         && (keyGenerator.equals(KeyGeneratorType.CUSTOM.getClassName()) || keyGenerator.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName()))) {
       tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS, partitionPathField);
+    }
+  }
+
+  private static void upgradeMergeMode(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+    if (tableConfig.getPayloadClass() != null
+        && tableConfig.getPayloadClass().equals(OverwriteWithLatestAvroPayload.class.getName())) {
+      if (HoodieTableType.COPY_ON_WRITE == tableConfig.getTableType()) {
+        tablePropsToAdd.put(
+            HoodieTableConfig.PAYLOAD_CLASS_NAME,
+            DefaultHoodieRecordPayload.class.getName());
+        tablePropsToAdd.put(
+            HoodieTableConfig.RECORD_MERGE_MODE,
+            RecordMergeMode.EVENT_TIME_ORDERING.name());
+      } else {
+        tablePropsToAdd.put(
+            HoodieTableConfig.RECORD_MERGE_MODE,
+            RecordMergeMode.COMMIT_TIME_ORDERING.name());
+      }
     }
   }
 }
