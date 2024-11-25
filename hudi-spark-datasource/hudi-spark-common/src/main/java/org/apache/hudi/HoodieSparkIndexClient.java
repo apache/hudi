@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -38,6 +39,7 @@ import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -55,6 +57,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryIndex;
 
 public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
@@ -81,7 +84,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   }
 
   @Override
-  public void create(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) {
+  public void create(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) throws Exception {
     String fullIndexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
         ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + userIndexName
         : PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX + userIndexName;
@@ -90,7 +93,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     }
     checkArgument(columns.size() == 1, "Only one column can be indexed for functional or secondary index.");
 
-    if (!isEligibleForIndexing(metaClient, indexType, options)) {
+    if (!isEligibleForIndexing(metaClient, indexType, options, columns)) {
       throw new HoodieMetadataIndexException("Not eligible for indexing: " + indexType + ", indexName: " + userIndexName);
     }
 
@@ -146,7 +149,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
       writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(HoodieCLIUtils.getLockOptions(metaClient.getBasePath().toString(),
-              metaClient.getBasePath().toUri().getScheme(), new TypedProperties())).asJava());
+          metaClient.getBasePath().toUri().getScheme(), new TypedProperties())).asJava());
 
       // [HUDI-7472] Ensure write-config contains the existing MDT partition to prevent those from getting deleted
       metaClient.getTableConfig().getMetadataPartitions().forEach(partitionPath -> {
@@ -169,7 +172,10 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     return writeConfig;
   }
 
-  private static boolean isEligibleForIndexing(HoodieTableMetaClient metaClient, String indexType, Map<String, String> options) {
+  private static boolean isEligibleForIndexing(HoodieTableMetaClient metaClient, String indexType, Map<String, String> options, Map<String, Map<String, String>> columns) throws Exception {
+    if (!validateDataTypeForSecondaryIndex(new ArrayList<>(columns.keySet()), new TableSchemaResolver(metaClient).getTableAvroSchema())) {
+      return false;
+    }
     // for secondary index, record index is a must
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX)) {
       // either record index is enabled or record index partition is already present
