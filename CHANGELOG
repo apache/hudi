@@ -430,3 +430,15 @@ e20cb5fb60 [AUDIT-1050]: Changelog for release-v1.42.0 (#1018)
 
 ---[2024-11-21 13:07:18] [release-v1.45.1] ---
 3305c31c322 [ENG-17701][INTERNAL] Update refresh command for RemoteFSView (#1047)
+
+---[2024-11-24 11:07:00] [changelog-release-v1.46.0] ---
+a3e4a9c48c [ENG-16611][INTERNAL] change payload default class (#1042)
+3de27016a8 [ENG-15951][INTERNAL] Creating separate config for rli guards. one for writer and another for reader (#1045)
+5576edb99b [AUDIT-1071][ENG-17447] Write shell script to perform daily branch cuts and changelog updates (#1048)
+490f736459 [ENG-16529][HUDI-7236] Allow MIT to change partition path when using global inde… (#992)
+215a76ec5e [AUDIT-1069]: Changelog for release-v1.45.1 (#1049)
+de426e0fd6 [ENG-17701][INTERNAL] Update refresh command for RemoteFSView (#1047)
+5333e88012 [ENG-17391][HUDI-8365] Reduce serialization overhead of HoodieTable (#1039)
+39b54e32cf [AUDIT-1052]: Changelog for release-v1.43.1 (#1030)
+7f8f0b3bb1 [ENG-11991][MINOR] Move field ordering lookup outside of loop for proto conversion (#1040)
+c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
