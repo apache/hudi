@@ -85,7 +85,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                                         ): Option[Set[String]] = {
     if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
       val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
-      val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)
+      val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices, fileIndex.includeLogFiles)
       // NOTE: If partition pruning doesn't prune any files, then there's no need to apply file filters
       //       when loading the Column Statistics Index
       val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
