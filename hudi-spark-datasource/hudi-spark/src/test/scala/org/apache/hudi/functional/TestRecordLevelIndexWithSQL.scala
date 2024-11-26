@@ -45,7 +45,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     hudiOpts = hudiOpts + (
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() -> "false")
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
 
     val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
