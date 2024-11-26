@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,6 +45,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.index.functional.HoodieFunctionalIndex.IDENTITY_FUNCTION;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -260,8 +263,9 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     Map<String, Map<String, String>> columnsMap = new HashMap<>();
     columnsMap.put("c1", Collections.emptyMap());
     String indexName = MetadataPartitionType.FUNCTIONAL_INDEX.getPartitionPath() + "idx";
-    metaClient.buildIndexDefinition(indexName, "column_stats",
-        columnsMap, Collections.emptyMap());
+    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, "column_stats", IDENTITY_FUNCTION,
+        new ArrayList<>(columnsMap.keySet()), Collections.emptyMap());
+    metaClient.buildIndexDefinition(indexDefinition);
     assertTrue(metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexName));
     assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));
     metaClient.deleteIndexDefinition(indexName);

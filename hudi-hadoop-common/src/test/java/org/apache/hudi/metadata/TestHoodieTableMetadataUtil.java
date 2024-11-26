@@ -42,6 +42,8 @@ import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,7 +61,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryIndex;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
@@ -327,5 +331,28 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
     result = getFileIDForFileGroup(MetadataPartitionType.FUNCTIONAL_INDEX, 5, "func_index_ts");
     assertEquals("func-index-ts-0005-0", result);
+  }
+
+  @Test
+  public void testValidateDataTypeForSecondaryIndex() {
+    // Create a dummy schema with both complex and primitive types
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .requiredString("stringField")
+        .optionalInt("intField")
+        .name("arrayField").type().array().items().stringType().noDefault()
+        .name("mapField").type().map().values().intType().noDefault()
+        .name("structField").type().record("NestedRecord")
+        .fields()
+        .requiredString("nestedString")
+        .endRecord()
+        .noDefault()
+        .endRecord();
+
+    // Test for primitive fields
+    assertTrue(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "intField"), schema));
+
+    // Test for complex fields
+    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("arrayField", "mapField", "structField"), schema));
   }
 }

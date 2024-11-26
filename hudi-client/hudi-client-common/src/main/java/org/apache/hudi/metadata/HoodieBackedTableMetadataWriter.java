@@ -581,13 +581,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     if (dataMetaClient.getIndexMetadata().isEmpty()) {
       return Collections.emptySet();
     }
-    Set<String> secondaryIndexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+
+    Set<String> indexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
         .map(HoodieIndexDefinition::getIndexName)
         .filter(indexName -> indexName.startsWith(partitionType.getPartitionPath()))
         .collect(Collectors.toSet());
     Set<String> completedMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
-    secondaryIndexPartitions.removeAll(completedMetadataPartitions);
-    return secondaryIndexPartitions;
+    indexPartitions.removeAll(completedMetadataPartitions);
+    return indexPartitions;
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeSecondaryIndexPartition(String indexName) throws IOException {
@@ -939,12 +940,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   public void dropMetadataPartitions(List<String> metadataPartitions) throws IOException {
     for (String partitionPath : metadataPartitions) {
-      // first update table config and index definitions
-      dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
-      if (MetadataPartitionType.isGenericIndex(partitionPath)) {
-        dataMetaClient.deleteIndexDefinition(partitionPath);
-      }
-
       LOG.warn("Deleting Metadata Table partition: {}", partitionPath);
       dataMetaClient.getStorage()
           .deleteDirectory(new StoragePath(metadataWriteConfig.getBasePath(), partitionPath));
