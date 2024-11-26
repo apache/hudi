@@ -67,7 +67,7 @@ public class TestBaseHoodieWriteClient {
     properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), false);
     HoodieTestUtils.init(this.storage.getConf().newInstance(), this.tempDir.toString(), HoodieTableType.MERGE_ON_READ, properties);
 
-    HoodieTableConfig tableConfig = new HoodieTableConfig(this.storage, this.metaPath, RecordMergeMode.OVERWRITE_WITH_LATEST,
+    HoodieTableConfig tableConfig = new HoodieTableConfig(this.storage, this.metaPath, RecordMergeMode.EVENT_TIME_ORDERING,
         HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME, HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID);
 
     // Test version conflicts
