@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -43,7 +44,8 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts + (
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() -> "false")
 
     val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
