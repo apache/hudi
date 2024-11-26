@@ -51,18 +51,10 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
     super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig, properties);
   }
 
-  private boolean morMergeNeedsPositionCol() {
-    return readerContext.supportsParquetRowIndex() && readerContext.getShouldMergeUseRecordPosition();
-  }
-
-  private boolean bootstrapMergeNeedsPositionCol() {
-    return readerContext.supportsParquetRowIndex() && readerContext.getNeedsBootstrapMerge();
-  }
-
   @Override
   protected Schema prepareRequiredSchema() {
     Schema preMergeSchema = super.prepareRequiredSchema();
-    return morMergeNeedsPositionCol()
+    return readerContext.getShouldMergeUseRecordPosition() && readerContext.getHasLogFiles()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;
   }
@@ -74,7 +66,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
 
   @Override
   protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
-    if (!morMergeNeedsPositionCol()) {
+    if (!(readerContext.getShouldMergeUseRecordPosition() && readerContext.getHasLogFiles())) {
       return super.doPruneInternalSchema(requiredSchema, internalSchema);
     }
 
@@ -91,7 +83,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
   @Override
   public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
     Pair<List<Schema.Field>,List<Schema.Field>> dataAndMetaCols = super.getBootstrapRequiredFields();
-    if (bootstrapMergeNeedsPositionCol() || morMergeNeedsPositionCol()) {
+    if (readerContext.supportsParquetRowIndex() && (this.needsBootstrapMerge || this.needsMORMerge)) {
       if (!dataAndMetaCols.getLeft().isEmpty()) {
         dataAndMetaCols.getLeft().add(getPositionalMergeField());
       }
