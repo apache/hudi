@@ -92,7 +92,7 @@ class FunctionalIndexSupport(spark: SparkSession,
   def filterQueriesWithFunctionalFilterKey(queryFilters: Seq[Expression], sourceFieldOpt: Option[String]): List[Tuple2[Expression, List[String]]] = {
     var functionalIndexQueries: List[Tuple2[Expression, List[String]]] = List.empty
     for (query <- queryFilters) {
-      filterQueryWithRecordKey(query, sourceFieldOpt, false, (expr: Expression) => {
+      filterQueryWithRecordKey(query, sourceFieldOpt, (expr: Expression) => {
         expr match {
           case expression: UnaryExpression => expression.child
           case other => other

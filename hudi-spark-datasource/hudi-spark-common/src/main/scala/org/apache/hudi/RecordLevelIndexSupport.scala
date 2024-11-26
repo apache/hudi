@@ -123,6 +123,18 @@ class RecordLevelIndexSupport(spark: SparkSession,
 object RecordLevelIndexSupport {
   val INDEX_NAME = "RECORD_LEVEL"
 
+  private def getDefaultAttributeFetcher(): Function1[Expression, Expression] = {
+    expr => expr
+  }
+
+  def getSimpleLiteralGenerator(): Function2[AttributeReference, Literal, String] = {
+    (_, lit) => lit.value.toString
+  }
+
+  def getComplexKeyLiteralGenerator(): Function2[AttributeReference, Literal, String] = {
+    (attr: AttributeReference, lit: Literal) => attr.name + KeyGenUtils.DEFAULT_COLUMN_VALUE_SEPARATOR + lit.value.toString
+  }
+
   /**
    * If the input query is an EqualTo or IN query on simple record key columns, the function returns a tuple of
    * list of the query and list of record key literals present in the query otherwise returns an empty option.
@@ -130,12 +142,24 @@ object RecordLevelIndexSupport {
    * @param queryFilter The query that need to be filtered.
    * @return Tuple of filtered query and list of record key literals that need to be matched
    */
-
-  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], isComplexRecordKey: Boolean): Option[(Expression, List[String])] = {
-    filterQueryWithRecordKey(queryFilter, recordKeyOpt, isComplexRecordKey, attributeFetcher = expr => expr)
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String]): Option[(Expression, List[String])] = {
+    filterQueryWithRecordKey(queryFilter, recordKeyOpt, getDefaultAttributeFetcher())
   }
 
-  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], isComplexRecordKey: Boolean,
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String],
+                               literalGenerator: Function2[AttributeReference, Literal, String]): Option[(Expression, List[String])] = {
+    filterQueryWithRecordKey(queryFilter, recordKeyOpt, literalGenerator, getDefaultAttributeFetcher())
+  }
+
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], attributeFetcher: Function1[Expression, Expression]): Option[(Expression, List[String])] = {
+    filterQueryWithRecordKey(queryFilter, recordKeyOpt, getSimpleLiteralGenerator(), attributeFetcher)
+  }
+
+  def isSupported(expr: Expression): Boolean = {
+    expr.isInstanceOf[In] || expr.isInstanceOf[EqualTo] || expr.isInstanceOf[And]
+  }
+
+  def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], literalGenerator: Function2[AttributeReference, Literal, String],
                                attributeFetcher: Function1[Expression, Expression]): Option[(Expression, List[String])] = {
     queryFilter match {
       case equalToQuery: EqualTo =>
@@ -144,7 +168,7 @@ object RecordLevelIndexSupport {
           val attribute = attributeLiteralTuple._1
           val literal = attributeLiteralTuple._2
           if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
-            val recordKeyLiteral = getRecordKeyLiteral(attribute, literal, isComplexRecordKey)
+            val recordKeyLiteral = literalGenerator.apply(attribute, literal)
             Option.apply(equalToQuery, List.apply(recordKeyLiteral))
           } else {
             Option.empty
@@ -155,17 +179,23 @@ object RecordLevelIndexSupport {
 
       case inQuery: In =>
         var validINQuery = true
-        attributeFetcher.apply(inQuery.value) match {
-          case attribute: AttributeReference =>
-            if (!attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
+        val attributeOpt = Option.apply(
+          attributeFetcher.apply(inQuery.value) match {
+            case attribute: AttributeReference =>
+              if (!attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
+                validINQuery = false
+                null
+              } else {
+                attribute
+              }
+            case _ =>
               validINQuery = false
-            }
-          case _ => validINQuery = false
-        }
+              null
+          })
         var literals: List[String] = List.empty
         inQuery.list.foreach {
-          case literal: Literal =>
-            val recordKeyLiteral = getRecordKeyLiteral(inQuery.value.asInstanceOf[AttributeReference], literal, isComplexRecordKey)
+          case literal: Literal if attributeOpt.isDefined =>
+            val recordKeyLiteral = literalGenerator.apply(attributeOpt.get, literal)
             literals = literals :+ recordKeyLiteral
           case _ => validINQuery = false
         }
@@ -177,33 +207,28 @@ object RecordLevelIndexSupport {
 
       // Handle And expression (composite filter)
       case andQuery: And =>
-        val leftResult = filterQueryWithRecordKey(andQuery.left, recordKeyOpt, isComplexRecordKey, attributeFetcher)
-        val rightResult = filterQueryWithRecordKey(andQuery.right, recordKeyOpt, isComplexRecordKey, attributeFetcher)
+        if (!isSupported(andQuery.left) || !isSupported(andQuery.right)) {
+          Option.empty
+        } else {
+          val leftResult = filterQueryWithRecordKey(andQuery.left, recordKeyOpt, literalGenerator, attributeFetcher)
+          val rightResult = filterQueryWithRecordKey(andQuery.right, recordKeyOpt, literalGenerator, attributeFetcher)
 
-        // If both left and right filters are valid, concatenate their results
-        (leftResult, rightResult) match {
-          case (Some((leftExp, leftKeys)), Some((rightExp, rightKeys))) =>
-            // Return concatenated expressions and record keys
-            Option.apply(And(leftExp, rightExp), leftKeys ++ rightKeys)
-          case (Some((leftExp, leftKeys)), None) =>
-            // Return concatenated expressions and record keys
-            Option.apply(leftExp, leftKeys)
-          case (None, Some((rightExp, rightKeys))) =>
-            // Return concatenated expressions and record keys
-            Option.apply(rightExp, rightKeys)
-          case _ => Option.empty
+          // If both left and right filters are valid, concatenate their results
+          (leftResult, rightResult) match {
+            case (Some((leftExp, leftKeys)), Some((rightExp, rightKeys))) =>
+              // Return concatenated expressions and record keys
+              Option.apply(And(leftExp, rightExp), leftKeys ++ rightKeys)
+            case (Some((leftExp, leftKeys)), None) =>
+              // Return concatenated expressions and record keys
+              Option.apply(leftExp, leftKeys)
+            case (None, Some((rightExp, rightKeys))) =>
+              // Return concatenated expressions and record keys
+              Option.apply(rightExp, rightKeys)
+            case _ => Option.empty
+          }
         }
 
       case _ => Option.empty
-    }
-  }
-
-  private def getRecordKeyLiteral(attribute: AttributeReference, literal: Literal, isComplexRecordKey: Boolean): String = {
-    if (isComplexRecordKey) {
-      // For complex record keys, the record key is of the form fieldName:fieldValue
-      attribute.name + KeyGenUtils.DEFAULT_COLUMN_VALUE_SEPARATOR + literal.value.toString
-    } else {
-      literal.value.toString
     }
   }
 

@@ -19,18 +19,17 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
-import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
-import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, Literal, Or}
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, HoodieCatalystExpressionUtils, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -156,7 +155,6 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
     if (shouldPrune) {
-      assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
       assertEquals(numFiles, filteredFilesCount)
     } else {
       assertEquals(filteredFilesCount, getLatestDataFilesCount(opts))
@@ -165,9 +163,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
     val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
-    if (shouldPrune) {
-      assertTrue(filteredFilesCount < filesCountWithNoSkipping)
-    } else {
+    if (!shouldPrune) {
       assertEquals(filteredFilesCount, filesCountWithNoSkipping)
     }
   }
@@ -271,9 +267,9 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   }
 
   @Test
-  def testRLIWithMultipleRecordKeyFields(): Unit = {
-    val tableName = "dummy_table_multi_pk"
-    val dummyTablePath = tempDir.resolve("dummy_table_multi_pk").toAbsolutePath.toString
+  def testRLIWithTwoRecordKeyFields(): Unit = {
+    val tableName = "dummy_table_two_pk"
+    val dummyTablePath = tempDir.resolve(tableName).toAbsolutePath.toString
     val hudiOpts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -312,7 +308,81 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
       .build()
     verifyEqualToQuery(hudiOpts, Seq("record_key_col", "name"), tableName, latestSnapshotDf, HoodieTableMetaClient.reload(metaClient))
     verifyInQuery(hudiOpts, Array("record_key_col", "name"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), true)
+    verifyInQuery(hudiOpts, Array("name", "record_key_col"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), true)
     verifyInQuery(hudiOpts, Array("record_key_col"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), false)
+  }
+
+  @Test
+  def testRLIWithThreeRecordKeyFields(): Unit = {
+    val tableName = "dummy_table_three_pk"
+    val dummyTablePath = tempDir.resolve(tableName).toAbsolutePath.toString
+    val hudiOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> tableName,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "record_key_col1,record_key_col2,record_key_col3",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_key_col",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+    ) ++ metadataOpts
+
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  record_key_col1 string,
+         |  record_key_col2 string,
+         |  record_key_col3 string,
+         |  partition_key_col string
+         |) using hudi
+         | options (
+         |  primaryKey ='record_key_col,name',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.datasource.write.recordkey.field = 'record_key_col1,record_key_col2,record_key_col3',
+         |  hoodie.enable.data.skipping = 'true'
+         | )
+         | partitioned by(partition_key_col)
+         | location '$dummyTablePath'
+       """.stripMargin)
+    spark.sql(s"insert into $tableName values('row1', 'name1', 'a', 'p1')")
+    spark.sql(s"insert into $tableName values('row2', 'name2', 'b', 'p2')")
+    spark.sql(s"insert into $tableName values('row3', 'name3', 'c', 'p3')")
+
+    val latestSnapshotDf = spark.read.format("hudi").options(hudiOpts).load(dummyTablePath)
+    this.metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(dummyTablePath)
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .build()
+    verifyEqualToQuery(hudiOpts, Seq("record_key_col1", "record_key_col2", "record_key_col3"), tableName, latestSnapshotDf, HoodieTableMetaClient.reload(metaClient))
+    verifyInQuery(hudiOpts, Array("record_key_col1", "record_key_col2", "record_key_col3"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), true)
+    verifyInQuery(hudiOpts, Array("record_key_col3", "record_key_col1", "record_key_col2"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), true)
+
+    // Verify pruning does not work
+    // Two columns repeated
+    verifyInQuery(hudiOpts, Array("record_key_col3", "record_key_col3", "record_key_col2"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), false)
+    // Only two out of three columns
+    verifyInQuery(hudiOpts, Array("record_key_col1", "record_key_col2"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), false)
+    // Only one out of three columns
+    verifyInQuery(hudiOpts, Array("record_key_col1"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), false)
+
+    // Verify pruning count using multiple literals
+    val tableSchema: StructType =
+      StructType(
+        Seq(
+          StructField("record_key_col1", StringType),
+          StructField("record_key_col2", StringType),
+          StructField("record_key_col3", StringType),
+          StructField("partition_key_col", StringType)
+        )
+      )
+    // All record key combinations are included so all files will be scanned
+    verifyPruningFileCount(hudiOpts, HoodieCatalystExpressionUtils.resolveExpr(spark, "record_key_col2 in ('name1', 'name2', 'name3')" +
+      " AND record_key_col1 in ('row1', 'row2', 'row3') AND record_key_col3 in ('a', 'b', 'c')", tableSchema), 3, metaClient, true)
+    // Only two record key combinations are valid, so only two files will be scanned
+    verifyPruningFileCount(hudiOpts, HoodieCatalystExpressionUtils.resolveExpr(spark, "record_key_col2 in ('name1', 'name2')" +
+      " AND record_key_col1 in ('row1', 'row2') AND record_key_col3 in ('a', 'b')", tableSchema), 2, metaClient, true)
+    // There is only one valid record key combination, so only one file will be scanned
+    verifyPruningFileCount(hudiOpts, HoodieCatalystExpressionUtils.resolveExpr(spark, "record_key_col2 in ('name1', 'name2')" +
+      " AND record_key_col1 in ('row2') AND record_key_col3 in ('a', 'b', 'c')", tableSchema), 1, metaClient, true)
   }
 
   def verifyEqualToQuery(hudiOpts: Map[String, String], colNames: Seq[String], tableName: String, latestSnapshotDf: DataFrame, metaClient: HoodieTableMetaClient): Unit = {

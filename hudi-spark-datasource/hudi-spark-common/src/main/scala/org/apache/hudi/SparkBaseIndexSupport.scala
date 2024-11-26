@@ -23,16 +23,16 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, In}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, In, Literal}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
-import scala.util.control.Breaks.break
-import scala.util.control.Breaks.breakable
+import scala.util.control.Breaks.{break, breakable}
 import scala.util.control.NonFatal
 
 abstract class SparkBaseIndexSupport(spark: SparkSession,
@@ -164,11 +164,18 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       recordKeyOpt.foreach { recordKeysArray =>
         // Handle composite record keys
         breakable {
+          // Iterate configured record keys and fetch literals for every record key
           for (recordKey <- recordKeysArray) {
             var recordKeys: List[String] = List.empty
             for (query <- queryFilters) {
               {
-                RecordLevelIndexSupport.filterQueryWithRecordKey(query, Option.apply(recordKey), isComplexRecordKey).foreach {
+                RecordLevelIndexSupport.filterQueryWithRecordKey(query, Option.apply(recordKey),
+                  if (isComplexRecordKey) {
+                    RecordLevelIndexSupport.getComplexKeyLiteralGenerator()
+                  } else {
+                    RecordLevelIndexSupport.getSimpleLiteralGenerator()
+                  }
+                ).foreach {
                   case (exp: Expression, recKeys: List[String]) =>
                     exp match {
                       // For IN, add each element individually to recordKeys
@@ -183,12 +190,15 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
             }
 
             if (recordKeys.isEmpty) {
+              // No literals found for the record key, therefore filtering can not be performed
               recordKeyQueries = List.empty
               compositeRecordKeys = List.empty
               break()
             } else if (!isComplexRecordKey || compositeRecordKeys.isEmpty) {
               compositeRecordKeys = recordKeys
             } else {
+              // Combine literals for this configured record key with literals for the other configured record keys
+              // If there are two literals for rk1, rk2, rk3 each. A total of 8 combinations will be generated
               var tempCompositeRecordKeys: List[String] = List.empty
               for (compRecKey <- compositeRecordKeys) {
                 for (recKey <- recordKeys) {
