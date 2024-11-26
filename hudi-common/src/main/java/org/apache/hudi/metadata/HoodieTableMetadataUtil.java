@@ -1341,6 +1341,7 @@ public class HoodieTableMetadataUtil {
     return getColumnsToIndex(tableConfig, metadataConfig, Either.left(columnNames), overrideEnableCheck);
 
   }
+  
   public static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                HoodieMetadataConfig metadataConfig,
                                                List<String> columnNames) {
