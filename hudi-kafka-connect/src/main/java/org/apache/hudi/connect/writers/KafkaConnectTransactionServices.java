@@ -94,12 +94,13 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       LOG.info(String.format("Setting record key %s and partition fields %s for table %s",
           recordKeyFields, partitionColumns, tableBasePath + tableName));
 
-      tableMetaClient = Option.of(HoodieTableMetaClient.withPropertyBuilder()
+      tableMetaClient = Option.of(HoodieTableMetaClient.newTableBuilder()
           .setTableType(HoodieTableType.COPY_ON_WRITE.name())
           .setTableName(tableName)
           .setPayloadClassName(HoodieAvroPayload.class.getName())
           .setRecordKeyFields(recordKeyFields)
           .setPartitionFields(partitionColumns)
+          .setTableVersion(writeConfig.getWriteVersion())
           .setKeyGeneratorClassProp(writeConfig.getKeyGeneratorClass())
           .fromProperties(connectConfigs.getProps())
           .initTable(storageConf.newInstance(), tableBasePath));

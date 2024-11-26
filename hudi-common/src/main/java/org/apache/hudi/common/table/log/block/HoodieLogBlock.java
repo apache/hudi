@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.Option;
@@ -43,6 +44,7 @@ import java.io.InterruptedIOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -63,7 +65,7 @@ public abstract class HoodieLogBlock {
   // Header for each log block
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block
-  private final Map<HeaderMetadataType, String> logBlockFooter;
+  private final Map<FooterMetadataType, String> logBlockFooter;
   // Location of a log block on disk
   private final Option<HoodieLogBlockContentLocation> blockContentLocation;
   // data for a specific block
@@ -74,7 +76,7 @@ public abstract class HoodieLogBlock {
 
   public HoodieLogBlock(
       @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-      @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
+      @Nonnull Map<FooterMetadataType, String> logBlockFooter,
       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
       @Nonnull Option<byte[]> content,
       @Nullable Supplier<SeekableDataInputStream> inputStreamSupplier,
@@ -98,6 +100,10 @@ public abstract class HoodieLogBlock {
 
   public abstract HoodieLogBlockType getBlockType();
 
+  public boolean isDataOrDeleteBlock() {
+    return getBlockType().isDataOrDeleteBlock();
+  }
+
   public long getLogBlockLength() {
     throw new HoodieException("No implementation was provided");
   }
@@ -110,7 +116,7 @@ public abstract class HoodieLogBlock {
     return logBlockHeader;
   }
 
-  public Map<HeaderMetadataType, String> getLogBlockFooter() {
+  public Map<FooterMetadataType, String> getLogBlockFooter() {
     return logBlockFooter;
   }
 
@@ -147,8 +153,8 @@ public abstract class HoodieLogBlock {
         LOG.error("Cannot write record positions to the log block header.", e);
       }
     } else {
-      LOG.warn("There are duplicate keys in the records (number of unique positions: %s, "
-              + "number of records: %s). Skip writing record positions to the log block header.",
+      LOG.warn("There are duplicate keys in the records (number of unique positions: {}, "
+              + "number of records: {}). Skip writing record positions to the log block header.",
           positionSet.size(), numRecords);
     }
   }
@@ -157,25 +163,36 @@ public abstract class HoodieLogBlock {
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */
   public enum HoodieLogBlockType {
-    COMMAND_BLOCK(":command"),
-    DELETE_BLOCK(":delete"),
-    CORRUPT_BLOCK(":corrupted"),
-    AVRO_DATA_BLOCK("avro"),
-    HFILE_DATA_BLOCK("hfile"),
-    PARQUET_DATA_BLOCK("parquet"),
-    CDC_DATA_BLOCK("cdc");
+    COMMAND_BLOCK(":command", HoodieTableVersion.ONE),
+    DELETE_BLOCK(":delete", HoodieTableVersion.ONE),
+    CORRUPT_BLOCK(":corrupted", HoodieTableVersion.ONE),
+    AVRO_DATA_BLOCK("avro", HoodieTableVersion.ONE),
+    HFILE_DATA_BLOCK("hfile", HoodieTableVersion.ONE),
+    PARQUET_DATA_BLOCK("parquet", HoodieTableVersion.FOUR),
+    CDC_DATA_BLOCK("cdc", HoodieTableVersion.SIX);
 
     private static final Map<String, HoodieLogBlockType> ID_TO_ENUM_MAP =
         TypeUtils.getValueToEnumMap(HoodieLogBlockType.class, e -> e.id);
 
     private final String id;
 
-    HoodieLogBlockType(String id) {
+    @SuppressWarnings("unused")
+    private final HoodieTableVersion earliestTableVersion;
+
+    HoodieLogBlockType(String id, HoodieTableVersion earliestTableVersion) {
       this.id = id;
+      this.earliestTableVersion = earliestTableVersion;
     }
 
     public static HoodieLogBlockType fromId(String id) {
       return ID_TO_ENUM_MAP.get(id);
+    }
+
+    /**
+     * @returns true if the log block type refers to data or delete block. false otherwise.
+     */
+    public boolean isDataOrDeleteBlock() {
+      return this != HoodieLogBlockType.COMMAND_BLOCK && this != HoodieLogBlockType.CORRUPT_BLOCK;
     }
   }
 
@@ -184,7 +201,21 @@ public abstract class HoodieLogBlock {
    * new enums at the end.
    */
   public enum HeaderMetadataType {
-    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, COMPACTED_BLOCK_TIMES, RECORD_POSITIONS, BLOCK_IDENTIFIER, IS_PARTIAL
+    INSTANT_TIME(HoodieTableVersion.ONE),
+    TARGET_INSTANT_TIME(HoodieTableVersion.ONE),
+    SCHEMA(HoodieTableVersion.ONE),
+    COMMAND_BLOCK_TYPE(HoodieTableVersion.ONE),
+    COMPACTED_BLOCK_TIMES(HoodieTableVersion.FIVE),
+    RECORD_POSITIONS(HoodieTableVersion.SIX),
+    BLOCK_IDENTIFIER(HoodieTableVersion.SIX),
+    IS_PARTIAL(HoodieTableVersion.EIGHT);
+
+    @SuppressWarnings("unused")
+    private final HoodieTableVersion earliestTableVersion;
+
+    HeaderMetadataType(HoodieTableVersion version) {
+      this.earliestTableVersion = version;
+    }
   }
 
   /**
@@ -244,42 +275,31 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Convert log metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual bytes
+   * Convert header metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual bytes
    */
-  public static byte[] getLogMetadataBytes(Map<HeaderMetadataType, String> metadata) throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DataOutputStream output = new DataOutputStream(baos);
-    output.writeInt(metadata.size());
-    for (Map.Entry<HeaderMetadataType, String> entry : metadata.entrySet()) {
-      output.writeInt(entry.getKey().ordinal());
-      byte[] bytes = getUTF8Bytes(entry.getValue());
-      output.writeInt(bytes.length);
-      output.write(bytes);
-    }
-    return baos.toByteArray();
+  public static byte[] getHeaderMetadataBytes(Map<HeaderMetadataType, String> metadata) throws IOException {
+    return getLogMetadataBytes(metadata);
   }
 
   /**
-   * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}.
+   * Convert bytes to Header Metadata, follow the same order as {@link HoodieLogBlock#getHeaderMetadataBytes}.
    */
-  public static Map<HeaderMetadataType, String> getLogMetadata(SeekableDataInputStream dis) throws IOException {
+  public static Map<HeaderMetadataType, String> getHeaderMetadata(SeekableDataInputStream dis) throws IOException {
+    return getLogMetadata(dis, index -> HeaderMetadataType.values()[index]);
+  }
 
-    Map<HeaderMetadataType, String> metadata = new HashMap<>();
-    // 1. Read the metadata written out
-    int metadataCount = dis.readInt();
-    try {
-      while (metadataCount > 0) {
-        int metadataEntryIndex = dis.readInt();
-        int metadataEntrySize = dis.readInt();
-        byte[] metadataEntry = new byte[metadataEntrySize];
-        dis.readFully(metadataEntry, 0, metadataEntrySize);
-        metadata.put(HeaderMetadataType.values()[metadataEntryIndex], new String(metadataEntry));
-        metadataCount--;
-      }
-      return metadata;
-    } catch (EOFException eof) {
-      throw new IOException("Could not read metadata fields ", eof);
-    }
+  /**
+   * Convert footer metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual bytes
+   */
+  public static byte[] getFooterMetadataBytes(Map<FooterMetadataType, String> metadata) throws IOException {
+    return getLogMetadataBytes(metadata);
+  }
+
+  /**
+   * Convert bytes to Footer Metadata, follow the same order as {@link HoodieLogBlock#getFooterMetadataBytes}.
+   */
+  public static Map<FooterMetadataType, String> getFooterMetadata(SeekableDataInputStream dis) throws IOException {
+    return getLogMetadata(dis, index -> FooterMetadataType.values()[index]);
   }
 
   /**
@@ -324,6 +344,7 @@ public abstract class HoodieLogBlock {
     } catch (IOException e) {
       // TODO : fs.open() and return inputstream again, need to pass FS configuration
       // because the inputstream might close/timeout for large number of log blocks to be merged
+      deflate();
       inflate();
     }
   }
@@ -334,5 +355,63 @@ public abstract class HoodieLogBlock {
    */
   protected void deflate() {
     content = Option.empty();
+  }
+
+  /**
+   * Converts a given map of log metadata into a byte array representation.
+   *
+   * The conversion process involves the following steps:
+   * 1. Write the size of the metadata map (number of entries).
+   * 2. For each entry in the map:
+   *    - Write the ordinal of the enum key (to identify the type of metadata).
+   *    - Write the length of the value string.
+   *    - Write the actual bytes of the value string in UTF-8 encoding.
+   *
+   * @param metadata A map containing metadata entries, where the key is an enum type representing
+   *                 the metadata type and the value is the corresponding string representation.
+   * @return A byte array containing the serialized metadata.
+   * @throws IOException If an I/O error occurs during the writing process, such as failure to write
+   *                     to the underlying output stream.
+   */
+  private static <T extends Enum<T>> byte[] getLogMetadataBytes(Map<T, String> metadata) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream output = new DataOutputStream(baos);
+    output.writeInt(metadata.size());
+    for (Map.Entry<T, String> entry : metadata.entrySet()) {
+      output.writeInt(entry.getKey().ordinal());
+      byte[] bytes = getUTF8Bytes(entry.getValue());
+      output.writeInt(bytes.length);
+      output.write(bytes);
+    }
+    return baos.toByteArray();
+  }
+
+  /**
+   * Convert bytes to Log Metadata, following the same order as {@link HoodieLogBlock#getHeaderMetadataBytes}
+   * and {@link HoodieLogBlock#getFooterMetadataBytes}.
+   *
+   * @param dis The SeekableDataInputStream to read the metadata from.
+   * @param typeMapper A function to map the ordinal index to the corresponding metadata type enum.
+   * @param <T> The type of the metadata enum (either HeaderMetadataType or FooterMetadataType).
+   * @return A Map containing the metadata type as the key and the metadata value as the value.
+   * @throws IOException If an I/O error occurs while reading the metadata.
+   */
+  private static <T> Map<T, String> getLogMetadata(SeekableDataInputStream dis, Function<Integer, T> typeMapper) throws IOException {
+    Map<T, String> metadata = new HashMap<>();
+    // 1. Read the metadata written out
+    int metadataCount = dis.readInt();
+    try {
+      while (metadataCount > 0) {
+        int metadataEntryIndex = dis.readInt();
+        int metadataEntrySize = dis.readInt();
+        byte[] metadataEntry = new byte[metadataEntrySize];
+        dis.readFully(metadataEntry, 0, metadataEntrySize);
+        metadata.put(typeMapper.apply(metadataEntryIndex), new String(metadataEntry));
+        metadataCount--;
+      }
+      return metadata;
+    } catch (EOFException eof) {
+      throw new IOException("Could not read metadata fields ", eof);
+    }
   }
 }

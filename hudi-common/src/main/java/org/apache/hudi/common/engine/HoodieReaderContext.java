@@ -19,11 +19,10 @@
 
 package org.apache.hudi.common.engine;
 
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -31,6 +30,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -57,7 +57,7 @@ public abstract class HoodieReaderContext<T> {
   private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
-  private HoodieRecordMerger recordMerger = null;
+  private Option<HoodieRecordMerger> recordMerger = null;
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
@@ -91,11 +91,11 @@ public abstract class HoodieReaderContext<T> {
     this.latestCommitTime = latestCommitTime;
   }
 
-  public HoodieRecordMerger getRecordMerger() {
+  public Option<HoodieRecordMerger> getRecordMerger() {
     return recordMerger;
   }
 
-  public void setRecordMerger(HoodieRecordMerger recordMerger) {
+  public void setRecordMerger(Option<HoodieRecordMerger> recordMerger) {
     this.recordMerger = recordMerger;
   }
 
@@ -186,11 +186,16 @@ public abstract class HoodieReaderContext<T> {
    */
   public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
+  public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
+  
   /**
-   * @param mergerStrategy Merger strategy UUID.
+   * @param mergeMode        record merge mode
+   * @param mergeStrategyId  record merge strategy ID
+   * @param mergeImplClasses custom implementation classes for record merging
+   *
    * @return {@link HoodieRecordMerger} to use.
    */
-  public abstract HoodieRecordMerger getRecordMerger(String mergerStrategy);
+  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses);
 
   /**
    * Gets the field value.
@@ -220,25 +225,29 @@ public abstract class HoodieReaderContext<T> {
    * @param recordOption An option of record.
    * @param metadataMap  A map containing the record metadata.
    * @param schema       The Avro schema of the record.
-   * @param props        Properties.
+   * @param orderingFieldName name of the ordering field
+   * @param orderingFieldTypeOpt type of the ordering field
+   * @param orderingFieldDefault default value for ordering
    * @return The ordering value.
    */
   public Comparable getOrderingValue(Option<T> recordOption,
                                      Map<String, Object> metadataMap,
                                      Schema schema,
-                                     TypedProperties props) {
+                                     String orderingFieldName,
+                                     Option<Schema.Type> orderingFieldTypeOpt,
+                                     Comparable orderingFieldDefault) {
     if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
       return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     }
 
-    if (!recordOption.isPresent()) {
-      return 0;
+    if (!recordOption.isPresent() || !orderingFieldTypeOpt.isPresent()) {
+      return orderingFieldDefault;
     }
 
-    String orderingFieldName = ConfigUtils.getOrderingField(props);
     Object value = getValue(recordOption.get(), schema, orderingFieldName);
-    return value != null ? (Comparable) value : 0;
-
+    Comparable finalOrderingVal = value != null ? castValue((Comparable) value, orderingFieldTypeOpt.get()) : orderingFieldDefault;
+    metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
+    return finalOrderingVal;
   }
 
   /**
@@ -260,18 +269,6 @@ public abstract class HoodieReaderContext<T> {
   public abstract T seal(T record);
 
   /**
-   * Compares values in different types which can contain engine-specific types.
-   *
-   * @param o1 {@link Comparable} object.
-   * @param o2 other {@link Comparable} object to compare to.
-   * @return comparison result.
-   */
-  public int compareTo(Comparable o1, Comparable o2) {
-    throw new IllegalArgumentException("Cannot compare values in different types: "
-        + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")");
-  }
-
-  /**
    * Generates metadata map based on the information.
    *
    * @param recordKey     Record key in String.
@@ -280,11 +277,11 @@ public abstract class HoodieReaderContext<T> {
    * @return A mapping containing the metadata.
    */
   public Map<String, Object> generateMetadataForRecord(
-      String recordKey, String partitionPath, Comparable orderingVal) {
+      String recordKey, String partitionPath, Comparable orderingVal, Option<Schema.Type> orderingFieldType) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, recordKey);
     meta.put(INTERNAL_META_PARTITION_PATH, partitionPath);
-    meta.put(INTERNAL_META_ORDERING_FIELD, orderingVal);
+    meta.put(INTERNAL_META_ORDERING_FIELD, orderingFieldType.map(type -> castValue(orderingVal, type)).orElse(orderingVal));
     return meta;
   }
 
@@ -345,6 +342,8 @@ public abstract class HoodieReaderContext<T> {
     return projectRecord(from, to, Collections.emptyMap());
   }
 
+  public abstract Comparable castValue(Comparable value, Schema.Type newType);
+
   /**
    * Extracts the record position value from the record itself.
    *
@@ -364,12 +363,5 @@ public abstract class HoodieReaderContext<T> {
 
   public boolean supportsParquetRowIndex() {
     return false;
-  }
-
-  /**
-   * Constructs engine specific delete record.
-   */
-  public T constructRawDeleteRecord(Map<String, Object> metadata) {
-    return null;
   }
 }

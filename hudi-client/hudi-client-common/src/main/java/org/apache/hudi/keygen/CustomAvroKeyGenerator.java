@@ -19,6 +19,7 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
@@ -76,8 +77,11 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
       return Collections.emptyList(); // Corresponds to no partition case
     } else {
       return partitionPathFields.stream().map(field -> {
-        Pair<String, CustomAvroKeyGenerator.PartitionKeyType> partitionAndType = getPartitionFieldAndKeyType(field);
-        CustomAvroKeyGenerator.PartitionKeyType keyType = partitionAndType.getRight();
+        Pair<String, Option<CustomAvroKeyGenerator.PartitionKeyType>> partitionAndType = getPartitionFieldAndKeyType(field);
+        if (partitionAndType.getRight().isEmpty()) {
+          throw getPartitionPathFormatException();
+        }
+        CustomAvroKeyGenerator.PartitionKeyType keyType = partitionAndType.getRight().get();
         String partitionPathField = partitionAndType.getLeft();
         switch (keyType) {
           case SIMPLE:
@@ -95,35 +99,53 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     }
   }
 
-  public static List<PartitionKeyType> getPartitionTypes(List<String> partitionPathFields) {
+  /**
+   * Returns list of partition types configured in the partition fields for custom key generator.
+   *
+   * @param tableConfig Table config where partition fields are configured
+   */
+  public static List<PartitionKeyType> getPartitionTypes(HoodieTableConfig tableConfig) {
+    List<String> partitionPathFields = HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(Collections.emptyList());
     if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
       return Collections.emptyList(); // Corresponds to no partition case
     } else {
-      return partitionPathFields.stream().map(field -> {
-        Pair<String, CustomAvroKeyGenerator.PartitionKeyType> partitionAndType = getPartitionFieldAndKeyType(field);
-        return partitionAndType.getRight();
-      }).collect(Collectors.toList());
-    }
-  }
-
-  public static List<String> getTimestampFields(List<String> partitionPathFields) {
-    if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
-      return Collections.emptyList(); // Corresponds to no partition case
-    } else {
-      return partitionPathFields.stream()
-          .map(CustomAvroKeyGenerator::getPartitionFieldAndKeyType)
-          .filter(fieldAndKeyType -> fieldAndKeyType.getRight().equals(PartitionKeyType.TIMESTAMP))
-          .map(Pair::getLeft)
+      return partitionPathFields.stream().map(field -> getPartitionFieldAndKeyType(field).getRight())
+          .filter(Option::isPresent)
+          .map(Option::get)
           .collect(Collectors.toList());
     }
   }
 
-  public static Pair<String, PartitionKeyType> getPartitionFieldAndKeyType(String field) {
-    String[] fieldWithType = field.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX);
-    if (fieldWithType.length != 2) {
-      throw new HoodieKeyException("Unable to find field names for partition path in proper format");
+  /**
+   * Returns the partition fields with timestamp partition type.
+   *
+   * @param tableConfig Table config where partition fields are configured
+   * @return Optional list of partition fields with timestamp partition type
+   */
+  public static Option<List<String>> getTimestampFields(HoodieTableConfig tableConfig) {
+    List<String> partitionPathFields = HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(Collections.emptyList());
+    if (partitionPathFields.isEmpty() || (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty())) {
+      return Option.of(Collections.emptyList()); // Corresponds to no partition case
+    } else if (getPartitionFieldAndKeyType(partitionPathFields.get(0)).getRight().isEmpty()) {
+      // Partition type is not configured for the partition fields therefore timestamp partition fields
+      // can not be determined
+      return Option.empty();
+    } else {
+      return Option.of(partitionPathFields.stream()
+          .map(CustomAvroKeyGenerator::getPartitionFieldAndKeyType)
+          .filter(fieldAndKeyType -> fieldAndKeyType.getRight().isPresent() && fieldAndKeyType.getRight().get().equals(PartitionKeyType.TIMESTAMP))
+          .map(Pair::getLeft)
+          .collect(Collectors.toList()));
     }
-    return Pair.of(fieldWithType[0], PartitionKeyType.valueOf(fieldWithType[1].toUpperCase()));
+  }
+
+  public static Pair<String, Option<PartitionKeyType>> getPartitionFieldAndKeyType(String field) {
+    String[] fieldWithType = field.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX);
+    if (fieldWithType.length == 2) {
+      return Pair.of(fieldWithType[0], Option.of(PartitionKeyType.valueOf(fieldWithType[1].toUpperCase())));
+    } else {
+      return Pair.of(fieldWithType[0], Option.empty());
+    }
   }
 
   @Override
@@ -156,6 +178,11 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     if (getRecordKeyFieldNames() == null || getRecordKeyFieldNames().isEmpty()) {
       throw new HoodieKeyException("Unable to find field names for record key in cfg");
     }
+  }
+
+  static HoodieKeyGeneratorException getPartitionPathFormatException() {
+    return new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format. "
+        + "Please specify the partition field names in format `field1:type1,field2:type2`. Example: `city:simple,ts:timestamp`");
   }
 
   public String getDefaultPartitionPathSeparator() {

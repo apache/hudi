@@ -23,7 +23,6 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,6 +33,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.table.HoodieJavaTable;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 
@@ -58,6 +59,11 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
                                                 HoodieEngineContext engineContext,
                                                 Option<String> inflightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+  }
+
+  @Override
+  HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+    return HoodieJavaTable.create(writeConfig, engineContext, metaClient);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
@@ -117,8 +123,9 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs, HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient,
-                                                               int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf) {
+  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
+                                                               HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               String instantTime) {
     throw new HoodieNotSupportedException("Functional index not supported for Java metadata table writer yet.");
   }
 

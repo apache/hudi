@@ -22,7 +22,7 @@ import java.util
 import java.util.Objects
 
 /**
- * This class is to make scala-2.11 compilable.
+ * TODO [HUDI-8297] This class might not be needed anymore.
  * Using Identifier.of(namespace, name) to get a IdentifierImpl will throw
  * compile exception( Static methods in interface require -target:jvm-1.8)
  */

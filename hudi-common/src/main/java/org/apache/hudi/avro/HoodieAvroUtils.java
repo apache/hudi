@@ -93,6 +93,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -1018,7 +1019,7 @@ public class HoodieAvroUtils {
     return result;
   }
 
-  private static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
+  public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
     if (oldSchema.getType() == newSchema.getType()) {
       switch (oldSchema.getType()) {
         case NULL:
@@ -1145,6 +1146,70 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Checks whether the provided schema contains a decimal with a precision less than or equal to 18,
+   * which allows the decimal to be stored as int/long instead of a fixed size byte array in
+   * <a href="https://github.com/apache/parquet-format/blob/master/LogicalTypes.md">parquet logical types</a>
+   * @param schema the input schema to search
+   * @return true if the schema contains a small precision decimal field and false otherwise
+   */
+  public static boolean hasSmallPrecisionDecimalField(Schema schema) {
+    return hasDecimalWithCondition(schema, HoodieAvroUtils::isSmallPrecisionDecimalField);
+  }
+
+  private static boolean hasDecimalWithCondition(Schema schema, Function<Decimal, Boolean> condition) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (Field field : schema.getFields()) {
+          if (hasDecimalWithCondition(field.schema(), condition)) {
+            return true;
+          }
+        }
+        return false;
+      case ARRAY:
+        return hasDecimalWithCondition(schema.getElementType(), condition);
+      case MAP:
+        return hasDecimalWithCondition(schema.getValueType(), condition);
+      case UNION:
+        return hasDecimalWithCondition(getActualSchemaFromUnion(schema, null), condition);
+      default:
+        if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          Decimal decimal = (Decimal) schema.getLogicalType();
+          return condition.apply(decimal);
+        } else {
+          return false;
+        }
+    }
+  }
+
+  private static boolean isSmallPrecisionDecimalField(Decimal decimal) {
+    return decimal.getPrecision() <= 18;
+  }
+
+  /**
+   * Checks whether the provided schema contains a list or map field.
+   * @param schema input
+   * @return true if a list or map is present, false otherwise
+   */
+  public static boolean hasListOrMapField(Schema schema) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (Field field : schema.getFields()) {
+          if (hasListOrMapField(field.schema())) {
+            return true;
+          }
+        }
+        return false;
+      case ARRAY:
+      case MAP:
+        return true;
+      case UNION:
+        return hasListOrMapField(getActualSchemaFromUnion(schema, null));
+      default:
+        return false;
+    }
+  }
+
+  /**
    * Avro does not support type promotion from numbers to string. This function returns true if
    * it will be necessary to rewrite the record to support this promotion.
    * NOTE: this does not determine whether the writerSchema and readerSchema are compatible.
@@ -1181,9 +1246,10 @@ public class HoodieAvroUtils {
       case UNION:
         return recordNeedsRewriteForExtendedAvroTypePromotion(getActualSchemaFromUnion(writerSchema, null), getActualSchemaFromUnion(readerSchema, null));
       case ENUM:
+        return needsRewriteToString(writerSchema, true);
       case STRING:
       case BYTES:
-        return needsRewriteToString(writerSchema);
+        return needsRewriteToString(writerSchema, false);
       default:
         return false;
     }
@@ -1194,7 +1260,7 @@ public class HoodieAvroUtils {
    * int, long, float, double, or bytes because avro doesn't support evolution from those types to
    * string so some intervention is needed
    */
-  private static boolean needsRewriteToString(Schema schema) {
+  private static boolean needsRewriteToString(Schema schema, boolean isEnum) {
     switch (schema.getType()) {
       case INT:
       case LONG:
@@ -1202,6 +1268,8 @@ public class HoodieAvroUtils {
       case DOUBLE:
       case BYTES:
         return true;
+      case ENUM:
+        return !isEnum;
       default:
         return false;
     }

@@ -19,7 +19,6 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -162,9 +161,9 @@ public class TestInputPathHandler {
     properties.setProperty(HoodieTableConfig.NAME.key(), tableName);
     properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
     properties.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieAvroPayload.class.getName());
-    properties.setProperty(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
-    return HoodieTableMetaClient.initTableAndGetMetaClient(
-        HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath, properties);
+    return HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(properties)
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
   }
 
   static List<Path> generatePartitions(DistributedFileSystem dfs, String basePath)

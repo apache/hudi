@@ -59,7 +59,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 HoodieLogBlockContentLocation logBlockContentLocation,
                                 Option<Schema> readerSchema,
                                 Map<HeaderMetadataType, String> header,
-                                Map<HeaderMetadataType, String> footer,
+                                Map<FooterMetadataType, String> footer,
                                 String keyField) {
     super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
 

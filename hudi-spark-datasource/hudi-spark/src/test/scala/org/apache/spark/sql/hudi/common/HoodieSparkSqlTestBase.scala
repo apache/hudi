@@ -27,13 +27,13 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
-import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
 import org.scalactic.source
@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util.TimeZone
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
@@ -70,7 +71,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     .config(sparkConf())
     .getOrCreate()
 
-  private var tableId = 0
+  private var tableId = new AtomicInteger(0)
 
   private var extraConf = Map[String, String]()
 
@@ -113,9 +114,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def generateTableName: String = {
-    val name = s"h$tableId"
-    tableId = tableId + 1
-    name
+    s"h${tableId.incrementAndGet()}"
   }
 
   override protected def afterAll(): Unit = {
@@ -151,6 +150,49 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       case e: Throwable =>
         assertResult(errorMsg.trim)(e.getMessage.trim)
         hasException = true
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def checkException(runnable: Runnable)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      runnable.run()
+    } catch {
+      case e: Throwable =>
+        assertResult(errorMsg.trim)(e.getMessage.trim)
+        hasException = true
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def checkNestedException(sql: String)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        var t = e
+        while (t != null) {
+          if (errorMsg.trim.equals(t.getMessage.trim)) {
+            hasException = true
+          }
+          t = t.getCause
+        }
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def checkExceptionContain(runnable: Runnable)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      runnable.run()
+    } catch {
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+        hasException = true
+
+      case f: Throwable =>
+        fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
     }
     assertResult(true)(hasException)
   }
@@ -202,7 +244,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         Some(conf.getConfString(k))
       } else None
     }
-    pairs.foreach { case(k, v) => conf.setConfString(k, v) }
+    pairs.foreach { case (k, v) => conf.setConfString(k, v) }
     try f finally {
       pairs.unzip._1.zip(currentValues).foreach {
         case (key, Some(value)) => conf.setConfString(key, value)
@@ -215,12 +257,12 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       f(tableName)
     } finally {
-      spark.sql(s"drop table if exists $tableName")
+      spark.sql(s"drop table if exists $tableName purge")
     }
   }
 
   protected def withRecordType(recordTypes: Seq[HoodieRecordType] = Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),
-                               recordConfig: Map[HoodieRecordType, Map[String, String]]=Map.empty)(f: => Unit) {
+                               recordConfig: Map[HoodieRecordType, Map[String, String]] = Map.empty)(f: => Unit) {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
     recordTypes.foreach { recordType =>
       val (merger, format) = recordType match {
@@ -228,22 +270,13 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
       }
       val config = Map(
-        HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> merger,
+        HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> merger,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> format) ++ recordConfig.getOrElse(recordType, Map.empty)
-      withSQLConf(config.toList:_*) {
+      withSQLConf(config.toList: _*) {
         f
         // We need to clear indexed location in memory after each test.
         HoodieInMemoryHashIndex.clear()
       }
-    }
-  }
-
-  protected def getRecordType(): HoodieRecordType = {
-    val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue())
-    if (merger.equals(classOf[DefaultSparkRecordMerger].getName)) {
-      HoodieRecordType.SPARK
-    } else {
-      HoodieRecordType.AVRO
     }
   }
 }

@@ -23,10 +23,11 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.PropertiesConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
-import org.apache.hudi.common.model.RecordPayloadType;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
@@ -91,11 +93,11 @@ public class ConfigUtils {
    * Get payload class.
    */
   public static String getPayloadClass(Properties properties) {
-    return RecordPayloadType.getPayloadClassName(new HoodieConfig(properties));
+    return HoodieRecordPayload.getPayloadClassName(new HoodieConfig(properties));
   }
 
   public static List<String> split2List(String param) {
-    return Arrays.stream(param.split(","))
+    return StringUtils.split(param, ",").stream()
         .map(String::trim).distinct().collect(Collectors.toList());
   }
 
@@ -237,9 +239,22 @@ public class ConfigUtils {
    */
   public static boolean containsConfigProperty(Map<String, Object> props,
                                                ConfigProperty<?> configProperty) {
-    if (!props.containsKey(configProperty.key())) {
+    return containsConfigProperty(props::containsKey, configProperty);
+  }
+
+  /**
+   * Whether the properties contain a config. If any of the key or alternative keys of the
+   * {@link ConfigProperty} exists, this method returns {@code true}.
+   *
+   * @param keyExistsFn    Function to check if key exists
+   * @param configProperty Config to look up.
+   * @return {@code true} if exists; {@code false} otherwise.
+   */
+  public static boolean containsConfigProperty(Function<String, Boolean> keyExistsFn,
+                                               ConfigProperty<?> configProperty) {
+    if (!keyExistsFn.apply(configProperty.key())) {
       for (String alternative : configProperty.getAlternatives()) {
-        if (props.containsKey(alternative)) {
+        if (keyExistsFn.apply(alternative)) {
           return true;
         }
       }
@@ -374,12 +389,27 @@ public class ConfigUtils {
    */
   public static String getStringWithAltKeys(Map<String, Object> props,
                                             ConfigProperty<String> configProperty) {
-    Object value = props.get(configProperty.key());
+    return getStringWithAltKeys(props::get, configProperty);
+  }
+
+  /**
+   * Gets the String value for a {@link ConfigProperty} config using a key mapping function. The key
+   * and alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
+   * config, if exists, is returned if the config is not found in the properties.
+   *
+   * @param keyMapper      Mapper function to map the key to values.
+   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @return String value if the config exists; default String value if the config does not exist
+   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
+   */
+  public static String getStringWithAltKeys(Function<String, Object> keyMapper,
+                                            ConfigProperty<String> configProperty) {
+    Object value = keyMapper.apply(configProperty.key());
     if (value != null) {
       return value.toString();
     }
     for (String alternative : configProperty.getAlternatives()) {
-      value = props.get(alternative);
+      value = keyMapper.apply(alternative);
       if (value != null) {
         LOG.warn(String.format("The configuration key '%s' has been deprecated "
                 + "and may be removed in the future. Please use the new key '%s' instead.",
@@ -551,6 +581,8 @@ public class ConfigUtils {
     if (found) {
       throw new IllegalArgumentException(
           "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+    } else if (!storage.exists(metaPath)) {
+      throw new TableNotFoundException(metaPath.toString());
     } else {
       throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
     }

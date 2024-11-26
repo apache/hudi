@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -44,9 +43,14 @@ import java.util.List;
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface HoodieRecordMerger extends Serializable {
 
-  String DEFAULT_MERGER_STRATEGY_UUID = "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5";
+  // Uses event time ordering to determine which record is chosen
+  String DEFAULT_MERGE_STRATEGY_UUID = "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5";
 
-  String OVERWRITE_MERGER_STRATEGY_UUID = "ce9acb64-bde0-424c-9b91-f6ebba25356d";
+  // Always chooses the most recently written record
+  String COMMIT_TIME_BASED_MERGE_STRATEGY_UUID = "ce9acb64-bde0-424c-9b91-f6ebba25356d";
+
+  // Use avro payload to merge records
+  String PAYLOAD_BASED_MERGE_STRATEGY_UUID = "00000000-0000-0000-0000-000000000000";
 
   /**
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.
@@ -137,7 +141,19 @@ public interface HoodieRecordMerger extends Serializable {
     throw new UnsupportedOperationException("Partial merging logic is not implemented.");
   }
 
-  default String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg) {
+  /**
+   * If false, whenever we have log files, we will need to read all columns
+   * If true, mor merging can be done without all columns. The columns required can be configured
+   * by overriding getMandatoryFieldsForMerging
+   */
+  default boolean isProjectionCompatible() {
+    return false;
+  }
+
+  /**
+   * Returns a list of fields required for mor merging. The default implementation will return the recordkey field and the precombine
+   */
+  default String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
     ArrayList<String> requiredFields = new ArrayList<>();
 
     if (cfg.populateMetaFields()) {
@@ -167,17 +183,4 @@ public interface HoodieRecordMerger extends Serializable {
    */
   String getMergingStrategy();
 
-  /**
-   * The record merge mode that corresponds to this record merger
-   */
-  default RecordMergeMode getRecordMergeMode() {
-    switch (getMergingStrategy()) {
-      case DEFAULT_MERGER_STRATEGY_UUID:
-        return RecordMergeMode.EVENT_TIME_ORDERING;
-      case OVERWRITE_MERGER_STRATEGY_UUID:
-        return RecordMergeMode.OVERWRITE_WITH_LATEST;
-      default:
-        return RecordMergeMode.CUSTOM;
-    }
-  }
 }

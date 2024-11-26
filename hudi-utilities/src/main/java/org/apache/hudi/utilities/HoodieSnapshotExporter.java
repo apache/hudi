@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -76,6 +75,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
@@ -150,7 +151,10 @@ public class HoodieSnapshotExporter {
     }
 
     FileSystem sourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, jsc.hadoopConfiguration());
-    final String latestCommitTimestamp = getLatestCommitTimestamp(sourceFs, cfg)
+    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(sourceFs.getConf()))
+        .setBasePath(cfg.sourceBasePath).build();
+    final String latestCommitTimestamp = getLatestCommitTimestamp(tableMetadata)
         .<HoodieSnapshotExporterException>orElseThrow(() -> {
           throw new HoodieSnapshotExporterException("No commits present. Nothing to snapshot.");
         });
@@ -165,20 +169,17 @@ public class HoodieSnapshotExporter {
     LOG.info(String.format("The job needs to export %d partitions.", partitions.size()));
 
     if (cfg.outputFormat.equals(OutputFormatValidator.HUDI)) {
-      exportAsHudi(jsc, sourceFs, cfg, partitions, latestCommitTimestamp);
+      exportAsHudi(jsc, sourceFs, cfg, partitions, latestCommitTimestamp, tableMetadata);
     } else {
       exportAsNonHudi(jsc, sourceFs, cfg, partitions, latestCommitTimestamp);
     }
     createSuccessTag(outputFs, cfg);
   }
 
-  private Option<String> getLatestCommitTimestamp(FileSystem fs, Config cfg) {
-    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
-        .setBasePath(cfg.sourceBasePath).build();
+  private Option<String> getLatestCommitTimestamp(HoodieTableMetaClient tableMetadata) {
     Option<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline().getWriteTimeline()
         .filterCompletedInstants().lastInstant();
-    return latestCommit.isPresent() ? Option.of(latestCommit.get().getTimestamp()) : Option.empty();
+    return latestCommit.isPresent() ? Option.of(latestCommit.get().requestedTime()) : Option.empty();
   }
 
   private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg,
@@ -236,7 +237,8 @@ public class HoodieSnapshotExporter {
   }
 
   private void exportAsHudi(JavaSparkContext jsc, FileSystem sourceFs,
-                            Config cfg, List<String> partitions, String latestCommitTimestamp) throws IOException {
+                            Config cfg, List<String> partitions, String latestCommitTimestamp,
+                            HoodieTableMetaClient metaClient) throws IOException {
     final int parallelism = cfg.parallelism == 0 ? jsc.defaultParallelism() : cfg.parallelism;
     final BaseFileOnlyView fsView = getBaseFileOnlyView(sourceFs, cfg);
     final HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
@@ -280,8 +282,8 @@ public class HoodieSnapshotExporter {
 
     // Also copy the .commit files
     LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
-    FileStatus[] commitFilesToCopy =
-        Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)))
+    List<FileStatus> commitFilesListToCopy =
+        Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME)))
             .filter(fileStatus -> {
               Path path = fileStatus.getPath();
               if (path.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
@@ -290,13 +292,19 @@ public class HoodieSnapshotExporter {
                 if (fileStatus.isDirectory()) {
                   return false;
                 }
-                String instantTime = FSUtils.getCommitFromCommitFile(path.getName());
-                return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
+                String instantTime = metaClient.getInstantFileNameParser().extractTimestamp(path.getName());
+                return compareTimestamps(instantTime, LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
               }
-            }).toArray(FileStatus[]::new);
+            }).collect(Collectors.toList());
+    commitFilesListToCopy.addAll(Arrays.stream(sourceFs.listStatus(
+        new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE)))
+        .collect(Collectors.toList()));
+    FileStatus[] commitFilesToCopy = commitFilesListToCopy.stream().toArray(FileStatus[]::new);
     context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
-      Path targetFilePath =
-          new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());
+      Path targetFilePath = commitFile.getPath().getName().endsWith(HoodieTableConfig.HOODIE_PROPERTIES_FILE)
+          ? new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+              + commitFile.getPath().getName()) : new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+              + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/" + commitFile.getPath().getName());
       FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, storageConf.unwrapCopyAs(Configuration.class));
       FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, storageConf.unwrapCopyAs(Configuration.class));
 

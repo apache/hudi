@@ -81,7 +81,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   public HoodieDataBlock(List<HoodieRecord> records,
                          boolean shouldWriteRecordPositions,
                          Map<HeaderMetadataType, String> header,
-                         Map<HeaderMetadataType, String> footer,
+                         Map<FooterMetadataType, String> footer,
                          String keyFieldName) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
     if (shouldWriteRecordPositions) {
@@ -116,7 +116,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             Option<HoodieLogBlockContentLocation> blockContentLocation,
                             Option<Schema> readerSchema,
                             Map<HeaderMetadataType, String> headers,
-                            Map<HeaderMetadataType, String> footer,
+                            Map<FooterMetadataType, String> footer,
                             String keyFieldName,
                             boolean enablePointLookups) {
     super(headers, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);

@@ -43,7 +43,6 @@ import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -102,8 +101,11 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
@@ -185,7 +187,7 @@ public class HiveTestUtil {
 
   public static void clear() throws IOException, HiveException, MetaException {
     fileSystem.delete(new Path(basePath), true);
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -281,7 +283,7 @@ public class HiveTestUtil {
     if (fileSystem.exists(path)) {
       fileSystem.delete(path, true);
     }
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(tableName)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -312,7 +314,7 @@ public class HiveTestUtil {
 
   public static void removeCommitFromActiveTimeline(String instantTime, String actionType) {
     List<StoragePath> pathsToDelete = new ArrayList<>();
-    StoragePath metaFolderPath = new StoragePath(basePath, METAFOLDER_NAME);
+    StoragePath metaFolderPath = new StoragePath(new StoragePath(basePath, METAFOLDER_NAME), TIMELINEFOLDER_NAME);
     String actionSuffix = "." + actionType;
     try {
       StoragePath completeInstantPath = HoodieTestUtils
@@ -365,15 +367,15 @@ public class HiveTestUtil {
 
     createMetaFile(
         basePath,
-        HoodieTimeline.makeRequestedRollbackFileName(instantTime),
+        INSTANT_FILE_NAME_GENERATOR.makeRequestedRollbackFileName(instantTime),
         getUTF8Bytes(""));
     createMetaFile(
         basePath,
-        HoodieTimeline.makeInflightRollbackFileName(instantTime),
+        INSTANT_FILE_NAME_GENERATOR.makeInflightRollbackFileName(instantTime),
         getUTF8Bytes(""));
     createMetaFile(
         basePath,
-        HoodieTimeline.makeRollbackFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeRollbackFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeRollbackMetadata(rollbackMetadata).get());
   }
 
@@ -381,7 +383,7 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException {
     Path path = new Path(basePath);
     FileIOUtils.deleteDirectory(new File(basePath));
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -418,7 +420,7 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     Path path = new Path(basePath);
     FileIOUtils.deleteDirectory(new File(basePath));
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -708,7 +710,7 @@ public class HiveTestUtil {
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
-        .withDeltaCommit(dataFile.getCommitTime()).withStorage(storage).build();
+        .withInstantTime(dataFile.getCommitTime()).withStorage(storage).build();
     List<HoodieRecord> records = (isLogSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100)).stream()
         .map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
@@ -728,7 +730,7 @@ public class HiveTestUtil {
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
-        .withDeltaCommit(dataFile.getCommitTime()).withStorage(storage).build();
+        .withInstantTime(dataFile.getCommitTime()).withStorage(storage).build();
     List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(logSchemaPath, dataPath).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
@@ -772,15 +774,15 @@ public class HiveTestUtil {
   public static void createCommitFile(HoodieCommitMetadata commitMetadata, String instantTime, String basePath) throws IOException {
     createMetaFile(
         basePath,
-        HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        serializeCommitMetadata(commitMetadata).get());
+        INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
   }
 
   public static void createReplaceCommitFile(HoodieReplaceCommitMetadata commitMetadata, String instantTime) throws IOException {
     createMetaFile(
         basePath,
-        HoodieTimeline.makeReplaceFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        serializeCommitMetadata(commitMetadata).get());
+        INSTANT_FILE_NAME_GENERATOR.makeReplaceFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
   }
 
   public static void createCommitFileWithSchema(HoodieCommitMetadata commitMetadata, String instantTime, boolean isSimpleSchema) throws IOException {
@@ -792,21 +794,21 @@ public class HiveTestUtil {
       throws IOException {
     createMetaFile(
         basePath,
-        HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        serializeCommitMetadata(commitMetadata).get());
+        INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
   }
 
   private static void createDeltaCommitFile(HoodieCommitMetadata deltaCommitMetadata, String deltaCommitTime)
       throws IOException {
     createMetaFile(
         basePath,
-        HoodieTimeline.makeDeltaFileName(deltaCommitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
-        serializeCommitMetadata(deltaCommitMetadata).get());
+        INSTANT_FILE_NAME_GENERATOR.makeDeltaFileName(deltaCommitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        serializeCommitMetadata(COMMIT_METADATA_SER_DE, deltaCommitMetadata).get());
   }
 
   private static void createMetaFile(String basePath, String fileName, byte[] bytes)
       throws IOException {
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
+    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + TIMELINEFOLDER_NAME + "/" + fileName);
     OutputStream out = fileSystem.create(fullPath, true);
     out.write(bytes);
     out.close();

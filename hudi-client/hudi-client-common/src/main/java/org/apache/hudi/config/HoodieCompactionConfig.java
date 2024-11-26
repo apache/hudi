@@ -146,7 +146,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Compaction strategy decides which file groups are picked up for "
           + "compaction during each compaction run. By default. Hudi picks the log file "
-          + "with most accumulated unmerged data");
+          + "with most accumulated unmerged data. The strategy can be composed with multiple strategies by concatenating the class names with ','.");
 
   public static final ConfigProperty<String> TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = ConfigProperty
       .key("hoodie.compaction.daybased.target.partitions")
@@ -154,6 +154,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of "
           + "latest partitions to compact during a compaction run.");
+
+  public static final ConfigProperty<String> COMPACTION_SPECIFY_PARTITION_PATH_REGEX = ConfigProperty
+      .key("hoodie.compaction.partition.path.regex")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Used to specify the partition path regex for compaction. "
+          + "Only partitions that match the regex will be compacted. Only be used when configure PartitionRegexBasedCompactionStrategy.");
 
   /**
    * Configs related to specific table types.
@@ -401,8 +408,15 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withCompactionStrategy(CompactionStrategy compactionStrategy) {
-      compactionConfig.setValue(COMPACTION_STRATEGY, compactionStrategy.getClass().getName());
+    public Builder withCompactionStrategy(CompactionStrategy... compactionStrategies) {
+      StringBuilder compactionStrategyBuilder = new StringBuilder();
+      for (CompactionStrategy compactionStrategy : compactionStrategies) {
+        compactionStrategyBuilder.append(compactionStrategy.getClass().getName()).append(",");
+      }
+      if (compactionStrategyBuilder.length() > 0) {
+        compactionStrategyBuilder.deleteCharAt(compactionStrategyBuilder.length() - 1);
+      }
+      compactionConfig.setValue(COMPACTION_STRATEGY, compactionStrategyBuilder.toString());
       return this;
     }
 
@@ -458,6 +472,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withEnableOptimizedLogBlocksScan(String enableOptimizedLogBlocksScan) {
       compactionConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, enableOptimizedLogBlocksScan);
+      return this;
+    }
+
+    public Builder withCompactionSpecifyPartitionPathRegex(String partitionPathRegex) {
+      compactionConfig.setValue(COMPACTION_SPECIFY_PARTITION_PATH_REGEX, partitionPathRegex);
       return this;
     }
 

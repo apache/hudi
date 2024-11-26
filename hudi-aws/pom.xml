@@ -200,6 +200,11 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-inline</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -251,6 +256,7 @@
                                     <name>amazon/dynamodb-local:${dynamodb-local.version}</name>
                                     <alias>it-database</alias>
                                     <run>
+                                        <platform>linux/amd64</platform>
                                         <ports>
                                             <port>${dynamodb-local.port}:${dynamodb-local.port}</port>
                                         </ports>
@@ -263,11 +269,12 @@
                                     </run>
                                 </image>
                                 <image>
-                                    <name>motoserver/moto:${moto.version}</name>
+                                    <name>apachehudi/moto:${moto.version}</name>
                                     <alias>it-aws</alias>
                                     <run>
+                                        <platform>linux/amd64</platform>
                                         <ports>
-                                            <port>${moto.port}:${moto.port}</port>
+                                            <port>${moto.port}:5000</port>
                                         </ports>
                                         <wait>
                                             <http>

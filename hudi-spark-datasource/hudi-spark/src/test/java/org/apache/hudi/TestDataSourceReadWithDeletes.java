@@ -109,7 +109,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
 
     List<Row> rows = spark().read().format("org.apache.hudi")
         .option("hoodie.datasource.query.type", "snapshot")
-        .load(config.getBasePath() + "/*/*")
+        .load(config.getBasePath())
         .select("id", "name", "age", "ts", "part")
         .collectAsList();
     assertEquals(2, rows.size());

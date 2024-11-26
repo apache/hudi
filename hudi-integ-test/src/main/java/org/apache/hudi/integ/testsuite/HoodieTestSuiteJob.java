@@ -23,9 +23,9 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -63,7 +63,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
@@ -121,11 +121,11 @@ public class HoodieTestSuiteJob {
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
     if (!fs.exists(new Path(cfg.targetBasePath))) {
-      metaClient = HoodieTableMetaClient.withPropertyBuilder()
+      metaClient = HoodieTableMetaClient.newTableBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
           .setRecordKeyFields(this.props.getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
-          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+          .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.targetBasePath);
     } else {
       metaClient = HoodieTableMetaClient.builder()
@@ -151,10 +151,12 @@ public class HoodieTestSuiteJob {
   int getSchemaVersionFromCommit(int nthCommit) throws Exception {
     int version = 0;
     try {
-      HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitsTimeline();
+      HoodieTimeline timeline = new ActiveTimelineV2(metaClient).getCommitsTimeline();
       // Pickup the schema version from nth commit from last (most recent insert/upsert will be rolled back).
       HoodieInstant prevInstant = timeline.nthFromLastInstant(nthCommit).get();
-      HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(prevInstant).get(),
+      HoodieCommitMetadata commit = metaClient.getCommitMetadataSerDe().deserialize(
+          prevInstant,
+          timeline.getInstantDetails(prevInstant).get(),
           HoodieCommitMetadata.class);
       Map<String, String> extraMetadata = commit.getExtraMetadata();
       String avroSchemaStr = extraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY);

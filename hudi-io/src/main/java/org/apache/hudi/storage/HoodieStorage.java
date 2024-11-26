@@ -221,6 +221,15 @@ public abstract class HoodieStorage implements Closeable {
                                                           StoragePathFilter filter) throws IOException;
 
   /**
+   * Sets Modification Time for the storage Path
+   * @param path
+   * @param modificationTimeInMillisEpoch Millis since Epoch
+   * @throws IOException
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract void setModificationTime(StoragePath path, long modificationTimeInMillisEpoch) throws IOException;
+
+  /**
    * Returns all the files that match the pathPattern and are not checksum files,
    * and filters the results.
    *

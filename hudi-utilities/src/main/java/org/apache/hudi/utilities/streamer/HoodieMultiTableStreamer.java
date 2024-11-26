@@ -140,6 +140,7 @@ public class HoodieMultiTableStreamer {
       //copy all the values from config to cfg
       String targetBasePath = resetTarget(config, database, currentTable);
       Helpers.deepCopyConfigs(config, cfg);
+      cfg.propsFilePath = configFilePath;
       String overriddenTargetBasePath = getStringWithAltKeys(tableProperties, HoodieStreamerConfig.TARGET_BASE_PATH, true);
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
       if (cfg.enableMetaSync && StringUtils.isNullOrEmpty(tableProperties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), ""))) {
@@ -255,6 +256,7 @@ public class HoodieMultiTableStreamer {
       tableConfig.clusterSchedulingWeight = globalConfig.clusterSchedulingWeight;
       tableConfig.clusterSchedulingMinShare = globalConfig.clusterSchedulingMinShare;
       tableConfig.sparkMaster = globalConfig.sparkMaster;
+      tableConfig.configs.addAll(globalConfig.configs);
     }
   }
 

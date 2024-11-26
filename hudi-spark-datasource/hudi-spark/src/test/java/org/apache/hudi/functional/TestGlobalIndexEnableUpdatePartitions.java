@@ -21,14 +21,21 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.SparkConf;
@@ -43,6 +50,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
@@ -55,6 +63,7 @@ import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerat
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getPayloadProps;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getUpdates;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
@@ -76,6 +85,13 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
         Arguments.of(MERGE_ON_READ, GLOBAL_SIMPLE),
         Arguments.of(MERGE_ON_READ, GLOBAL_BLOOM),
         Arguments.of(MERGE_ON_READ, RECORD_INDEX)
+    );
+  }
+
+  private static Stream<Arguments> getTableTypeAndIndexTypeUpdateOrDelete() {
+    return Stream.of(
+        Arguments.of(MERGE_ON_READ, RECORD_INDEX, true),
+        Arguments.of(MERGE_ON_READ, RECORD_INDEX, false)
     );
   }
 
@@ -132,6 +148,88 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       client.startCommitWithTime(commitTimeAtEpoch9);
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect());
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
+    }
+  }
+
+  /**
+   * Tests getTableTypeAndIndexTypeUpdateOrDelete
+   * @throws IOException
+   */
+  @ParameterizedTest
+  @MethodSource("getTableTypeAndIndexTypeUpdateOrDelete")
+  public void testRollbacksWithPartitionUpdate(HoodieTableType tableType, IndexType indexType, boolean isUpsert) throws IOException {
+    final Class<?> payloadClass = DefaultHoodieRecordPayload.class;
+    HoodieWriteConfig writeConfig = getWriteConfig(payloadClass, indexType);
+    TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig(), storageConf());
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
+    final int totalRecords = 8;
+    final String p1 = "p1";
+    final String p2 = "p2";
+    final String p3 = "p3";
+    List<HoodieRecord> insertsAtEpoch0 = getInserts(totalRecords, p1, 0, payloadClass);
+    List<HoodieRecord> updatesAtEpoch5 = getUpdates(insertsAtEpoch0.subList(0, 4), p2, 5, payloadClass);
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
+      // 1st batch: inserts
+      String commitTimeAtEpoch0 = TimelineUtils.generateInstantTime(false, timeGenerator);
+      client.startCommitWithTime(commitTimeAtEpoch0);
+      assertNoWriteErrors(client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect());
+
+      // 2nd batch: update 4 records from p1 to p2
+      String commitTimeAtEpoch5 = TimelineUtils.generateInstantTime(false, timeGenerator);
+      client.startCommitWithTime(commitTimeAtEpoch5);
+      if (isUpsert) {
+        assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5).collect());
+        readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
+        readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p2, 5);
+      } else {
+        assertNoWriteErrors(client.delete(jsc().parallelize(updatesAtEpoch5.stream().map(hoodieRecord -> hoodieRecord.getKey()).collect(Collectors.toList()), 2), commitTimeAtEpoch5).collect());
+        readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
+        readTableAndValidate(metaClient, new int[] {}, p2, 0);
+      }
+      // simuate crash. delete latest completed dc.
+      String latestCompletedDeltaCommit = INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.reloadActiveTimeline().getCommitsAndCompactionTimeline().lastInstant().get());
+      metaClient.getStorage().deleteFile(new StoragePath(metaClient.getBasePath() + "/.hoodie/timeline/" + latestCompletedDeltaCommit));
+    }
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
+      // re-ingest same batch
+      String commitTimeAtEpoch10 = TimelineUtils.generateInstantTime(false, timeGenerator);
+      client.startCommitWithTime(commitTimeAtEpoch10);
+      if (isUpsert) {
+        assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch10).collect());
+        // this also tests snapshot query. We had a bug where MOR snapshot was ignoring rollbacks while determining last instant while reading log records.
+        readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
+        readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p2, 5);
+      } else {
+        assertNoWriteErrors(client.delete(jsc().parallelize(updatesAtEpoch5.stream().map(hoodieRecord -> hoodieRecord.getKey()).collect(Collectors.toList()), 2), commitTimeAtEpoch10).collect());
+        readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
+        readTableAndValidate(metaClient, new int[] {}, p2, 0);
+      }
+
+      // upsert test
+      // update 4 of them from p2 to p3.
+      // delete test:
+      // update 4 of them to p3. these are treated as new inserts since they are deleted. no changes should be seen wrt p2.
+      String commitTimeAtEpoch15 = TimelineUtils.generateInstantTime(false, timeGenerator);
+      List<HoodieRecord> updatesAtEpoch15 = getUpdates(updatesAtEpoch5, p3, 15, payloadClass);
+      client.startCommitWithTime(commitTimeAtEpoch15);
+      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch15, 2), commitTimeAtEpoch15).collect());
+      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieMergedReadHandle.
+      readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
+      readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p3, 15);
+
+      // lets move 2 of them back to p1
+      String commitTimeAtEpoch20 = TimelineUtils.generateInstantTime(false, timeGenerator);
+      List<HoodieRecord> updatesAtEpoch20 = getUpdates(updatesAtEpoch5.subList(0, 2), p1, 20, payloadClass);
+      client.startCommitWithTime(commitTimeAtEpoch20);
+      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch20, 1), commitTimeAtEpoch20).collect());
+      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieMergedReadHandle.
+      Map<String, Long> expectedTsMap = new HashMap<>();
+      Arrays.stream(new int[] {0, 1}).forEach(entry -> expectedTsMap.put(String.valueOf(entry), 20L));
+      Arrays.stream(new int[] {4, 5, 6, 7}).forEach(entry -> expectedTsMap.put(String.valueOf(entry), 0L));
+      readTableAndValidate(metaClient, new int[] {0, 1, 4, 5, 6, 7}, p1, expectedTsMap);
+      readTableAndValidate(metaClient, new int[] {2, 3}, p3, 15);
     }
   }
 
@@ -252,9 +350,8 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
         .select("_hoodie_record_key", "_hoodie_partition_path", "id", "pt", "ts")
         .cache();
     int expectedCount = expectedIds.length;
-    assertEquals(expectedCount, df.count());
-    assertEquals(expectedCount, df.filter(String.format("pt = '%s'", expectedPartition)).count());
-    Row[] allRows = (Row[]) df.collect();
+    Row[] allRows = (Row[]) df.filter(String.format("pt = '%s'", expectedPartition)).collect();
+    assertEquals(expectedCount, allRows.length);
     for (int i = 0; i < expectedCount; i++) {
       int expectedId = expectedIds[i];
       Row r = allRows[i];
@@ -289,7 +386,11 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
             .withGlobalBloomIndexUpdatePartitionPath(true)
             .withGlobalSimpleIndexUpdatePartitionPath(true)
             .withRecordIndexUpdatePartitionPath(true).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(4).build())
         .withSchema(SCHEMA_STR)
+        .withRecordMergeMode(RecordMergeMode.CUSTOM)
+        .withRecordMergeStrategyId(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .fromProperties(getPayloadProps(payloadClass)).build())
         .build();

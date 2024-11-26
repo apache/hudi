@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.util.JFunction
-
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
@@ -44,6 +43,14 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
   def getIndexName: String
 
   def isIndexAvailable: Boolean
+
+  /**
+   * Returns true if the query type is supported by the index.
+   *
+   * TODO: The default implementation should be changed to throw
+   * an exception once time travel support for metadata table is added.
+   */
+  def supportsQueryType(options: Map[String, String]): Boolean = true
 
   def computeCandidateIsStrict(spark: SparkSession,
                                fileIndex: HoodieFileIndex,
@@ -70,20 +77,24 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
   def invalidateCaches(): Unit
 
-  protected def getPrunedFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
-                                   includeLogFiles: Boolean = false): Set[String] = {
-    prunedPartitionsAndFileSlices
-      .flatMap {
-        case (_, fileSlices) => fileSlices
-      }
-      .flatMap { fileSlice =>
-        val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
-        val logFiles = if (includeLogFiles) {
-          fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toList
-        } else Nil
-        baseFileOption.map(_.getFileName).toList ++ logFiles
-      }
-      .toSet
+  def getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                      includeLogFiles: Boolean = false): (Set[String], Set[String]) = {
+    val (prunedPartitions, prunedFiles) = prunedPartitionsAndFileSlices.foldLeft((Set.empty[String], Set.empty[String])) {
+      case ((partitionSet, fileSet), (partitionPathOpt, fileSlices)) =>
+        val updatedPartitionSet = partitionPathOpt.map(_.path).map(partitionSet + _).getOrElse(partitionSet)
+        val updatedFileSet = fileSlices.foldLeft(fileSet) { (fileAcc, fileSlice) =>
+          val baseFile = Option(fileSlice.getBaseFile.orElse(null)).map(_.getFileName)
+          val logFiles = if (includeLogFiles) {
+            fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toSet
+          } else Set.empty[String]
+
+          fileAcc ++ baseFile ++ logFiles
+        }
+
+        (updatedPartitionSet, updatedFileSet)
+    }
+
+    (prunedPartitions, prunedFiles)
   }
 
   protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], prunedFileNames: Set[String]): Set[String] = {

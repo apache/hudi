@@ -118,8 +118,8 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
     HoodieTimeline cowCommitTimeline = hoodieTable.getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION)).filterCompletedInstants();
     cowCommitTimeline.getInstants().forEach(instant -> {
       try {
-        HoodieCommitMetadata metadata =
-                HoodieCommitMetadata.fromBytes(cowCommitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata metadata = hoodieTable.getMetaClient().getCommitMetadataSerDe().deserialize(instant,
+            cowCommitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
         partitions.addAll(metadata.getWritePartitionPaths());
       } catch (IOException e) {
         // ignore Exception here

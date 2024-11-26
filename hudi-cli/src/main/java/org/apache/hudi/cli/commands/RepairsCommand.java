@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
@@ -93,7 +94,7 @@ public class RepairsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.DEDUPLICATE.toString(), master, sparkMemory,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.DEDUPLICATE, master, sparkMemory,
         duplicatedPartitionPath, repairedOutputPath, HoodieCLI.basePath, String.valueOf(dryRun), dedupeType);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -117,7 +118,7 @@ public class RepairsCommand {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     String latestCommit =
-        client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getTimestamp();
+        client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().requestedTime();
     List<String> partitionPaths =
         FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.storage, HoodieCLI.basePath);
     StoragePath basePath = client.getBasePath();
@@ -199,13 +200,13 @@ public class RepairsCommand {
         CleanerUtils.getCleanerPlan(client, instant);
       } catch (AvroRuntimeException e) {
         LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-        HoodieActiveTimeline.deleteInstantFile(client.getStorage(), client.getMetaPath(),
-            instant);
+        TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
+            instant, client.getInstantFileNameGenerator());
       } catch (IOException ioe) {
         if (ioe.getMessage().contains("Not an Avro data file")) {
           LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-          HoodieActiveTimeline.deleteInstantFile(client.getStorage(), client.getMetaPath(),
-              instant);
+          TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
+              instant, client.getInstantFileNameGenerator());
         } else {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }
@@ -243,7 +244,7 @@ public class RepairsCommand {
       Option<StoragePath> baseFormatFile =
           HoodiePartitionMetadata.baseFormatMetaPathIfExists(HoodieCLI.storage, partition);
       String latestCommit =
-          client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getTimestamp();
+          client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().requestedTime();
 
       String[] row = new String[] {
           partitionPath,
@@ -301,7 +302,7 @@ public class RepairsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.REPAIR_DEPRECATED_PARTITION.toString(), master, sparkMemory,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.REPAIR_DEPRECATED_PARTITION, master, sparkMemory,
         HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -329,7 +330,7 @@ public class RepairsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.RENAME_PARTITION.toString(), master, sparkMemory,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.RENAME_PARTITION, master, sparkMemory,
         HoodieCLI.basePath, oldPartition, newPartition);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

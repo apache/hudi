@@ -1513,4 +1513,46 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       )
     }
   }
+
+  test("Test Create Table In Inconsistent Schemes") {
+    withTempDir { tmp =>
+      val parentPath = tmp.getCanonicalPath
+
+      // test the case that create same table after change schema
+      val tableName1 = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName1 (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  type = 'cow'
+           | )
+           | location '$parentPath/$tableName1'
+     """.stripMargin)
+      spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
+      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      spark.sql(s"drop table $tableName1")
+
+      checkExceptionContain(
+        s"""
+           |create table $tableName1 (
+           |  id int,
+           |  name map<string, string>,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  type = 'cow'
+           | )
+           | location '$parentPath/$tableName1'
+     """.stripMargin
+      )("Failed to create catalog table in metastore")
+    }
+  }
 }

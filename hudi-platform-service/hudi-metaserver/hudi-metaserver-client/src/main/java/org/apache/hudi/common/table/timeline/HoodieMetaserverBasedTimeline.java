@@ -21,6 +21,9 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameGeneratorV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -31,12 +34,14 @@ import org.apache.hudi.storage.StoragePathInfo;
 
 /**
  * Active timeline for hoodie table whose metadata is stored in the hoodie meta server instead of file system.
+ * Note. MetadataServer only works with 1.x table version and will be disabled when in prior table version.
  */
-public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
+public class HoodieMetaserverBasedTimeline extends ActiveTimelineV2 {
   private final String databaseName;
   private final String tableName;
   private final HoodieMetaserverClient metaserverClient;
-  
+  private final InstantGeneratorV2 instantGenerator = new InstantGeneratorV2();
+  private final InstantFileNameGeneratorV2 instantFileNameGenerator = new InstantFileNameGeneratorV2();
   public HoodieMetaserverBasedTimeline(HoodieTableMetaClient metaClient, HoodieMetaserverConfig config) {
     this.metaClient = metaClient;
     this.metaserverClient = HoodieMetaserverClientProxy.getProxy(config);
@@ -52,20 +57,20 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
 
   @Override
   protected void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
-    ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
+    ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()));
     metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant, data);
   }
 
   @Override
   public void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data, boolean allowRedundantTransitions) {
-    ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
+    ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()));
     metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant, data);
   }
 
   @Override
   public void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
     StoragePathInfo pathInfo = new StoragePathInfo(new StoragePath(filename), 0, false, (short) 0, 0, 0);
-    HoodieInstant instant = new HoodieInstant(pathInfo);
+    HoodieInstant instant = instantGenerator.createNewInstant(pathInfo);
     ValidationUtils.checkArgument(instant.getState().equals(HoodieInstant.State.REQUESTED));
     metaserverClient.createNewInstant(databaseName, tableName, instant, Option.empty());
   }
@@ -78,7 +83,7 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
   @Override
   protected Option<byte[]> readDataFromPath(StoragePath detailPath) {
     StoragePathInfo pathInfo = new StoragePathInfo(detailPath, 0, false, (short) 0, 0, 0);
-    HoodieInstant instant = new HoodieInstant(pathInfo);
+    HoodieInstant instant = instantGenerator.createNewInstant(pathInfo);
     return metaserverClient.getInstantMetadata(databaseName, tableName, instant);
   }
 
@@ -95,9 +100,9 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
   protected String getInstantFileName(HoodieInstant instant) {
     if (instant.isCompleted()) {
       // Set a fake completion time.
-      return instant.getFileName("0").replace("_0", "");
+      return instantFileNameGenerator.getFileName("0", instant).replace("_0", "");
     }
 
-    return instant.getFileName();
+    return instantFileNameGenerator.getFileName(instant);
   }
 }

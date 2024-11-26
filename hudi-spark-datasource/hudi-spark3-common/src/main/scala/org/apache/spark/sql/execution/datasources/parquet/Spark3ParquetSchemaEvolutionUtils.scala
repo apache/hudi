@@ -27,9 +27,10 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.table.timeline.TimelineLayout
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
@@ -39,7 +40,6 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 
 import java.time.ZoneId
-
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
@@ -57,9 +57,12 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   private lazy val tablePath: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
   private lazy val fileSchema: InternalSchema = if (shouldUseInternalSchema) {
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
+    //TODO: HARDCODED TIMELINE OBJECT
     val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
+    val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
-      new HoodieHadoopStorage(tablePath, sharedConf), if (validCommits == null) "" else validCommits)
+      new HoodieHadoopStorage(tablePath, sharedConf), if (validCommits == null) "" else validCommits,
+      layout.getInstantFileNameParser, layout.getCommitMetadataSerDe, layout.getInstantGenerator)
   } else {
     null
   }
@@ -157,27 +160,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   }
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
-
-    if (typeChangeInfos.isEmpty) {
-      GenerateUnsafeProjection.generate(fullSchema, fullSchema)
-    } else {
-      // find type changed.
-      val newSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
-        if (typeChangeInfos.containsKey(i)) {
-          StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
-        } else f
-      })
-      val newFullSchema = schemaUtils.toAttributes(newSchema) ++ schemaUtils.toAttributes(partitionSchema)
-      val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
-        if (typeChangeInfos.containsKey(i)) {
-          val srcType = typeChangeInfos.get(i).getRight
-          val dstType = typeChangeInfos.get(i).getLeft
-          val needTimeZone = Cast.needsTimeZone(srcType, dstType)
-          Cast(attr, dstType, if (needTimeZone) timeZoneId else None)
-        } else attr
-      }
-      GenerateUnsafeProjection.generate(castSchema, newFullSchema)
-    }
+    HoodieParquetFileFormatHelper.generateUnsafeProjection(fullSchema, timeZoneId, typeChangeInfos, requiredSchema, partitionSchema, schemaUtils)
   }
 
   def buildVectorizedReader(convertTz: ZoneId,

@@ -66,7 +66,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema,
                                                  BloomFilter filter) {
     return new HoodieFlinkWriteableTestTable(metaClient.getBasePath().toString(),
-        metaClient.getRawHoodieStorage(), metaClient, schema, filter);
+        metaClient.getRawStorage(), metaClient, schema, filter);
   }
 
   public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema) {
@@ -139,7 +139,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
     try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder()
         .onParentPath(new StoragePath(basePath, partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-        .withDeltaCommit(location.getInstantTime()).withStorage(storage).build()) {
+        .withInstantTime(location.getInstantTime()).withStorage(storage).build()) {
       Map<HeaderMetadataType, String> header = new java.util.HashMap<>();
       header.put(HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
       header.put(HeaderMetadataType.SCHEMA, schema.toString());

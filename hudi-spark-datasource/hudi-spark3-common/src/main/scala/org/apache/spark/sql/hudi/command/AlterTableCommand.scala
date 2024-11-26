@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
-import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -271,10 +270,11 @@ object AlterTableCommand extends Logging {
 
     val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
     val timeLine = hoodieTable.getActiveTimeline
-    val requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime)
+    val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator
+    val requested = instantGenerator.createNewInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
-    timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(metadata))
+    timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(metaClient.getTimelineLayout.getCommitMetadataSerDe, metadata))
     val extraMeta = new util.HashMap[String, String]()
     extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(instantTime.toLong)))
     val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)

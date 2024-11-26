@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.hudi.dml
 
+import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
+import org.apache.hudi.testutils.DataSourceTestUtils
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
@@ -184,6 +185,83 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
+
+  /**
+   * Test MIT with global index.
+   * HUDI-7131
+   */
+  test("Test Merge Into with Global Index") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withRecordType()(withTempDir { tmp =>
+        withSQLConf("hoodie.index.type" -> "GLOBAL_BLOOM") {
+          val targetTable = generateTableName
+          spark.sql(
+            s"""
+               |create table ${targetTable} (
+               |  id int,
+               |  version int,
+               |  name string,
+               |  inc_day string
+               |) using hudi
+               |tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id'
+               | )
+               |partitioned by (inc_day)
+               |location '${tmp.getCanonicalPath}/$targetTable'
+               |""".stripMargin)
+          spark.sql(
+            s"""
+               |merge into ${targetTable} as target
+               |using (
+               |select 1 as id, 1 as version, 'str_1' as name, '2023-10-01' as inc_day
+               |) source
+               |on source.id = target.id
+               |when matched then
+               |update set *
+               |when not matched then
+               |insert *
+               |""".stripMargin)
+          spark.sql(
+            s"""
+               |merge into ${targetTable} as target
+               |using (
+               |select 1 as id, 2 as version, 'str_2' as name, '2023-10-01' as inc_day
+               |) source
+               |on source.id = target.id
+               |when matched then
+               |update set *
+               |when not matched then
+               |insert *
+               |""".stripMargin)
+
+          checkAnswer(s"select id, version, name, inc_day from $targetTable")(
+            Seq(1, 2, "str_2", "2023-10-01")
+          )
+          // migrate the record to a new partition.
+
+          spark.sql(
+            s"""
+               |merge into ${targetTable} as target
+               |using (
+               |select 1 as id, 2 as version, 'str_2' as name, '2023-10-02' as inc_day
+               |) source
+               |on source.id = target.id
+               |when matched then
+               |update set *
+               |when not matched then
+               |insert *
+               |""".stripMargin)
+
+          checkAnswer(s"select id, version, name, inc_day from $targetTable")(
+            Seq(1, 2, "str_2", "2023-10-02")
+          )
+        }
+      })
+      spark.sessionState.conf.unsetConf("hoodie.index.type")
+    }
+  }
+
   test("Test MergeInto with ignored record") {
     withRecordType()(withTempDir {tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
@@ -261,6 +339,89 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         Seq(3, "a3", 12.0, 1000)
       )
     })
+  }
+
+  test("Test MergeInto with changing partition and global index") {
+    Seq(true, false).foreach { updatePartitionPathEnabled =>
+      withTempDir { tmp =>
+        withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE",
+          "hoodie.simple.index.update.partition.path" -> updatePartitionPathEnabled.toString) {
+          Seq("cow","mor").foreach { tableType =>
+            val targetTable = generateTableName
+            spark.sql(
+              s"""
+                 | create table $targetTable (
+                 |  id int,
+                 |  version int,
+                 |  mergeCond string,
+                 |  partition string
+                 | ) using hudi
+                 | partitioned by (partition)
+                 | tblproperties (
+                 |    'primaryKey' = 'id',
+                 |    'type' = '$tableType',
+                 |    'payloadClass' = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload',
+                 |    'payloadType' = 'CUSTOM',
+                 |    preCombineField = 'version'
+                 | )
+                 | location '${tmp.getCanonicalPath}/$targetTable'
+             """.stripMargin)
+
+            spark.sql(s"insert into $targetTable values(1, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(2, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(3, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(4, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(5, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(6, 1, 'insert', '2023-10-01')")
+
+            val sourceTable = generateTableName
+            spark.sql(
+              s"""
+                 | create table $sourceTable (
+                 | id int,
+                 | version int,
+                 | mergeCond string,
+                 | partition string
+                 | ) using parquet
+                 | partitioned by (partition)
+                 | location '${tmp.getCanonicalPath}/$sourceTable'
+            """.stripMargin)
+
+            //merge cond matches and partition is changed
+            spark.sql(s"insert into $sourceTable values(1, 2, 'yes', '2023-10-02')")
+            //merge cond does not match and partition is changed
+            spark.sql(s"insert into $sourceTable values(2, 2, 'no', '2023-10-02')")
+            //merge cond matches and partition is not changed
+            spark.sql(s"insert into $sourceTable values(3, 2, 'yes', '2023-10-01')")
+            //merge cond does not match and partition is not changed
+            spark.sql(s"insert into $sourceTable values(4, 2, 'no', '2023-10-01')")
+            //merge cond is delete and partition is changed
+            spark.sql(s"insert into $sourceTable values(5, 2, 'delete', '2023-10-02')")
+            //merge cond is delete and partition is not changed
+            spark.sql(s"insert into $sourceTable values(6, 2, 'delete', '2023-10-01')")
+            //id does not match
+            spark.sql(s"insert into $sourceTable values(7, 1, 'insert', '2023-10-01')")
+
+            spark.sql(
+              s"""
+                 | merge into $targetTable t using
+                 | (select * from $sourceTable) as s
+                 | on t.id=s.id
+                 | when matched and s.mergeCond = 'yes' then update set *
+                 | when matched and s.mergeCond = 'delete' then delete
+                 | when not matched then insert *
+             """.stripMargin)
+             val updatedPartitionPath = if (updatePartitionPathEnabled) "partition=2023-10-02" else "partition=2023-10-01"
+            checkAnswer(s"select id,version,_hoodie_partition_path from $targetTable order by id")(
+              Seq(1, 2, updatedPartitionPath),
+              Seq(2, 1, "partition=2023-10-01"),
+              Seq(3, 2, "partition=2023-10-01"),
+              Seq(4, 1, "partition=2023-10-01"),
+              Seq(7, 1, "partition=2023-10-01"))
+          }
+        }
+      }
+    }
   }
 
   test("Test MergeInto for MOR table ") {
@@ -824,7 +985,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "a1", 10, 1000)
         )
         val fs = HadoopFSUtils.getFs(targetBasePath, spark.sessionState.newHadoopConf())
-        val firstCommitTime = HoodieDataSourceHelpers.latestCommit(fs, targetBasePath)
+        val firstCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
 
         // Second merge
         spark.sql(s"update $sourceTable set price = 12, _ts = 1001 where id = 1")
@@ -841,14 +1002,13 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         // Test incremental query
         val hudiIncDF1 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-          .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommitTime)
+          .option(DataSourceReadOptions.START_COMMIT.key, firstCompletionTime)
+          .option(DataSourceReadOptions.END_COMMIT.key, firstCompletionTime)
           .load(targetBasePath)
         hudiIncDF1.createOrReplaceTempView("inc1")
         checkAnswer(s"select id, name, price, _ts from inc1")(
           Seq(1, "a1", 10, 1000)
         )
-        val secondCommitTime = HoodieDataSourceHelpers.latestCommit(fs, targetBasePath)
         // Third merge
         spark.sql(s"insert into $sourceTable values(2, 'a2', 10, 1001)")
         spark.sql(
@@ -863,10 +1023,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "a1", 12, 1001),
           Seq(2, "a2", 10, 1001)
         )
+        val thirdCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
         // Test incremental query
         val hudiIncDF2 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, secondCommitTime)
+          .option(DataSourceReadOptions.START_COMMIT.key, thirdCompletionTime)
           .load(targetBasePath)
         hudiIncDF2.createOrReplaceTempView("inc2")
         checkAnswer(s"select id, name, price, _ts from inc2 order by id")(

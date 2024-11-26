@@ -73,7 +73,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               HoodieLogBlockContentLocation logBlockContentLocation,
                               Option<Schema> readerSchema,
                               Map<HeaderMetadataType, String> header,
-                              Map<HeaderMetadataType, String> footer,
+                              Map<FooterMetadataType, String> footer,
                               boolean enablePointLookups,
                               StoragePath pathForReader,
                               boolean useNativeHFileReader) {

@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -197,7 +198,7 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
         .map(baseFile -> Pair.of(partition, baseFile.getFileId()))
         .collect(Collectors.toList());
     assertEquals(1, partitionPathAndFileIDPairs.size());
-    String latestCommitTime = table.getActiveTimeline().lastInstant().get().getTimestamp();
+    String latestCommitTime = table.getActiveTimeline().lastInstant().get().requestedTime();
     HoodieMergedReadHandle mergedReadHandle = new HoodieMergedReadHandle<>(writeConfig, Option.of(latestCommitTime), table, partitionPathAndFileIDPairs.get(0));
     List<HoodieRecord> mergedRecords = mergedReadHandle.getMergedRecords();
     assertEquals(totalRecords, mergedRecords.size());
@@ -227,6 +228,7 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
         .withSchema(SCHEMA_STR)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .fromProperties(getPayloadProps(payloadClass)).build())
+        .withRecordMergeMode(RecordMergeMode.CUSTOM)
         .build();
   }
 }

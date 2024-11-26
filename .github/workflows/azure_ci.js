@@ -40,16 +40,27 @@ async function checkAzureCiAndCreateCommitStatus({ github, context, prNumber, la
   if (botComments.length > 0) {
     const lastComment = botComments[0];
     const reportPrefix = `${latestCommitHash} Azure: `
-    const successReportString = `${reportPrefix}[SUCCESS]`
-    const failureReportString = `${reportPrefix}[FAILURE]`
+    const successReportString = `[SUCCESS]`
+    const failureReportString = `[FAILURE]`
+    let entries = lastComment.body.split("*")
 
-    if (lastComment.body.includes(reportPrefix)) {
-      if (lastComment.body.includes(successReportString)) {
-        message = 'Successful on the latest commit';
-        status = 'success';
-      } else if (lastComment.body.includes(failureReportString)) {
-        message = 'Failed on the latest commit';
-        status = 'failure';
+    // Each CI report entry is in the following format.
+    // There can be multiple runs on the same commit.
+    // * <commit_hash1> Azure: [FAILURE](url1)
+    // * <commit_hash2> Azure: [CANCELED](url2)
+    // * <commit_hash3> Azure: [CANCELED](url3) Azure: [SUCCESS](url4)
+    // As long as there is one successful CI run for a particular commit,
+    // we treat the commit passing CI.
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].includes(reportPrefix)) {
+        if (entries[i].includes(successReportString)) {
+          message = 'Successful on the latest commit';
+          status = 'success';
+        } else if (entries[i].includes(failureReportString)) {
+          message = 'Failed on the latest commit';
+          status = 'failure';
+        }
+        break;
       }
     }
 

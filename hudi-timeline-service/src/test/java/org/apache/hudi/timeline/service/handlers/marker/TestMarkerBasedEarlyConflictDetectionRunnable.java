@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -106,7 +107,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
     prepareFiles(rootBaseMarkerDir, currentInstantTime, currentMarkers, storage);
 
     HashSet<HoodieInstant> oldInstants = new HashSet<>();
-    oldInstants.add(new HoodieInstant(false, "commit", oldInstant));
+    oldInstants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", oldInstant));
     when(markerHandler.getAllMarkers(currentMarkerDir)).thenReturn(currentMarkers);
 
     ScheduledExecutorService detectorExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -120,7 +121,7 @@ public class TestMarkerBasedEarlyConflictDetectionRunnable extends HoodieCommonT
   }
 
   private void prepareFiles(String baseMarkerDir, String instant, Set<String> markers, HoodieStorage storage) throws IOException {
-    storage.create(new StoragePath(basePath + "/.hoodie/" + instant + ".commit"), true);
+    storage.create(new StoragePath(basePath + "/.hoodie/timeline/" + instant + ".commit"), true);
     String markerDir = baseMarkerDir + "/" + instant;
     storage.createDirectory(new StoragePath(markerDir));
     BufferedWriter out = new BufferedWriter(new FileWriter(markerDir + "/MARKERS0"));

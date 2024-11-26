@@ -24,7 +24,9 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -43,7 +45,9 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -55,6 +59,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.BLOOM_FILTER_FIELD_
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_COLUMN_NAME;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_DELETED;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_TIGHT_BOUND;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT;
@@ -76,7 +81,6 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_REC
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_IS_DELETED;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_RECORD_KEY;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsRecords;
 
@@ -176,9 +180,7 @@ public enum MetadataPartitionType {
   FUNCTIONAL_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX, "func-index-", -1) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      // Functional index is created via sql and not via write path.
-      // HUDI-7662 tracks adding a separate config to enable/disable functional index.
-      return false;
+      return getBooleanWithAltKeys(writeConfig, FUNCTIONAL_INDEX_ENABLE_PROP);
     }
 
     @Override
@@ -199,9 +201,7 @@ public enum MetadataPartitionType {
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      // Secondary index is created via sql and not via write path.
-      // HUDI-7662 tracks adding a separate config to enable/disable secondary index.
-      return false;
+      return getBooleanWithAltKeys(writeConfig, SECONDARY_INDEX_ENABLE_PROP);
     }
 
     @Override
@@ -217,9 +217,7 @@ public enum MetadataPartitionType {
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       GenericRecord secondaryIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_SECONDARY_INDEX);
       checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + MetadataPartitionType.SECONDARY_INDEX.getRecordType());
-      payload.secondaryIndexMetadata = new HoodieSecondaryIndexInfo(
-          secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_RECORD_KEY).toString(),
-          (Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED));
+      payload.secondaryIndexMetadata = new HoodieSecondaryIndexInfo((Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED));
     }
 
     @Override
@@ -298,8 +296,8 @@ public enum MetadataPartitionType {
           String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
     } else {
       payload.columnStatMetadata = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())
-          .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME))
-          .setColumnName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME))
+          .setFileName(columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME).toString())
+          .setColumnName(columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME).toString())
           // AVRO-2377 1.9.2 Modified the type of org.apache.avro.Schema#FIELD_RESERVED to Collections.unmodifiableSet.
           // This causes Kryo to fail when deserializing a GenericRecord, See HUDI-5484.
           // We should avoid using GenericRecord and convert GenericRecord into a serializable type.
@@ -310,8 +308,38 @@ public enum MetadataPartitionType {
           .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
           .setTotalUncompressedSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE))
           .setIsDeleted((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_DELETED))
+          .setIsTightBound((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_TIGHT_BOUND))
           .build();
     }
+  }
+
+  /**
+   * Returns the index definition name without the prefix of the partition type. This name
+   * is what's provided by user while creating the index. This function is useful for partition
+   * types like functional and secondary index which use a prefix.
+   */
+  public String getIndexNameWithoutPrefix(HoodieIndexDefinition indexDefinition) {
+    String indexName = indexDefinition.getIndexName();
+    ValidationUtils.checkArgument(indexName.startsWith(partitionPath), String.format("Index Name %s does not start with partition path %s", indexName, partitionPath));
+    if (indexDefinition.getIndexName().length() > partitionPath.length()) {
+      return indexDefinition.getIndexName().substring(partitionPath.length());
+    }
+    return "";
+  }
+
+  /**
+   * Returns true if partition type is functional or secondary.
+   */
+  public static boolean isGenericIndex(String metadataPartitionPath) {
+    return metadataPartitionPath.startsWith(SECONDARY_INDEX.getPartitionPath())
+        || metadataPartitionPath.startsWith(FUNCTIONAL_INDEX.getPartitionPath());
+  }
+
+  public static String getGenericIndexNameWithoutPrefix(String indexName) {
+    String prefix = indexName.startsWith(SECONDARY_INDEX.getPartitionPath())
+        ? SECONDARY_INDEX.getPartitionPath()
+        : FUNCTIONAL_INDEX.getPartitionPath();
+    return indexName.substring(prefix.length());
   }
 
   // Partition path in metadata table.
@@ -373,6 +401,13 @@ public enum MetadataPartitionType {
    */
   public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
     return newer;
+  }
+
+  /**
+   * Check if the partition path should be deleted on restore.
+   */
+  public static boolean shouldDeletePartitionOnRestore(String partitionPath) {
+    return fromPartitionPath(partitionPath) != FILES && fromPartitionPath(partitionPath) != RECORD_INDEX;
   }
 
   /**

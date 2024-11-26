@@ -17,14 +17,14 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{HoodieRecordMerger, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 import org.scalatest.Matchers.intercept
 
@@ -34,19 +34,16 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
   def testWithDefaultSqlOptions(): Unit = {
     val ops1 = Map("primaryKey" -> "id")
     val with1 = HoodieOptionConfig.withDefaultSqlOptions(ops1)
-    assertTrue(with1.size == 5)
-    assertTrue(with1("primaryKey") == "id")
-    assertTrue(with1("type") == "cow")
-    assertTrue(with1("payloadClass") == classOf[DefaultHoodieRecordPayload].getName)
-    assertTrue(with1("recordMergerStrategy") == HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
-    assertTrue(with1("payloadType") == DataSourceWriteOptions.PAYLOAD_TYPE.defaultValue)
+    assertEquals(2, with1.size)
+    assertEquals("id", with1("primaryKey"))
+    assertEquals("cow", with1("type"))
 
     val ops2 = Map("primaryKey" -> "id",
       "preCombineField" -> "timestamp",
       "type" -> "mor",
       "payloadClass" -> classOf[OverwriteWithLatestAvroPayload].getName,
-      "recordMergerStrategy" -> HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID,
-      "payloadType" -> DataSourceWriteOptions.PAYLOAD_TYPE.defaultValue
+      "recordMergeStrategyId" -> HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID,
+      "recordMergeMode" -> HoodieWriteConfig.RECORD_MERGE_MODE.defaultValue
     )
     val with2 = HoodieOptionConfig.withDefaultSqlOptions(ops2)
     assertTrue(ops2 == with2)

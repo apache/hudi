@@ -31,29 +31,32 @@ import java.util.List;
  */
 public interface HoodieFunctionalIndex<S, T> extends Serializable {
 
-  public static final String SPARK_DATE_FORMAT = "date_format";
-  public static final String SPARK_DAY = "day";
-  public static final String SPARK_MONTH = "month";
-  public static final String SPARK_YEAR = "year";
-  public static final String SPARK_HOUR = "hour";
-  public static final String SPARK_FROM_UNIXTIME = "from_unixtime";
-  public static final String SPARK_UNIX_TIMESTAMP = "unix_timestamp";
-  public static final String SPARK_TO_DATE = "to_date";
-  public static final String SPARK_TO_TIMESTAMP = "to_timestamp";
-  public static final String SPARK_DATE_ADD = "date_add";
-  public static final String SPARK_DATE_SUB = "date_sub";
-  public static final String SPARK_CONCAT = "concat";
-  public static final String SPARK_SUBSTRING = "substring";
-  public static final String SPARK_UPPER = "upper";
-  public static final String SPARK_LOWER = "lower";
-  public static final String SPARK_TRIM = "trim";
-  public static final String SPARK_LTRIM = "ltrim";
-  public static final String SPARK_RTRIM = "rtrim";
-  public static final String SPARK_LENGTH = "length";
-  public static final String SPARK_REGEXP_REPLACE = "regexp_replace";
-  public static final String SPARK_REGEXP_EXTRACT = "regexp_extract";
-  public static final String SPARK_SPLIT = "split";
-  public static final String SPARK_IDENTITY = "identity";
+  String HOODIE_FUNCTIONAL_INDEX_RELATIVE_FILE_PATH = "_hoodie_functional_index_relative_file_path";
+  String HOODIE_FUNCTIONAL_INDEX_PARTITION = "_hoodie_functional_index_partition";
+  String HOODIE_FUNCTIONAL_INDEX_FILE_SIZE = "_hoodie_functional_index_file_size";
+  String SPARK_DATE_FORMAT = "date_format";
+  String SPARK_DAY = "day";
+  String SPARK_MONTH = "month";
+  String SPARK_YEAR = "year";
+  String SPARK_HOUR = "hour";
+  String SPARK_FROM_UNIXTIME = "from_unixtime";
+  String SPARK_UNIX_TIMESTAMP = "unix_timestamp";
+  String SPARK_TO_DATE = "to_date";
+  String SPARK_TO_TIMESTAMP = "to_timestamp";
+  String SPARK_DATE_ADD = "date_add";
+  String SPARK_DATE_SUB = "date_sub";
+  String SPARK_CONCAT = "concat";
+  String SPARK_SUBSTRING = "substring";
+  String SPARK_UPPER = "upper";
+  String SPARK_LOWER = "lower";
+  String SPARK_TRIM = "trim";
+  String SPARK_LTRIM = "ltrim";
+  String SPARK_RTRIM = "rtrim";
+  String SPARK_LENGTH = "length";
+  String SPARK_REGEXP_REPLACE = "regexp_replace";
+  String SPARK_REGEXP_EXTRACT = "regexp_extract";
+  String SPARK_SPLIT = "split";
+  String IDENTITY_FUNCTION = "identity";
 
   /**
    * Get the name of the index.

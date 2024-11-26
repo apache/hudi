@@ -47,10 +47,14 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -127,11 +131,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
-  protected final HoodieIndex<?, ?> index;
-  private final StorageConfiguration<?> storageConf;
+  private transient HoodieIndex<?, ?> index;
   protected final TaskContextSupplier taskContextSupplier;
-  private final HoodieTableMetadata metadata;
-  private final HoodieStorageLayout storageLayout;
+  private transient HoodieTableMetadata metadata;
+  private transient HoodieStorageLayout storageLayout;
+  private final InstantGenerator instantGenerator;
+  private final InstantFileNameGenerator instantFileNameGenerator;
+  private final InstantFileNameParser instantFileNameParser;
   private final boolean isMetadataTable;
 
   private transient FileSystemViewManager viewManager;
@@ -139,18 +145,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
-    this.storageConf = context.getStorageConf();
     this.context = context;
     this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
-
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
-        .build();
-    this.metadata = HoodieTableMetadata.create(context, metaClient.getStorage(), metadataConfig, config.getBasePath());
-
+    this.instantGenerator = metaClient.getInstantGenerator();
+    this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
+    this.instantFileNameParser = metaClient.getInstantFileNameParser();
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
-    this.index = getIndex(config, context);
-    this.storageLayout = getStorageLayout(config);
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
@@ -158,15 +159,15 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return isMetadataTable;
   }
 
-  protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
-
-  protected HoodieStorageLayout getStorageLayout(HoodieWriteConfig config) {
-    return HoodieLayoutFactory.createLayout(config);
+  public HoodieTableVersion version() {
+    return metaClient.getTableConfig().getTableVersion();
   }
+
+  protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> metadata);
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
     }
     return viewManager;
   }
@@ -306,6 +307,18 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return metaClient;
   }
 
+  public InstantGenerator getInstantGenerator() {
+    return instantGenerator;
+  }
+
+  public InstantFileNameGenerator getInstantFileNameGenerator() {
+    return instantFileNameGenerator;
+  }
+
+  public InstantFileNameParser getInstantFileNameParser() {
+    return instantFileNameParser;
+  }
+
   /**
    * @return if the table is physically partitioned, based on the partition fields stored in the table config.
    */
@@ -409,7 +422,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Get the list of savepoint timestamps in this table.
    */
   public Set<String> getSavepointTimestamps() {
-    return getCompletedSavepointTimeline().getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    return getCompletedSavepointTimeline().getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toSet());
   }
 
   public HoodieActiveTimeline getActiveTimeline() {
@@ -420,10 +433,16 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Return the index.
    */
   public HoodieIndex<?, ?> getIndex() {
+    if (index == null) {
+      index = getIndex(config, context);
+    }
     return index;
   }
 
   public HoodieStorageLayout getStorageLayout() {
+    if (storageLayout == null) {
+      storageLayout = HoodieLayoutFactory.createLayout(config);
+    }
     return storageLayout;
   }
 
@@ -657,7 +676,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
     if (deleteInstants) {
       // above rollback would still keep requested in the timeline. so, lets delete it if if are looking to purge the pending clustering fully.
-      getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.REQUESTED, inflightInstant.getAction(), inflightInstant.getTimestamp()));
+      getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, inflightInstant.getAction(), inflightInstant.requestedTime()));
     }
   }
 
@@ -669,8 +688,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   private void rollbackInflightInstant(HoodieInstant inflightInstant,
                                        Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
-        -> entry.getRollbackInstant().getTimestamp())
+    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
+        -> entry.getRollbackInstant().requestedTime())
         .orElseGet(() -> getMetaClient().createNewInstantTime());
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
         false);
@@ -685,8 +704,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param inflightInstant Inflight Compaction Instant
    */
   public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
-        -> entry.getRollbackInstant().getTimestamp())
+    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
+        -> entry.getRollbackInstant().requestedTime())
         .orElseGet(() -> getMetaClient().createNewInstantTime());
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
         false);
@@ -820,7 +839,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths, FileVisibility visibility) {
-    final HoodieStorage storage = metaClient.getRawHoodieStorage();
+    final HoodieStorage storage = metaClient.getRawStorage();
     List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
     try {
       getConsistencyGuard(storage, config.getConsistencyGuardConfig())
@@ -934,7 +953,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public HoodieEngineContext getContext() {
     // This is to handle scenarios where this is called at the executor tasks which do not have access
     // to engine context, and it ends up being null (as its not serializable and marked transient here).
-    return context == null ? new HoodieLocalEngineContext(storageConf) : context;
+    return context == null ? new HoodieLocalEngineContext(metaClient.getStorageConf()) : context;
   }
 
   /**
@@ -1074,7 +1093,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieTableMetadata getMetadataTable() {
-    return this.metadata;
+    if (metadata == null) {
+      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+          .fromProperties(config.getMetadataConfig().getProps())
+          .build();
+      metadata = HoodieTableMetadata.create(context, metaClient.getStorage(), metadataConfig, config.getBasePath());
+    }
+    return metadata;
   }
 
   /**
