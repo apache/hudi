@@ -327,7 +327,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
       // upsert will not run into conflicts.
       metaClient.getStorage().deleteDirectory(
-          new StoragePath(metaClient.getMetaPath(), "001.inflight"));
+          new StoragePath(metaClient.getTimelinePath(), "001.inflight"));
 
       writeClient.upsert(writeRecords, newCommitTime);
       assertNoWriteErrors(writeStatues.collect());

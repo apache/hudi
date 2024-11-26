@@ -53,6 +53,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -171,11 +172,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     // TODO(HUDI-7843):
-    // get rid of event time and overwrite with latest. Just return Option.empty
+    // get rid of event time and commit time ordering. Just return Option.empty
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
         return Option.of(new DefaultHiveRecordMerger());
-      case OVERWRITE_WITH_LATEST:
+      case COMMIT_TIME_ORDERING:
         return Option.of(new OverwriteWithLatestHiveRecordMerger());
       case CUSTOM:
       default:
@@ -265,10 +266,10 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public Comparable castValue(Comparable value, Schema.Type newType) {
     //TODO: [HUDI-8261] actually do casting here
-    if (newType == Schema.Type.STRING) {
-      return value.toString();
+    if (value instanceof WritableComparable) {
+      return value;
     }
-    return value;
+    return (WritableComparable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(value, Schema.create(newType));
   }
 
   public UnaryOperator<ArrayWritable> reverseProjectRecord(Schema from, Schema to) {

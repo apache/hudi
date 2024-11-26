@@ -1593,7 +1593,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // Delete replacecommit requested instant.
     StoragePath replaceCommitRequestedPath = new StoragePath(
-        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/"
             + INSTANT_FILE_NAME_GENERATOR.makeRequestedReplaceFileName(replaceInstant));
     metaClient.getStorage().deleteDirectory(replaceCommitRequestedPath);
     metaClient.reloadActiveTimeline();

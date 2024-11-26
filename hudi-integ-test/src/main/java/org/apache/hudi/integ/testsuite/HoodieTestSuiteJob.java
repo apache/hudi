@@ -63,7 +63,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
@@ -125,7 +125,7 @@ public class HoodieTestSuiteJob {
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
           .setRecordKeyFields(this.props.getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
-          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+          .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.targetBasePath);
     } else {
       metaClient = HoodieTableMetaClient.builder()

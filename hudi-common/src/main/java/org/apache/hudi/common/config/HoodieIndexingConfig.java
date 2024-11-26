@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.index.secondary.SecondaryIndexType;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -294,10 +293,6 @@ public class HoodieIndexingConfig extends HoodieConfig {
 
   public boolean isIndexUsingBloomFilter() {
     return getIndexType().equalsIgnoreCase(MetadataPartitionType.BLOOM_FILTERS.name());
-  }
-
-  public boolean isIndexUsingLucene() {
-    return getIndexType().equalsIgnoreCase(SecondaryIndexType.LUCENE.name());
   }
 
   public boolean isIndexUsingColumnStats() {

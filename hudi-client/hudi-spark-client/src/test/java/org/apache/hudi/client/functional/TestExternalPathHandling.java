@@ -101,6 +101,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
         .build();
 
     writeClient = getHoodieWriteClient(writeConfig);
+    writeClient.setOperationType(WriteOperationType.INSERT_OVERWRITE);
     String instantTime1 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
     String partitionPath1 = partitions.get(0);
     Pair<String, String> fileIdAndName1 = fileIdAndNameGenerator.generate(1, instantTime1);

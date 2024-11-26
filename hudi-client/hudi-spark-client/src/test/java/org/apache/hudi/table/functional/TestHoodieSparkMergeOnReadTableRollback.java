@@ -794,7 +794,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       for (HoodieInstant.State state : Arrays.asList(HoodieInstant.State.REQUESTED, HoodieInstant.State.INFLIGHT)) {
         HoodieInstant toCopy = INSTANT_GENERATOR.createNewInstant(state, HoodieTimeline.DELTA_COMMIT_ACTION, lastCommitTime);
         File file = Files.createTempFile(tempFolder, null, null).toFile();
-        fs().copyToLocalFile(new Path(metaClient.getMetaPath().toString(), INSTANT_FILE_NAME_GENERATOR.getFileName(toCopy)),
+        fs().copyToLocalFile(new Path(metaClient.getTimelinePath().toString(), INSTANT_FILE_NAME_GENERATOR.getFileName(toCopy)),
             new Path(file.getAbsolutePath()));
         fileNameMap.put(file.getAbsolutePath(), INSTANT_FILE_NAME_GENERATOR.getFileName(toCopy));
       }
@@ -820,7 +820,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       for (Map.Entry<String, String> entry : fileNameMap.entrySet()) {
         try {
           fs().copyFromLocalFile(new Path(entry.getKey()),
-              new Path(metaClient.getMetaPath().toString(), entry.getValue()));
+              new Path(metaClient.getTimelinePath().toString(), entry.getValue()));
         } catch (IOException e) {
           throw new HoodieIOException("Error copying state from local disk.", e);
         }

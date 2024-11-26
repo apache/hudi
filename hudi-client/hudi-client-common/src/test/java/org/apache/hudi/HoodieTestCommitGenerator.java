@@ -173,7 +173,7 @@ public class HoodieTestCommitGenerator {
       String basePath, StorageConfiguration<?> storageConf,
       String filename, byte[] content) throws IOException {
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, storageConf);
-    StoragePath commitFilePath = new StoragePath(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + filename);
+    StoragePath commitFilePath = new StoragePath(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/" + filename);
     try (OutputStream os = storage.create(commitFilePath, true)) {
       os.write(content);
     }
