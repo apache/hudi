@@ -339,7 +339,7 @@ case class HoodieFileIndex(spark: SparkSession,
             // If the partition values cannot be parsed by [[convertToPartitionPath]],
             // fall back to listing all partitions
             case e: HoodieException => {
-              logInfo(">>> Cannot use partition stats index for pruning partitions, fall back to listing all partitions", e)
+              //logInfo(">>> Cannot use partition stats index for pruning partitions, fall back to listing all partitions", e)
               (false, listMatchingPartitionPaths(Seq.empty))
             }
           }
@@ -410,7 +410,7 @@ case class HoodieFileIndex(spark: SparkSession,
           val prunedFileNames = indexSupport.computeCandidateIsStrict(spark, this, queryFilters, queryReferencedColumns,
             prunedPartitionsAndFileSlices, shouldPushDownFilesFilter)
 
-          logInfo(s">>> Found ${prunedFileNames} candidate files after data skipping, indexSupport: ${indexSupport.getIndexName}")
+          //logInfo(s">>> Found ${prunedFileNames} candidate files after data skipping, indexSupport: ${indexSupport.getIndexName}")
 
           if (prunedFileNames.nonEmpty) {
             return Try(prunedFileNames)
@@ -419,7 +419,7 @@ case class HoodieFileIndex(spark: SparkSession,
       }
     }
     validateConfig()
-    logInfo(s">>> No candidate files found after data skipping")
+    //logInfo(s">>> No candidate files found after data skipping")
     Option.empty
   }
 

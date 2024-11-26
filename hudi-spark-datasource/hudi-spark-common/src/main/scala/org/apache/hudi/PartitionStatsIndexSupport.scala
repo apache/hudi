@@ -97,12 +97,11 @@ class PartitionStatsIndexSupport(spark: SparkSession,
             //       filter does not prune any partition.
             val indexSchema = transposedPartitionStatsDF.schema
             val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema)).reduce(And)
-            val s = Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+            Some(transposedPartitionStatsDF.where(new Column(indexFilter))
               .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
               .collect()
               .map(_.getString(0))
               .toSet)
-            s
           } else {
             // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
             Option.empty
