@@ -293,7 +293,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
       }
 
-      this.buffer = ByteBuffer.allocate(Math.min(bufferSize, safeLongToInt(contentLocation.getBlockSize())));
+      this.buffer = ByteBuffer.allocate(Math.min(bufferSize, Math.toIntExact(contentLocation.getBlockSize())));
       // The buffer defaults to read mode
       this.buffer.flip();
     }
@@ -399,13 +399,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
       buffer.limit(buffer.limit() + bytesRead);
       return true;
-    }
-
-    private static int safeLongToInt(long value) {
-      if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
-        throw new ArithmeticException("Value out of int range: " + value);
-      }
-      return (int) value;
     }
   }
 
