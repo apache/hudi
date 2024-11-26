@@ -95,7 +95,7 @@ is enabled by default.
 :::
 
 ### Hudi Compactor Utility
-Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](/docs/deployment#compactions)
+Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](/docs/cli#compactions)
 
 Example:
 ```properties

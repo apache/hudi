@@ -157,7 +157,7 @@ Platform services offer functionality that is specific to data and workloads, an
 Services, like [Hudi Streamer](./hoodie_streaming_ingestion#hudi-streamer) (or its Flink counterpart), are specialized in handling data and workloads, seamlessly integrating with Kafka streams and various 
 formats to build data lakes. They support functionalities like automatic checkpoint management, integration with major schema registries (including Confluent), and 
 deduplication of data. Hudi Streamer also offers features for backfills, one-off runs, and continuous mode operation with Spark/Flink streaming writers. Additionally, 
-Hudi provides tools for [snapshotting](./snapshot_exporter) and incrementally [exporting](./snapshot_exporter#examples) Hudi tables, importing new tables, and [post-commit callback](/docs/next/platform_services_post_commit_callback) for analytics or 
+Hudi provides tools for [snapshotting](./snapshot_exporter) and incrementally [exporting](./snapshot_exporter#examples) Hudi tables, importing new tables, and [post-commit callback](platform_services_post_commit_callback) for analytics or 
 workflow management, enhancing the deployment of production-grade incremental pipelines. Apart from these services, Hudi also provides broad support for different 
 catalogs such as [Hive Metastore](./syncing_metastore), [AWS Glue](./syncing_aws_glue_data_catalog/), [Google BigQuery](./gcp_bigquery), [DataHub](./syncing_datahub), etc. that allows syncing of Hudi tables to be queried by 
 interactive engines such as Trino and Presto.

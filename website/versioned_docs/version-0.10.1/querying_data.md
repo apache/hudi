@@ -17,7 +17,7 @@ In sections, below we will discuss specific setup to access different query type
 The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi tables can be queried via the Spark datasource with a simple `spark.read.parquet`.
 See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark datasource reading queries. 
 
-To setup Spark for querying Hudi, see the [Query Engine Setup](/docs/0.10.1/query_engine_setup#Spark-DataSource) page.
+To setup Spark for querying Hudi, see the [Query Engine Setup](/docs/0.10.1/query_engine_setup#spark) page.
 
 ### Snapshot query {#spark-snap-query}
 Retrieve the data table at the present point in time.
@@ -49,7 +49,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ```
 
 For examples, refer to [Incremental Queries](/docs/quick-start-guide#incremental-query) in the Spark quickstart. 
-Please refer to [configurations](/docs/configurations#spark-datasource) section, to view all datasource options.
+Please refer to [configurations](/docs/configurations/#SPARK_DATASOURCE) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
 
@@ -170,10 +170,10 @@ would ensure Map Reduce execution is chosen for a Hive query, which combines par
 separated) and calls InputFormat.listStatus() only once with all those partitions.
 
 ## PrestoDB
-To setup PrestoDB for querying Hudi, see the [Query Engine Setup](/docs/0.10.1/query_engine_setup#PrestoDB) page.
+To setup PrestoDB for querying Hudi, see the [Query Engine Setup](/docs/0.10.1/query_engine_setup#prestodb) page.
 
 ## Trino
-To setup Trino for querying Hudi, see the [Query Engine Setup](/docs/0.10.1/query_engine_setup#Trino) page.
+To setup Trino for querying Hudi, see the [Query Engine Setup](/docs/0.10.1/query_engine_setup#trino) page.
 
 ## Impala (3.4 or later)
 

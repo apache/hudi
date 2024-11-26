@@ -21,7 +21,7 @@ and the [soft limit](/docs/configurations#hoodieparquetsmallfilelimit) below whi
 be considered a small file. For the initial bootstrap of a Hudi table, tuning record size estimate is also important to 
 ensure sufficient records are bin-packed in a parquet file. For subsequent writes, Hudi automatically uses average 
 record size based on previous commit. Hudi will try to add enough records to a small file at write time to get it to the 
-configured maximum limit. For e.g , with `compactionSmallFileSize=100MB` and limitFileSize=120MB, Hudi will pick all 
+configured maximum limit. For e.g , with `hoodie.parquet.max.file.size=100MB` and hoodie.parquet.small.file.limit=120MB, Hudi will pick all 
 files < 100MB and try to get them upto 120MB.
 
 ### For Merge-On-Read 

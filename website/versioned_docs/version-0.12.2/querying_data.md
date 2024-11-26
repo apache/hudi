@@ -17,7 +17,7 @@ In sections, below we will discuss specific setup to access different query type
 The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi tables can be queried via the Spark datasource with a simple `spark.read.parquet`.
 See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark datasource reading queries. 
 
-To setup Spark for querying Hudi, see the [Query Engine Setup](/docs/0.12.2/query_engine_setup#Spark-DataSource) page.
+To setup Spark for querying Hudi, see the [Query Engine Setup](/docs/0.12.2/query_engine_setup#spark) page.
 
 ### Snapshot query {#spark-snap-query}
 Retrieve the data table at the present point in time.

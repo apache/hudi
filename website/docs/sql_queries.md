@@ -196,7 +196,7 @@ DROP INDEX partition_stats on hudi_indexed_table;
 
 ### Snapshot Query with Event Time Ordering
 
-Hudi supports different [record merge modes](/docs/next/record_merger) for merging the records from the same key. Event
+Hudi supports different [record merge modes](record_merger) for merging the records from the same key. Event
 time ordering is one of the merge modes where the records are merged based on the event time. Let's create a table with
 event time ordering merge mode.
 

@@ -1123,9 +1123,9 @@ Hudi provides industry-leading performance and functionality for streaming data.
 from various different sources in a streaming manner, with powerful built-in capabilities like auto checkpointing, schema enforcement via schema provider, 
 transformation support, automatic table services and so on.
 
-**Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](/docs/hoodie_streaming_ingestion#structured-streaming) for more.
+**Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](hoodie_streaming_ingestion#structured-streaming) for more.
 
-Check out more information on [modeling data in Hudi](/docs/faq#how-do-i-model-the-data-stored-in-hudi) and different ways to [writing Hudi Tables](/docs/writing_data).
+Check out more information on [modeling data in Hudi](faq#how-do-i-model-the-data-stored-in-hudi) and different ways to [writing Hudi Tables](/docs/writing_data).
 
 ### Dockerized Demo
 Even as we showcased the core capabilities, Hudi supports a lot more advanced functionality that can make it easy

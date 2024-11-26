@@ -448,19 +448,19 @@ feature is that it now lets you author streaming pipelines on streaming or batch
 
 ## Where To Go From Here?
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
-- **Configuration** : For [Global Configuration](/docs/next/flink_tuning#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](/docs/next/flink_tuning#table-options).
-- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/next/ingestion_flink#cdc-ingestion), [Bulk Insert](/docs/next/ingestion_flink#bulk-insert), [Index Bootstrap](/docs/next/ingestion_flink#index-bootstrap), [Changelog Mode](/docs/next/ingestion_flink#changelog-mode) and [Append Mode](/docs/next/ingestion_flink#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](/docs/next/sql_dml#non-blocking-concurrency-control-experimental).
-- **Reading Data** : Flink supports different modes for reading, such as [Streaming Query](/docs/sql_queries#streaming-query) and [Incremental Query](/docs/sql_queries#incremental-query).
-- **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/next/flink_tuning#memory-optimization) and [Write Rate Limit](/docs/next/flink_tuning#write-rate-limit).
+- **Configuration** : For [Global Configuration](flink_tuning#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](flink_tuning#table-options).
+- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](ingestion_flink#cdc-ingestion), [Bulk Insert](ingestion_flink#bulk-insert), [Index Bootstrap](ingestion_flink#index-bootstrap), [Changelog Mode](ingestion_flink#changelog-mode) and [Append Mode](ingestion_flink#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](sql_dml#non-blocking-concurrency-control-experimental).
+- **Reading Data** : Flink supports different modes for reading, such as [Streaming Query](sql_queries#streaming-query) and [Incremental Query](/docs/sql_queries#incremental-query).
+- **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](flink_tuning#memory-optimization) and [Write Rate Limit](flink_tuning#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).
-- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](/docs/querying_data#prestodb).
+- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](sql_queries#presto).
 - **Catalog**: A Hudi specific catalog is supported: [Hudi Catalog](/docs/sql_ddl/#create-catalog).
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
-  - [Hudi Timeline](/docs/next/timeline) – How Hudi manages transactions and other table services
-  - [Hudi File Layout](/docs/next/storage_layouts) - How the files are laid out on storage
-  - [Hudi Table Types](/docs/next/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
-  - [Hudi Query Types](/docs/next/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
+  - [Hudi Timeline](timeline) – How Hudi manages transactions and other table services
+  - [Hudi File Layout](file_layouts) - How the files are laid out on storage
+  - [Hudi Table Types](table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
+  - [Hudi Query Types](table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
 
 See more in the "Concepts" section of the docs.
 

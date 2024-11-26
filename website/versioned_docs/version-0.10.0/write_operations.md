@@ -37,7 +37,7 @@ Hudi supports implementing two types of deletes on data stored in Hudi tables, b
 ## Writing path
 The following is an inside look on the Hudi write path and the sequence of events that occur during a write.
 
-1. [Deduping](/docs/configurations/#writeinsertdeduplicate)
+1. [Deduping](configurations#hoodiecombinebeforeinsert)
    1. First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
 2. [Index Lookup](/docs/indexing)
    1. Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
@@ -51,7 +51,7 @@ The following is an inside look on the Hudi write path and the sequence of event
 6. Update [Index](/docs/indexing)
    1. Now that the write is performed, we will go back and update the index.
 7. Commit
-   1. Finally we commit all of these changes atomically. (A [callback notification](/docs/writing_data#commit-notifications) is exposed)
+   1. Finally we commit all of these changes atomically. (A [callback notification](writing_data#commit-notifications) is exposed)
 8. [Clean](/docs/hoodie_cleaner) (if needed)
    1. Following the commit, cleaning is invoked if needed.
 9. [Compaction](/docs/compaction)

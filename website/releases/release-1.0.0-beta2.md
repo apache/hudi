@@ -57,7 +57,7 @@ queries with predicate on columns other than record key columns.
 Partition stats index aggregates statistics at the partition level for the columns for which it is enabled. This helps
 in efficient partition pruning even for non-partition fields.
 
-To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-and-secondary-index-experimental).
+To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-index).
 
 ### API Changes
 

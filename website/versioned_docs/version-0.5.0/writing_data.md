@@ -212,10 +212,10 @@ column statistics etc. Even on some cloud data stores, there is often cost to li
 
 Here are some ways to efficiently manage the storage of your Hudi datasets.
 
- - The [small file handling feature](/docs/configurations#compactionSmallFileSize) in Hudi, profiles incoming workload 
+ - The [small file handling feature](/docs/configurations#hoodieparquetsmallfilelimit) in Hudi, profiles incoming workload 
    and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files. 
- - Cleaner can be [configured](/docs/configurations#retainCommits) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
- - User can also tune the size of the [base/parquet file](/docs/configurations#limitFileSize), [log files](/docs/configurations#logFileMaxSize) & expected [compression ratio](/docs/configurations#parquetCompressionRatio), 
+ - Cleaner can be [configured](configurations#retaincommitsno_of_commits_to_retain--24) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
+ - User can also tune the size of the [base/parquet file](/docs/configurations#hoodieparquetmaxfilesize), [log files](configurations#logfilemaxsizelogfilesize--1gb) & expected [compression ratio](/docs/configurations#parquetCompressionRatio), 
    such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.
  - Intelligently tuning the [bulk insert parallelism](/docs/configurations#withBulkInsertParallelism), can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
    once created cannot be deleted, but simply expanded as explained before.

@@ -129,7 +129,7 @@ A sample incremental pull, that will obtain all records written since `beginInst
      .load(tablePath); // For incremental view, pass in the root/base path of dataset
 ```
 
-Please refer to [configurations](/docs/configurations#spark-datasource) section, to view all datasource options.
+Please refer to [configurations](/docs/configurations#spark-datasource-configs) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
 

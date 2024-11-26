@@ -36,9 +36,9 @@ For illustration purposes, we are going to consider only COPY_ON_WRITE table.
 
 Configs of interest before we dive into the algorithm:
 
-- [Max file size](/docs/configurations#limitFileSize): Max size for a given data file. Hudi will try to maintain file sizes to this configured value <br/>
-- [Soft file limit](/docs/configurations#compactionSmallFileSize): Max file size below which a given data file is considered to a small file <br/>
-- [Insert split size](/docs/configurations#insertSplitSize): Number of inserts grouped for a single partition. This value should match 
+- [Max file size](/docs/configurations#hoodieparquetmaxfilesize): Max size for a given data file. Hudi will try to maintain file sizes to this configured value <br/>
+- [Soft file limit](/docs/configurations#hoodieparquetsmallfilelimit): Max file size below which a given data file is considered to a small file <br/>
+- [Insert split size](/docs/configurations#hoodiecopyonwriteinsertsplitsize): Number of inserts grouped for a single partition. This value should match 
 the number of records in a single file (you can determine based on max file size and per record size)
 
 For instance, if your first config value is 120MB and 2nd config value is set to 100MB, any file whose size is < 100MB 

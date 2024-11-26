@@ -44,5 +44,5 @@ inputDataset.write.format("org.apache.hudi”)
   .save("/path/on/dfs");
 ```
 
-Alternatively, you can also use the Hudi [DeltaStreamer](https://hudi.apache.org/writing_data#deltastreamer) tool with the DFSSource.
+Alternatively, you can also use the Hudi [DeltaStreamer](https://hudi.apache.org/docs/hoodie_streaming_ingestion#hudi-streamer) tool with the DFSSource.
 

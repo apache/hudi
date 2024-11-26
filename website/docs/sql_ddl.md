@@ -105,7 +105,7 @@ TBLPROPERTIES (
 
 ### Create table with merge modes {#create-table-with-record-merge-mode}
 
-Hudi supports different [record merge modes](/docs/next/record_merger) to handle merge of incoming records with existing
+Hudi supports different [record merge modes](record_merger) to handle merge of incoming records with existing
 records. To create a table with specific record merge mode, you can set `recordMergeMode` option.
 
 ```sql
@@ -127,7 +127,7 @@ LOCATION 'file:///tmp/hudi_table_merge_mode/';
 With `EVENT_TIME_ORDERING`, the record with the larger event time (`precombineField`) overwrites the record with the
 smaller event time on the same key, regardless of transaction's commit time. Users can set `CUSTOM` mode to provide their own
 merge logic. With `CUSTOM` merge mode, you can provide a custom class that implements the merge logic. The interfaces 
-to implement is explained in detail [here](/docs/next/record_merger#custom).
+to implement is explained in detail [here](record_merger#custom).
 
 ```sql
 CREATE TABLE IF NOT EXISTS hudi_table_merge_mode_custom (
@@ -236,7 +236,7 @@ AS SELECT * FROM parquet_table;
 ### Create Index
 
 Hudi supports creating and dropping different types of indexes on a table. For more information on different
-type of indexes please refer [multi-modal indexing](/docs/next/indexes#multi-modal-indexing). Secondary 
+type of indexes please refer [multi-modal indexing](indexes#multi-modal-indexing). Secondary 
 index, expression index and record indexes can be created using SQL create index command.
 
 ```sql
@@ -529,7 +529,7 @@ CREATE INDEX idx_bloom_rider ON hudi_indexed_table USING bloom_filters(rider) OP
 - Secondary index can only be used for tables using OverwriteWithLatestAvroPayload payload or COMMIT_TIME_ORDERING merge mode 
 - Column stats Expression Index can not be created using `identity` expression with SQL. Users can leverage column stat index using Datasource instead.
 - Index update can fail with schema evolution.
-- Only one index can be created at a time using [async indexer](/docs/next/metadata_indexing).
+- Only one index can be created at a time using [async indexer](metadata_indexing).
 
 ### Setting Hudi configs 
 
@@ -592,7 +592,7 @@ Users can set table properties while creating a table. The important table prope
 #### Passing Lock Providers for Concurrent Writers
 
 Hudi requires a lock provider to support concurrent writers or asynchronous table services when using OCC
-and [NBCC](/docs/next/concurrency_control#non-blocking-concurrency-control-mode-experimental) (Non-Blocking Concurrency Control)
+and [NBCC](concurrency_control#non-blocking-concurrency-control) (Non-Blocking Concurrency Control)
 concurrency mode. For NBCC mode, locking is only used to write the commit metadata file in the timeline. Writes are
 serialized by completion time. Users can pass these table properties into *TBLPROPERTIES* as well. Below is an example
 for a Zookeeper based configuration.
@@ -843,7 +843,7 @@ WITH (
 
 ### Create Table in Non-Blocking Concurrency Control Mode
 
-The following is an example of creating a Flink table in [Non-Blocking Concurrency Control mode](/docs/next/concurrency_control#non-blocking-concurrency-control).
+The following is an example of creating a Flink table in [Non-Blocking Concurrency Control mode](concurrency_control#non-blocking-concurrency-control).
 
 ```sql
 -- This is a datagen source that can generate records continuously
@@ -911,7 +911,7 @@ ALTER TABLE tableA RENAME TO tableB;
 ### Setting Hudi configs
 
 #### Using table options
-You can configure hoodie configs in table options when creating a table. You can refer Flink specific hoodie configs [here](/docs/next/configurations#FLINK_SQL)
+You can configure hoodie configs in table options when creating a table. You can refer Flink specific hoodie configs [here](configurations#FLINK_SQL)
 These configs will be applied to all the operations on that table.
 
 ```sql

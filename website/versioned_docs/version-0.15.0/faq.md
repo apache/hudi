@@ -6,7 +6,7 @@ keywords: [hudi, writing, reading]
 
 The FAQs are split into following pages. Please refer to the specific pages for more info.
 
-- [General](/docs/next/faq_general)
+- [General](faq_general)
 - [Design & Concepts](/docs/next/faq_design_and_concepts)
 - [Writing Tables](/docs/next/faq_writing_tables)
 - [Reading Tables](/docs/next/faq_reading_tables)
