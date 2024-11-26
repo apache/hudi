@@ -189,7 +189,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       }
       // simuate crash. delete latest completed dc.
       String latestCompletedDeltaCommit = INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.reloadActiveTimeline().getCommitsAndCompactionTimeline().lastInstant().get());
-      metaClient.getStorage().deleteFile(new StoragePath(metaClient.getBasePath() + "/.hoodie/" + latestCompletedDeltaCommit));
+      metaClient.getStorage().deleteFile(new StoragePath(metaClient.getBasePath() + "/.hoodie/timeline/" + latestCompletedDeltaCommit));
     }
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {

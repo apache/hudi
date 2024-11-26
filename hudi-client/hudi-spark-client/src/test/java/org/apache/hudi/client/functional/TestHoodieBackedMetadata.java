@@ -163,6 +163,7 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_EXTENSION;
@@ -173,8 +174,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_TH
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -783,7 +784,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(
             engineContext, metadataMetaClient.getStorage(), metadataMetaClient.getBasePath(), false);
         // partition should be physically deleted
-        assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
         assertFalse(metadataTablePartitions.contains(COLUMN_STATS.getPartitionPath()));
 
         Option<HoodieInstant> completedReplaceInstant = metadataMetaClient.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant();
@@ -1001,7 +1001,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // for future upserts. so, renaming the file here to some temp name and later renaming it back to same name.
     java.nio.file.Path metaFilePath = Paths.get(HoodieTestUtils.getCompleteInstantPath(
             metaClient.getStorage(),
-            new StoragePath(metadataTableBasePath, METAFOLDER_NAME),
+            new StoragePath(new StoragePath(metadataTableBasePath, METAFOLDER_NAME), TIMELINEFOLDER_NAME),
             metadataCompactionInstant.get(), HoodieTimeline.COMMIT_ACTION)
         .toUri());
     java.nio.file.Path tempFilePath =
@@ -1037,7 +1037,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // for future upserts. so, renaming the file here to some temp name and later renaming it back to same name.
       metaFilePath = Paths.get(HoodieTestUtils.getCompleteInstantPath(
               metaClient.getStorage(),
-              new StoragePath(metadataTableBasePath, METAFOLDER_NAME),
+              new StoragePath(new StoragePath(metadataTableBasePath, METAFOLDER_NAME), TIMELINEFOLDER_NAME),
               metadataCompactionInstant.get(), HoodieTimeline.COMMIT_ACTION)
           .toUri());
       FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant.get());
@@ -1094,7 +1094,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // mimicing crash or making an inflight in metadata table.
       StoragePath toDelete = HoodieTestUtils.getCompleteInstantPath(
           metaClient.getStorage(),
-          new StoragePath(metaClient.getMetaPath() + "/metadata" + "/" + ".hoodie/"),
+          new StoragePath(metaClient.getMetaPath() + "/metadata" + "/" + ".hoodie/timeline/"),
           newCommitTime2, HoodieTimeline.DELTA_COMMIT_ACTION);
       metaClient.getStorage().deleteDirectory(toDelete);
 
@@ -1227,13 +1227,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
                                     String instantTime,
                                     String suffix) throws IOException {
     if (suffix.contains(REQUESTED_EXTENSION) || suffix.contains(INFLIGHT_EXTENSION)) {
-      String targetPath = basePath + "/" + METAFOLDER_NAME + "/" + instantTime + suffix;
+      String targetPath = basePath + "/" + METAFOLDER_NAME + "/" + TIMELINEFOLDER_NAME + "/" + instantTime + suffix;
       deleteFileFromStorage(storage, targetPath);
     } else {
       try {
         StoragePath completeInstantPath = HoodieTestUtils.getCompleteInstantPath(
             storage,
-            new StoragePath(basePath + "/" + METAFOLDER_NAME),
+            new StoragePath(new StoragePath(basePath + "/" + METAFOLDER_NAME), TIMELINEFOLDER_NAME),
             instantTime, suffix.replaceFirst(".", ""));
         deleteFileFromStorage(storage, completeInstantPath.toString());
       } catch (Exception e) {
@@ -2033,7 +2033,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // remove latest completed delta commit from MDT.
     StoragePath toDelete = HoodieTestUtils.getCompleteInstantPath(
         metaClient.getStorage(),
-        new StoragePath(metaClient.getMetaPath() + "/metadata/.hoodie/"),
+        new StoragePath(metaClient.getMetaPath() + "/metadata/.hoodie/timeline/"),
         commit2, HoodieTimeline.DELTA_COMMIT_ACTION);
     metaClient.getStorage().deleteDirectory(toDelete);
 
@@ -2054,7 +2054,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // collect all commit meta files from metadata table.
     List<StoragePathInfo> metaFiles = metaClient.getStorage()
-        .listDirectEntries(new StoragePath(metaClient.getMetaPath(), "metadata/.hoodie"));
+        .listDirectEntries(new StoragePath(metaClient.getMetaPath(), "metadata/.hoodie/timeline/"));
     List<StoragePathInfo> commit3Files = metaFiles.stream()
         .filter(pathInfo ->
             pathInfo.getPath().getName().contains(commit3)
@@ -2781,7 +2781,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       String commitInstantFileName =
           INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get());
       assertTrue(storage.deleteFile(new StoragePath(
-          basePath + StoragePath.SEPARATOR + METAFOLDER_NAME, commitInstantFileName)));
+          basePath + StoragePath.SEPARATOR + METAFOLDER_NAME + StoragePath.SEPARATOR + TIMELINEFOLDER_NAME, commitInstantFileName)));
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
@@ -2830,7 +2830,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // delete the metadata table partitions to check, whether rollback of pending commit succeeds and
     // metadata table partitions are rebootstrapped.
-    metadataWriter.dropMetadataPartitions(Arrays.asList(RECORD_INDEX.getPartitionPath(), FILES.getPartitionPath()));
+    client.dropIndex(Arrays.asList(RECORD_INDEX.getPartitionPath(), FILES.getPartitionPath()));
     assertFalse(storage.exists(new StoragePath(
         getMetadataTableBasePath(basePath) + StoragePath.SEPARATOR + FILES.getPartitionPath())));
     assertFalse(storage.exists(new StoragePath(getMetadataTableBasePath(basePath)
@@ -2953,11 +2953,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // delete partitions
-      newCommitTime = client.createNewInstantTime(5000);
+      newCommitTime = client.createNewInstantTime();
       client.deletePartitions(singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), newCommitTime);
 
       // add 1 more commit
-      newCommitTime = client.createNewInstantTime(5000);
+      newCommitTime = client.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateInserts(newCommitTime, 10);
       upsertRecords = new ArrayList<>();
@@ -3006,7 +3006,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       String commitInstantFileName =
           INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.getActiveTimeline().getReverseOrderedInstants().findFirst().get());
       assertTrue(storage.deleteFile(new StoragePath(
-          basePath + StoragePath.SEPARATOR + METAFOLDER_NAME, commitInstantFileName)));
+          basePath + StoragePath.SEPARATOR + METAFOLDER_NAME + StoragePath.SEPARATOR + TIMELINEFOLDER_NAME, commitInstantFileName)));
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
@@ -3251,7 +3251,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.reloadActiveTimeline().getCleanerTimeline().filterCompletedInstants()
               .getReverseOrderedInstants().findFirst().get());
       assertTrue(storage.deleteFile(new StoragePath(
-          basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME, cleanInstantFileName)));
+          basePath + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME + StoragePath.SEPARATOR + TIMELINEFOLDER_NAME,
+          cleanInstantFileName)));
       assertEquals(
           metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflights().countInstants(),
           1);
@@ -3699,13 +3700,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         if (instant.getAction().equals(HoodieActiveTimeline.RESTORE_ACTION)) {
           metadataWriter.getEnabledPartitionTypes().stream().filter(partitionType -> !MetadataPartitionType.shouldDeletePartitionOnRestore(partitionType.getPartitionPath()))
               .forEach(partitionType -> assertTrue(metadataTablePartitions.contains(partitionType.getPartitionPath())));
-        } else {
-          assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
         }
       });
-
-      final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
-      metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
 
       // Metadata table should automatically compact and clean
       // versions are +1 as autoclean / compaction happens end of commits

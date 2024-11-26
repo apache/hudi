@@ -175,7 +175,7 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
 
   private void createCommitFile(HoodieCommitMetadata commitMetadata, String commitTime, String basePath) throws IOException {
     byte[] bytes = serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get();
-    Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+    Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/"
         + INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
     OutputStream fsout = dfsCluster.getFileSystem().create(fullPath, true);
     fsout.write(bytes);

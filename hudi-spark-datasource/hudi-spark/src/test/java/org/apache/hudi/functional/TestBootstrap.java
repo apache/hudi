@@ -281,7 +281,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
             deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION,
             bootstrapCommitInstantTs)))
         .forEach(instant -> TimelineUtils.deleteInstantFile(
-            metaClient.getStorage(), metaClient.getMetaPath(), instant, INSTANT_FILE_NAME_GENERATOR));
+            metaClient.getStorage(), metaClient.getTimelinePath(), instant, INSTANT_FILE_NAME_GENERATOR));
     metaClient.reloadActiveTimeline();
     client.getTableServiceClient().rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();

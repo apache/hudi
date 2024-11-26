@@ -99,7 +99,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
-import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
@@ -581,13 +581,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     if (dataMetaClient.getIndexMetadata().isEmpty()) {
       return Collections.emptySet();
     }
-    Set<String> secondaryIndexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+
+    Set<String> indexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
         .map(HoodieIndexDefinition::getIndexName)
         .filter(indexName -> indexName.startsWith(partitionType.getPartitionPath()))
         .collect(Collectors.toSet());
     Set<String> completedMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
-    secondaryIndexPartitions.removeAll(completedMetadataPartitions);
-    return secondaryIndexPartitions;
+    indexPartitions.removeAll(completedMetadataPartitions);
+    return indexPartitions;
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeSecondaryIndexPartition(String indexName) throws IOException {
@@ -775,7 +776,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .setTableName(dataWriteConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
         // MT version should match DT, such that same readers can read both.
         .setTableVersion(dataWriteConfig.getWriteVersion())
-        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+        .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
         .setPayloadClassName(HoodieMetadataPayload.class.getName())
         .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
         .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
@@ -939,8 +940,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   public void dropMetadataPartitions(List<String> metadataPartitions) throws IOException {
     for (String partitionPath : metadataPartitions) {
-      // first update table config
-      dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
       LOG.warn("Deleting Metadata Table partition: {}", partitionPath);
       dataMetaClient.getStorage()
           .deleteDirectory(new StoragePath(metadataWriteConfig.getBasePath(), partitionPath));
@@ -1128,10 +1127,15 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap, HoodieData<WriteStatus> writeStatus) {
+    if (!dataWriteConfig.isSecondaryIndexEnabled()) {
+      return;
+    }
     // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
     // because these operations do not change the secondary key - record key mapping.
-    if (commitMetadata.getOperationType() == WriteOperationType.COMPACT
-        || commitMetadata.getOperationType() == WriteOperationType.CLUSTER) {
+    WriteOperationType operationType = commitMetadata.getOperationType();
+    if (operationType.isInsertOverwriteOrDeletePartition() && MetadataPartitionType.SECONDARY_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
+      throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
+    } else if (operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.CLUSTER) {
       return;
     }
 

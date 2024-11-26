@@ -86,7 +86,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     tableName = tableName();
     tablePath = tablePath(tableName);
     metaPath = Paths.get(tablePath, METAFOLDER_NAME).toString();
-    archivePath = Paths.get(metaPath, HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue()).toString();
+    archivePath = Paths.get(metaPath, HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue()).toString();
   }
 
   /**
@@ -161,7 +161,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
     assertEquals("Metadata for table " + tableName + " loaded", result.toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    assertEquals(metaPath + StoragePath.SEPARATOR + "archive", client.getArchivePath());
+    assertEquals(new StoragePath(metaPath, "archive"), client.getArchivePath());
     assertEquals(tablePath, client.getBasePath().toString());
     assertEquals(metaPath, client.getMetaPath().toString());
     assertEquals(HoodieTableVersion.SIX, client.getTableConfig().getTableVersion());

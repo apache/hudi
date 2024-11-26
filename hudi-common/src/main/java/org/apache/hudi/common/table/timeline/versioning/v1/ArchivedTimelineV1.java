@@ -105,7 +105,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
     return Option.ofNullable(readCommits.get(instant.requestedTime()));
   }
 
-  public static StoragePath getArchiveLogPath(String archiveFolder) {
+  public static StoragePath getArchiveLogPath(StoragePath archiveFolder) {
     return new StoragePath(archiveFolder, HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX);
   }
 

@@ -109,7 +109,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       // reads compaction plan from aux path which is untouched). TO test for regression, we simply get file status
       // and look at the file size
       StoragePathInfo pathInfo = metaClient.getStorage()
-          .getPathInfo(new StoragePath(metaClient.getMetaPath(),
+          .getPathInfo(new StoragePath(metaClient.getTimelinePath(),
               INSTANT_FILE_NAME_GENERATOR.getFileName(pendingCompactionInstant)));
       assertTrue(pathInfo.getLength() > 0);
     }

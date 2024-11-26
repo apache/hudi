@@ -100,7 +100,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
       return createHandle.close().get(0);
     }).collect();
 
-    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/"
+    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/timeline/"
         + INSTANT_FILE_NAME_GENERATOR.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
     HadoopFSUtils.getFs(basePath, HoodieTestUtils.getDefaultStorageConf()).create(commitFile);
     return statuses.get(0);

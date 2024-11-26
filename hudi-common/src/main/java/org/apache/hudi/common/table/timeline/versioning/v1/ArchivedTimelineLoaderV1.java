@@ -75,7 +75,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
     try {
       // List all files
       List<StoragePathInfo> entryList = metaClient.getStorage().globEntries(
-          new StoragePath(metaClient.getArchivePath() + "/.commits_.archive*"));
+          new StoragePath(metaClient.getArchivePath(), ".commits_.archive*"));
 
       // Sort files by version suffix in reverse (implies reverse chronological order)
       entryList.sort(new ArchiveFileVersionComparator());

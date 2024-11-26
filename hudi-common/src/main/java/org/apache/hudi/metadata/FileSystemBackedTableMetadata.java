@@ -285,13 +285,13 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     // no-op
   }
 
-  public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName)
+  public Option<BloomFilter> getBloomFilter(final String partitionName, final String fileName, final String metadataPartitionName)
       throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getBloomFilter for " + fileName);
   }
 
   @Override
-  public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList)
+  public Map<Pair<String, String>, BloomFilter> getBloomFilters(final List<Pair<String, String>> partitionNameFileNameList, final String metadataPartitionName)
       throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation: getBloomFilters!");
   }

@@ -167,11 +167,11 @@ public class LSMTimeline {
    * Returns all the valid snapshot versions.
    */
   public static List<Integer> allSnapshotVersions(HoodieTableMetaClient metaClient) throws IOException {
-    StoragePath archivedFolderPath = new StoragePath(metaClient.getArchivePath());
+    StoragePath archivedFolderPath = metaClient.getArchivePath();
     if (!metaClient.getStorage().exists(archivedFolderPath)) {
       return Collections.emptyList();
     }
-    return metaClient.getStorage().listDirectEntries(new StoragePath(metaClient.getArchivePath()),
+    return metaClient.getStorage().listDirectEntries(metaClient.getArchivePath(),
             getManifestFilePathFilter())
         .stream()
         .map(fileStatus -> fileStatus.getPath().getName())
@@ -226,7 +226,7 @@ public class LSMTimeline {
   public static List<StoragePathInfo> listAllManifestFiles(HoodieTableMetaClient metaClient)
       throws IOException {
     return metaClient.getStorage().listDirectEntries(
-        new StoragePath(metaClient.getArchivePath()), getManifestFilePathFilter());
+        metaClient.getArchivePath(), getManifestFilePathFilter());
   }
 
   /**
