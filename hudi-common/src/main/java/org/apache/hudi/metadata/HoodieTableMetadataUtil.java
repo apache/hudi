@@ -785,6 +785,8 @@ public class HoodieTableMetadataUtil {
       int parallelism = Math.max(Math.min(allWriteStats.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
       String basePath = dataTableMetaClient.getBasePath().toString();
       // we might need to set some additional variables if we need to process log files.
+      // for RLI and MOR table, we only care about log files if they contain any deletes. If not, all entries in logs are considered as updates, for which
+      // we do not need to generate new RLI record.
       boolean anyLogFilesWithDeletes = allWriteStats.stream().anyMatch(writeStat -> {
         String fileName = FSUtils.getFileName(writeStat.getPath(), writeStat.getPartitionPath());
         return FSUtils.isLogFile(fileName) && writeStat.getNumDeletes() > 0;

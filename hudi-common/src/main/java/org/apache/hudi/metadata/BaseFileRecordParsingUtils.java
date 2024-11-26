@@ -69,7 +69,8 @@ public class BaseFileRecordParsingUtils {
           instantTime, writesFileIdEncoding)).collect(toList()).iterator();
     } else {
       // read from previous base file and find difference to also generate delete records.
-      // we will return new inserts and deletes from this code block
+      // we will return new inserts and deletes from this code block.
+      // this code path will be exercised for these cases: COW merge, MOR compaction and small file handling cases for MOR.
       Set<String> recordKeysFromPreviousBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, previousFileName);
       List<HoodieRecord> toReturn = recordKeysFromPreviousBaseFile.stream()
           .filter(recordKey -> {
@@ -88,6 +89,14 @@ public class BaseFileRecordParsingUtils {
     }
   }
 
+  /**
+   * Fetch list of record keys deleted or updated in file referenced in the {@link HoodieWriteStat} passed.
+   * @param basePath base path of the table.
+   * @param writeStat {@link HoodieWriteStat} instance of interest.
+   * @param storage {@link HoodieStorage} instance of interest.
+   * @return list of record keys deleted or updated.
+   * @throws IOException
+   */
   public static List<String> getRecordKeysDeletedOrUpdated(String basePath,
                                                            HoodieWriteStat writeStat,
                                                            HoodieStorage storage) throws IOException {

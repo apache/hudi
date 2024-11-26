@@ -171,6 +171,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     try {
       String latestValidFilePath = baseFileToMerge.getFileName();
       writeStatus.getStat().setPrevCommit(baseFileToMerge.getCommitTime());
+      // At the moment, we only support SI for overwrite with latest payload. So, we don't need to embed entire file slice here.
+      // HUDI-8518 will be taken up to fix it for any payload during which we might require entire file slice to be set here.
+      // Already AppendHandle adds all logs file from current file slice to HoodieDeltaWriteStat.
       writeStatus.getStat().setPrevBaseFile(latestValidFilePath);
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
