@@ -469,6 +469,32 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     //test with avro schema with meta cols
     assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(HoodieAvroUtils.addMetadataFields(schema)))));
 
+    //test with avro schema with type filter
+    metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withMaxColumnsToIndexForColStats(100)
+        .build();
+    expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    expected.add("timestamp");
+    expected.add("_row_key");
+    expected.add("partition_path");
+    expected.add("rider");
+    expected.add("driver");
+    expected.add("begin_lat");
+    expected.add("begin_lon");
+    expected.add("end_lat");
+    expected.add("end_lon");
+    expected.add("distance_in_meters");
+    expected.add("seconds_since_epoch");
+    expected.add("weight");
+    expected.add("nation");
+    expected.add("current_date");
+    expected.add("current_ts");
+    expected.add("_hoodie_is_deleted");
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA))));
+    //test with avro schema with meta cols
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA)))));
+
     //test with meta cols disabled
     tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
     metadataConfig = HoodieMetadataConfig.newBuilder()

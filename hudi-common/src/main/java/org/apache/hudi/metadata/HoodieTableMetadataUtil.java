@@ -1336,20 +1336,28 @@ public class HoodieTableMetadataUtil {
 
   public static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                HoodieMetadataConfig metadataConfig,
+                                               List<String> columnNames,
+                                               boolean overrideEnableCheck) {
+    return getColumnsToIndex(tableConfig, metadataConfig, Either.left(columnNames), overrideEnableCheck);
+
+  }
+  public static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
+                                               HoodieMetadataConfig metadataConfig,
                                                List<String> columnNames) {
-    return getColumnsToIndex(tableConfig, metadataConfig, Either.left(columnNames));
+    return getColumnsToIndex(tableConfig, metadataConfig, columnNames, false);
   }
 
   public static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                HoodieMetadataConfig metadataConfig,
                                                Lazy<Option<Schema>> tableSchema) {
-    return getColumnsToIndex(tableConfig, metadataConfig, Either.right(tableSchema));
+    return getColumnsToIndex(tableConfig, metadataConfig, Either.right(tableSchema), false);
   }
 
   private static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                 HoodieMetadataConfig metadataConfig,
-                                                Either<List<String>, Lazy<Option<Schema>>> tableSchema) {
-    checkState(metadataConfig.isColumnStatsIndexEnabled());
+                                                Either<List<String>, Lazy<Option<Schema>>> tableSchema,
+                                                boolean overrideEnableCheck) {
+    checkState(overrideEnableCheck || metadataConfig.isColumnStatsIndexEnabled());
     Stream<String> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetas(metadataConfig, tableSchema);
     if (!tableConfig.populateMetaFields()) {
       return columnsToIndexWithoutRequiredMetas.collect(Collectors.toList());
@@ -1371,7 +1379,21 @@ public class HoodieTableMetadataUtil {
   }
 
   private static Stream<String> getFirstNFieldNames(Schema tableSchema, int n) {
-    return getFirstNFieldNames(tableSchema.getFields().stream().map(Schema.Field::name), n);
+    return getFirstNFieldNames(tableSchema.getFields().stream()
+        .filter(field -> {
+          switch (resolveNullableSchema(field.schema()).getType()) {
+            case BOOLEAN:
+            case INT:
+            case LONG:
+            case FLOAT:
+            case DOUBLE:
+            case BYTES:
+            case STRING:
+              return true;
+            default:
+              return false;
+          }
+        }).map(Schema.Field::name), n);
   }
 
   private static Stream<String> getFirstNFieldNames(Stream<String> fieldNames, int n) {
