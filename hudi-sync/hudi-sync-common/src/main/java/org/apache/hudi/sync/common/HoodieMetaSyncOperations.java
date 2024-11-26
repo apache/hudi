@@ -268,4 +268,11 @@ public interface HoodieMetaSyncOperations {
   default String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
     throw new UnsupportedOperationException();
   }
+
+  /**
+   * Update the table from simple bucket index to extensible bucket index
+   */
+  default void updateSimpleToExtensibleBucket(String tableName, Integer defaultNumBuckets) {
+
+  }
 }

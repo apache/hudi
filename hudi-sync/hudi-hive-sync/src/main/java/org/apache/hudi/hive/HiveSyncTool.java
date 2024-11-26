@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncTool;
@@ -534,6 +535,36 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private List<String> filterPartitions(List<PartitionEvent> events, PartitionEventType eventType) {
     return events.stream().filter(s -> s.eventType == eventType).map(s -> s.storagePartition)
         .collect(Collectors.toList());
+  }
+
+  public void updateSimpleToExtensibleBucket(int initialBucketNum) {
+    try {
+      if (syncClient != null) {
+        switch (syncClient.getTableType()) {
+          case COPY_ON_WRITE:
+            throw new HoodieNotSupportedException("Extensible Bucket is not supported for Copy on Write tables");
+          case MERGE_ON_READ:
+            syncClient.updateSimpleToExtensibleBucket(snapshotTableName, initialBucketNum);
+            if (roTableName.isPresent()) {
+              syncClient.updateSimpleToExtensibleBucket(roTableName.get(), initialBucketNum);
+            }
+            break;
+          default:
+            LOG.error("Unknown table type " + syncClient.getTableType());
+            throw new InvalidTableException(syncClient.getBasePath());
+        }
+      }
+    } catch (RuntimeException e) {
+      throw new HoodieException("Got runtime exception when convert bucket layout from simple-bucket to extensible-bucket " + tableName, e);
+    } finally {
+      if (syncClient != null) {
+        try {
+          syncClient.close();
+        } catch (Exception e) {
+          throw new HoodieException("SyncClient shutdown failed", e);
+        }
+      }
+    }
   }
 
   public static void main(String[] args) {

@@ -72,7 +72,7 @@ public class HoodieExtensibleBucketIndex extends HoodieBucketIndex {
     public ExtensibleBucketMapper(HoodieTable table, List<String> partitions) {
       partitionToIdentifier = partitions.stream().collect(Collectors.toMap(p -> p, p -> {
         // Get the bucket identifier for the partition
-        return ExtensibleBucketIndexUtils.loadExtensibleBucketIdentifier(table, p);
+        return ExtensibleBucketIndexUtils.loadExtensibleBucketIdentifierWithExistLocation(table, p);
       }));
     }
 

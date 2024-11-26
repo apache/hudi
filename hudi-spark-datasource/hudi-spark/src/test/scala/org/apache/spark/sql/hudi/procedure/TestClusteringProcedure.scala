@@ -30,6 +30,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
 import org.apache.spark.sql.{Dataset, Row}
@@ -771,6 +772,170 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       metaClient.reloadActiveTimeline()
       assert(3 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
       assert(1 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
+    }
+  }
+
+  test("Test Call run_clustering with extensible bucket index") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'BUCKET',
+           |  hoodie.index.bucket.engine = "EXTENSIBLE_BUCKET",
+           |  hoodie.table.initial.bucket.number = 1,
+           |  hoodie.bucket.index.hash.field = 'id'
+           | )
+           | partitioned by (ts)
+           | location '$basePath'
+     """.stripMargin)
+
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.schedule.inline=false")
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1010)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1010)")
+
+      val conf = new Configuration
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
+
+      // missing bucket-resizing target bucket num
+      checkExceptionContain(s"call run_clustering(table => '$tableName')")(
+      "bucket-resizing target-num should be power of 2")
+      metaClient.reloadActiveTimeline()
+      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+
+      // set bucket-resizing target bucket num
+      spark.sql(s"set hoodie.clustering.plan.strategy.bucket.resizing.target.num = 4")
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      metaClient.reloadActiveTimeline()
+      assert(metaClient.getActiveTimeline.getCompletedReplaceTimeline.empty())
+      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+
+      // show clustering operations
+      val result = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
+        .collect()
+        .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+      assertResult(1)(result.length)
+
+      // write more records during clustering, should rollback the clustering plan
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1010)")
+
+      // show clustering operations
+      val result2 = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
+        .collect()
+        .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+      assertResult(0)(result2.length)
+
+      // verify the records
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1010),
+        Seq(2, "a2", 10.0, 1010),
+        Seq(3, "a3", 10.0, 1010)
+      )
+
+      // set bucket-resizing target bucket num and schedule again
+      spark.sql(s"set hoodie.clustering.plan.strategy.bucket.resizing.target.num = 4")
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      metaClient.reloadActiveTimeline()
+      assert(metaClient.getActiveTimeline.getCompletedReplaceTimeline.empty())
+      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+
+      // use reject-update-strategy
+      spark.sql(s"set hoodie.clustering.updates.strategy =" + HoodieClusteringConfig.SPARK_REJECT_UPDATE_STRATEGY)
+
+      // write more records during clustering, should reject the update
+      checkExceptionContain(s"insert into $tableName values(4, 'a4', 10, 1010)")("Not allowed to update the clustering file group")
+
+      // write more records but not in the same partition
+      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1011)")
+
+      // execute the clustering plan
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')")
+
+      metaClient.reloadActiveTimeline()
+      assert(1 == metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.size())
+      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+
+      // show clustering operations
+      val result3 = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
+        .collect()
+        .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3))
+      )
+      assertResult(1)(result3.length)
+
+      // verify the records
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1010),
+        Seq(2, "a2", 10.0, 1010),
+        Seq(3, "a3", 10.0, 1010),
+        Seq(4, "a4", 10.0, 1011)
+      )
+
+      // schedule again
+      spark.sql(s"set hoodie.clustering.plan.strategy.bucket.resizing.target.num = 2")
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      // enable dual write
+      spark.sql(s"set hoodie.clustering.updates.strategy = " + HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY)
+      spark.sql(s"set hoodie.clustering.bucket.resizing.concurrent.write.enabled=true")
+
+      // write more records during clustering, should success and not affect the clustering plan
+      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1010)")
+
+      // show clustering operations
+      val result4 = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
+        .collect()
+        .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3))
+      )
+      assertResult(2)(result4.length)
+      metaClient.reloadActiveTimeline()
+      assert(1 == metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.size())
+      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+
+      // verify now the records
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1010),
+        Seq(2, "a2", 10.0, 1010),
+        Seq(3, "a3", 10.0, 1010),
+        Seq(4, "a4", 10.0, 1011),
+        Seq(5, "a5", 10.0, 1010)
+      )
+
+      // execute the clustering plan
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')")
+
+      metaClient.reloadActiveTimeline()
+      assert(2 == metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.size())
+      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+
+      // show clustering operations
+      val result5 = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
+        .collect()
+        .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3))
+      )
+      assertResult(2)(result5.length)
+
+      // verify the records
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1010),
+        Seq(2, "a2", 10.0, 1010),
+        Seq(3, "a3", 10.0, 1010),
+        Seq(4, "a4", 10.0, 1011),
+        Seq(5, "a5", 10.0, 1010)
+      )
     }
   }
 

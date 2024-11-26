@@ -318,6 +318,32 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     // Clustering finished, check the number of records (there will be file group switch in the background)
     writeClient.cluster(clusteringTime, true);
     Assertions.assertEquals(4000, readRecords().size());
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    Assertions.assertEquals(6000, readRecords().size());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testConcurrentClusterAndBulkInsert(boolean rowWriterEnable) throws IOException {
+    setup(5120);
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
+    String writeTime = HoodieActiveTimeline.createNewInstantTime();
+    List<WriteStatus> writeStatues = writeData(writeTime, 2000, false);
+    // Cannot schedule clustering if there is in-flight writer
+    Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
+    Assertions.assertTrue(writeClient.commitStats(writeTime, context.parallelize(writeStatues, 1), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(), metaClient.getCommitActionType()));
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // Schedule clustering
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    // Concurrent is not blocked by the clustering
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    // The records are immediately visible when the writer completes
+    Assertions.assertEquals(4000, readRecords().size());
+    // Clustering finished, check the number of records (there will be file group switch in the background)
+    writeClient.cluster(clusteringTime, true);
+    Assertions.assertEquals(4000, readRecords().size());
   }
 
   private List<Row> readRecords() {

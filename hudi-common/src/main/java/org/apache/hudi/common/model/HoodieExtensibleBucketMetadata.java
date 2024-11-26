@@ -45,6 +45,8 @@ public class HoodieExtensibleBucketMetadata implements Serializable {
 
   public static final String BUCKET_METADATA_FILE_SUFFIX = ".bucket_meta";
 
+  public static final String BUCKET_METADATA_COMMIT_FILE_SUFFIX = ".commit";
+
   /**
    * Bucket layout version, increment when bucket resizing happens, start from 0
    */
@@ -108,7 +110,7 @@ public class HoodieExtensibleBucketMetadata implements Serializable {
 
   /**
    * Get instant time from the extensible bucket metadata filename
-   * Pattern of the filename: <instant>.BUCKET_METADATA_FILE_SUFFIX
+   * Pattern of the filename: <instant>.BUCKET_METADATA_FILE_SUFFIX/BUCKET_METADATA_COMMIT_FILE_SUFFIX
    */
   public static String getInstantFromFile(String filename) {
     return filename.split("\\.")[0];

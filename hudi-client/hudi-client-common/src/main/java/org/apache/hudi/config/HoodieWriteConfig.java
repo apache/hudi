@@ -1892,7 +1892,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public int getBucketResizingTargetNum() {
     Integer targetNum = getInt(HoodieClusteringConfig.BUCKET_RESIZING_TARGET_NUM);
     // check target-num if match power of 2
-    checkArgument(MathUtils.isPowerOf2(targetNum), "bucket-resizing target-num should be power of 2");
+    checkArgument(targetNum != null && MathUtils.isPowerOf2(targetNum), "bucket-resizing target-num should be power of 2 but got " + targetNum);
     return targetNum;
   }
 

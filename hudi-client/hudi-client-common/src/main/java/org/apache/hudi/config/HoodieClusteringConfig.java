@@ -344,7 +344,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Bucket resizing clustering plan mode, currently support FORCE");
 
   public static final ConfigProperty<Boolean> BUCKET_RESIZING_CONCURRENT_WRITE_ENABLED = ConfigProperty
-      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "bucket.resizing.concurrent.write.enabled")
+      .key("hoodie.clustering.bucket.resizing.concurrent.write.enabled")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.14.0")

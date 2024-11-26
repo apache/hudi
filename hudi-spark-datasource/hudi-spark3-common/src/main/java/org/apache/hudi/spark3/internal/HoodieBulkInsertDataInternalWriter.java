@@ -24,6 +24,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketBulkInsertDataInternalWriterHelper;
 import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper;
 import org.apache.hudi.table.action.commit.ConsistentBucketBulkInsertDataInternalWriterHelper;
+import org.apache.hudi.table.action.commit.ExtensibleBucketBulkInsertDataInternalWriterHelper;
 
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.write.DataWriter;
@@ -44,12 +45,21 @@ public class HoodieBulkInsertDataInternalWriter implements DataWriter<InternalRo
                                             boolean arePartitionRecordsSorted) {
 
     if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET) {
-      if (writeConfig.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.SIMPLE) {
-        this.bulkInsertWriterHelper = new BucketBulkInsertDataInternalWriterHelper(hoodieTable,
-            writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
-      } else {
-        this.bulkInsertWriterHelper = new ConsistentBucketBulkInsertDataInternalWriterHelper(hoodieTable,
-            writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+      switch (writeConfig.getBucketIndexEngineType()) {
+        case SIMPLE:
+          this.bulkInsertWriterHelper = new BucketBulkInsertDataInternalWriterHelper(hoodieTable,
+              writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+          break;
+        case CONSISTENT_HASHING:
+          this.bulkInsertWriterHelper = new ConsistentBucketBulkInsertDataInternalWriterHelper(hoodieTable,
+              writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+          break;
+        case EXTENSIBLE_BUCKET:
+          this.bulkInsertWriterHelper = new ExtensibleBucketBulkInsertDataInternalWriterHelper(hoodieTable,
+              writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+          break;
+        default:
+          throw new IllegalArgumentException("Unsupported bucket index engine type: " + writeConfig.getBucketIndexEngineType());
       }
     } else {
       this.bulkInsertWriterHelper = new BulkInsertDataInternalWriterHelper(hoodieTable,

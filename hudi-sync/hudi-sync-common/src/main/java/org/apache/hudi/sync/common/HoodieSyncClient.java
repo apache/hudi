@@ -245,4 +245,9 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   protected String generateTempTableName(String tableName) {
     return tableName + TEMP_SUFFIX + ZonedDateTime.now().toEpochSecond();
   }
+
+  @Override
+  public void updateSimpleToExtensibleBucket(String tableName, Integer defaultNumBuckets) {
+    // TODO: implement this later
+  }
 }

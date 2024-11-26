@@ -44,6 +44,8 @@ import org.apache.hudi.index.bucket.ExtensibleBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.avro.Schema;
@@ -74,6 +76,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
+import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -191,7 +196,7 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testRollbackPendingClustering(boolean rowWriterEnable) throws IOException {
+  public void testRollbackRequestedClustering(boolean rowWriterEnable) throws IOException {
     int maxFileSize = 128 * 1024 * 1024;
     setUp(maxFileSize, 16, HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY, false, true);
     config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
@@ -214,6 +219,38 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     String clusteringTimeAgain = (String) writeClient.scheduleClustering(Option.empty()).get();
     writeClient.cluster(clusteringTimeAgain, true);
     List<Row> actualRows = readRecordsSortedByPK();
+    verifyRows(expectedRows, actualRows);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testRollbackReadyToCommitClustering(boolean rowWriterEnable) throws IOException {
+    int maxFileSize = 128 * 1024 * 1024;
+    setUp(maxFileSize, 16, HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY, false, true);
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
+    config.setValue("hoodie.metadata.enable", "false");
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    // schedule and execute clustering but not commit
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    HoodieWriteMetadata cluster = writeClient.cluster(clusteringTime, false);
+    // update to resizing bucket, expect rollback pending clustering
+    assertDoesNotThrow(() -> writeData(HoodieActiveTimeline.createNewInstantTime(), 1000, true));
+    List<Row> expectedRows = readRecordsSortedByPK();
+    // commit the pending clustering but expect fail because of rollback
+    assertThrows(HoodieException.class, () -> writeClient.commitClustering(clusteringTime, cluster, Option.empty()));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Assertions.assertEquals(metaClient.getActiveTimeline().filterPendingReplaceTimeline().countInstants(), 0);
+    Assertions.assertEquals(metaClient.getActiveTimeline().getCompletedReplaceTimeline().countInstants(), 0);
+    Assertions.assertEquals(metaClient.getActiveTimeline().getRollbackTimeline().countInstants(), 1);
+
+    List<Row> actualRows = readRecordsSortedByPK();
+    verifyRows(expectedRows, actualRows);
+
+    // clustering again
+    String clusteringTimeAgain = (String) writeClient.scheduleClustering(Option.empty()).get();
+    writeClient.cluster(clusteringTimeAgain, true);
+    actualRows = readRecordsSortedByPK();
     verifyRows(expectedRows, actualRows);
   }
 
@@ -345,6 +382,28 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     writeClient.cluster(clusteringTime, true);
     List<Row> actualRows = readRecordsSortedByPK();
     verifyRows(expectedRows, actualRows);
+  }
+
+  /**
+   * Only one clustering job is allowed on each partition
+   */
+  @Test
+  public void testConcurrentClustering() throws IOException {
+    setUp(5120, 16);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    // Schedule again, it should not be scheduled as the previous one are doing clustering to all partitions
+    Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
+    writeClient.cluster(clusteringTime, true);
+
+    // Schedule two clustering, but only one is allowed
+    config.setValue(DAYBASED_LOOKBACK_PARTITIONS, "1");
+    config.setValue(PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST, "0");
+    config.setValue(PLAN_PARTITION_FILTER_MODE, ClusteringPlanPartitionFilterMode.RECENT_DAYS.toString());
+    Assertions.assertTrue(writeClient.scheduleClustering(Option.empty()).isPresent());
+    config.setValue(DAYBASED_LOOKBACK_PARTITIONS, "1");
+    config.setValue(PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST, "1");
+    Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
   }
 
   private HoodieRecord generateHoodieRecord(String recordKey, String partitionPath, String salt) {

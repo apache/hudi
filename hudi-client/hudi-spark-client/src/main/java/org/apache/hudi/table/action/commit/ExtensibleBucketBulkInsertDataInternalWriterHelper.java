@@ -44,6 +44,11 @@ public class ExtensibleBucketBulkInsertDataInternalWriterHelper extends BucketBu
   private static final Logger LOG = LoggerFactory.getLogger(ExtensibleBucketBulkInsertDataInternalWriterHelper.class);
 
   public ExtensibleBucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig, String instantTime, int taskPartitionId, long taskId, long taskEpochId,
+                                                            StructType structType, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
+    this(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted, false);
+  }
+
+  public ExtensibleBucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig, String instantTime, int taskPartitionId, long taskId, long taskEpochId,
                                                             StructType structType, boolean populateMetaFields, boolean arePartitionRecordsSorted, boolean shouldPreserveHoodieMetadata) {
     super(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted, shouldPreserveHoodieMetadata);
   }
@@ -71,7 +76,9 @@ public class ExtensibleBucketBulkInsertDataInternalWriterHelper extends BucketBu
     String fileIdPrefix = BucketIdentifier.newExtensibleBucketFileIdFixedSuffix(bucketId, bucketVersion);
     String fileId = FSUtils.createNewFileId(fileIdPrefix, 0);
 
-    ValidationUtils.checkArgument(!bucketIdentifier.isPending() || hoodieTable.getFileSystemView()
+    // only support these two cases:
+    // 1. common
+    ValidationUtils.checkArgument(bucketIdentifier.isPending() || hoodieTable.getFileSystemView()
         .getAllFileGroups(partitionPath)
         .filter(fg -> fg.getAllFileSlices().findFirst().isPresent())
         .noneMatch(fg -> fg.getFileGroupId().getFileId().equals(fileId)),

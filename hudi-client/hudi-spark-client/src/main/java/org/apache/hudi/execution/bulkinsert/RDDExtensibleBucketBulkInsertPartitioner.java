@@ -46,7 +46,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
-// TODO: complete the implementation for extensible bucket
 public class RDDExtensibleBucketBulkInsertPartitioner<T> extends RDDBucketIndexPartitioner<T> implements ExtensibleBucketInsertPartitioner {
 
   private Map<String/*partition path*/, HoodieExtensibleBucketMetadata/*pending bucket-resizing related metadata*/> pendingMetadata = new HashMap<>();
@@ -117,8 +116,7 @@ public class RDDExtensibleBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
     if (pendingMetadata.containsKey(partition)) {
       return new ExtensibleBucketIdentifier(pendingMetadata.get(partition), true);
     }
-    HoodieExtensibleBucketMetadata metadata = ExtensibleBucketIndexUtils.loadOrCreateMetadata(this.table, partition);
-    return new ExtensibleBucketIdentifier(metadata);
+    return ExtensibleBucketIndexUtils.loadExtensibleBucketIdentifierWithExistLocation(this.table, partition);
   }
 
   @Override
