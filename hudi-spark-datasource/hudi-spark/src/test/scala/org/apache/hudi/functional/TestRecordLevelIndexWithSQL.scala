@@ -19,6 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
@@ -63,11 +64,11 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
 
     createTempTable(hudiOpts)
     val latestSnapshotDf = spark.read.format("hudi").options(hudiOpts).load(basePath)
-    verifyInQuery(hudiOpts, "_row_key", latestSnapshotDf)
+    verifyInQuery(hudiOpts, Array("_row_key"), latestSnapshotDf, sqlTempTable, "partition", Seq("2015/03/16", "2015/03/17"), true)
     verifyEqualToQuery(hudiOpts, "_row_key", latestSnapshotDf)
     verifyNegativeTestCases(hudiOpts, "_row_key", latestSnapshotDf)
     // verify the same for _hoodie_record_key
-    verifyInQuery(hudiOpts, RECORD_KEY_METADATA_FIELD.getFieldName, latestSnapshotDf)
+    verifyInQuery(hudiOpts, Array(RECORD_KEY_METADATA_FIELD.getFieldName), latestSnapshotDf, sqlTempTable, "partition", Seq("2015/03/16", "2015/03/17"), true)
     verifyEqualToQuery(hudiOpts, RECORD_KEY_METADATA_FIELD.getFieldName, latestSnapshotDf)
     verifyNegativeTestCases(hudiOpts, RECORD_KEY_METADATA_FIELD.getFieldName, latestSnapshotDf)
   }
@@ -107,23 +108,32 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val dataFilter = EqualTo(attribute(colName), Literal(reckey(0)))
     assertEquals(1, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     val numFiles = if (isTableMOR()) 2 else 1
-    verifyPruningFileCount(hudiOpts, dataFilter, numFiles)
+    verifyPruningFileCount(hudiOpts, dataFilter, numFiles, shouldPrune = true)
   }
 
-  def verifyInQuery(hudiOpts: Map[String, String], colName: String, latestSnapshotDf: DataFrame): Unit = {
-    var reckey = latestSnapshotDf.limit(1).collect().map(row => row.getAs(colName).toString)
-    var dataFilter = In(attribute(colName), reckey.map(l => literal(l)).toList)
-    assertEquals(1, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
-    var numFiles = if (isTableMOR()) 2 else 1
-    verifyPruningFileCount(hudiOpts, dataFilter, numFiles)
+  def verifyInQuery(hudiOpts: Map[String, String], colNames: Array[String], latestSnapshotDf: DataFrame, tableName: String,
+                    partitionFieldName: String, partitions: Seq[String], shouldPrune: Boolean): Unit = {
+    var dataFilter: Expression = null
+    var numFiles: Int = 0
+    var recKeys: Array[String] = null
+    var inQueries: Array[In] = colNames.map(colName => {
+      recKeys = latestSnapshotDf.limit(1).collect().map(row => row.getAs(colName).toString)
+      In(attribute(colName), recKeys.map(l => literal(l)).toList)
+    })
+    dataFilter = inQueries.reduceLeft(And)
+    assertEquals(1, spark.sql("select * from " + tableName + " where " + dataFilter.sql).count())
+    numFiles = if (isTableMOR()) 2 else 1
+    verifyPruningFileCount(hudiOpts, dataFilter, numFiles, shouldPrune)
 
-    val partitions = Seq("2015/03/16", "2015/03/17")
-    reckey = latestSnapshotDf.collect().filter(row => partitions.contains(row.getAs("partition").toString))
-      .map(row => row.getAs(colName).toString)
-    dataFilter = In(attribute(colName), reckey.map(l => literal(l)).toList)
-    assertEquals(reckey.length, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
+    inQueries = colNames.map(colName => {
+      recKeys = latestSnapshotDf.collect().filter(row => partitions.contains(row.getAs(partitionFieldName).toString))
+        .map(row => row.getAs(colName).toString)
+      In(attribute(colName), recKeys.map(l => literal(l)).toList)
+    })
+    dataFilter = inQueries.reduceLeft(And)
+    assertEquals(recKeys.length, spark.sql("select * from " + tableName + " where " + dataFilter.sql).count())
     numFiles = if (isTableMOR()) 4 else 2
-    verifyPruningFileCount(hudiOpts, dataFilter, numFiles)
+    verifyPruningFileCount(hudiOpts, dataFilter, numFiles, shouldPrune)
   }
 
   private def attribute(partition: String): AttributeReference = {
@@ -134,24 +144,32 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     Literal.create(value)
   }
 
-  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int): Unit = {
-    verifyPruningFileCount(opts, dataFilter, numFiles, HoodieTableMetaClient.reload(metaClient))
+  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int, shouldPrune: Boolean): Unit = {
+    verifyPruningFileCount(opts, dataFilter, numFiles, HoodieTableMetaClient.reload(metaClient), shouldPrune)
   }
 
-  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int, metaClient: HoodieTableMetaClient): Unit = {
+  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, numFiles: Int, metaClient: HoodieTableMetaClient, shouldPrune: Boolean): Unit = {
     // with data skipping
     val commonOpts = opts + ("path" -> metaClient.getBasePath.toString)
     this.metaClient = HoodieTableMetaClient.reload(metaClient)
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
-    assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
-    assertEquals(numFiles, filteredFilesCount)
+    if (shouldPrune) {
+      assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
+      assertEquals(numFiles, filteredFilesCount)
+    } else {
+      assertEquals(filteredFilesCount, getLatestDataFilesCount(opts))
+    }
 
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
     val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
-    assertTrue(filteredFilesCount < filesCountWithNoSkipping)
+    if (shouldPrune) {
+      assertTrue(filteredFilesCount < filesCountWithNoSkipping)
+    } else {
+      assertEquals(filteredFilesCount, filesCountWithNoSkipping)
+    }
   }
 
   private def isTableMOR(): Boolean = {
@@ -293,6 +311,8 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
       .setConf(HoodieTestUtils.getDefaultStorageConf)
       .build()
     verifyEqualToQuery(hudiOpts, Seq("record_key_col", "name"), tableName, latestSnapshotDf, HoodieTableMetaClient.reload(metaClient))
+    verifyInQuery(hudiOpts, Array("record_key_col", "name"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), true)
+    verifyInQuery(hudiOpts, Array("record_key_col"), latestSnapshotDf, tableName, "partition_key_col", Seq("p2", "p3"), false)
   }
 
   def verifyEqualToQuery(hudiOpts: Map[String, String], colNames: Seq[String], tableName: String, latestSnapshotDf: DataFrame, metaClient: HoodieTableMetaClient): Unit = {
@@ -306,6 +326,6 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     }.reduceLeft(And)
 
     assertEquals(1, spark.sql("select * from " + tableName + " where " + dataFilter.sql).count())
-    verifyPruningFileCount(hudiOpts, dataFilter, 1, metaClient)
+    verifyPruningFileCount(hudiOpts, dataFilter, 1, metaClient, shouldPrune = true)
   }
 }

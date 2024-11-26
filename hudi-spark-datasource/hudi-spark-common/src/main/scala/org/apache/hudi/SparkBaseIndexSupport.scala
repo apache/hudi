@@ -31,6 +31,8 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
+import scala.util.control.Breaks.break
+import scala.util.control.Breaks.breakable
 import scala.util.control.NonFatal
 
 abstract class SparkBaseIndexSupport(spark: SparkSession,
@@ -156,27 +158,49 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       (List.empty, List.empty)
     } else {
       var recordKeyQueries: List[Expression] = List.empty
-      var recordKeys: List[String] = List.empty
-      for (query <- queryFilters) {
-        val recordKeyOpt = getRecordKeyConfig
-        recordKeyOpt.foreach { recordKeysArray =>
-          // Handle composite record keys
-          RecordLevelIndexSupport.filterQueryWithRecordKey(query, recordKeysArray).foreach {
-            case (exp: Expression, recKeys: List[String]) =>
-              exp match {
-                // For IN, add each element individually to recordKeys
-                case _: In =>
-                  recordKeys = recordKeys ++ recKeys
+      var compositeRecordKeys: List[String] = List.empty
+      val recordKeyOpt = getRecordKeyConfig
+      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+      recordKeyOpt.foreach { recordKeysArray =>
+        // Handle composite record keys
+        breakable {
+          for (recordKey <- recordKeysArray) {
+            var recordKeys: List[String] = List.empty
+            for (query <- queryFilters) {
+              {
+                RecordLevelIndexSupport.filterQueryWithRecordKey(query, Option.apply(recordKey), isComplexRecordKey).foreach {
+                  case (exp: Expression, recKeys: List[String]) =>
+                    exp match {
+                      // For IN, add each element individually to recordKeys
+                      case _: In => recordKeys = recordKeys ++ recKeys
 
-                // For other cases, basically EqualTo, concatenate recKeys with the default separator
-                case _ =>
-                  recordKeys = recordKeys :+ recKeys.mkString(DEFAULT_RECORD_KEY_PARTS_SEPARATOR)
+                      // For other cases, basically EqualTo, concatenate recKeys with the default separator
+                      case _ => recordKeys = recordKeys ++ recKeys
+                    }
+                    recordKeyQueries = recordKeyQueries :+ exp
+                }
               }
-              recordKeyQueries = recordKeyQueries :+ exp
+            }
+
+            if (recordKeys.isEmpty) {
+              recordKeyQueries = List.empty
+              compositeRecordKeys = List.empty
+              break()
+            } else if (!isComplexRecordKey || compositeRecordKeys.isEmpty) {
+              compositeRecordKeys = recordKeys
+            } else {
+              var tempCompositeRecordKeys: List[String] = List.empty
+              for (compRecKey <- compositeRecordKeys) {
+                for (recKey <- recordKeys) {
+                  tempCompositeRecordKeys = tempCompositeRecordKeys :+ (compRecKey + DEFAULT_RECORD_KEY_PARTS_SEPARATOR + recKey)
+                }
+              }
+              compositeRecordKeys = tempCompositeRecordKeys
+            }
           }
         }
       }
-      (recordKeyQueries, recordKeys)
+      (recordKeyQueries, compositeRecordKeys)
     }
   }
 
