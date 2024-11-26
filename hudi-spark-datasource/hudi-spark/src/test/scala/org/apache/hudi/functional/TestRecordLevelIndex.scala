@@ -252,7 +252,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
     insertDf.cache()
 
-    val deleteDf = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(dataGen.generateUniqueDeleteRecords(getNewInstantTime, 1)).asScala, 1))
+    val deleteBatch = recordsToStrings(dataGen.generateUniqueDeleteRecords(getNewInstantTime, 1)).asScala
+    val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
     deleteDf.cache()
     val recordKeyToDelete = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
     deleteDf.write.format("org.apache.hudi")
