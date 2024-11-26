@@ -187,7 +187,7 @@ public class TestSchemaHandler {
     assertEquals(expectedRequiredFullSchema, schemaHandler.getRequiredSchema());
 
     //read subset of columns
-    requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "rider");
+    requestedSchema = DATA_COLS_ONLY_SCHEMA;
     schemaHandler = supportsParquetRowIndex
         ? new HoodiePositionBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
         Option.empty(), hoodieTableConfig, new TypedProperties())
@@ -207,6 +207,150 @@ public class TestSchemaHandler {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
     }
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
+  }
+
+  @ParameterizedTest
+  @MethodSource("testMorParams")
+  public void testMorBootstrap(RecordMergeMode mergeMode,
+                               boolean hasPrecombine,
+                               boolean isProjectionCompatible,
+                               boolean mergeUseRecordPosition,
+                               boolean supportsParquetRowIndex) {
+    HoodieReaderContext<String> readerContext = new MockReaderContext(supportsParquetRowIndex);
+    readerContext.setHasLogFiles(true);
+    readerContext.setHasBootstrapBaseFile(true);
+    readerContext.setShouldMergeUseRecordPosition(mergeUseRecordPosition);
+    HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
+    when(hoodieTableConfig.populateMetaFields()).thenReturn(Boolean.TRUE);
+    when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
+    if (hasPrecombine) {
+      when(hoodieTableConfig.getPreCombineField()).thenReturn("timestamp");
+    } else {
+      when(hoodieTableConfig.getPreCombineField()).thenReturn(null);
+    }
+    if (mergeMode == CUSTOM) {
+      // NOTE: in this test custom doesn't have any meta cols because it is more interesting of a test case
+      Option<HoodieRecordMerger> merger = Option.of(new MockMerger(isProjectionCompatible, new String[]{"begin_lat", "begin_lon", "timestamp"}));
+      readerContext.setRecordMerger(merger);
+    }
+    Schema requestedSchema = DATA_SCHEMA;
+    HoodieFileGroupReaderSchemaHandler schemaHandler = supportsParquetRowIndex
+        ? new HoodiePositionBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties())
+        : new HoodieFileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties());
+    Schema expectedRequiredFullSchema = supportsParquetRowIndex && mergeUseRecordPosition
+        ? HoodiePositionBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
+        : requestedSchema;
+    assertEquals(expectedRequiredFullSchema, schemaHandler.getRequiredSchema());
+    Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
+    Pair<List<Schema.Field>, List<Schema.Field>> expectedBootstrapFields = HoodieFileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredFullSchema);
+    if (supportsParquetRowIndex) {
+      expectedBootstrapFields.getLeft().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+      expectedBootstrapFields.getRight().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+    }
+    assertEquals(expectedBootstrapFields.getLeft(), bootstrapFields.getLeft());
+    assertEquals(expectedBootstrapFields.getRight(), bootstrapFields.getRight());
+
+    //read subset of columns
+    requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
+    schemaHandler = supportsParquetRowIndex
+        ? new HoodiePositionBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties())
+        : new HoodieFileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties());
+    Schema expectedRequiredSchema;
+    if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
+      expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
+    } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
+      expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
+    } else if (mergeMode == CUSTOM && isProjectionCompatible) {
+      expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider", "begin_lon", "timestamp");
+    } else {
+      expectedRequiredSchema = DATA_SCHEMA;
+    }
+    if (supportsParquetRowIndex && mergeUseRecordPosition) {
+      expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
+    }
+    assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
+    bootstrapFields = schemaHandler.getBootstrapRequiredFields();
+    expectedBootstrapFields = HoodieFileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredSchema);
+    if (supportsParquetRowIndex) {
+      expectedBootstrapFields.getLeft().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+      expectedBootstrapFields.getRight().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+    }
+    assertEquals(expectedBootstrapFields.getLeft(), bootstrapFields.getLeft());
+    assertEquals(expectedBootstrapFields.getRight(), bootstrapFields.getRight());
+
+    // request only data cols
+    requestedSchema = DATA_COLS_ONLY_SCHEMA;
+    schemaHandler = supportsParquetRowIndex
+        ? new HoodiePositionBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties())
+        : new HoodieFileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties());
+    if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
+      expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
+    } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
+      expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
+    } else if (mergeMode == CUSTOM && isProjectionCompatible) {
+      expectedRequiredSchema = generateProjectionSchema("begin_lat", "tip_history", "rider", "begin_lon", "timestamp");
+    } else {
+      expectedRequiredSchema = DATA_SCHEMA;
+    }
+    if (supportsParquetRowIndex && mergeUseRecordPosition) {
+      expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
+    }
+    assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
+    bootstrapFields = schemaHandler.getBootstrapRequiredFields();
+    expectedBootstrapFields = HoodieFileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredSchema);
+    if (supportsParquetRowIndex) {
+      if (mergeMode == CUSTOM && isProjectionCompatible) {
+        if (mergeUseRecordPosition) {
+          expectedBootstrapFields.getRight().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+        }
+      } else {
+        expectedBootstrapFields.getLeft().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+        expectedBootstrapFields.getRight().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+      }
+    }
+    assertEquals(expectedBootstrapFields.getLeft(), bootstrapFields.getLeft());
+    assertEquals(expectedBootstrapFields.getRight(), bootstrapFields.getRight());
+
+    // request only meta cols
+    requestedSchema = META_COLS_ONLY_SCHEMA;
+    schemaHandler = supportsParquetRowIndex
+        ? new HoodiePositionBasedSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties())
+        : new HoodieFileGroupReaderSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties());
+    if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
+      expectedRequiredSchema = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key", "timestamp");
+    } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
+      expectedRequiredSchema = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key");
+    } else if (mergeMode == CUSTOM && isProjectionCompatible) {
+      expectedRequiredSchema = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key", "begin_lat", "begin_lon", "timestamp");
+    } else {
+      expectedRequiredSchema = DATA_SCHEMA;
+    }
+    if (supportsParquetRowIndex && mergeUseRecordPosition) {
+      expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
+    }
+    assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
+    bootstrapFields = schemaHandler.getBootstrapRequiredFields();
+    expectedBootstrapFields = HoodieFileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredSchema);
+    if (supportsParquetRowIndex) {
+      if ((mergeMode == EVENT_TIME_ORDERING && !hasPrecombine) || mergeMode == COMMIT_TIME_ORDERING) {
+        if (mergeUseRecordPosition) {
+          expectedBootstrapFields.getLeft().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+        }
+      } else {
+        expectedBootstrapFields.getLeft().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+        expectedBootstrapFields.getRight().add(HoodiePositionBasedSchemaHandler.getPositionalMergeField());
+      }
+    }
+    assertEquals(expectedBootstrapFields.getLeft(), bootstrapFields.getLeft());
+    assertEquals(expectedBootstrapFields.getRight(), bootstrapFields.getRight());
   }
 
   private static Schema generateProjectionSchema(String... fields) {
