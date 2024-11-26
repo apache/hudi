@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
@@ -94,13 +93,11 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
     return dataAndMetaCols;
   }
 
-  @VisibleForTesting
-  static Schema addPositionalMergeCol(Schema input) {
+  private static Schema addPositionalMergeCol(Schema input) {
     return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField()));
   }
 
-  @VisibleForTesting
-  static Schema.Field getPositionalMergeField() {
+  private static Schema.Field getPositionalMergeField() {
     return new Schema.Field(ROW_INDEX_TEMPORARY_COLUMN_NAME,
         Schema.create(Schema.Type.LONG), "", -1L);
   }
