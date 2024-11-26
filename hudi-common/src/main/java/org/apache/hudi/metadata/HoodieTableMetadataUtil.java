@@ -849,10 +849,10 @@ public class HoodieTableMetadataUtil {
 
   @VisibleForTesting
   public static List<String> getRecordKeysDeletedOrUpdated(HoodieEngineContext engineContext,
-                                                                      HoodieCommitMetadata commitMetadata,
-                                                                      HoodieMetadataConfig metadataConfig,
-                                                                      HoodieTableMetaClient dataTableMetaClient,
-                                                                      String instantTime) {
+                                                           HoodieCommitMetadata commitMetadata,
+                                                           HoodieMetadataConfig metadataConfig,
+                                                           HoodieTableMetaClient dataTableMetaClient,
+                                                           String instantTime) {
 
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
@@ -1460,7 +1460,7 @@ public class HoodieTableMetadataUtil {
           .withLatestInstantTime(latestCommitTimestamp)
           .withReaderSchema(writerSchemaOpt.get())
           .withTableMetaClient(datasetMetaClient)
-          .withLogRecordScannerCallbackForDeletedKeys(deletedKey -> deletedKeys.add(deletedKey.getRecordKey()))
+          .withRecordDeletionCallback(deletedKey -> deletedKeys.add(deletedKey.getRecordKey()))
           .build();
       scanner.scan();
       return deletedKeys;
@@ -1484,7 +1484,7 @@ public class HoodieTableMetadataUtil {
           .withReaderSchema(writerSchemaOpt.get())
           .withTableMetaClient(datasetMetaClient)
           .withLogRecordScannerCallback(record -> allRecordKeys.add(record.getRecordKey()))
-          .withLogRecordScannerCallbackForDeletedKeys(deletedKey -> allRecordKeys.add(deletedKey.getRecordKey()))
+          .withRecordDeletionCallback(deletedKey -> allRecordKeys.add(deletedKey.getRecordKey()))
           .build();
       scanner.scan();
       return allRecordKeys;

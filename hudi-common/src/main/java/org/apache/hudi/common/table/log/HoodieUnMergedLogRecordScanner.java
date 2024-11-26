@@ -43,11 +43,11 @@ import java.util.stream.Collectors;
 public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScanner {
 
   private final LogRecordScannerCallback callback;
-  private final DeletionCallback deletionCallback;
+  private final RecordDeletionCallback recordDeletionCallback;
 
   private HoodieUnMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean reverseReader, int bufferSize,
-                                         LogRecordScannerCallback callback, DeletionCallback deletionCallback,
+                                         LogRecordScannerCallback callback, RecordDeletionCallback recordDeletionCallback,
                                          Option<InstantRange> instantRange, InternalSchema internalSchema,
                                          boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
@@ -55,7 +55,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
         false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger,
          hoodieTableMetaClientOption);
     this.callback = callback;
-    this.deletionCallback = deletionCallback;
+    this.recordDeletionCallback = recordDeletionCallback;
   }
 
   /**
@@ -89,8 +89,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
 
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
-    if (deletionCallback != null) {
-      deletionCallback.apply(deleteRecord.getHoodieKey());
+    if (recordDeletionCallback != null) {
+      recordDeletionCallback.apply(deleteRecord.getHoodieKey());
     }
   }
 
@@ -107,7 +107,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
    * A callback for log record scanner to consume deleted HoodieKeys.
    */
   @FunctionalInterface
-  public interface DeletionCallback {
+  public interface RecordDeletionCallback {
     void apply(HoodieKey deletedKey);
   }
 
@@ -126,7 +126,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     private Option<InstantRange> instantRange = Option.empty();
     // specific configurations
     private LogRecordScannerCallback callback;
-    private DeletionCallback deletionCallback;
+    private RecordDeletionCallback recordDeletionCallback;
     private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
     private HoodieTableMetaClient hoodieTableMetaClient;
@@ -190,8 +190,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
       return this;
     }
 
-    public Builder withLogRecordScannerCallbackForDeletedKeys(DeletionCallback deletionCallback) {
-      this.deletionCallback = deletionCallback;
+    public Builder withRecordDeletionCallback(RecordDeletionCallback recordDeletionCallback) {
+      this.recordDeletionCallback = recordDeletionCallback;
       return this;
     }
 
@@ -219,7 +219,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
       ValidationUtils.checkArgument(recordMerger != null);
 
       return new HoodieUnMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
-          latestInstantTime, reverseReader, bufferSize, callback, deletionCallback, instantRange,
+          latestInstantTime, reverseReader, bufferSize, callback, recordDeletionCallback, instantRange,
           internalSchema, enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient));
     }
   }
