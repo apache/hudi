@@ -1502,10 +1502,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock);
 
-    List<String> allLogFiles =
-        FSUtils.getAllLogFiles(storage, partitionPath, fileId, HoodieLogFile.DELTA_EXTENSION, "100")
-            .map(s -> s.getPath().toString()).collect(Collectors.toList());
-
     // Rollback the last block i.e. a data block.
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "102");
@@ -1525,8 +1521,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, deleteBlockHeader);
     writer.appendBlock(deleteBlock);
 
+    // Call close() to ensure all data is written to HDFS
+    writer.close();
+
     FileCreateUtils.createDeltaCommit(basePath, "102", storage);
 
+    List<String> allLogFiles = FSUtils.getAllLogFiles(storage, partitionPath, fileId, HoodieLogFile.DELTA_EXTENSION, "100")
+        .map(s -> s.getPath().toString()).collect(Collectors.toList());
     final List<String> readKeys = new ArrayList<>();
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
@@ -1560,7 +1561,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Collections.sort(recordKeysInserted);
     Collections.sort(readKeys);
     assertEquals(recordKeysInserted, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
-    writer.close();
     scanner.close();
   }
 
