@@ -293,7 +293,7 @@ public class KafkaOffsetGen {
             + " partitions (more than 1). single_offset checkpoint type is not applicable.");
       } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType)
           && partitionInfoList.size() == 1 && isValidOffsetCheckpointType(lastCheckpoint)) {
-        lastCheckpointStr = Option.of(topicName + ",0:" + lastCheckpoint.get());
+        lastCheckpointStr = Option.of(topicName + ",0:" + lastCheckpoint.get().getCheckpointKey());
       }
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {

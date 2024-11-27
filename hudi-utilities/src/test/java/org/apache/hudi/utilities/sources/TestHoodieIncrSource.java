@@ -547,7 +547,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       assertEquals(expectedCount, batchCheckPoint.getKey().get().count());
       expectedRDDPartitions.ifPresent(rddPartitions -> assertEquals(rddPartitions, batchCheckPoint.getKey().get().rdd().getNumPartitions()));
     }
-    assertEquals(expectedCheckpoint, batchCheckPoint.getRight());
+    assertEquals(new CheckpointV2(expectedCheckpoint), batchCheckPoint.getRight());
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull, int expectedCount,
