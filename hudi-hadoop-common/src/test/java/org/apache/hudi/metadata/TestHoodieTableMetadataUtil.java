@@ -44,6 +44,7 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.AfterEach;
@@ -64,6 +65,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForPartitionStats;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryIndex;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -541,5 +543,51 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     for (int i = 0; i < n; i++) {
       list.add("col_" + i);
     }
+  }
+
+  @Test
+  public void testValidateDataTypeForPartitionStats() {
+    // Create a dummy schema with both complex and primitive types
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .requiredString("stringField")
+        .optionalInt("intField")
+        .optionalBoolean("booleanField")
+        .optionalFloat("floatField")
+        .optionalDouble("doubleField")
+        .optionalLong("longField")
+        .optionalBytes("bytesField")
+        .name("unionIntField").type().unionOf().nullType().and().intType().endUnion().noDefault()
+        .name("arrayField").type().array().items().stringType().noDefault()
+        .name("mapField").type().map().values().intType().noDefault()
+        .name("structField").type().record("NestedRecord")
+        .fields()
+        .requiredString("nestedString")
+        .endRecord()
+        .noDefault()
+        .endRecord();
+
+    // Test for primitive fields
+    assertTrue(validateDataTypeForPartitionStats("stringField", schema));
+    assertTrue(validateDataTypeForPartitionStats("intField", schema));
+    assertTrue(validateDataTypeForPartitionStats("booleanField", schema));
+    assertTrue(validateDataTypeForPartitionStats("floatField", schema));
+    assertTrue(validateDataTypeForPartitionStats("doubleField", schema));
+    assertTrue(validateDataTypeForPartitionStats("longField", schema));
+    assertTrue(validateDataTypeForPartitionStats("bytesField", schema));
+    assertTrue(validateDataTypeForPartitionStats("unionIntField", schema));
+
+    // Test for complex fields
+    assertFalse(validateDataTypeForPartitionStats("arrayField", schema));
+    assertFalse(validateDataTypeForPartitionStats("mapField", schema));
+    assertFalse(validateDataTypeForPartitionStats("structField", schema));
+
+    // Test for logical types
+    Schema dateFieldSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
+    schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("dateField").type(dateFieldSchema).noDefault()
+        .endRecord();
+    assertFalse(validateDataTypeForPartitionStats("dateField", schema));
   }
 }

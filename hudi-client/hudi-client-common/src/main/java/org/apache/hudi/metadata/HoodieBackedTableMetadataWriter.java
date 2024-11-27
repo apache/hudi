@@ -429,6 +429,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             fileGroupCountAndRecordsPair = initializeExpressionIndexPartition(partitionName, instantTimeForPartition);
             break;
           case PARTITION_STATS:
+            // For PARTITION_STATS, COLUMN_STATS should also be enabled
+            if (!dataWriteConfig.isMetadataColumnStatsIndexEnabled()) {
+              LOG.warn("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
+                  HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
+              continue;
+            }
             fileGroupCountAndRecordsPair = initializePartitionStatsIndex(partitionInfoList);
             partitionName = PARTITION_STATS.getPartitionPath();
             break;
