@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -43,6 +44,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -60,6 +62,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
+import org.mortbay.util.SingletonList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -200,11 +204,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
 
-    // We use the new path if
-    //   1. a readerContext object is given,
-    //   2. any partial updates in the log data blocks
+    // We use the new path or fg reader if a readerContext object is given,
     Option<HoodieReaderContext> readerContextOpt = taskContextSupplier.getReaderContext(metaClient);
-    if (readerContextOpt.isPresent() && shouldUsePartialUpdates(operation)) {
+    if (readerContextOpt.isPresent()) {
       return compactWithPartialUpdate(
           readerContextOpt.get(),
           instantTime,
@@ -274,8 +276,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
       stat.setTotalLogRecords(scanner.getTotalLogRecords());
       stat.setPartitionPath(operation.getPartitionPath());
-      stat
-          .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+      stat.setTotalLogSizeCompacted(
+          operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
       stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
       stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
       stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
@@ -318,7 +320,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                              TypedProperties props,
                                              HoodieWriteConfig config,
                                              TaskContextSupplier taskContextSupplier) throws IOException {
-    List<WriteStatus> writeStatuses = new ArrayList<>();
+    HoodieTimer timer = HoodieTimer.start();
+    timer.startTimer();
     List<HoodieLogFile> logFiles = logFilePaths.stream()
         .map(p -> new HoodieLogFile(new StoragePath(p))).collect(toList());
     Option<HoodieBaseFile> baseFileOpt =
@@ -362,17 +365,62 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         metaClient.getStorage(),
         config,
         writeSchemaWithMetaFields, taskContextSupplier, config.getRecordMerger().getRecordType());
+
+    WriteStatus writestatus = initNewStatus(config, true, operation);
+    long recordsWritten = 0;
+    long errorRecords = 0;
     while (recordIterator.hasNext()) {
       HoodieRecord record = (HoodieRecord) recordIterator.next();
-      fileWriter.write(record.getRecordKey(), record, writeSchemaWithMetaFields);
+      try {
+        fileWriter.write(record.getRecordKey(), record, writeSchemaWithMetaFields);
+        recordsWritten++;
+        writestatus.markSuccess(record, record.getMetadata());
+      } catch (Throwable t) {
+        errorRecords++;
+        writestatus.markFailure(record, t, record.getMetadata());
+        LOG.error("Error write record: {}", record, t);
+      }
     }
 
     // 4. Construct the return values.
+    writestatus.setTotalRecords(recordsWritten);
+    writestatus.setTotalErrorRecords(errorRecords);
+    setupWriteStatus(new StoragePath(newFileName), writestatus, config, metaClient.getStorage(), timer);
+    List<WriteStatus> writeStatuses = SingletonList.newSingletonList(writestatus);
     return writeStatuses;
   }
 
-  // check if partial updates exist in log files.
-  boolean shouldUsePartialUpdates(CompactionOperation operation) {
-    return false;
+  private WriteStatus initNewStatus(HoodieWriteConfig config, boolean shouldTrackSuccessRecords, CompactionOperation operation) {
+    WriteStatus writeStatus = (WriteStatus) ReflectionUtils.loadClass(
+        config.getWriteStatusClassName(), shouldTrackSuccessRecords, config.getWriteStatusFailureFraction());
+    HoodieWriteStat stat = new HoodieDeltaWriteStat();
+    writeStatus.setFileId(operation.getFileId());
+    writeStatus.setPartitionPath(operation.getPartitionPath());
+    writeStatus.setStat(stat);
+    return writeStatus;
+  }
+
+  protected void setupWriteStatus(StoragePath filePath,
+                                  WriteStatus writeStatus,
+                                  HoodieWriteConfig config,
+                                  HoodieStorage storage,
+                                  HoodieTimer timer) throws IOException {
+    HoodieWriteStat stat = writeStatus.getStat();
+    stat.setPartitionPath(writeStatus.getPartitionPath());
+    stat.setNumWrites(writeStatus.getTotalRecords());
+    stat.setNumDeletes(0);
+    stat.setNumInserts(writeStatus.getTotalRecords());
+    stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
+    stat.setFileId(writeStatus.getFileId());
+    stat.setPath(new StoragePath(config.getBasePath()), filePath);
+    stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
+
+    long fileSize = storage.getPathInfo(filePath).getLength();
+    stat.setTotalWriteBytes(fileSize);
+    stat.setFileSizeInBytes(fileSize);
+
+    RuntimeStats runtimeStats = new RuntimeStats();
+    runtimeStats.setTotalCreateTime(timer.endTimer());
+    stat.setRuntimeStats(runtimeStats);
   }
 }
