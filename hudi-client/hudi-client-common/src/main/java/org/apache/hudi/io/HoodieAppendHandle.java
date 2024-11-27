@@ -436,7 +436,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     if (config.isMetadataColumnStatsIndexEnabled()) {
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
-              config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields))));
+              config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
+              Option.of(this.recordMerger.getRecordType())));
       final List<Schema.Field> fieldsToIndex = writeSchemaWithMetaFields.getFields().stream()
           .filter(field -> columnsToIndexSet.contains(field.name()))
           .collect(Collectors.toList());

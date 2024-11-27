@@ -67,7 +67,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   protected val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
 
   private lazy val indexedColumns: Set[String] = HoodieTableMetadataUtil
-    .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, convertScalaListToJavaList(tableSchema.fieldNames), true).asScala.toSet
+    .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, convertScalaListToJavaList(tableSchema.fieldNames)).asScala.toSet
 
 
   override def getIndexName: String = ColumnStatsIndexSupport.INDEX_NAME
