@@ -19,9 +19,8 @@
 
 package org.apache.spark.sql.hudi.command.index
 
-import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, INSERT_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata
@@ -31,6 +30,7 @@ import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, H
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -54,7 +54,9 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
     HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "4",
     HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
-    HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "3"
+    HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "3",
+    HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+    DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name()
   ) ++ metadataOpts
 
   test("Test Create/Show/Drop Secondary Index") {
@@ -77,7 +79,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
                |  preCombineField = 'ts',
                |  hoodie.metadata.enable = 'true',
                |  hoodie.metadata.record.index.enable = 'true',
-               |  hoodie.metadata.index.secondary.enable = 'true'
+               |  hoodie.metadata.index.secondary.enable = 'true',
+               |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
                | )
                | partitioned by(ts)
                | location '$basePath'
@@ -213,6 +216,64 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           // create secondary index throws error when trying to create on multiple fields at a time
           checkException(sql = s"create index idx_city on $tableName using secondary_index(city,state)")(
             "Only one column can be indexed for functional or secondary index."
+          )
+        }
+      }
+    }
+  }
+
+  test("Test Secondary Index Creation Failure For Unsupported payloads") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir {
+        tmp => {
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  ts bigint,
+               |  id string,
+               |  rider string,
+               |  driver string,
+               |  fare int,
+               |  city string,
+               |  state string
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = 'mor',
+               |  preCombineField = 'ts',
+               |  hoodie.metadata.enable = 'true',
+               |  hoodie.metadata.record.index.enable = 'true',
+               |  hoodie.metadata.index.secondary.enable = 'true',
+               |  hoodie.datasource.write.recordkey.field = 'id',
+               |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
+               | )
+               | partitioned by(state)
+               | location '$basePath'
+       """.stripMargin)
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values
+               | (1695159649087, '334e26e9-8355-45cc-97c6-c31daf0df330', 'rider-A', 'driver-K', 19, 'san_francisco', 'california'),
+               | (1695091554787, 'e96c4396-3fad-413a-a942-4cb36106d720', 'rider-B', 'driver-M', 27, 'austin', 'texas')
+               | """.stripMargin
+          )
+
+          // validate record_index created successfully
+          val metadataDF = spark.sql(s"select key from hudi_metadata('$basePath') where type=5")
+          assert(metadataDF.count() == 2)
+
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(HoodieTestUtils.getDefaultStorageConf)
+            .build()
+          assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
+          // create secondary index throws error when trying to create on multiple fields at a time
+          checkException(sql = s"create index idx_city on $tableName using secondary_index(city)")(
+            "Secondary Index can only be enabled on table with OverwriteWithLatestAvroPayload payload class or Merge mode set to OVERWRITE_WITH_LATEST"
           )
         }
       }
@@ -506,7 +567,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.metadata.index.secondary.enable = 'true',
-         |  hoodie.datasource.write.recordkey.field = 'id'
+         |  hoodie.datasource.write.recordkey.field = 'id',
+         |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
          | )
          | partitioned by(state)
          | location '$basePath'

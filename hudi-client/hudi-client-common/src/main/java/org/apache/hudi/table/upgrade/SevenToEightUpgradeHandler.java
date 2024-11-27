@@ -69,7 +69,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     tablePropsToAdd.put(HoodieTableConfig.TIMELINE_PATH, HoodieTableConfig.TIMELINE_PATH.defaultValue());
     upgradePartitionFields(config, tableConfig, tablePropsToAdd);
-    upgradeMergeMode(config, tableConfig, tablePropsToAdd);
+    upgradeMergeMode(tableConfig, tablePropsToAdd);
 
     // Handle timeline upgrade:
     //  - Rewrite instants in active timeline to new format
@@ -126,20 +126,20 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  private static void upgradeMergeMode(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+  private static void upgradeMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     if (tableConfig.getPayloadClass() != null
         && tableConfig.getPayloadClass().equals(OverwriteWithLatestAvroPayload.class.getName())) {
       if (HoodieTableType.COPY_ON_WRITE == tableConfig.getTableType()) {
+        tablePropsToAdd.put(
+            HoodieTableConfig.RECORD_MERGE_MODE,
+            RecordMergeMode.COMMIT_TIME_ORDERING.name());
+      } else {
         tablePropsToAdd.put(
             HoodieTableConfig.PAYLOAD_CLASS_NAME,
             DefaultHoodieRecordPayload.class.getName());
         tablePropsToAdd.put(
             HoodieTableConfig.RECORD_MERGE_MODE,
             RecordMergeMode.EVENT_TIME_ORDERING.name());
-      } else {
-        tablePropsToAdd.put(
-            HoodieTableConfig.RECORD_MERGE_MODE,
-            RecordMergeMode.COMMIT_TIME_ORDERING.name());
       }
     }
   }
