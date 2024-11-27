@@ -19,6 +19,7 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.HoodieFileWriter;
 
 import java.io.Serializable;
 import java.util.function.Supplier;
@@ -35,4 +36,8 @@ public abstract class TaskContextSupplier implements Serializable {
   public abstract Supplier<Long> getAttemptIdSupplier();
 
   public abstract Option<String> getProperty(EngineProperty prop);
+
+  public abstract Option<HoodieReaderContext> getReaderContext();
+
+  public abstract Option<HoodieFileWriter> getFileWriter();
 }

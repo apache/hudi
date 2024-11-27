@@ -21,12 +21,18 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -34,15 +40,18 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieCompactionHandler;
@@ -189,6 +198,27 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
             new StoragePath(FSUtils.constructAbsolutePath(
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
+
+    // We use the new path if
+    //   1. a readerContext object is given,
+    //   2. a file writer is given, and
+    //   3. any partial updates in the log data blocks
+    Option<HoodieReaderContext> readerContextOpt = taskContextSupplier.getReaderContext();
+    Option<HoodieFileWriter> fileWriterOpt = taskContextSupplier.getFileWriter();
+    if (readerContextOpt.isPresent() && fileWriterOpt.isPresent() && shouldUsePartialUpdates(operation)) {
+      return compactWithPartialUpdate(
+          readerContextOpt.get(),
+          metaClient,
+          operation,
+          logFiles,
+          readerSchema,
+          internalSchemaOption,
+          config.getProps(),
+          fileWriterOpt.get(),
+          config);
+    }
+
+    // Otherwise, we use the existing code path.
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(metaClient.getBasePath())
@@ -278,4 +308,57 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }
   }
 
+  List<WriteStatus> compactWithPartialUpdate(HoodieReaderContext readerContext,
+                                             HoodieTableMetaClient metaClient,
+                                             CompactionOperation operation,
+                                             List<String> logFilePaths,
+                                             Schema readerSchema,
+                                             Option<InternalSchema> internalSchemaOpt,
+                                             TypedProperties props,
+                                             HoodieFileWriter fileWriter,
+                                             HoodieWriteConfig config) throws IOException {
+    List<WriteStatus> writeStatuses = new ArrayList<>();
+    List<HoodieLogFile> logFiles = logFilePaths.stream()
+        .map(p -> new HoodieLogFile(new StoragePath(p))).collect(toList());
+    Option<HoodieBaseFile> baseFileOpt =
+        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
+    FileSlice fileSlice = new FileSlice(
+        operation.getFileGroupId(),
+        operation.getBaseInstantTime(),
+        baseFileOpt.isPresent() ? baseFileOpt.get() : null,
+        logFiles);
+    // 1. Generate the input for fg reader.
+    HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
+        readerContext,
+        metaClient.getStorage(),
+        metaClient.getBasePath().toString(),
+        operation.getBaseInstantTime(),
+        fileSlice,
+        readerSchema,
+        readerSchema,
+        internalSchemaOpt,
+        metaClient,
+        props,
+        0,
+        -1,
+        true);
+    // 2. Get the `HoodieFileGroupReaderIterator` from the fg reader.
+    fileGroupReader.initRecordIterators();
+    HoodieFileGroupReader.HoodieFileGroupReaderIterator<T> recordIterator
+        = fileGroupReader.getClosableIterator();
+    // 3. Write the record using parquet writer.
+    Schema schemaWithMetaFields =
+        HoodieAvroUtils.addMetadataFields(readerSchema, config.allowOperationMetadataField());
+    while (recordIterator.hasNext()) {
+      HoodieRecord record = (HoodieRecord) recordIterator.next();
+      fileWriter.write(record.getRecordKey(), record, schemaWithMetaFields);
+    }
+
+    return writeStatuses;
+  }
+
+  // check if partial updates exist in log files.
+  boolean shouldUsePartialUpdates(CompactionOperation operation) {
+    return false;
+  }
 }
