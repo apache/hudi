@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -31,7 +32,6 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
-import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -48,7 +48,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
@@ -62,7 +61,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
 import org.mortbay.util.SingletonList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -204,8 +202,11 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
 
-    // We use the new path or fg reader if a readerContext object is given,
-    Option<HoodieReaderContext> readerContextOpt = taskContextSupplier.getReaderContext(metaClient);
+    // PATH 1: When the engine decides to return a valid reader context object.
+    boolean useReaderContext = config.getProps().getBoolean(
+        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
+        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue());
+    Option<HoodieReaderContext> readerContextOpt = taskContextSupplier.getReaderContext(metaClient, useReaderContext);
     if (readerContextOpt.isPresent()) {
       return compactWithPartialUpdate(
           readerContextOpt.get(),
@@ -220,7 +221,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
           taskContextSupplier);
     }
 
-    // Otherwise, we use the existing code path.
+    // PATH2: Otherwise.
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(metaClient.getBasePath())

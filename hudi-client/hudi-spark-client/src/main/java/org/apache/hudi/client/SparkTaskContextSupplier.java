@@ -26,26 +26,18 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.storage.HoodieFileWriter;
-import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.io.storage.HoodieSparkFileWriterFactory;
 
-import com.google.flatbuffers.FlexBuffers;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
-import org.apache.spark.sql.hudi.SparkAdapter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.util.Utils;
 
 import java.io.Serializable;
-import java.util.Collections;
 import java.util.function.Supplier;
 
 import scala.collection.immutable.HashMap;
-import scala.collection.immutable.Seq$;
 import scala.collection.mutable.ArrayBuffer;
 
 /**
@@ -110,16 +102,16 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
 
   // This reader context is used to read records before write, like compaction, clustering.
   @Override
-  public Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient) {
-    // 1. Create parquet reader.
-    // 2. Get partition filer.
-    // 3. Get data filter.
-    SparkParquetReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
-        false, SQLConf.get(), new HashMap<>(), (Configuration) metaClient.getStorageConf().unwrap());
-    return Option.of(new SparkFileFormatInternalRowReaderContext(
-        reader,
-        metaClient.getTableConfig().getRecordKeyFields().get()[0],
-        new ArrayBuffer<>(),
-        new ArrayBuffer<>()));
+  public Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient, boolean useReaderContext) {
+    if (useReaderContext) {
+      SparkParquetReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
+          false, SQLConf.get(), new HashMap<>(), (Configuration) metaClient.getStorageConf().unwrap());
+      return Option.of(new SparkFileFormatInternalRowReaderContext(
+          reader,
+          metaClient.getTableConfig().getRecordKeyFields().get()[0],
+          new ArrayBuffer<>(),
+          new ArrayBuffer<>()));
+    }
+    return Option.empty();
   }
 }

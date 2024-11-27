@@ -20,9 +20,6 @@ package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.io.storage.HoodieFileWriter;
-import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import java.io.Serializable;
 import java.util.function.Supplier;
@@ -40,7 +37,7 @@ public abstract class TaskContextSupplier implements Serializable {
 
   public abstract Option<String> getProperty(EngineProperty prop);
 
-  public Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient) {
+  public Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient, boolean useReaderContext) {
     return Option.empty();
   }
 }
