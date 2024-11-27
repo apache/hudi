@@ -105,7 +105,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsert(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records,
-      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+                                                                 Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     return new SparkBulkInsertDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config,
         this, instantTime, records, userDefinedBulkInsertPartitioner).execute();
   }
@@ -122,19 +122,19 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
-      HoodieData<HoodieRecord<T>> preppedRecords) {
+                                                                    HoodieData<HoodieRecord<T>> preppedRecords) {
     return new SparkUpsertPreppedDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords).execute();
   }
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> insertPrepped(HoodieEngineContext context, String instantTime,
-      HoodieData<HoodieRecord<T>> preppedRecords) {
+                                                                    HoodieData<HoodieRecord<T>> preppedRecords) {
     return new SparkInsertPreppedDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords).execute();
   }
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context, String instantTime,
-      HoodieData<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+                                                                        HoodieData<HoodieRecord<T>> preppedRecords, Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     return new SparkBulkInsertPreppedDeltaCommitActionExecutor((HoodieSparkEngineContext) context, config,
         this, instantTime, preppedRecords, userDefinedBulkInsertPartitioner).execute();
   }
@@ -151,7 +151,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor<T> compactionExecutor = new RunCompactionActionExecutor<>(
         context, config, this, compactionInstantTime, new HoodieSparkMergeOnReadTableCompactor<>(),
-        new HoodieSparkCopyOnWriteTable<>(config, context, getMetaClient()), WriteOperationType.COMPACT);
+        new HoodieSparkCopyOnWriteTable(config, context, getMetaClient()), WriteOperationType.COMPACT);
     return compactionExecutor.execute();
   }
 
@@ -200,8 +200,8 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
 
   @Override
   public Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
-                                                          Map<String, HoodieRecord<?>> recordMap,
-                                                          Map<HoodieLogBlock.HeaderMetadataType, String> header) {
+                                                                   Map<String, HoodieRecord<?>> recordMap,
+                                                                   Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     HoodieAppendHandle appendHandle = new HoodieAppendHandle(config, instantTime, this,
         partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header);
     appendHandle.write(recordMap);
