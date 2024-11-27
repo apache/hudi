@@ -48,6 +48,7 @@ import java.util.Properties;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -230,6 +231,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
     // Start two services and having assert they have different views for same table.
     HoodieTableMetaClient.initTableAndGetMetaClient(new Configuration(), basePath, writeConfig1.getProps());
     EmbeddedTimelineService service1 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, "localhost", writeConfig1);
+    assertFalse(service1.getRemoteFileSystemViewConfig().isRemoteInitEnabled());
     service1.getViewManager().getFileSystemView(basePath);
     // Write commits to basePath.
     String partitionPath = "partition1";

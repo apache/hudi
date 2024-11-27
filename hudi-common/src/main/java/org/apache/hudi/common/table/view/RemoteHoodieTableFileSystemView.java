@@ -199,6 +199,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
       queryParams.put(BASEPATH_PARAM, basePath);
       String timelineHashFromServer = executeRequest(GET_TIMELINE_HASH, queryParams,STRING_TYPE_REFERENCE, RequestMethod.GET);
       if (!Objects.equals(timelineHashFromServer, timeline.getTimelineHash())) {
+        LOG.debug("Initialising timeline in remote view for " + basePath);
         String body = OBJECT_MAPPER.writeValueAsString(TimelineDTO.fromTimeline(timeline));
         executeRequest(INIT_TIMELINE, queryParams, body, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
       }

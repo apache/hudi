@@ -174,6 +174,7 @@ public class RequestHandler {
     String localTimelineHash = localTimeline.getTimelineHash();
     // refresh if timeline hash mismatches
     if (!localTimelineHash.equals(timelineHashFromClient)) {
+      LOG.warn("Timeline hashes don't match, local view is not in sync");
       return true;
     }
 
