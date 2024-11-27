@@ -52,6 +52,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieCompactionHandler;
@@ -201,21 +202,20 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     // We use the new path if
     //   1. a readerContext object is given,
-    //   2. a file writer is given, and
-    //   3. any partial updates in the log data blocks
-    Option<HoodieReaderContext> readerContextOpt = taskContextSupplier.getReaderContext();
-    Option<HoodieFileWriter> fileWriterOpt = taskContextSupplier.getFileWriter();
-    if (readerContextOpt.isPresent() && fileWriterOpt.isPresent() && shouldUsePartialUpdates(operation)) {
+    //   2. any partial updates in the log data blocks
+    Option<HoodieReaderContext> readerContextOpt = taskContextSupplier.getReaderContext(metaClient);
+    if (readerContextOpt.isPresent() && shouldUsePartialUpdates(operation)) {
       return compactWithPartialUpdate(
           readerContextOpt.get(),
+          instantTime,
           metaClient,
           operation,
           logFiles,
           readerSchema,
           internalSchemaOption,
           config.getProps(),
-          fileWriterOpt.get(),
-          config);
+          config,
+          taskContextSupplier);
     }
 
     // Otherwise, we use the existing code path.
@@ -309,14 +309,15 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
   }
 
   List<WriteStatus> compactWithPartialUpdate(HoodieReaderContext readerContext,
+                                             String instantTime,
                                              HoodieTableMetaClient metaClient,
                                              CompactionOperation operation,
                                              List<String> logFilePaths,
                                              Schema readerSchema,
                                              Option<InternalSchema> internalSchemaOpt,
                                              TypedProperties props,
-                                             HoodieFileWriter fileWriter,
-                                             HoodieWriteConfig config) throws IOException {
+                                             HoodieWriteConfig config,
+                                             TaskContextSupplier taskContextSupplier) throws IOException {
     List<WriteStatus> writeStatuses = new ArrayList<>();
     List<HoodieLogFile> logFiles = logFilePaths.stream()
         .map(p -> new HoodieLogFile(new StoragePath(p))).collect(toList());
@@ -347,13 +348,26 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     HoodieFileGroupReader.HoodieFileGroupReaderIterator<T> recordIterator
         = fileGroupReader.getClosableIterator();
     // 3. Write the record using parquet writer.
-    Schema schemaWithMetaFields =
-        HoodieAvroUtils.addMetadataFields(readerSchema, config.allowOperationMetadataField());
+    String writeToken = FSUtils.makeWriteToken(
+        taskContextSupplier.getPartitionIdSupplier().get(),
+        taskContextSupplier.getStageIdSupplier().get(),
+        taskContextSupplier.getAttemptIdSupplier().get());
+    String newFileName =
+        FSUtils.makeBaseFileName(instantTime, writeToken, operation.getFileId(), ".parquet");
+    // compaction has to use this schema.
+    Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(readerSchema, config.allowOperationMetadataField());
+    HoodieFileWriter fileWriter = HoodieFileWriterFactory.getFileWriter(
+        operation.getDataFileCommitTime().get(),
+        new StoragePath(newFileName),
+        metaClient.getStorage(),
+        config,
+        writeSchemaWithMetaFields, taskContextSupplier, config.getRecordMerger().getRecordType());
     while (recordIterator.hasNext()) {
       HoodieRecord record = (HoodieRecord) recordIterator.next();
-      fileWriter.write(record.getRecordKey(), record, schemaWithMetaFields);
+      fileWriter.write(record.getRecordKey(), record, writeSchemaWithMetaFields);
     }
 
+    // 4. Construct the return values.
     return writeStatuses;
   }
 
