@@ -1423,11 +1423,14 @@ public class HoodieTableMetadataUtil {
   }
 
   private static boolean canCompare(Schema schema, HoodieRecordType recordType) {
-    // if recordType is SPARK then we cannot compare RECORD and ARRAY types in addition to MAP type
-    if (recordType == HoodieRecordType.SPARK) {
-      return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
+    boolean toReturn = schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
+    if (!toReturn) {
+      return toReturn;
     }
-    return schema.getType() != Schema.Type.MAP;
+    if (recordType == HoodieRecordType.SPARK) {
+      return schema.getType() != Schema.Type.FIXED && schema.getType() != Schema.Type.BYTES;
+    }
+    return toReturn;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
@@ -2305,9 +2308,11 @@ public class HoodieTableMetadataUtil {
                   .filter(stats -> fileNames.contains(stats.getFileName()))
                   .map(HoodieColumnRangeMetadata::fromColumnStats)
                   .collectAsList();
-          // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
-          // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
-          fileColumnMetadata.add(partitionColumnMetadata);
+          if (!partitionColumnMetadata.isEmpty()) {
+            // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
+            // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
+            fileColumnMetadata.add(partitionColumnMetadata);
+          }
         }
 
         return collectAndProcessColumnMetadata(fileColumnMetadata, partitionName, shouldScanColStatsForTightBound).iterator();

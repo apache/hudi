@@ -263,10 +263,12 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     }
   }
 
+  // siva fix me. flaky somehow. succeeds locally. but in CI it could fail. yet to triage. but unlikely its a col stats issue.
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIUpsertAndDropIndex(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)

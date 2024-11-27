@@ -112,7 +112,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testMetadataColumnStatsIndexInitializationWithUpserts(tableType: HoodieTableType, partitionCol : String): Unit = {
     val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
     val metadataOpts = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true"
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     val commonOpts = Map(
@@ -227,7 +228,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testMetadataColumnStatsIndexInitializationWithRollbacks(tableType: HoodieTableType, partitionCol : String): Unit = {
     val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
     val metadataOpts = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true"
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     val commonOpts = Map(

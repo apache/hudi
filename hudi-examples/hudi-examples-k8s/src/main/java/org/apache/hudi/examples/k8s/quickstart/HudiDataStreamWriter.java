@@ -104,7 +104,7 @@ public class HudiDataStreamWriter {
   private static Map<String, String> createHudiOptions(String basePath) {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), basePath);
-    options.put(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), "s3a");
+    options.put(HoodieCommonConfig.FS_ATOMIC_CREATION_SUPPORT.key(), "s3a");
     options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     options.put(FlinkOptions.PRECOMBINE_FIELD.key(), "ts");
     options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
