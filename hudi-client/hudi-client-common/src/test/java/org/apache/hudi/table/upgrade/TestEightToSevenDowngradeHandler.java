@@ -163,9 +163,9 @@ class TestEightToSevenDowngradeHandler {
     EightToSevenDowngradeHandler.downgradePartitionFields(config, tableConfig, tablePropsToAdd);
     assertTrue(tablePropsToAdd.containsKey(PARTITION_FIELDS));
     assertEquals("partition_field", tablePropsToAdd.get(PARTITION_FIELDS));
-    EightToSevenDowngradeHandler.unsetInitialVersion(config, tableConfig, tablePropsToAdd);
+    EightToSevenDowngradeHandler.unsetInitialVersion(tableConfig, tablePropsToAdd);
     assertFalse(tableConfig.getProps().containsKey(INITIAL_VERSION.key()));
-    EightToSevenDowngradeHandler.unsetRecordMergeMode(config, tableConfig, tablePropsToAdd);
+    EightToSevenDowngradeHandler.unsetRecordMergeMode(tableConfig, tablePropsToAdd);
     assertFalse(tableConfig.getProps().containsKey(RECORD_MERGE_MODE.key()));
     assertTrue(tablePropsToAdd.containsKey(PAYLOAD_CLASS_NAME));
     EightToSevenDowngradeHandler.downgradeBootstrapIndexType(config, tableConfig, tablePropsToAdd);

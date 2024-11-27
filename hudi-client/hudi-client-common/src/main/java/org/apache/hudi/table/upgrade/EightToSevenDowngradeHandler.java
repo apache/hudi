@@ -131,8 +131,8 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
     // downgrade table properties
     downgradePartitionFields(config, metaClient.getTableConfig(), tablePropsToAdd);
-    unsetInitialVersion(config, metaClient.getTableConfig(), tablePropsToAdd);
-    unsetRecordMergeMode(config, metaClient.getTableConfig(), tablePropsToAdd);
+    unsetInitialVersion(metaClient.getTableConfig(), tablePropsToAdd);
+    unsetRecordMergeMode(metaClient.getTableConfig(), tablePropsToAdd);
     downgradeKeyGeneratorType(config, metaClient.getTableConfig(), tablePropsToAdd);
     downgradeBootstrapIndexType(config, metaClient.getTableConfig(), tablePropsToAdd);
 
@@ -156,13 +156,13 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     }
   }
 
-  static void unsetInitialVersion(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+  static void unsetInitialVersion(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     tableConfig.getProps().remove(HoodieTableConfig.INITIAL_VERSION.key());
   }
 
-  static void unsetRecordMergeMode(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+  static void unsetRecordMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     Triple<RecordMergeMode, String, String> mergingConfigs =
-        HoodieTableConfig.inferCorrectMergingBehavior(config.getRecordMergeMode(), tableConfig.getPayloadClass(), tableConfig.getRecordMergeStrategyId());
+        HoodieTableConfig.inferCorrectMergingBehavior(tableConfig.getRecordMergeMode(), tableConfig.getPayloadClass(), tableConfig.getRecordMergeStrategyId());
     if (StringUtils.nonEmpty(mergingConfigs.getMiddle())) {
       tablePropsToAdd.put(HoodieTableConfig.PAYLOAD_CLASS_NAME, mergingConfigs.getMiddle());
     }
