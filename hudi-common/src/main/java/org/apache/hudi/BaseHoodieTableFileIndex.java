@@ -514,7 +514,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       StoragePath basePath
   ) {
     HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(
-        engineContext, storage, metadataConfig, basePath.toString(), true);
+        engineContext, storage, metadataConfig, basePath.toString(), false);
     return newTableMetadata;
   }
 
