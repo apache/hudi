@@ -1361,14 +1361,15 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock);
 
-    List<String> allLogFiles =
-        FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-            .map(s -> s.getPath().toString()).collect(Collectors.toList());
+    // Call close() to ensure all data is written to HDFS
+    writer.close();
 
     FileCreateUtils.createDeltaCommit(basePath, "100", storage);
     FileCreateUtils.createDeltaCommit(basePath, "101", storage);
     FileCreateUtils.createDeltaCommit(basePath, "102", storage);
 
+    List<String> allLogFiles = FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        .map(s -> s.getPath().toString()).collect(Collectors.toList());
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
@@ -1404,6 +1405,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Collections.sort(readKeys);
     assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
 
+    // Write the log file again
+    writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
+
     // Rollback the 1st block i.e. a data block.
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "101");
@@ -1412,10 +1417,15 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
 
+    // Call close() to ensure all data is written to HDFS
+    writer.close();
+
     FileCreateUtils.deleteDeltaCommit(basePath, "101", storage);
 
     readKeys.clear();
     scanner.close();
+    allLogFiles = FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        .map(s -> s.getPath().toString()).collect(Collectors.toList());
     scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
@@ -1449,7 +1459,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Collections.sort(firstBlockRecords);
     Collections.sort(readKeys);
     assertEquals(firstBlockRecords, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
-    writer.close();
     scanner.close();
   }
 
@@ -1648,6 +1657,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         FSUtils.getAllLogFiles(storage, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
+    // Call close() to ensure all data is written to HDFS
+    writer.close();
+
     FileCreateUtils.createDeltaCommit(basePath, "100", storage);
     FileCreateUtils.createDeltaCommit(basePath, "101", storage);
     FileCreateUtils.createDeltaCommit(basePath, "102", storage);
@@ -1691,7 +1703,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Collections.sort(originalKeys);
     Collections.sort(readKeys);
     assertEquals(originalKeys, readKeys, "HoodieMergedLogRecordScanner should return 180 records from 4 versions");
-    writer.close();
     scanner.close();
   }
 
@@ -2067,11 +2078,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records2, header);
     writer.appendBlock(dataBlock);
+    writer.close();
     FileCreateUtils.createDeltaCommit(basePath, "101", storage);
 
     // Should be able to read all 110 records
     checkLogBlocksAndKeys("101", schema, ExternalSpillableMap.DiskMapType.BITCASK, false,
         false, 110, 110, Option.empty());
+
+    // Write the log file again
+    writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).build();
 
     // Write a rollback for commit 100 which is not the latest commit
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "100");
