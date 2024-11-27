@@ -241,7 +241,7 @@ case class HoodieFileIndex(spark: SparkSession,
     hasPushedDownPartitionPredicates = true
 
     // If there are no data filters, return all the file slices.
-    // If isPartitionPurge is true, this fun is trigger by HoodiePruneFileSourcePartitions, don't look up candidate files
+    // If isPartitionPruned is true, this fun is trigger by HoodiePruneFileSourcePartitions, don't look up candidate files
     // If there are no file slices, return empty list.
     if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty || isPartitionPruned ) {
       prunedPartitionsAndFileSlices
@@ -263,7 +263,7 @@ case class HoodieFileIndex(spark: SparkSession,
           }
       }
 
-      logDebug(s"Overlapping candidate files from Column Stats or Record Level Index: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
+      logDebug(s"Overlapping candidate files from indexes: ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
       var totalFileSliceSize = 0
       var candidateFileSliceSize = 0
@@ -338,7 +338,10 @@ case class HoodieFileIndex(spark: SparkSession,
           } catch {
             // If the partition values cannot be parsed by [[convertToPartitionPath]],
             // fall back to listing all partitions
-            case _: HoodieException => (false, listMatchingPartitionPaths(Seq.empty))
+            case e: HoodieException => {
+              logInfo(">>> Cannot use partition stats index for pruning partitions, fall back to listing all partitions", e)
+              (false, listMatchingPartitionPaths(Seq.empty))
+            }
           }
         } else {
           // Cannot use partition stats index (not available) for pruning partitions,
@@ -406,6 +409,9 @@ case class HoodieFileIndex(spark: SparkSession,
         if (indexSupport.isIndexAvailable && indexSupport.supportsQueryType(options)) {
           val prunedFileNames = indexSupport.computeCandidateIsStrict(spark, this, queryFilters, queryReferencedColumns,
             prunedPartitionsAndFileSlices, shouldPushDownFilesFilter)
+
+          logInfo(s">>> Found ${prunedFileNames} candidate files after data skipping, indexSupport: ${indexSupport.getIndexName}")
+
           if (prunedFileNames.nonEmpty) {
             return Try(prunedFileNames)
           }
@@ -413,6 +419,7 @@ case class HoodieFileIndex(spark: SparkSession,
       }
     }
     validateConfig()
+    logInfo(s">>> No candidate files found after data skipping")
     Option.empty
   }
 
