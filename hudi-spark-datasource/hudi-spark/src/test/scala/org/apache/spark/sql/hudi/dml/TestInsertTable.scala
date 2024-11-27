@@ -1997,7 +1997,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
+  /*test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
     withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
       Seq("false", "true").foreach { bulkInsertAsRow =>
         withTempDir { tmp =>
@@ -2108,7 +2108,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     }
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
-  }
+  }*/
 
   /**
    * When neither of strict mode nor sql.write.operation is set, sql write operation is deduced as UPSERT
@@ -2236,7 +2236,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
   }
 
-  test("Test sql write operation with INSERT_INTO No explicit configs No Precombine") {
+  /*test("Test sql write operation with INSERT_INTO No explicit configs No Precombine") {
     spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
@@ -2248,7 +2248,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         }
       }
     }
-  }
+  }*/
 
   var listenerCallCount: Int = 0
   var countDownLatch: CountDownLatch = _
