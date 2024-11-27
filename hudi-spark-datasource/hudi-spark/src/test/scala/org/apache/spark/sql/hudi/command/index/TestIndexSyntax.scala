@@ -20,12 +20,15 @@
 package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.HoodieSparkUtils
-
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, DropIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.junit.jupiter.api.Assertions.assertTrue
 
 class TestIndexSyntax extends HoodieSparkSqlTestBase {
 
@@ -89,9 +92,48 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
     }
   }
 
-  private def assertTableIdentifier(catalogTable: CatalogTable,
-                                    expectedDatabaseName: String,
-                                    expectedTableName: String): Unit = {
+  test("Test Create Index Syntax") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val databaseName = "default"
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | partitioned by(ts)
+               | location '$basePath'
+       """.stripMargin)
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+
+          spark.sql("set hoodie.metadata.enable=true")
+          spark.sql("set hoodie.metadata.record.index.enable=true")
+          spark.sql(s"create index idx_ts on $tableName (id)")
+
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(HoodieTestUtils.getDefaultStorageConf)
+            .build()
+          assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX))
+        }
+      }
+    }
+  }
+
+  private def assertTableIdentifier(catalogTable: CatalogTable, expectedDatabaseName: String, expectedTableName: String): Unit = {
     assertResult(Some(expectedDatabaseName))(catalogTable.identifier.database)
     assertResult(expectedTableName)(catalogTable.identifier.table)
   }

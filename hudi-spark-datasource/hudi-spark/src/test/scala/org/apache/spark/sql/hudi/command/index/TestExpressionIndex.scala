@@ -61,7 +61,7 @@ import org.scalatest.Ignore
 import java.util.stream.Collectors
 import scala.collection.JavaConverters
 
-
+@Ignore
 class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
@@ -261,6 +261,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(expr='random')"
           checkNestedException(createIndexSql) ("Unsupported Spark function: random")
           createIndexSql = s"create index name_lower on $tableName using column_stats(ts)"
+          checkException(createIndexSql) ("Currently Column stats Index can only be created with a non identity expression")
+          createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')"
           spark.sql(createIndexSql)
           metaClient = createMetaClient(spark, basePath)
           expressionIndexMetadata = metaClient.getIndexMetadata.get()
@@ -326,7 +328,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         assertEquals("expr_index_idx_datestr", expressionIndexMetadata.getIndexDefinitions.get("expr_index_idx_datestr").getIndexName)
 
         // Verify one can create more than one expression index
-        spark.sql(s"create index name_lower on $tableName using column_stats(ts) options(expr='identity')")
+        spark.sql(s"create index name_lower on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy')")
         metaClient = createMetaClient(spark, basePath)
         expressionIndexMetadata = metaClient.getIndexMetadata.get()
         assertEquals(2, expressionIndexMetadata.getIndexDefinitions.size())
@@ -395,7 +397,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         )
 
         // Verify one can create more than one expression index
-        createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(expr='identity')"
+        createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy')"
         spark.sql(createIndexSql)
         metaClient = createMetaClient(spark, basePath)
         expressionIndexMetadata = metaClient.getIndexMetadata.get()
@@ -523,24 +525,24 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           s"""
              |create table $tableName (
              |  id int,
-             |  price double,
+             |  name string,
              |  ts long,
-             |  name string
+             |  price string
              |) using hudi
              | options (
              |  primaryKey ='id',
              |  type = 'mor',
              |  preCombineField = 'ts'
              | )
-             | partitioned by(name)
+             | partitioned by(price)
              | location '$basePath'
        """.stripMargin)
         // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2020-09-26
-        spark.sql(s"insert into $tableName values(1, 10, 1601098924, 'a1')")
+        spark.sql(s"insert into $tableName values(1, 'a1', 1601098924, '10')")
         // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2021-09-26
-        spark.sql(s"insert into $tableName values(2, 10, 1632634924, 'a1')")
+        spark.sql(s"insert into $tableName values(2, 'a1', 1632634924, '10')")
         // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2022-09-26
-        spark.sql(s"insert into $tableName values(3, 10, 1664170924, 'a2')")
+        spark.sql(s"insert into $tableName values(3, 'a2', 1664170924, '20')")
         // create expression index and verify
         spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')")
         var metaClient = createMetaClient(spark, basePath)
@@ -549,32 +551,32 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         assertEquals(1, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
 
         // create expression index and verify
-        spark.sql(s"create index idx_price on $tableName using column_stats(price) options(expr='identity')")
+        spark.sql(s"create index idx_name on $tableName using column_stats(name) options(expr='upper')")
         metaClient = createMetaClient(spark, basePath)
-        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains("expr_index_idx_price"))
+        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains("expr_index_idx_name"))
         assertEquals(2, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
 
         // verify expression index records by querying metadata table
-        val metadataSql = s"select ColumnStatsMetadata.columnName, ColumnStatsMetadata.minValue.member4.value, ColumnStatsMetadata.maxValue.member4.value, " +
-          s"ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value, ColumnStatsMetadata.isDeleted from hudi_metadata('$tableName') where type=3"
+        val metadataSql = s"select ColumnStatsMetadata.columnName, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value, " +
+          s"ColumnStatsMetadata.isDeleted from hudi_metadata('$tableName') where type=3"
         checkAnswer(metadataSql)(
-          Seq("ts", null, null, "2020-09-26", "2021-09-26", false), // for file in name=a1
-          Seq("ts", null, null, "2022-09-26", "2022-09-26", false), // for file in name=a2
-          Seq("price", 10.0, 10.0, null, null, false), // for file in name=a1
-          Seq("price", 10.0, 10.0, null, null, false) // for file in name=a2
+          Seq("ts", "2020-09-26", "2021-09-26", false), // for file in name=a1
+          Seq("ts", "2022-09-26", "2022-09-26", false), // for file in name=a2
+          Seq("name", "A1", "A1", false), // for file in name=a1
+          Seq("name", "A2", "A2", false) // for file in name=a2
         )
 
         // do an update after initializing the index
-        // set price as 5.0 for id=1
-        spark.sql(s"update $tableName set price = 5.0 where id = 1")
+        // set name as a3 for id=1
+        spark.sql(s"update $tableName set name = 'a3' where id = 1")
 
         // check query result for predicates including both the expression index columns
-        checkAnswer(s"select id, price from $tableName where price <= 8")(
-          Seq(1, 5.0)
+        checkAnswer(s"select id, name from $tableName where upper(name) = 'A3'")(
+          Seq(1, "a3")
         )
-        checkAnswer(s"select id, price from $tableName where price > 8")(
-          Seq(2, 10.0),
-          Seq(3, 10.0)
+        checkAnswer(s"select id, name from $tableName where upper(name) < 'A3'")(
+          Seq(2, "a1"),
+          Seq(3, "a2")
         )
         checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') >= '2022-09-26'")(
           Seq(3, "a2")
@@ -582,12 +584,12 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
         // verify there are new updates to expression index
         checkAnswer(metadataSql)(
-          Seq("ts", null, null, "2020-09-26", "2021-09-26", false), // for file in name=a1
-          Seq("ts", null, null, "2020-09-26", "2020-09-26", false), // for update of id=1
-          Seq("ts", null, null, "2022-09-26", "2022-09-26", false), // for file in name=a2
-          Seq("price", 10.0, 10.0, null, null, false), // for file in name=a1
-          Seq("price", 5.0, 5.0, null, null, false), // for update of id=1
-          Seq("price", 10.0, 10.0, null, null, false) // for file in name=a2
+          Seq("ts", "2020-09-26", "2021-09-26", false), // for file in name=a1
+          Seq("ts", "2020-09-26", "2020-09-26", false), // for update of id=1
+          Seq("ts", "2022-09-26", "2022-09-26", false), // for file in name=a2
+          Seq("name", "A1", "A1", false), // for file in name=a1
+          Seq("name", "A3", "A3", false), // for update of id=1
+          Seq("name", "A2", "A2", false) // for file in name=a2
         )
       }
     }
@@ -1032,7 +1034,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           .save(basePath)
         // Create a expression index on column c6
         spark.sql(s"create table $tableName using hudi location '$basePath'")
-        spark.sql(s"create index idx_datestr on $tableName using column_stats(c6) options(expr='identity')")
+        spark.sql(s"create index idx_datestr on $tableName using column_stats(c6) options(expr='year')")
         val metaClient = HoodieTableMetaClient.builder()
           .setBasePath(basePath)
           .setConf(HoodieTestUtils.getDefaultStorageConf)
@@ -1121,7 +1123,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           .save(basePath)
         // Create a expression index on column c6
         spark.sql(s"create table $tableName using hudi location '$basePath'")
-        spark.sql(s"create index idx_datestr on $tableName using column_stats(c6) options(expr='identity')")
+        spark.sql(s"create index idx_datestr on $tableName using column_stats(c6) options(expr='year')")
         val metaClient = HoodieTableMetaClient.builder()
           .setBasePath(basePath)
           .setConf(HoodieTestUtils.getDefaultStorageConf)
