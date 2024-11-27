@@ -54,8 +54,9 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
-import static org.apache.hudi.index.functional.HoodieFunctionalIndex.IDENTITY_FUNCTION;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX;
+import static org.apache.hudi.index.functional.HoodieExpressionIndex.EXPRESSION_OPTION;
+import static org.apache.hudi.index.functional.HoodieExpressionIndex.IDENTITY_FUNCTION;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryIndex;
@@ -88,7 +89,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   public void create(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) throws Exception {
     String fullIndexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
         ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + userIndexName
-        : PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX + userIndexName;
+        : PARTITION_NAME_EXPRESSION_INDEX_PREFIX + userIndexName;
     if (indexExists(metaClient, fullIndexName)) {
       throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
     }
@@ -98,7 +99,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       throw new HoodieMetadataIndexException("Not eligible for indexing: " + indexType + ", indexName: " + userIndexName);
     }
 
-    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(fullIndexName, indexType, options.getOrDefault("func", IDENTITY_FUNCTION),
+    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(fullIndexName, indexType, options.getOrDefault(EXPRESSION_OPTION, IDENTITY_FUNCTION),
         new ArrayList<>(columns.keySet()), options);
     if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
         || !metaClient.getIndexMetadata().isPresent()
@@ -110,9 +111,9 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     ValidationUtils.checkState(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
 
     LOG.info("Creating index {} of using {}", fullIndexName, indexType);
-    Option<HoodieIndexDefinition> functionalIndexDefinitionOpt = Option.ofNullable(indexDefinition);
+    Option<HoodieIndexDefinition> expressionIndexDefinitionOpt = Option.ofNullable(indexDefinition);
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
-        sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinitionOpt)), toScalaOption(Option.empty()))) {
+        sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, expressionIndexDefinitionOpt)), toScalaOption(Option.empty()))) {
       // generate index plan
       Option<String> indexInstantTime = doSchedule(writeClient, metaClient, fullIndexName);
       if (indexInstantTime.isPresent()) {
@@ -147,7 +148,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   }
 
   private static Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client, HoodieTableMetaClient metaClient, String indexName) {
-    List<MetadataPartitionType> partitionTypes = Collections.singletonList(MetadataPartitionType.FUNCTIONAL_INDEX);
+    List<MetadataPartitionType> partitionTypes = Collections.singletonList(MetadataPartitionType.EXPRESSION_INDEX);
     checkArgument(partitionTypes.size() == 1, "Currently, only one index type can be scheduled at a time.");
     if (metaClient.getTableConfig().getMetadataPartitions().isEmpty()) {
       throw new HoodieException("Metadata table is not yet initialized. Initialize FILES partition before any other partition " + Arrays.toString(partitionTypes.toArray()));

@@ -112,7 +112,7 @@ case class HoodieFileIndex(spark: SparkSession,
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
     new BucketIndexSupport(spark, metadataConfig, metaClient),
     new SecondaryIndexSupport(spark, metadataConfig, metaClient),
-    new FunctionalIndexSupport(spark, metadataConfig, metaClient),
+    new ExpressionIndexSupport(spark, metadataConfig, metaClient),
     new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
     new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
   )
@@ -444,8 +444,8 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isRecordIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == RecordLevelIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
-  private def isFunctionalIndexEnabled: Boolean = indicesSupport.exists(idx =>
-    idx.getIndexName == FunctionalIndexSupport.INDEX_NAME && idx.isIndexAvailable)
+  private def isExpressionIndexEnabled: Boolean = indicesSupport.exists(idx =>
+    idx.getIndexName == ExpressionIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
   private def isBucketIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == BucketIndexSupport.INDEX_NAME && idx.isIndexAvailable)
@@ -463,9 +463,9 @@ case class HoodieFileIndex(spark: SparkSession,
 
   private def validateConfig(): Unit = {
     if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexEnabled)) {
-      logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index, Record Level Index, or Functional Index" +
+      logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index, Record Level Index, or Expression Index" +
         " to be enabled as well! " + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
-        + s", isRecordIndexApplicable = $isRecordIndexEnabled, isFunctionalIndexEnabled = $isFunctionalIndexEnabled, " +
+        + s", isRecordIndexApplicable = $isRecordIndexEnabled, isExpressionIndexEnabled = $isExpressionIndexEnabled, " +
         s"isBucketIndexEnable = $isBucketIndexEnabled, isPartitionStatsIndexEnabled = $isPartitionStatsIndexEnabled)"
         + s", isBloomFiltersIndexEnabled = $isBloomFiltersIndexEnabled)")
     }

@@ -178,8 +178,8 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
   public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
-  public static final String PARTITION_NAME_FUNCTIONAL_INDEX = "func_index";
-  public static final String PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX = "func_index_";
+  public static final String PARTITION_NAME_EXPRESSION_INDEX = "expr_index";
+  public static final String PARTITION_NAME_EXPRESSION_INDEX_PREFIX = "expr_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
 
@@ -584,14 +584,14 @@ public class HoodieTableMetadataUtil {
               dataMetaClient, isColumnStatsIndexEnabled, columnStatsIndexParallelism, targetColumnsForColumnStatsIndex);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
     }
-    if (enabledPartitionTypes.contains(MetadataPartitionType.FUNCTIONAL_INDEX)) {
-      convertMetadataToFunctionalIndexRecords(engineContext, cleanMetadata, instantTime, dataMetaClient, bloomIndexParallelism, columnStatsIndexParallelism, partitionToRecordsMap);
+    if (enabledPartitionTypes.contains(MetadataPartitionType.EXPRESSION_INDEX)) {
+      convertMetadataToExpressionIndexRecords(engineContext, cleanMetadata, instantTime, dataMetaClient, bloomIndexParallelism, columnStatsIndexParallelism, partitionToRecordsMap);
     }
 
     return partitionToRecordsMap;
   }
 
-  private static void convertMetadataToFunctionalIndexRecords(HoodieEngineContext engineContext, HoodieCleanMetadata cleanMetadata,
+  private static void convertMetadataToExpressionIndexRecords(HoodieEngineContext engineContext, HoodieCleanMetadata cleanMetadata,
                                                               String instantTime, HoodieTableMetaClient dataMetaClient,
                                                               int bloomIndexParallelism, int columnStatsIndexParallelism,
                                                               Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap) {
@@ -600,28 +600,28 @@ public class HoodieTableMetadataUtil {
       HoodieIndexMetadata metadata = indexMetadata.get();
       Map<String, HoodieIndexDefinition> indexDefinitions = metadata.getIndexDefinitions();
       if (indexDefinitions.isEmpty()) {
-        throw new HoodieMetadataException("Functional index metadata not found");
+        throw new HoodieMetadataException("Expression index metadata not found");
       }
       // iterate over each index definition and check:
-      // if it is a functional index using column_stats, then follow the same approach as column_stats
-      // if it is a functional index using bloom_filters, then follow the same approach as bloom_filters
+      // if it is a expression index using column_stats, then follow the same approach as column_stats
+      // if it is a expression index using bloom_filters, then follow the same approach as bloom_filters
       // else throw an exception
       for (Map.Entry<String, HoodieIndexDefinition> entry : indexDefinitions.entrySet()) {
         String indexName = entry.getKey();
         HoodieIndexDefinition indexDefinition = entry.getValue();
-        if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(MetadataPartitionType.fromPartitionPath(indexDefinition.getIndexName()))) {
+        if (MetadataPartitionType.EXPRESSION_INDEX.equals(MetadataPartitionType.fromPartitionPath(indexDefinition.getIndexName()))) {
           if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
             partitionToRecordsMap.put(indexName, convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism));
           } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
             partitionToRecordsMap.put(indexName,
                 convertMetadataToColumnStatsRecords(cleanMetadata, engineContext, dataMetaClient, true, columnStatsIndexParallelism, indexDefinition.getSourceFields()));
           } else {
-            throw new HoodieMetadataException("Unsupported functional index type");
+            throw new HoodieMetadataException("Unsupported expression index type");
           }
         }
       }
     } else {
-      throw new HoodieMetadataException("Functional index metadata not found");
+      throw new HoodieMetadataException("Expression index metadata not found");
     }
   }
 
@@ -1862,7 +1862,7 @@ public class HoodieTableMetadataUtil {
    * @return The fileID
    */
   public static String getFileIDForFileGroup(MetadataPartitionType partitionType, int index, String partitionName) {
-    if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) || MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
+    if (MetadataPartitionType.EXPRESSION_INDEX.equals(partitionType) || MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
       return String.format("%s%04d-%d", partitionName.replaceAll("_", "-").concat("-"), index, 0);
     }
     return String.format("%s%04d-%d", partitionType.getFileIdPrefix(), index, 0);
@@ -2118,7 +2118,7 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  public static Schema getProjectedSchemaForFunctionalIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
+  public static Schema getProjectedSchemaForExpressionIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
     Schema tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     List<String> partitionFields = metaClient.getTableConfig().getPartitionFields()
         .map(Arrays::asList)

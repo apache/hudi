@@ -1025,7 +1025,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
       HoodieTableMetaClient metaClient = table.getMetaClient();
-      // For secondary index and functional index with wrong parameters, index definition for the MDT partition is
+      // For secondary index and expression index with wrong parameters, index definition for the MDT partition is
       // removed so that such indices are not recreated while initializing the writer.
       metadataPartitions.forEach(partition -> {
         if (MetadataPartitionType.isGenericIndex(partition)) {

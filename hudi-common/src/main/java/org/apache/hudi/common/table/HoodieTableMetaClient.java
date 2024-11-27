@@ -210,7 +210,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Builds functional index definition and writes to index definition file.
+   * Builds expression index definition and writes to index definition file.
    */
   public void buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
@@ -228,7 +228,7 @@ public class HoodieTableMetaClient implements Serializable {
     try {
       FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
     } catch (IOException e) {
-      throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
+      throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
     }
   }
 
@@ -244,7 +244,7 @@ public class HoodieTableMetaClient implements Serializable {
     try {
       FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
     } catch (IOException e) {
-      throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
+      throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
     }
   }
 
@@ -262,19 +262,19 @@ public class HoodieTableMetaClient implements Serializable {
         return Option.of(HoodieIndexMetadata.fromJson(
             new String(FileIOUtils.readDataFromPath(storage, indexDefinitionPath).get())));
       } catch (IOException e) {
-        throw new HoodieIOException("Could not load functional index metadata at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
+        throw new HoodieIOException("Could not load expression index metadata at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
       }
     }
     return Option.empty();
   }
 
-  public void updateIndexMetadata(HoodieIndexMetadata newFunctionalIndexMetadata, String indexMetaPath) {
-    this.indexMetadataOpt = Option.of(newFunctionalIndexMetadata);
+  public void updateIndexMetadata(HoodieIndexMetadata newExpressionIndexMetadata, String indexMetaPath) {
+    this.indexMetadataOpt = Option.of(newExpressionIndexMetadata);
     try {
       // update the index metadata file as well
       FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
     } catch (IOException e) {
-      throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
+      throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
     }
   }
 
