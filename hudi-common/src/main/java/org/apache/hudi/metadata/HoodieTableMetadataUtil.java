@@ -768,7 +768,8 @@ public class HoodieTableMetadataUtil {
         });
   }
 
-  static HoodieData<HoodieRecord> convertMetadataToRecordIndexRecords(HoodieEngineContext engineContext,
+  @VisibleForTesting
+  public static HoodieData<HoodieRecord> convertMetadataToRecordIndexRecords(HoodieEngineContext engineContext,
                                                                       HoodieCommitMetadata commitMetadata,
                                                                       HoodieMetadataConfig metadataConfig,
                                                                       HoodieTableMetaClient dataTableMetaClient,
@@ -785,6 +786,15 @@ public class HoodieTableMetadataUtil {
     try {
       int parallelism = Math.max(Math.min(allWriteStats.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
       String basePath = dataTableMetaClient.getBasePath().toString();
+      HoodieFileFormat baseFileFormat = dataTableMetaClient.getTableConfig().getBaseFileFormat();
+      // RLI cannot support logs having inserts with current offering. So, lets validate that.
+      if (allWriteStats.stream().anyMatch(writeStat -> {
+        String fileName = FSUtils.getFileName(writeStat.getPath(), writeStat.getPartitionPath());
+        return FSUtils.isLogFile(fileName) && writeStat.getNumInserts() > 0;
+      })) {
+        throw new HoodieIOException("RLI cannot support logs having inserts with current offering. Would recommend disabling Record Level Index");
+      }
+
       // we might need to set some additional variables if we need to process log files.
       // for RLI and MOR table, we only care about log files if they contain any deletes. If not, all entries in logs are considered as updates, for which
       // we do not need to generate new RLI record.
@@ -792,6 +802,7 @@ public class HoodieTableMetadataUtil {
         String fileName = FSUtils.getFileName(writeStat.getPath(), writeStat.getPartitionPath());
         return FSUtils.isLogFile(fileName) && writeStat.getNumDeletes() > 0;
       });
+
       Option<Schema> writerSchemaOpt = Option.empty();
       if (anyLogFilesWithDeletes) { // if we have a log file w/ deletes.
         writerSchemaOpt = tryResolveSchemaForTable(dataTableMetaClient);
@@ -802,19 +813,21 @@ public class HoodieTableMetadataUtil {
       HoodieData<HoodieRecord> recordIndexRecords = engineContext.parallelize(allWriteStats, parallelism)
           .flatMap(writeStat -> {
             HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
+            StoragePath fullFilePath = new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath());
             // handle base files
-            if (writeStat.getPath().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+            if (writeStat.getPath().endsWith(baseFileFormat.getFileExtension())) {
               return BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage);
-            } else {
+            } else if (FSUtils.isLogFile(fullFilePath)) {
               // for logs, we only need to process log files containing deletes
               if (writeStat.getNumDeletes() > 0) {
-                StoragePath fullFilePath = new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath());
-                Set<String> deletedRecordKeys = getDeletedRecordKeys(fullFilePath.toString(), dataTableMetaClient,
-                    finalWriterSchemaOpt, maxBufferSize, instantTime);
+                Set<String> deletedRecordKeys = getRecordKeys(fullFilePath.toString(), dataTableMetaClient,
+                    finalWriterSchemaOpt, maxBufferSize, instantTime, false, true);
                 return deletedRecordKeys.stream().map(recordKey -> HoodieMetadataPayload.createRecordIndexDelete(recordKey)).collect(toList()).iterator();
               }
               // ignore log file data blocks.
               return new ArrayList<HoodieRecord>().iterator();
+            } else {
+              throw new HoodieIOException("Unsupported file type " + fullFilePath.toString() + " while generating MDT records");
             }
           });
 
@@ -833,7 +846,8 @@ public class HoodieTableMetadataUtil {
    * @param parallelism parallelism to use.
    * @return
    */
-  private static HoodieData<HoodieRecord> reduceByKeys(HoodieData<HoodieRecord> recordIndexRecords, int parallelism) {
+  @VisibleForTesting
+  public static HoodieData<HoodieRecord> reduceByKeys(HoodieData<HoodieRecord> recordIndexRecords, int parallelism) {
     return recordIndexRecords.mapToPair(
             (SerializablePairFunction<HoodieRecord, HoodieKey, HoodieRecord>) t -> Pair.of(t.getKey(), t))
         .reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
@@ -842,6 +856,9 @@ public class HoodieTableMetadataUtil {
           if (isRecord1Deleted && !isRecord2Deleted) {
             return record2;
           } else if (!isRecord1Deleted && isRecord2Deleted) {
+            return record1;
+          } else if (isRecord1Deleted && isRecord2Deleted) {
+            // let's delete just 1 of them
             return record1;
           } else {
             throw new HoodieIOException("Two HoodieRecord updates to RLI is seen for same record key " + record2.getRecordKey() + ", record 1 : "
@@ -867,6 +884,15 @@ public class HoodieTableMetadataUtil {
     try {
       int parallelism = Math.max(Math.min(allWriteStats.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
       String basePath = dataTableMetaClient.getBasePath().toString();
+      HoodieFileFormat baseFileFormat = dataTableMetaClient.getTableConfig().getBaseFileFormat();
+      // SI cannot support logs having inserts with current offering. So, lets validate that.
+      if (allWriteStats.stream().anyMatch(writeStat -> {
+        String fileName = FSUtils.getFileName(writeStat.getPath(), writeStat.getPartitionPath());
+        return FSUtils.isLogFile(fileName) && writeStat.getNumInserts() > 0;
+      })) {
+        throw new HoodieIOException("Secondary index cannot support logs having inserts with current offering. Can you drop secondary index.");
+      }
+
       // we might need to set some additional variables if we need to process log files.
       boolean anyLogFiles = allWriteStats.stream().anyMatch(writeStat -> {
         String fileName = FSUtils.getFileName(writeStat.getPath(), writeStat.getPartitionPath());
@@ -882,13 +908,16 @@ public class HoodieTableMetadataUtil {
       return engineContext.parallelize(allWriteStats, parallelism)
           .flatMap(writeStat -> {
             HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
+            StoragePath fullFilePath = new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath());
             // handle base files
-            if (writeStat.getPath().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+            if (writeStat.getPath().endsWith(baseFileFormat.getFileExtension())) {
               return BaseFileRecordParsingUtils.getRecordKeysDeletedOrUpdated(basePath, writeStat, storage).iterator();
-            } else {
+            } else if (FSUtils.isLogFile(fullFilePath)) {
               // for logs, every entry is either an update or a delete
-              StoragePath fullFilePath = new StoragePath(dataTableMetaClient.getBasePath(), writeStat.getPath());
-              return getRecordKeys(fullFilePath.toString(), dataTableMetaClient, finalWriterSchemaOpt, maxBufferSize, instantTime).iterator();
+              return getRecordKeys(fullFilePath.toString(), dataTableMetaClient, finalWriterSchemaOpt, maxBufferSize, instantTime, true, true)
+                  .iterator();
+            } else {
+              throw new HoodieIOException("Found unsupported file type " + fullFilePath.toString() + ", while generating MDT records");
             }
           }).collectAsList();
     } catch (Exception e) {
@@ -1449,46 +1478,28 @@ public class HoodieTableMetadataUtil {
   }
 
   @VisibleForTesting
-  public static Set<String> getDeletedRecordKeys(String filePath, HoodieTableMetaClient datasetMetaClient,
-                                                 Option<Schema> writerSchemaOpt, int maxBufferSize,
-                                                 String latestCommitTimestamp) throws IOException {
-    if (writerSchemaOpt.isPresent()) {
-      // read log file records without merging
-      Set<String> deletedKeys = new HashSet<>();
-      HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-          .withStorage(datasetMetaClient.getStorage())
-          .withBasePath(datasetMetaClient.getBasePath())
-          .withLogFilePaths(Collections.singletonList(filePath))
-          .withBufferSize(maxBufferSize)
-          .withLatestInstantTime(latestCommitTimestamp)
-          .withReaderSchema(writerSchemaOpt.get())
-          .withTableMetaClient(datasetMetaClient)
-          .withRecordDeletionCallback(deletedKey -> deletedKeys.add(deletedKey.getRecordKey()))
-          .build();
-      scanner.scan();
-      return deletedKeys;
-    }
-    return Collections.emptySet();
-  }
-
-  @VisibleForTesting
   public static Set<String> getRecordKeys(String filePath, HoodieTableMetaClient datasetMetaClient,
-                                                 Option<Schema> writerSchemaOpt, int maxBufferSize,
-                                                 String latestCommitTimestamp) throws IOException {
+                                          Option<Schema> writerSchemaOpt, int maxBufferSize,
+                                          String latestCommitTimestamp, boolean includeValidKeys,
+                                          boolean includeDeletedKeys) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       // read log file records without merging
       Set<String> allRecordKeys = new HashSet<>();
-      HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
+      HoodieUnMergedLogRecordScanner.Builder builder = HoodieUnMergedLogRecordScanner.newBuilder()
           .withStorage(datasetMetaClient.getStorage())
           .withBasePath(datasetMetaClient.getBasePath())
           .withLogFilePaths(Collections.singletonList(filePath))
           .withBufferSize(maxBufferSize)
           .withLatestInstantTime(latestCommitTimestamp)
           .withReaderSchema(writerSchemaOpt.get())
-          .withTableMetaClient(datasetMetaClient)
-          .withLogRecordScannerCallback(record -> allRecordKeys.add(record.getRecordKey()))
-          .withRecordDeletionCallback(deletedKey -> allRecordKeys.add(deletedKey.getRecordKey()))
-          .build();
+          .withTableMetaClient(datasetMetaClient);
+      if (includeValidKeys) {
+        builder.withLogRecordScannerCallback(record -> allRecordKeys.add(record.getRecordKey()));
+      }
+      if (includeDeletedKeys) {
+        builder.withRecordDeletionCallback(deletedKey -> allRecordKeys.add(deletedKey.getRecordKey()));
+      }
+      HoodieUnMergedLogRecordScanner scanner = builder.build();
       scanner.scan();
       return allRecordKeys;
     }
