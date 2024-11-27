@@ -284,7 +284,7 @@ public class KafkaOffsetGen {
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
-      Option<String> lastCheckpointStr = Option.empty();
+      Option<String> lastCheckpointStr;
       if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equalsIgnoreCase(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpoint)) {
         lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName,
             Long.parseLong(lastCheckpoint.get().getCheckpointKey()));
@@ -294,6 +294,8 @@ public class KafkaOffsetGen {
       } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType)
           && partitionInfoList.size() == 1 && isValidOffsetCheckpointType(lastCheckpoint)) {
         lastCheckpointStr = Option.of(topicName + ",0:" + lastCheckpoint.get().getCheckpointKey());
+      } else {
+        lastCheckpointStr = lastCheckpoint.isPresent() ? Option.of(lastCheckpoint.get().getCheckpointKey()) : Option.empty();
       }
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
