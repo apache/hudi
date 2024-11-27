@@ -1350,8 +1350,15 @@ public class HoodieTableMetadataUtil {
 
   public static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                HoodieMetadataConfig metadataConfig,
+                                               Lazy<Option<Schema>> tableSchema,
+                                               boolean overrideEnableCheck) {
+    return getColumnsToIndex(tableConfig, metadataConfig, Either.right(tableSchema), overrideEnableCheck);
+  }
+
+  public static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
+                                               HoodieMetadataConfig metadataConfig,
                                                Lazy<Option<Schema>> tableSchema) {
-    return getColumnsToIndex(tableConfig, metadataConfig, Either.right(tableSchema), false);
+    return getColumnsToIndex(tableConfig, metadataConfig, tableSchema, false);
   }
 
   private static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
@@ -1390,6 +1397,7 @@ public class HoodieTableMetadataUtil {
             case DOUBLE:
             case BYTES:
             case STRING:
+            case FIXED:
               return true;
             default:
               return false;
@@ -2408,7 +2416,7 @@ public class HoodieTableMetadataUtil {
                                                                              HoodieTableMetaClient dataTableMetaClient,
                                                                              Option<Schema> writerSchemaOpt) {
     Lazy<Option<Schema>> lazyWriterSchemaOpt = writerSchemaOpt.isPresent() ? Lazy.eagerly(writerSchemaOpt) : Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient));
-    final List<String> columnsToIndex = getColumnsToIndex(dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt);
+    final List<String> columnsToIndex = getColumnsToIndex(dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt, metadataConfig.isPartitionStatsIndexEnabled());
     if (columnsToIndex.isEmpty()) {
       LOG.warn("No columns to index for partition stats index");
       return engineContext.emptyHoodieData();
@@ -2483,7 +2491,7 @@ public class HoodieTableMetadataUtil {
     try {
       Option<Schema> tableSchema = getTableSchemaFromCommitMetadata(commitMetadata, dataMetaClient.getTableConfig());
       Lazy<Option<Schema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
-      List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt);
+      List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt, metadataConfig.isPartitionStatsIndexEnabled());
       if (columnsToIndex.isEmpty()) {
         return engineContext.emptyHoodieData();
       }

@@ -616,7 +616,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           val result4DF = spark.sql(
             s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.COLUMN_STATS.getRecordType}"
           )
-          assert(result4DF.count() == 3)
+          // 3 meta columns are always indexed so 3 stats per column * (3 meta cols + 1 data col) = 12
+          assert(result4DF.count() == 12)
 
           val result5DF = spark.sql(
             s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.RECORD_INDEX.getRecordType}"
@@ -661,7 +662,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |  preCombineField = 'ts',
                |  hoodie.datasource.write.recordkey.field = 'id',
                |  hoodie.metadata.index.partition.stats.enable = 'true',
-               |  hoodie.metadata.index.column.stats.column.list = 'price'
+               |  hoodie.metadata.index.column.stats.column.list = 'price',
+               |  hoodie.populate.meta.fields = 'false'
                |)
                |location '${tmp.getCanonicalPath}/$tableName'
                |""".stripMargin
