@@ -25,6 +25,7 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.S3SourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.S3EventsMetaSelector;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -73,8 +74,8 @@ public class S3EventsSource extends RowSource implements Closeable {
    * @return A pair of dataset of event records and the next checkpoint instant string
    */
   @Override
-  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
-    Pair<List<String>, String> selectPathsWithLatestSqsMessage =
+  public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCkptStr, long sourceLimit) {
+    Pair<List<String>, Checkpoint> selectPathsWithLatestSqsMessage =
         pathSelector.getNextEventsFromQueue(sqs, lastCkptStr, processedMessages);
     if (selectPathsWithLatestSqsMessage.getLeft().isEmpty()) {
       return Pair.of(Option.empty(), selectPathsWithLatestSqsMessage.getRight());

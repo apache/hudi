@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
 import org.apache.hadoop.fs.Path;
@@ -99,7 +100,7 @@ public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
     List<Message> processed = new ArrayList<>();
 
     // test the return values
-    Pair<List<String>, String> eventFromQueue =
+    Pair<List<String>, Checkpoint> eventFromQueue =
         selector.getNextEventsFromQueue(sqs, Option.empty(), processed);
 
     assertEquals(1, eventFromQueue.getLeft().size());
@@ -110,7 +111,7 @@ public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
             .getJSONObject("s3")
             .getJSONObject("object")
             .getString("key"));
-    assertEquals("1627376736755", eventFromQueue.getRight());
+    assertEquals("1627376736755", eventFromQueue.getRight().getCheckpointKey());
   }
 
   @Test
@@ -125,7 +126,7 @@ public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
                 .build());
 
     List<Message> processed = new ArrayList<>();
-    Pair<List<String>, String> eventFromQueue =
+    Pair<List<String>, Checkpoint> eventFromQueue =
         selector.getNextEventsFromQueue(sqs, Option.empty(), processed);
 
     assertEquals(0, eventFromQueue.getLeft().size());

@@ -22,6 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -30,10 +32,14 @@ public class InputBatch<T> {
 
   public static final Schema NULL_SCHEMA = Schema.create(Schema.Type.NULL);
   private final Option<T> batch;
-  private final String checkpointForNextBatch;
+  private final Checkpoint checkpointForNextBatch;
   private final SchemaProvider schemaProvider;
 
   public InputBatch(Option<T> batch, String checkpointForNextBatch, SchemaProvider schemaProvider) {
+    this(batch, new CheckpointV2(checkpointForNextBatch), schemaProvider);
+  }
+
+  public InputBatch(Option<T> batch, Checkpoint checkpointForNextBatch, SchemaProvider schemaProvider) {
     this.batch = batch;
     this.checkpointForNextBatch = checkpointForNextBatch;
     this.schemaProvider = schemaProvider;
@@ -43,11 +49,15 @@ public class InputBatch<T> {
     this(batch, checkpointForNextBatch, null);
   }
 
+  public InputBatch(Option<T> batch, Checkpoint checkpointForNextBatch) {
+    this(batch, checkpointForNextBatch, null);
+  }
+
   public Option<T> getBatch() {
     return batch;
   }
 
-  public String getCheckpointForNextBatch() {
+  public Checkpoint getCheckpointForNextBatch() {
     return checkpointForNextBatch;
   }
 

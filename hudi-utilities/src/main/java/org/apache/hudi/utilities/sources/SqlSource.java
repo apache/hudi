@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.SqlSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -74,8 +75,8 @@ public class SqlSource extends RowSource {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(
-      Option<String> lastCkptStr, long sourceLimit) {
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(
+      Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     LOG.debug(sourceSql);
     Dataset<Row> source = spark.sql(sourceSql);
     LOG.debug(source.showString(10, 0, true));

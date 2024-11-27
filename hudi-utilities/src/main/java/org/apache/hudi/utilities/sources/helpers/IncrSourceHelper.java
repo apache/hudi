@@ -33,6 +33,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.streamer.SourceProfile;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -171,7 +172,7 @@ public class IncrSourceHelper {
   public static IncrementalQueryAnalyzer getIncrementalQueryAnalyzer(
       JavaSparkContext jssc,
       String srcPath,
-      Option<String> lastCkptStr,
+      Option<Checkpoint> lastCheckpoint,
       MissingCheckpointStrategy missingCheckpointStrategy,
       int numInstantsFromConfig,
       Option<SourceProfile<Integer>> latestSourceProfile) {
@@ -184,8 +185,8 @@ public class IncrSourceHelper {
     String startCompletionTime;
     RangeType rangeType;
 
-    if (lastCkptStr.isPresent() && !lastCkptStr.get().isEmpty()) {
-      startCompletionTime = lastCkptStr.get();
+    if (lastCheckpoint.isPresent() && !lastCheckpoint.get().getCheckpointKey().isEmpty()) {
+      startCompletionTime = lastCheckpoint.get().getCheckpointKey();
       rangeType = RangeType.OPEN_CLOSED;
     } else if (missingCheckpointStrategy != null) {
       rangeType = RangeType.CLOSED_CLOSED;

@@ -34,14 +34,14 @@ public class TestInputBatch {
 
   @Test
   public void getSchemaProviderShouldThrowException() {
-    final InputBatch<String> inputBatch = new InputBatch<>(Option.of("foo"), null, null);
+    final InputBatch<String> inputBatch = new InputBatch<>(Option.of("foo"), (String) null, null);
     Throwable t = assertThrows(HoodieException.class, inputBatch::getSchemaProvider);
     assertEquals("Please provide a valid schema provider class!", t.getMessage());
   }
 
   @Test
   public void getSchemaProviderShouldReturnNullSchemaProvider() {
-    final InputBatch<String> inputBatch = new InputBatch<>(Option.empty(), null, null);
+    final InputBatch<String> inputBatch = new InputBatch<>(Option.empty(), (String) null, null);
     SchemaProvider schemaProvider = inputBatch.getSchemaProvider();
     assertTrue(schemaProvider instanceof InputBatch.NullSchemaProvider);
   }
@@ -49,7 +49,7 @@ public class TestInputBatch {
   @Test
   public void getSchemaProviderShouldReturnGivenSchemaProvider() {
     SchemaProvider schemaProvider = new RowBasedSchemaProvider(null);
-    final InputBatch<String> inputBatch = new InputBatch<>(Option.of("foo"), null, schemaProvider);
+    final InputBatch<String> inputBatch = new InputBatch<>(Option.of("foo"), (String) null, schemaProvider);
     assertSame(schemaProvider, inputBatch.getSchemaProvider());
   }
 }

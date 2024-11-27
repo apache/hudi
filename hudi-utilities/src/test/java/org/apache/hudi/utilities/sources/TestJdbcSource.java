@@ -23,6 +23,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.hadoop.conf.Configuration;
@@ -75,6 +77,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     UtilitiesTestBase.initTestServices(false, false, false);
   }
 
+  @Override
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
@@ -86,6 +89,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASS);
   }
 
+  @Override
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
@@ -275,7 +279,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       insert("001", 100, connection, DATA_GENERATOR, PROPS);
 
       // Start incremental scan. With checkpoint greater than the number of records, there should not be any dataset to fetch.
-      batch = runSource(Option.of("200"), 50);
+      batch = runSource(Option.of(new CheckpointV2("200")), 50);
       rowDataset = batch.getBatch().get();
       assertEquals(0, rowDataset.count());
     } catch (Exception e) {
@@ -369,7 +373,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       insert("001", 10, connection, DATA_GENERATOR, PROPS);
 
       // Start incremental scan
-      rowDataset = runSource(Option.of(max), 10).getBatch().get();
+      rowDataset = runSource(Option.of(new CheckpointV2(max)), 10).getBatch().get();
       assertEquals(10, rowDataset.count());
       assertEquals(10, rowDataset.where("commit_time=001").count());
     } catch (Exception e) {
@@ -447,8 +451,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
     outputStream.close();
   }
 
-  private InputBatch<Dataset<Row>> runSource(Option<String> lastCkptStr, long sourceLimit) {
+  private InputBatch<Dataset<Row>> runSource(Option<Checkpoint> lastCkptStr, long sourceLimit) {
     Source<Dataset<Row>> jdbcSource = new JdbcSource(PROPS, jsc, sparkSession, null);
-    return jdbcSource.fetchNewData(lastCkptStr, sourceLimit);
+    return jdbcSource.fetchNewDataFromCheckpoint(lastCkptStr, sourceLimit);
   }
 }

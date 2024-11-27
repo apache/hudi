@@ -28,6 +28,7 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.HoodieRetryingKafkaConsumer;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -253,7 +254,7 @@ public class KafkaOffsetGen {
     }
   }
 
-  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieIngestionMetrics metrics) {
+  public OffsetRange[] getNextOffsetRanges(Option<Checkpoint> lastCheckpoint, long sourceLimit, HoodieIngestionMetrics metrics) {
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
     long maxEventsToReadFromKafka = getLongWithAltKeys(props, KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE);
 
@@ -268,10 +269,10 @@ public class KafkaOffsetGen {
     long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
     LOG.info("getNextOffsetRanges set config {} to {}", KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), minPartitions);
 
-    return getNextOffsetRanges(lastCheckpointStr, numEvents, minPartitions, metrics);
+    return getNextOffsetRanges(lastCheckpoint, numEvents, minPartitions, metrics);
   }
 
-  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long numEvents, long minPartitions, HoodieIngestionMetrics metrics) {
+  public OffsetRange[] getNextOffsetRanges(Option<Checkpoint> lastCheckpoint, long numEvents, long minPartitions, HoodieIngestionMetrics metrics) {
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
@@ -283,14 +284,16 @@ public class KafkaOffsetGen {
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
-      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equalsIgnoreCase(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpointStr)) {
-        lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName, Long.parseLong(lastCheckpointStr.get()));
+      Option<String> lastCheckpointStr = Option.empty();
+      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equalsIgnoreCase(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpoint)) {
+        lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName,
+            Long.parseLong(lastCheckpoint.get().getCheckpointKey()));
       } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType) && partitionInfoList.size() != 1) {
         throw new HoodieException("Kafka topic " + topicName + " has " + partitionInfoList.size()
             + " partitions (more than 1). single_offset checkpoint type is not applicable.");
       } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType)
-          && partitionInfoList.size() == 1 && isValidOffsetCheckpointType(lastCheckpointStr)) {
-        lastCheckpointStr = Option.of(topicName + ",0:" + lastCheckpointStr.get());
+          && partitionInfoList.size() == 1 && isValidOffsetCheckpointType(lastCheckpoint)) {
+        lastCheckpointStr = Option.of(topicName + ",0:" + lastCheckpoint.get());
       }
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
@@ -375,16 +378,17 @@ public class KafkaOffsetGen {
 
   /**
    * Check if the checkpoint is a timestamp.
-   * @param lastCheckpointStr
+   * @param lastCheckpoint
    * @return
    */
-  private Boolean isValidTimestampCheckpointType(Option<String> lastCheckpointStr) {
-    if (!lastCheckpointStr.isPresent()) {
+  private Boolean isValidTimestampCheckpointType(Option<Checkpoint> lastCheckpoint) {
+    if (!lastCheckpoint.isPresent()) {
       return false;
     }
+    String checkpointStr = lastCheckpoint.get().getCheckpointKey();
     Pattern pattern = Pattern.compile("[-+]?[0-9]+(\\.[0-9]+)?");
-    Matcher isNum = pattern.matcher(lastCheckpointStr.get());
-    return isNum.matches() && (lastCheckpointStr.get().length() == 13 || lastCheckpointStr.get().length() == 10);
+    Matcher isNum = pattern.matcher(checkpointStr);
+    return isNum.matches() && (checkpointStr.length() == 13 || checkpointStr.length() == 10);
   }
 
   /**
@@ -392,12 +396,12 @@ public class KafkaOffsetGen {
    * @param lastCheckpointStr
    * @return
    */
-  private Boolean isValidOffsetCheckpointType(Option<String> lastCheckpointStr) {
+  private Boolean isValidOffsetCheckpointType(Option<Checkpoint> lastCheckpointStr) {
     if (!lastCheckpointStr.isPresent()) {
       return false;
     }
     try {
-      Long.parseUnsignedLong(lastCheckpointStr.get());
+      Long.parseUnsignedLong(lastCheckpointStr.get().getCheckpointKey());
       return true;
     } catch (NumberFormatException ex) {
       LOG.warn("Checkpoint type is set to single_offset, but provided value of checkpoint=\"{}\" is not a valid number", lastCheckpointStr.get());

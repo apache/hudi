@@ -29,6 +29,8 @@ import org.apache.hudi.utilities.sources.helpers.gcs.MessageBatch;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity;
 import org.apache.hudi.utilities.sources.helpers.gcs.MetadataMessage;
 import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -108,7 +110,7 @@ public class GcsEventsSource extends RowSource {
 
   private final List<String> messagesToAck = new ArrayList<>();
 
-  private static final String CHECKPOINT_VALUE_ZERO = "0";
+  private static final Checkpoint CHECKPOINT_VALUE_ZERO = new CheckpointV2("0");
 
   private static final Logger LOG = LoggerFactory.getLogger(GcsEventsSource.class);
 
@@ -137,8 +139,8 @@ public class GcsEventsSource extends RowSource {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
-    LOG.info("fetchNextBatch(): Input checkpoint: " + lastCkptStr);
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    LOG.info("fetchNextBatch(): Input checkpoint: " + lastCheckpoint);
     MessageBatch messageBatch;
     try {
       messageBatch = fetchFileMetadata();

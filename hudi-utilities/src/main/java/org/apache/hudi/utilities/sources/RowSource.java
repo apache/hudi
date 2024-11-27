@@ -28,6 +28,7 @@ import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 import org.apache.hudi.utilities.streamer.StreamContext;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -48,11 +49,16 @@ public abstract class RowSource extends Source<Dataset<Row>> {
     super(props, sparkContext, sparkSession, SourceType.ROW, streamContext);
   }
 
-  protected abstract Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit);
+  protected abstract Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit);
 
   @Override
   protected final InputBatch<Dataset<Row>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
-    Pair<Option<Dataset<Row>>, String> res = fetchNextBatch(lastCkptStr, sourceLimit);
+    throw new UnsupportedOperationException("RowSource#fetchNewData should not be called");
+  }
+
+  @Override
+  protected final InputBatch<Dataset<Row>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    Pair<Option<Dataset<Row>>, Checkpoint> res = fetchNextBatch(lastCheckpoint, sourceLimit);
     return res.getKey().map(dsr -> {
       Dataset<Row> sanitizedRows = SanitizationUtils.sanitizeColumnNamesForAvro(dsr, props);
       SchemaProvider rowSchemaProvider =

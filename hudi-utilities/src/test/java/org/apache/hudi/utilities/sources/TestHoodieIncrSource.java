@@ -49,6 +49,8 @@ import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.avro.Schema;
 import org.apache.spark.SparkConf;
@@ -536,7 +538,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc(), spark(), metrics, new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA), sourceProfile));
 
     // read everything until latest
-    Pair<Option<Dataset<Row>>, String> batchCheckPoint = incrSource.fetchNextBatch(checkpointToPull, 500);
+    Pair<Option<Dataset<Row>>, Checkpoint> batchCheckPoint = incrSource.fetchNextBatch(
+        checkpointToPull.isPresent() ? Option.of(new CheckpointV2(checkpointToPull.get())) : Option.empty(), 500);
     assertNotNull(batchCheckPoint.getValue());
     if (expectedCount == 0) {
       assertFalse(batchCheckPoint.getKey().isPresent());

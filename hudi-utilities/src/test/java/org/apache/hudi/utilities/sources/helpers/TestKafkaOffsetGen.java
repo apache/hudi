@@ -25,6 +25,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -117,7 +118,8 @@ public class TestKafkaOffsetGen {
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_STRING));
 
-    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 500, metrics);
+    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(
+        Option.of(new CheckpointV2(lastCheckpointString)), 500, metrics);
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(250, nextOffsetRanges[0].fromOffset());
     assertEquals(750, nextOffsetRanges[0].untilOffset());
@@ -131,7 +133,8 @@ public class TestKafkaOffsetGen {
 
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_TIMESTAMP));
 
-    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(String.valueOf(System.currentTimeMillis() - 100000)), 500, metrics);
+    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(
+        Option.of(new CheckpointV2(String.valueOf(System.currentTimeMillis() - 100000))), 500, metrics);
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
     assertEquals(500, nextOffsetRanges[0].untilOffset());
@@ -146,14 +149,16 @@ public class TestKafkaOffsetGen {
 
     // long positive value of offset => get it
     String lastCheckpointString = "250";
-    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 500, metrics);
+    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(
+        Option.of(new CheckpointV2(lastCheckpointString)), 500, metrics);
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(250, nextOffsetRanges[0].fromOffset());
     assertEquals(750, nextOffsetRanges[0].untilOffset());
 
     // negative offset value => get by autoOffsetReset config
     lastCheckpointString = "-2";
-    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 500, metrics);
+    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(
+        Option.of(new CheckpointV2(lastCheckpointString)), 500, metrics);
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(1000, nextOffsetRanges[0].fromOffset());
     assertEquals(1000, nextOffsetRanges[0].untilOffset());
@@ -161,7 +166,8 @@ public class TestKafkaOffsetGen {
     // incorrect offset value => get by autoOffsetReset config
     kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET));
     lastCheckpointString = "garbage";
-    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 5000, metrics);
+    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(
+        Option.of(new CheckpointV2(lastCheckpointString)), 5000, metrics);
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
     assertEquals(1000, nextOffsetRanges[0].untilOffset());
@@ -175,7 +181,8 @@ public class TestKafkaOffsetGen {
     // incorrect number of partitions => exception (number of partitions is more than 1)
     String lastCheckpointString = "250";
     Exception exception = assertThrows(HoodieException.class,
-        () -> kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 500, metrics));
+        () -> kafkaOffsetGen.getNextOffsetRanges(
+            Option.of(new CheckpointV2(lastCheckpointString)), 500, metrics));
     assertTrue(exception.getMessage().startsWith("Kafka topic " + testTopicName + " has 2 partitions (more than 1)"));
   }
 

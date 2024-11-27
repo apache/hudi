@@ -33,6 +33,8 @@ import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -108,7 +110,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
   }
 
   @Override
-  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCheckpoint, long sourceLimit) {
+  public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint = CloudObjectIncrCheckpoint.fromString(lastCheckpoint);
     HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     QueryInfo queryInfo =
@@ -124,7 +126,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
       LOG.warn("Already caught up. No new data to process");
-      return Pair.of(Option.empty(), queryInfo.getEndInstant());
+      return Pair.of(Option.empty(), new CheckpointV2(queryInfo.getEndInstant()));
     }
     return cloudDataFetcher.fetchPartitionedSource(S3, cloudObjectIncrCheckpoint, this.sourceProfileSupplier, queryRunner.run(queryInfo, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);
   }

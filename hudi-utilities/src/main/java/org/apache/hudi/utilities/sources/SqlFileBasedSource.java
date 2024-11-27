@@ -24,6 +24,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -77,8 +79,8 @@ public class SqlFileBasedSource extends RowSource {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(
-      Option<String> lastCkptStr, long sourceLimit) {
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(
+      Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     Dataset<Row> rows = null;
     final FileSystem fs = HadoopFSUtils.getFs(sourceSqlFile, sparkContext.hadoopConfiguration(), true);
     try {
@@ -92,7 +94,7 @@ public class SqlFileBasedSource extends RowSource {
           rows = sparkSession.sql(sqlStr);
         }
       }
-      return Pair.of(Option.of(rows), shouldEmitCheckPoint ? String.valueOf(System.currentTimeMillis()) : null);
+      return Pair.of(Option.of(rows), shouldEmitCheckPoint ? new CheckpointV2(String.valueOf(System.currentTimeMillis())) : null);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source SQL file.", ioe);
     }

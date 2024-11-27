@@ -29,6 +29,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.JsonSource;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -48,7 +49,8 @@ public class RandomJsonSource extends JsonSource {
             HadoopFSUtils.getStorageConf(sparkContext.hadoopConfiguration()));
   }
 
-  protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
+  @Override
+  protected InputBatch<JavaRDD<String>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCkptStr, long sourceLimit) {
     String commitTime = TimelineUtils.generateInstantTime(true, timeGenerator);
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
 

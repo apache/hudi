@@ -49,6 +49,8 @@ import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -350,13 +352,14 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
         spark(), new CloudDataFetcher(typedProperties, jsc(), spark(), metrics, cloudObjectsSelectorCommon), queryRunner,
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
-    Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = incrSource.fetchNextBatch(checkpointToPull, sourceLimit);
+    Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = incrSource.fetchNextBatch(
+        checkpointToPull.isPresent() ? Option.of(new CheckpointV2(checkpointToPull.get())) : Option.empty(), sourceLimit);
 
     Option<Dataset<Row>> datasetOpt = dataAndCheckpoint.getLeft();
-    String nextCheckPoint = dataAndCheckpoint.getRight();
+    Checkpoint nextCheckPoint = dataAndCheckpoint.getRight();
 
     Assertions.assertNotNull(nextCheckPoint);
-    Assertions.assertEquals(expectedCheckpoint, nextCheckPoint);
+    Assertions.assertEquals(new CheckpointV2(expectedCheckpoint), nextCheckPoint);
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,

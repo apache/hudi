@@ -29,6 +29,7 @@ import org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
@@ -75,6 +76,7 @@ public class RollbackNode extends DagNode<Option<HoodieInstant>> {
         metaClient.getStorage().deleteDirectory(new StoragePath(
             executionContext.getWriterContext().getCfg().inputBasePath,
             executionContext.getWriterContext().getHoodieTestSuiteWriter().getLastCheckpoint()
+                .map(Checkpoint::getCheckpointKey)
                 .orElse("")));
         this.result = lastInstant;
       }

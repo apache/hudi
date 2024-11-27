@@ -33,6 +33,8 @@ import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -163,7 +165,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   }
 
   @Override
-  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCheckpoint, long sourceLimit) {
+  public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint = CloudObjectIncrCheckpoint.fromString(lastCheckpoint);
     HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
 
@@ -179,7 +181,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
       LOG.info("Source of file names is empty. Returning empty result and endInstant: "
           + queryInfo.getStartInstant());
-      return Pair.of(Option.empty(), queryInfo.getStartInstant());
+      return Pair.of(Option.empty(), new CheckpointV2(queryInfo.getStartInstant()));
     }
     return cloudDataFetcher.fetchPartitionedSource(GCS, cloudObjectIncrCheckpoint, this.sourceProfileSupplier, queryRunner.run(queryInfo, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);
   }

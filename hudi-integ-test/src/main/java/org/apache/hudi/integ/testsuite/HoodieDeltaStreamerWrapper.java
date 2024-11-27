@@ -28,6 +28,7 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.streamer.StreamSync;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -78,7 +79,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
     return upsert(WriteOperationType.UPSERT);
   }
 
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
+  public Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     StreamSync service = getDeltaSync();
     service.initializeMetaClientAndRefreshTimeline();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()

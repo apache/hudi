@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameReader;
@@ -93,10 +94,10 @@ public class CsvDFSSource extends RowSource {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr,
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint,
       long sourceLimit) {
-    Pair<Option<String>, String> selPathsWithMaxModificationTime =
-        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
+    Pair<Option<String>, Checkpoint> selPathsWithMaxModificationTime =
+        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCheckpoint, sourceLimit);
     return Pair.of(fromFiles(
         selPathsWithMaxModificationTime.getLeft()), selPathsWithMaxModificationTime.getRight());
   }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -51,8 +52,8 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
-    int nextCommitNum = lastCkptStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    int nextCommitNum = lastCheckpoint.map(s -> Integer.parseInt(s.getCheckpointKey()) + 1).orElse(0);
     String instantTime = String.format("%05d", nextCommitNum);
     LOG.info("Source Limit is set to {}", sourceLimit);
 

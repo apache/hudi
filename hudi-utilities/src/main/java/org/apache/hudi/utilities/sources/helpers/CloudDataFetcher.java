@@ -25,6 +25,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -83,7 +85,7 @@ public class CloudDataFetcher implements Serializable {
         : getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING);
   }
 
-  public Pair<Option<Dataset<Row>>, String> fetchPartitionedSource(
+  public Pair<Option<Dataset<Row>>, Checkpoint> fetchPartitionedSource(
       CloudObjectsSelectorCommon.Type cloudType,
       CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint,
       Option<SourceProfileSupplier> sourceProfileSupplier,
@@ -107,7 +109,7 @@ public class CloudDataFetcher implements Serializable {
             filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
     if (!checkPointAndDataset.getRight().isPresent()) {
       LOG.info("Empty source, returning endpoint:" + checkPointAndDataset.getLeft());
-      return Pair.of(Option.empty(), checkPointAndDataset.getLeft().toString());
+      return Pair.of(Option.empty(), new CheckpointV2(checkPointAndDataset.getLeft().toString()));
     }
     LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
 
@@ -127,7 +129,7 @@ public class CloudDataFetcher implements Serializable {
       numSourcePartitions = sourceProfileSupplier.get().getSourceProfile().getSourcePartitions();
     }
     Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition, numSourcePartitions);
-    return Pair.of(datasetOption, checkPointAndDataset.getLeft().toString());
+    return Pair.of(datasetOption, new CheckpointV2(checkPointAndDataset.getLeft().toString()));
   }
 
   private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata,

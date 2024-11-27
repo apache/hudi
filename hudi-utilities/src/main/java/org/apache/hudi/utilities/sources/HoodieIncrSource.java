@@ -38,6 +38,8 @@ import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpo
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameReader;
@@ -171,7 +173,7 @@ public class HoodieIncrSource extends RowSource {
   }
 
   @Override
-  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
+  public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     checkRequiredConfigProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH));
     String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
     boolean readLatestOnMissingCkpt = getBooleanWithAltKeys(
@@ -186,7 +188,7 @@ public class HoodieIncrSource extends RowSource {
     }
 
     IncrementalQueryAnalyzer analyzer = IncrSourceHelper.getIncrementalQueryAnalyzer(
-        sparkContext, srcPath, lastCkptStr, missingCheckpointStrategy,
+        sparkContext, srcPath, lastCheckpoint, missingCheckpointStrategy,
         getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH),
         getLatestSourceProfile());
     QueryContext queryContext = analyzer.analyze();
@@ -199,7 +201,7 @@ public class HoodieIncrSource extends RowSource {
         || (endCompletionTime = queryContext.getMaxCompletionTime())
         .equals(analyzer.getStartCompletionTime().orElseGet(() -> null))) {
       LOG.info("Already caught up. No new data to process");
-      return Pair.of(Option.empty(), lastCkptStr.orElse(null));
+      return Pair.of(Option.empty(), lastCheckpoint.orElse(null));
     }
 
     DataFrameReader reader = sparkSession.read().format("hudi");
@@ -283,7 +285,7 @@ public class HoodieIncrSource extends RowSource {
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
       return coalesceOrRepartition(sourceWithMetaColumnsDropped, sourceProfile.getSourcePartitions());
     }).orElse(sourceWithMetaColumnsDropped);
-    return Pair.of(Option.of(src), endCompletionTime);
+    return Pair.of(Option.of(src), new CheckpointV2(endCompletionTime));
   }
 
   // Try to fetch the latestSourceProfile, this ensures the profile is refreshed if it's no longer valid.

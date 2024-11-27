@@ -29,6 +29,7 @@ import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -97,12 +98,12 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
       configureSchemaDeserializer();
       offsetGen = new KafkaOffsetGen(props);
     }
-    return super.fetchNewData(lastCheckpointStr, sourceLimit);
+    return super.fetchNewDataFromCheckpoint(lastCheckpoint, sourceLimit);
   }
 
   @Override

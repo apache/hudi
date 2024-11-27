@@ -28,9 +28,12 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
@@ -39,6 +42,7 @@ import java.io.Serializable;
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public abstract class Source<T> implements SourceCommitCallback, Serializable {
+  private static final Logger LOG = LoggerFactory.getLogger(Source.class);
 
   public enum SourceType {
     JSON, AVRO, ROW, PROTO
@@ -71,18 +75,31 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     this.sourceProfileSupplier = streamContext.getSourceProfileSupplier();
   }
 
+  @Deprecated
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  protected InputBatch<T> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    LOG.info("In Hudi 1.0+, the checkpoint based on Hudi timeline is changed. "
+        + "If your Source implementation relies on request time as the checkpoint, "
+        + "you may consider migrating to completion time-based checkpoint by overriding "
+        + "Source#fetchNewDataFromCheckpoint");
+    return fetchNewData(
+        lastCheckpoint.isPresent()
+            ? Option.of(lastCheckpoint.get().getCheckpointKey()) : Option.empty(),
+        sourceLimit);
+  }
 
   /**
    * Main API called by Hoodie Streamer to fetch records.
    *
-   * @param lastCkptStr Last Checkpoint
+   * @param lastCheckpoint Last Checkpoint
    * @param sourceLimit Source Limit
    * @return
    */
-  public final InputBatch<T> fetchNext(Option<String> lastCkptStr, long sourceLimit) {
-    InputBatch<T> batch = fetchNewData(lastCkptStr, sourceLimit);
+  public final InputBatch<T> fetchNext(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    InputBatch<T> batch = fetchNewDataFromCheckpoint(lastCheckpoint, sourceLimit);
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);

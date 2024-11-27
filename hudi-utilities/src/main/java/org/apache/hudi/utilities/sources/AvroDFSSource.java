@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
@@ -51,9 +52,9 @@ public class AvroDFSSource extends AvroSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
-    Pair<Option<String>, String> selectPathsWithMaxModificationTime =
-        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    Pair<Option<String>, Checkpoint> selectPathsWithMaxModificationTime =
+        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCheckpoint, sourceLimit);
     return selectPathsWithMaxModificationTime.getLeft()
         .map(pathStr -> new InputBatch<>(Option.of(fromFiles(pathStr)), selectPathsWithMaxModificationTime.getRight()))
         .orElseGet(() -> new InputBatch<>(Option.empty(), selectPathsWithMaxModificationTime.getRight()));

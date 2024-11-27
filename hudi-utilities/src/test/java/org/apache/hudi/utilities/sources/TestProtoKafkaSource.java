@@ -81,6 +81,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   private static final Random RANDOM = new Random();
   private static final String MOCK_REGISTRY_URL = "mock://127.0.0.1:8081";
 
+  @Override
   protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.streamer.source.kafka.topic", topic);

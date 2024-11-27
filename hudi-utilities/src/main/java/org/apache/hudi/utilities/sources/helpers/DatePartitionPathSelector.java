@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig;
+import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -111,9 +113,9 @@ public class DatePartitionPathSelector extends DFSPathSelector {
   }
 
   @Override
-  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(JavaSparkContext sparkContext,
-                                                                             Option<String> lastCheckpointStr,
-                                                                             long sourceLimit) {
+  public Pair<Option<String>, Checkpoint> getNextFilePathsAndMaxModificationTime(JavaSparkContext sparkContext,
+                                                                                 Option<Checkpoint> lastCheckpoint,
+                                                                                 long sourceLimit) {
     // If not specified the current date is assumed by default.
     LocalDate currentDate = LocalDate.parse(
         getStringWithAltKeys(props, DatePartitionPathSelectorConfig.CURRENT_DATE, LocalDate.now().toString()));
@@ -130,7 +132,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
             + numPrevDaysToList
             + " from current date => "
             + currentDate);
-    long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
+    long lastCheckpointTime = lastCheckpoint.map(e -> Long.parseLong(e.getCheckpointKey())).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(fs.getConf());
     List<String> prunedPartitionPaths = pruneDatePartitionPaths(
@@ -164,13 +166,13 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
     // no data to read
     if (filteredFiles.isEmpty()) {
-      return new ImmutablePair<>(Option.empty(), String.valueOf(newCheckpointTime));
+      return new ImmutablePair<>(Option.empty(), new CheckpointV2(String.valueOf(newCheckpointTime)));
     }
 
     // read the files out.
     String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
 
-    return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(newCheckpointTime));
+    return new ImmutablePair<>(Option.ofNullable(pathStr), new CheckpointV2(String.valueOf(newCheckpointTime)));
   }
 
   /**
