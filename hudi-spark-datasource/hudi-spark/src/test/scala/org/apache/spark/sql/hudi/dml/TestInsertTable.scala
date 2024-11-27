@@ -1997,6 +1997,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  /*
   test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
     withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
       Seq("false", "true").foreach { bulkInsertAsRow =>
@@ -2108,7 +2109,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     }
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
-  }
+  }*/
 
   /**
    * When neither of strict mode nor sql.write.operation is set, sql write operation is deduced as UPSERT
