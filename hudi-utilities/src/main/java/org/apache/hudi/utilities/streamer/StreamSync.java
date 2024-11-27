@@ -842,7 +842,8 @@ public class StreamSync implements Serializable, Closeable {
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
-        this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch().getCheckpointKey());
+        this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch() != null
+            ? inputBatch.getCheckpointForNextBatch().getCheckpointKey() : null);
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
           scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
