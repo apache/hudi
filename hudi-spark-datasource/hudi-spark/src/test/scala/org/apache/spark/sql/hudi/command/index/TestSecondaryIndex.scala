@@ -92,7 +92,15 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             Seq("record_index", "record_index", "")
           )
 
-          spark.sql(s"create index idx_name on $tableName using secondary_index(name)")
+          // Secondary index can not be created for two columns at once
+          checkException(s"create index idx_name_price on $tableName using secondary_index(name,price)")(
+            "Can not create secondary index on more than one column at a time"
+          )
+          checkException(s"create index idx_name_price on $tableName (name,price)")(
+            "Can not create secondary index on more than one column at a time"
+          )
+          // Secondary index is created by default for non record key column when index type is not specified
+          spark.sql(s"create index idx_name on $tableName (name)")
           checkAnswer(s"show indexes from default.$tableName")(
             Seq("secondary_index_idx_name", "secondary_index", "name"),
             Seq("record_index", "record_index", "")

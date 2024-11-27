@@ -23,6 +23,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieIndexingConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.index.functional.BaseHoodieIndexClient;
@@ -99,6 +101,10 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   }
 
   private void createRecordIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType) {
+    if (!userIndexName.equals(PARTITION_NAME_RECORD_INDEX)) {
+      throw new HoodieIndexException("Record index should be named as record_index");
+    }
+
     String fullIndexName = PARTITION_NAME_RECORD_INDEX;
     if (indexExists(metaClient, fullIndexName)) {
       throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
@@ -175,7 +181,9 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   @Override
   public void drop(HoodieTableMetaClient metaClient, String indexName, boolean ignoreIfNotExists) {
     LOG.info("Dropping index {}", indexName);
-    Option<HoodieIndexDefinition> indexDefinitionOpt = Option.ofNullable(metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName));
+    Option<HoodieIndexDefinition> indexDefinitionOpt = metaClient.getIndexMetadata()
+        .map(HoodieIndexMetadata::getIndexDefinitions)
+        .map(definition -> definition.get(indexName));
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
         sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, indexDefinitionOpt)), toScalaOption(Option.empty()))) {
       writeClient.dropIndex(Collections.singletonList(indexName));

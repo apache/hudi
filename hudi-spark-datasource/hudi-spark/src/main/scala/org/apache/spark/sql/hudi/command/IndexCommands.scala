@@ -70,7 +70,7 @@ case class CreateIndexCommand(table: CatalogTable,
       }
       HoodieSparkIndexClient.getInstance(sparkSession).create(
         metaClient, indexName, indexType, columnsMap, extraOpts.asJava)
-    } else if (indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)) {
+    } else if (indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX) || indexName.equals(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)) {
       ValidationUtils.checkArgument(matchesRecordKeys(columnsMap.keySet().asScala.toSet, metaClient.getTableConfig),
         "Input columns should match configured record key columns: " + metaClient.getTableConfig.getRecordKeyFieldProp)
       HoodieSparkIndexClient.getInstance(sparkSession).create(
