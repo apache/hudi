@@ -137,6 +137,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
   // Enables full scan of log records
   protected final boolean forceFullScan;
+  protected boolean containsPartialUpdates;
   // Progress
   private float progress = 0.0f;
   // Populate meta fields for the records
@@ -242,19 +243,18 @@ public abstract class AbstractHoodieLogRecordScanner {
    * @param keySpecOpt specifies target set of keys to be scanned
    * @param skipProcessingBlocks controls, whether (delta) blocks have to actually be processed
    */
-  protected final void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
+  protected final void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks, boolean onlyDetectPartialUpdates) {
     synchronized (this) {
       if (enableOptimizedLogBlocksScan) {
         scanInternalV2(keySpecOpt, skipProcessingBlocks);
       } else {
-        scanInternalV1(keySpecOpt);
+        scanInternalV1(keySpecOpt, onlyDetectPartialUpdates);
       }
     }
   }
 
-  private void scanInternalV1(Option<KeySpec> keySpecOpt) {
+  private void scanInternalV1(Option<KeySpec> keySpecOpt, boolean onlyDetectPartialUpdates) {
     currentInstantLogBlocks = new ArrayDeque<>();
-
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
     totalRollbacks = new AtomicLong(0);
@@ -301,6 +301,11 @@ public abstract class AbstractHoodieLogRecordScanner {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
           case PARQUET_DATA_BLOCK:
+            if (onlyDetectPartialUpdates && ((HoodieDataBlock) logBlock).containsPartialUpdates()) {
+              // if we are looking to detect only partial updates, detect and bail out.
+              containsPartialUpdates = true;
+              break;
+            }
             LOG.info("Reading a data block from file {} at instant {}", logFile.getPath(), instantTime);
             // store the current block
             currentInstantLogBlocks.push(logBlock);
@@ -371,15 +376,18 @@ public abstract class AbstractHoodieLogRecordScanner {
             throw new UnsupportedOperationException("Block type not supported yet");
         }
       }
-      // merge the last read block when all the blocks are done reading
-      if (!currentInstantLogBlocks.isEmpty()) {
-        // if there are no dups, we can take currentInstantLogBlocks as is.
-        LOG.info("Merging the final data blocks");
-        processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
-      }
 
-      // Done
-      progress = 1.0f;
+      if (!onlyDetectPartialUpdates) {
+        // merge the last read block when all the blocks are done reading
+        if (!currentInstantLogBlocks.isEmpty()) {
+          // if there are no dups, we can take currentInstantLogBlocks as is.
+          LOG.info("Merging the final data blocks");
+          processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
+        }
+
+        // Done
+        progress = 1.0f;
+      }
     } catch (IOException e) {
       LOG.error("Got IOException when reading log file", e);
       throw new HoodieIOException("IOException when reading log file ", e);
@@ -694,6 +702,10 @@ public abstract class AbstractHoodieLogRecordScanner {
     return !forceFullScan;
   }
 
+  public boolean isContainingPartialUpdates() {
+    return containsPartialUpdates;
+  }
+
   /**
    * Return progress of scanning as a float between 0.0 to 1.0.
    */
@@ -923,6 +935,8 @@ public abstract class AbstractHoodieLogRecordScanner {
     public Builder withTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
       throw new UnsupportedOperationException();
     }
+
+    public abstract Builder onlyDetectPartialUpdates(boolean onlyDetectPartialUpdates);
 
     public abstract AbstractHoodieLogRecordScanner build();
   }

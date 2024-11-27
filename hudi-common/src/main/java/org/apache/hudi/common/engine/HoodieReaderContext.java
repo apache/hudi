@@ -20,6 +20,7 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
@@ -40,6 +41,7 @@ import java.util.Map;
 import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -219,6 +221,19 @@ public abstract class HoodieReaderContext<T> {
     return val.toString();
   }
 
+  public String getRecordKey(T record, Schema schema, TypedProperties props) {
+    String key = getRecordKey(record, schema);
+    if (key != null) {
+      return key;
+    }
+    String keyField = props.getString(RECORDKEY_FIELD_NAME.key(), null);
+    if (keyField == null) {
+      return null;
+    }
+    Object keyValue = getValue(record, schema, keyField);
+    return keyValue != null ? keyValue.toString() : null;
+  }
+
   /**
    * Gets the ordering value in particular type.
    *
@@ -260,6 +275,12 @@ public abstract class HoodieReaderContext<T> {
   public abstract HoodieRecord<T> constructHoodieRecord(Option<T> recordOption,
                                                         Map<String, Object> metadataMap);
 
+  public HoodieRecord<T> constructHoodieRecord(Option<T> recordOption,
+                                               Map<String, Object> metadataMap,
+                                               TypedProperties props) {
+    return constructHoodieRecord(recordOption, metadataMap);
+  }
+
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
    *
@@ -295,6 +316,13 @@ public abstract class HoodieReaderContext<T> {
   public Map<String, Object> generateMetadataForRecord(T record, Schema schema) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema));
+    meta.put(INTERNAL_META_SCHEMA, schema);
+    return meta;
+  }
+
+  public Map<String, Object> generateMetadataForRecord(T record, Schema schema, TypedProperties props) {
+    Map<String, Object> meta = new HashMap<>();
+    meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema, props));
     meta.put(INTERNAL_META_SCHEMA, schema);
     return meta;
   }
