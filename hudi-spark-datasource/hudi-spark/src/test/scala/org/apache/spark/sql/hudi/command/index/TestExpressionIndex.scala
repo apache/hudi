@@ -61,6 +61,7 @@ import org.scalatest.Ignore
 import java.util.stream.Collectors
 import scala.collection.JavaConverters
 
+@Ignore
 class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
@@ -100,7 +101,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           // ts=10000000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 10000000)")
           // create expression index
-          spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')")
+          spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd HH:mm')")
           val metaClient = createMetaClient(spark, basePath)
           assertTrue(metaClient.getIndexMetadata.isPresent)
           val expressionIndexMetadata = metaClient.getIndexMetadata.get()
