@@ -74,25 +74,35 @@ public class LSMTimelineWriter {
   private final HoodieWriteConfig config;
   private final TaskContextSupplier taskContextSupplier;
   private final HoodieTableMetaClient metaClient;
+  private final StoragePath archivePath;
 
   private HoodieWriteConfig writeConfig;
 
   private LSMTimelineWriter(HoodieWriteConfig config, HoodieTable<?, ?, ?, ?> table) {
-    this(config, table.getTaskContextSupplier(), table.getMetaClient());
+    this(config, table.getTaskContextSupplier(), table.getMetaClient(), Option.empty());
   }
 
-  private LSMTimelineWriter(HoodieWriteConfig config, TaskContextSupplier taskContextSupplier, HoodieTableMetaClient metaClient) {
+  private LSMTimelineWriter(HoodieWriteConfig config, HoodieTable<?, ?, ?, ?> table, Option<StoragePath> archivePath) {
+    this(config, table.getTaskContextSupplier(), table.getMetaClient(), archivePath);
+  }
+
+  private LSMTimelineWriter(HoodieWriteConfig config, TaskContextSupplier taskContextSupplier, HoodieTableMetaClient metaClient, Option<StoragePath> archivePath) {
     this.config = config;
     this.taskContextSupplier = taskContextSupplier;
     this.metaClient = metaClient;
+    this.archivePath = archivePath.orElse(metaClient.getArchivePath());
   }
 
   public static LSMTimelineWriter getInstance(HoodieWriteConfig config, HoodieTable<?, ?, ?, ?> table) {
     return new LSMTimelineWriter(config, table);
   }
 
+  public static LSMTimelineWriter getInstance(HoodieWriteConfig config, HoodieTable<?, ?, ?, ?> table, Option<StoragePath> archivePath) {
+    return new LSMTimelineWriter(config, table, archivePath);
+  }
+
   public static LSMTimelineWriter getInstance(HoodieWriteConfig config, TaskContextSupplier taskContextSupplier, HoodieTableMetaClient metaClient) {
-    return new LSMTimelineWriter(config, taskContextSupplier, metaClient);
+    return new LSMTimelineWriter(config, taskContextSupplier, metaClient, Option.empty());
   }
 
   /**
@@ -107,7 +117,7 @@ public class LSMTimelineWriter {
       Option<Consumer<ActiveAction>> preWriteCallback,
       Option<Consumer<Exception>> exceptionHandler) throws HoodieCommitException {
     ValidationUtils.checkArgument(!activeActions.isEmpty(), "The instant actions to write should not be empty");
-    StoragePath filePath = new StoragePath(metaClient.getArchivePath(),
+    StoragePath filePath = new StoragePath(this.archivePath,
         newFileName(activeActions.get(0).getInstantTime(), activeActions.get(activeActions.size() - 1).getInstantTime(), FILE_LAYER_ZERO));
     try (HoodieFileWriter writer = openWriter(filePath)) {
       Schema wrapperSchema = HoodieLSMTimelineInstant.getClassSchema();
@@ -164,8 +174,8 @@ public class LSMTimelineWriter {
    * @param fileToAdd     New file name to add
    */
   public void updateManifest(List<String> filesToRemove, String fileToAdd) throws IOException {
-    int latestVersion = LSMTimeline.latestSnapshotVersion(metaClient);
-    HoodieLSMTimelineManifest latestManifest = LSMTimeline.latestSnapshotManifest(metaClient, latestVersion);
+    int latestVersion = LSMTimeline.latestSnapshotVersion(metaClient, archivePath);
+    HoodieLSMTimelineManifest latestManifest = LSMTimeline.latestSnapshotManifest(metaClient, latestVersion, archivePath);
     HoodieLSMTimelineManifest newManifest = latestManifest.copy(filesToRemove);
     newManifest.addFile(getFileEntry(fileToAdd));
     createManifestFile(newManifest, latestVersion);
@@ -176,7 +186,7 @@ public class LSMTimelineWriter {
     // version starts from 1 and increases monotonically
     int newVersion = currentVersion < 0 ? 1 : currentVersion + 1;
     // create manifest file
-    final StoragePath manifestFilePath = LSMTimeline.getManifestFilePath(metaClient, newVersion);
+    final StoragePath manifestFilePath = LSMTimeline.getManifestFilePath(newVersion, archivePath);
     metaClient.getStorage().createImmutableFileInPath(manifestFilePath, Option.of(content));
     // update version file
     updateVersionFile(newVersion);
@@ -184,7 +194,7 @@ public class LSMTimelineWriter {
 
   private void updateVersionFile(int newVersion) throws IOException {
     byte[] content = getUTF8Bytes(String.valueOf(newVersion));
-    final StoragePath versionFilePath = LSMTimeline.getVersionFilePath(metaClient);
+    final StoragePath versionFilePath = LSMTimeline.getVersionFilePath(archivePath);
     metaClient.getStorage().deleteFile(versionFilePath);
     metaClient.getStorage().createImmutableFileInPath(versionFilePath, Option.of(content));
   }
@@ -222,7 +232,7 @@ public class LSMTimelineWriter {
   @VisibleForTesting
   public void compactAndClean(HoodieEngineContext context) throws IOException {
     // 1. List all the latest snapshot files
-    HoodieLSMTimelineManifest latestManifest = LSMTimeline.latestSnapshotManifest(metaClient);
+    HoodieLSMTimelineManifest latestManifest = LSMTimeline.latestSnapshotManifest(metaClient, archivePath);
     int layer = 0;
     // 2. triggers the compaction for L0
     Option<String> compactedFileName = doCompact(latestManifest, layer);
@@ -266,12 +276,12 @@ public class LSMTimelineWriter {
 
   public void compactFiles(List<String> candidateFiles, String compactedFileName) {
     LOG.info("Starting to compact source files.");
-    try (HoodieFileWriter writer = openWriter(new StoragePath(metaClient.getArchivePath(), compactedFileName))) {
+    try (HoodieFileWriter writer = openWriter(new StoragePath(archivePath, compactedFileName))) {
       for (String fileName : candidateFiles) {
         // Read the input source file
         try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
             .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-            .getFileReader(config, new StoragePath(metaClient.getArchivePath(), fileName))) {
+            .getFileReader(config, new StoragePath(archivePath, fileName))) {
           // Read the meta entry
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), HoodieLSMTimelineInstant.getClassSchema())) {
             while (iterator.hasNext()) {
@@ -293,17 +303,17 @@ public class LSMTimelineWriter {
    */
   public void clean(HoodieEngineContext context, int compactedVersions) throws IOException {
     // if there are more than 3 version of snapshots, clean the oldest files.
-    List<Integer> allSnapshotVersions = LSMTimeline.allSnapshotVersions(metaClient);
+    List<Integer> allSnapshotVersions = LSMTimeline.allSnapshotVersions(metaClient, archivePath);
     int numVersionsToKeep = 3 + compactedVersions; // should make the threshold configurable.
     if (allSnapshotVersions.size() > numVersionsToKeep) {
       allSnapshotVersions.sort((v1, v2) -> v2 - v1);
       List<Integer> versionsToKeep = allSnapshotVersions.subList(0, numVersionsToKeep);
       Set<String> filesToKeep = versionsToKeep.stream()
-          .flatMap(version -> LSMTimeline.latestSnapshotManifest(metaClient, version).getFileNames().stream())
+          .flatMap(version -> LSMTimeline.latestSnapshotManifest(metaClient, version, archivePath).getFileNames().stream())
           .collect(Collectors.toSet());
       // delete the manifest file first
       List<String> manifestFilesToClean = new ArrayList<>();
-      LSMTimeline.listAllManifestFiles(metaClient).forEach(fileStatus -> {
+      LSMTimeline.listAllManifestFiles(metaClient, archivePath).forEach(fileStatus -> {
         if (!versionsToKeep.contains(
             LSMTimeline.getManifestVersion(fileStatus.getPath().getName()))) {
           manifestFilesToClean.add(fileStatus.getPath().toString());
@@ -312,7 +322,7 @@ public class LSMTimelineWriter {
       HadoopFSUtils.deleteFilesParallelize(metaClient, manifestFilesToClean, context, config.getArchiveDeleteParallelism(),
           false);
       // delete the data files
-      List<String> dataFilesToClean = LSMTimeline.listAllMetaFiles(metaClient).stream()
+      List<String> dataFilesToClean = LSMTimeline.listAllMetaFiles(metaClient, archivePath).stream()
           .filter(fileStatus -> !filesToKeep.contains(fileStatus.getPath().getName()))
           .map(fileStatus -> fileStatus.getPath().toString())
           .collect(Collectors.toList());
@@ -323,7 +333,7 @@ public class LSMTimelineWriter {
 
   private HoodieLSMTimelineManifest.LSMFileEntry getFileEntry(String fileName) throws IOException {
     long fileLen = metaClient.getStorage().getPathInfo(
-        new StoragePath(metaClient.getArchivePath(), fileName)).getLength();
+        new StoragePath(archivePath, fileName)).getLength();
     return HoodieLSMTimelineManifest.LSMFileEntry.getInstance(fileName, fileLen);
   }
 

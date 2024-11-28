@@ -585,9 +585,11 @@ public class HoodieTableMetaClient implements Serializable {
         : timelineLayout.getTimelineFactory().createArchivedTimeline(this, startTs);
   }
 
-  private static void createTableLayoutOnStorage(StorageConfiguration<?> storageConf,
-                                                 StoragePath basePath,
-                                                 Properties props) throws IOException {
+  public static void createTableLayoutOnStorage(StorageConfiguration<?> storageConf,
+                                                StoragePath basePath,
+                                                Properties props,
+                                                Integer timelineLayout,
+                                                boolean shouldCreateTableConfig) throws IOException {
     LOG.info("Initializing {} as hoodie table", basePath);
     final HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, storageConf);
     if (!storage.exists(basePath)) {
@@ -604,19 +606,20 @@ public class HoodieTableMetaClient implements Serializable {
       storage.createDirectory(schemaPathDir);
     }
 
-    // if anything other than default archive log folder is specified, create that too
+    // if anything other than default timeline path is specified, create that too
     String timelinePropVal = new HoodieConfig(props).getStringOrDefault(TIMELINE_PATH);
     StoragePath timelineDir = metaPathDir;
-    if (!StringUtils.isNullOrEmpty(timelinePropVal)) {
+    timelineLayout = timelineLayout == null ? TimelineLayoutVersion.CURR_VERSION : timelineLayout;
+    if (!StringUtils.isNullOrEmpty(timelinePropVal) && TimelineLayoutVersion.VERSION_2.equals(timelineLayout)) {
       timelineDir = new StoragePath(metaPathDir, timelinePropVal);
       if (!storage.exists(timelineDir)) {
         storage.createDirectory(timelineDir);
       }
     }
 
-    // if anything other than default archive log folder is specified, create that too
+    // if anything other than default timeline history path is specified, create that too
     String archiveLogPropVal = new HoodieConfig(props).getStringOrDefault(HoodieTableConfig.TIMELINE_HISTORY_PATH);
-    if (!StringUtils.isNullOrEmpty(archiveLogPropVal)) {
+    if (!StringUtils.isNullOrEmpty(archiveLogPropVal) && TimelineLayoutVersion.VERSION_2.equals(timelineLayout)) {
       StoragePath archiveLogDir = new StoragePath(timelineDir, archiveLogPropVal);
       if (!storage.exists(archiveLogDir)) {
         storage.createDirectory(archiveLogDir);
@@ -636,7 +639,9 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     initializeBootstrapDirsIfNotExists(basePath, storage);
-    HoodieTableConfig.create(storage, metaPathDir, props);
+    if (shouldCreateTableConfig) {
+      HoodieTableConfig.create(storage, metaPathDir, props);
+    }
   }
 
   public static void initializeBootstrapDirsIfNotExists(StoragePath basePath, HoodieStorage storage) throws IOException {
@@ -1479,7 +1484,7 @@ public class HoodieTableMetaClient implements Serializable {
 
     public HoodieTableMetaClient initTable(StorageConfiguration<?> storageConf, StoragePath basePath) throws IOException {
       Properties props = build();
-      createTableLayoutOnStorage(storageConf, basePath, props);
+      createTableLayoutOnStorage(storageConf, basePath, props, timelineLayoutVersion, true);
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(basePath)
           .setMetaserverConfig(props)
           .build();
