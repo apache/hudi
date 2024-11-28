@@ -113,7 +113,7 @@ object HoodieCLIUtils extends Logging {
   }
 
   def getLockOptions(tablePath: String, schema: String, lockConfig: TypedProperties): Map[String, String] = {
-    val customSupportedFSs = lockConfig.getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key, ",", new ArrayList[String])
+    val customSupportedFSs = lockConfig.getStringList(HoodieCommonConfig.FS_ATOMIC_CREATION_SUPPORT.key, ",", new ArrayList[String])
     if (schema == null || customSupportedFSs.contains(schema) || StorageSchemes.isAtomicCreationSupported(schema)) {
       logInfo("Auto config filesystem lock provider for metadata table")
       val props = FileSystemBasedLockProvider.getLockConfig(tablePath)

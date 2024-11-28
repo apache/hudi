@@ -113,7 +113,7 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " instead of the instant's commit time."
       );
 
-  public static final ConfigProperty<String> HOODIE_FS_ATOMIC_CREATION_SUPPORT = ConfigProperty
+  public static final ConfigProperty<String> FS_ATOMIC_CREATION_SUPPORT = ConfigProperty
       .key("hoodie.fs.atomic_creation.support")
       .defaultValue("")
       .markAdvanced()
