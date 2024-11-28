@@ -94,7 +94,8 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
        * At this point, metadata should already be disabled (see {@link UpgradeDowngrade#needsUpgradeOrDowngrade(HoodieTableVersion)}).
        * So, check either this is a metadata table itself,  or metadata table is disabled.
        */
-      ValidationUtils.checkState(table.isMetadataTable() || !config.isMetadataTableEnabled(), "Metadata table should be disabled to write in table version SIX using 1.0.0." + metaClient.getBasePath());
+      ValidationUtils.checkState(table.isMetadataTable() || !config.isMetadataTableEnabled(),
+          "Metadata table should be disabled to write in table version SIX using 1.0.0+" + metaClient.getBasePath());
       config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
       return tablePropsToAdd;
     }
