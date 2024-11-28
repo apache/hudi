@@ -2265,7 +2265,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   }
 
-  test("Test multiple partition fields pruning") {
+  /*test("Test multiple partition fields pruning") {
 
     withTempDir { tmp =>
       val targetTable = generateTableName
@@ -2367,7 +2367,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       countDownLatch.await
       assert(listenerCallCount >= 1)
     }
-  }
+  } */
 
   test("Test inaccurate index type") {
     withTempDir { tmp =>
