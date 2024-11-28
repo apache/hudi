@@ -282,7 +282,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     ExecutorService executorService = Executors.newFixedThreadPool(MAX_CONCURRENT_INDEXING);
     Future<?> indexingCatchupTaskFuture = executorService.submit(
         IndexingCatchupTaskFactory.createCatchupTask(indexPartitionInfos, metadataWriter, instantsToIndex, metadataCompletedTimestamps,
-            table.getMetaClient(), metadataMetaClient, currentCaughtupInstant, txnManager, context));
+            table, metadataMetaClient, currentCaughtupInstant, txnManager, context));
     try {
       LOG.info("Starting index catchup task");
       HoodieTimer timer = HoodieTimer.start();

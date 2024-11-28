@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.action.index;
 
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
@@ -34,6 +35,7 @@ import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,8 +54,10 @@ public class RecordBasedIndexingCatchupTask extends AbstractIndexingCatchupTask 
                                         HoodieTableMetaClient metadataMetaClient,
                                         String currentCaughtupInstant,
                                         TransactionManager transactionManager,
-                                        HoodieEngineContext engineContext) {
-    super(metadataWriter, instantsToIndex, metadataCompletedInstants, metaClient, metadataMetaClient, transactionManager, currentCaughtupInstant, engineContext);
+                                        HoodieEngineContext engineContext,
+                                        HoodieTable table,
+                                        HoodieHeartbeatClient heartbeatClient) {
+    super(metadataWriter, instantsToIndex, metadataCompletedInstants, metaClient, metadataMetaClient, transactionManager, currentCaughtupInstant, engineContext, table, heartbeatClient);
   }
 
   @Override

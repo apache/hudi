@@ -22,6 +22,7 @@ package org.apache.hudi.table.action.index;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,8 +31,10 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +64,8 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
   protected final HoodieTableMetaClient metadataMetaClient;
   protected final TransactionManager transactionManager;
   protected final HoodieEngineContext engineContext;
+  protected final HoodieTable table;
+  protected final HoodieHeartbeatClient heartbeatClient;
   protected String currentCaughtupInstant;
 
   public AbstractIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
@@ -70,7 +75,9 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
                                      HoodieTableMetaClient metadataMetaClient,
                                      TransactionManager transactionManager,
                                      String currentCaughtupInstant,
-                                     HoodieEngineContext engineContext) {
+                                     HoodieEngineContext engineContext,
+                                     HoodieTable table,
+                                     HoodieHeartbeatClient heartbeatClient) {
     this.metadataWriter = metadataWriter;
     this.instantsToIndex = instantsToIndex;
     this.metadataCompletedInstants = metadataCompletedInstants;
@@ -79,6 +86,8 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
     this.transactionManager = transactionManager;
     this.currentCaughtupInstant = currentCaughtupInstant;
     this.engineContext = engineContext;
+    this.table = table;
+    this.heartbeatClient = heartbeatClient;
   }
 
   @Override
@@ -155,6 +164,15 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
       return null;
     }
     if (!instant.isCompleted()) {
+      // check if instant heartbeat expired, if so then ignore this instant
+      try {
+        if (table.getConfig().getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instant.requestedTime())) {
+          LOG.info("Ignoring instant " + instant + " as heartbeat expired");
+          return null;
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Unable to check if heartbeat expired for instant " + instant, e);
+      }
       try {
         LOG.warn("instant not completed, reloading timeline " + instant);
         reloadTimelineWithWait(instant);
