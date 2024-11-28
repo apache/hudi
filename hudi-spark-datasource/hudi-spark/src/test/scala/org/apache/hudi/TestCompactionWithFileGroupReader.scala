@@ -21,6 +21,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.DataSourceWriteOptions.{ENABLE_ROW_WRITER, RECORD_MERGE_IMPL_CLASSES}
+import org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS
 import org.apache.hudi.common.config.HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT
 import org.apache.hudi.common.table.HoodieTableConfig.LOG_FILE_FORMAT
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -38,36 +39,39 @@ import org.junit.{After, Before, Test}
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.nio.file.{Files, Path}
-import scala.jdk.CollectionConverters.asScalaBufferConverter
+import scala.jdk.CollectionConverters._
 
-class TestCompactionWithFileGroupRreader extends SparkClientFunctionalTestHarness {
-  val LOG: Logger = LoggerFactory.getLogger(classOf[TestCompactionWithFileGroupRreader])
-  var storage: HoodieStorage = _
-  var tmpDir: Path = _
-  var tblPath: String = _
-  var metaClient: HoodieTableMetaClient = _
-  var hasDeleted: Boolean = _
+/**
+ * Test class for compaction using file group readers in Hudi.
+ */
+class TestCompactionWithFileGroupReader extends SparkClientFunctionalTestHarness {
+  private val log: Logger = LoggerFactory.getLogger(classOf[TestCompactionWithFileGroupReader])
+  private var storage: HoodieStorage = _
+  private var tempDirectory: Path = _
+  private var tablePath: String = _
+  private var metaClient: HoodieTableMetaClient = _
 
-  override def basePath(): String = tmpDir.toAbsolutePath.toUri.toString
+  override def basePath(): String = tempDirectory.toAbsolutePath.toUri.toString
 
   @Before
   def setUp(): Unit = {
-    tmpDir = Files.createTempDirectory("hudi_random")
+    log.info("Setting up the test environment.")
+    tempDirectory = Files.createTempDirectory("hudi_test")
     super.runBeforeEach()
-    val sc: StorageConfiguration[Configuration] = new HadoopStorageConfiguration(true)
-    tblPath = basePath()
-    storage = HoodieStorageUtils.getStorage(new StoragePath(tblPath), sc)
-    hasDeleted = false
+    val storageConfig: StorageConfiguration[Configuration] = new HadoopStorageConfiguration(true)
+    tablePath = basePath()
+    storage = HoodieStorageUtils.getStorage(new StoragePath(tablePath), storageConfig)
   }
 
   @After
   def tearDown(): Unit = {
+    log.info("Tearing down the test environment.")
     super.closeFileSystem()
   }
 
   @Test
   def testCompactionUsingFileGroupReader(): Unit = {
-    val tableOpt: Map[String, String] = Map(
+    val tableOptions = Map(
       "hoodie.datasource.write.table.name" -> "test_table",
       "hoodie.datasource.write.table.type" -> "MERGE_ON_READ",
       "hoodie.datasource.write.recordkey.field" -> "id",
@@ -78,9 +82,10 @@ class TestCompactionWithFileGroupRreader extends SparkClientFunctionalTestHarnes
       LOG_FILE_FORMAT.key -> "parquet",
       LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
       RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
+      MERGE_USE_RECORD_POSITIONS.key -> "false"
     )
 
-    val serviceOpt: Map[String, String] = Map(
+    val serviceOptions = Map(
       TABLE_SERVICES_ENABLED.key -> "true",
       INLINE_COMPACT.key -> "true",
       INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "2",
@@ -89,7 +94,8 @@ class TestCompactionWithFileGroupRreader extends SparkClientFunctionalTestHarnes
       INLINE_CLUSTERING.key -> "false",
       INLINE_CLUSTERING_MAX_COMMITS.key -> "1"
     )
-    val opt = tableOpt ++ serviceOpt
+
+    val options = tableOptions ++ serviceOptions
 
     val schema = new StructType(Array(
       StructField("id", StringType, nullable = true),
@@ -97,41 +103,48 @@ class TestCompactionWithFileGroupRreader extends SparkClientFunctionalTestHarnes
       StructField("ts", LongType, nullable = true)
     ))
 
-    val data1 = Seq(
-      Row("id1", "name1", 1L),
-      Row("id2", "name1", 2L),
-      Row("id3", "name1", 3L))
-    val df1 = spark.createDataFrame(
-      spark.sparkContext.parallelize(data1, 2), schema)
-    df1.write
-      .format("hudi")
-      .option("hoodie.table.log.file.format", "parquet")
-      .options(opt)
-      .mode(SaveMode.Overwrite)
-      .save(tblPath)
+    def writeTestData(data: Seq[Row], mode: SaveMode): Unit = {
+      spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
+        .write
+        .format("hudi")
+        .options(options)
+        .mode(mode)
+        .save(tablePath)
+    }
 
-    val data2 = Seq(
-      Row("id1", "name1", 4L),
-      Row("id2", "name1", 5L),
-      Row("id3", "name1", 6L))
-    val df2 = spark.createDataFrame(
-      spark.sparkContext.parallelize(data2, 2), schema)
-    df2.write
-      .format("hudi")
-      .option("hoodie.clustering.async.enabled", "true")
-      .options(opt)
-      .mode(SaveMode.Append)
-      .save(tblPath)
+    // Write initial dataset
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(Seq(
+        Row("id1", "name1", 1L),
+        Row("id2", "name1", 2L),
+        Row("id3", "name1", 3L)
+      )), schema)
+    df1.write.format("hudi").options(options).mode(SaveMode.Overwrite).save(tablePath)
 
+    // Write additional dataset
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(Seq(
+        Row("id1", "name1", 4L),
+        Row("id2", "name1", 5L),
+        Row("id3", "name1", 6L)
+      )), schema)
+    df2.write.format("hudi").options(options).mode(SaveMode.Append).save(tablePath)
+
+    // Validate the results
     metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(tblPath).setStorage(storage).build()
-    val instants = metaClient.getActiveTimeline.getInstants.asScala.toList
-    assertTrue(instants.exists(i => i.getAction.equals("commit") && i.isCompleted))
+      .setBasePath(tablePath)
+      .setStorage(storage)
+      .build()
 
-    val df = spark.read.format("hudi").load(tblPath)
-    assertEquals(3, df.count())
-    val d1 = df.except(df2)
-    val d2 = df2.except(df)
-    assertTrue(d1.isEmpty && d2.isEmpty)
+    val instants = metaClient.getActiveTimeline.getInstants.asScala.toList
+    assertTrue(instants.exists(i => i.getAction == "commit" && i.isCompleted))
+
+    val finalData = spark.read.format("hudi").load(tablePath)
+    val finalDf = finalData.select("id", "name", "ts").sort("id")
+    finalDf.show(false)
+    val expectedDf = df2.sort("id")
+    expectedDf.show(false)
+
+    assertEquals(3, finalData.count())
+    assertTrue(finalDf.except(expectedDf).isEmpty)
+    assertTrue(expectedDf.except(finalDf).isEmpty)
   }
 }

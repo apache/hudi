@@ -71,9 +71,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.StreamSupport;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
 /**
  * A HoodieCompactor runs compaction on a hoodie table.
@@ -333,11 +335,12 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         baseFileOpt.isPresent() ? baseFileOpt.get() : null,
         logFiles);
     // 1. Generate the input for fg reader.
+    boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
         metaClient.getStorage(),
         metaClient.getBasePath().toString(),
-        operation.getBaseInstantTime(),
+        instantTime,
         fileSlice,
         readerSchema,
         readerSchema,
@@ -345,8 +348,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         metaClient,
         props,
         0,
-        -1,
-        true);
+        Long.MAX_VALUE,
+        usePosition);
     // 2. Get the `HoodieFileGroupReaderIterator` from the fg reader.
     fileGroupReader.initRecordIterators();
     HoodieFileGroupReader.HoodieFileGroupReaderIterator<T> recordIterator
@@ -362,28 +365,29 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(readerSchema, config.allowOperationMetadataField());
     StoragePath dirPath = FSUtils.constructAbsolutePath(metaClient.getBasePath().toString(), operation.getPartitionPath());
     StoragePath newBaseFilePath = new StoragePath(dirPath, newFileName);
-    HoodieFileWriter fileWriter = HoodieFileWriterFactory.getFileWriter(
-        operation.getDataFileCommitTime().get(),
-        newBaseFilePath,
-        metaClient.getStorage(),
-        config,
-        writeSchemaWithMetaFields, taskContextSupplier, config.getRecordMerger().getRecordType());
 
     WriteStatus writestatus = initNewStatus(config, true, operation);
     long recordsWritten = 0;
     long errorRecords = 0;
-    while (recordIterator.hasNext()) {
-      HoodieRecord record = (HoodieRecord) recordIterator.next();
-      try {
-        fileWriter.write(record.getRecordKey(), record, writeSchemaWithMetaFields);
-        recordsWritten++;
-        writestatus.markSuccess(record, record.getMetadata());
-      } catch (Throwable t) {
-        errorRecords++;
-        writestatus.markFailure(record, t, record.getMetadata());
-        LOG.error("Error write record: {}", record, t);
-      } finally {
-        fileWriter.close();
+    try(HoodieFileWriter fileWriter = HoodieFileWriterFactory.getFileWriter(
+        instantTime,
+        newBaseFilePath,
+        metaClient.getStorage(),
+        config,
+        writeSchemaWithMetaFields, taskContextSupplier, config.getRecordMerger().getRecordType())) {
+      while (recordIterator.hasNext()) {
+        T record = recordIterator.next();
+        Map<String, String> metadata = readerContext.generateMetadataForRecord(record, readerSchema);
+        HoodieRecord hoodieRecord = readerContext.constructHoodieRecord(Option.of(record), metadata, props);
+        try {
+          fileWriter.write(hoodieRecord.getRecordKey(), hoodieRecord, writeSchemaWithMetaFields);
+          recordsWritten++;
+          writestatus.markSuccess(hoodieRecord, hoodieRecord.getMetadata());
+        } catch (Throwable t) {
+          errorRecords++;
+          writestatus.markFailure(hoodieRecord, t, hoodieRecord.getMetadata());
+          LOG.error("Error write record: {}", record, t);
+        }
       }
     }
 

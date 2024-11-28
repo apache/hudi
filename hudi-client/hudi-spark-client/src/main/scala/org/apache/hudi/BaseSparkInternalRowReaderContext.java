@@ -20,6 +20,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
@@ -45,6 +46,7 @@ import scala.Function1;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 /**
@@ -83,7 +85,25 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public String getRecordKey(InternalRow row, Schema schema) {
-    return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
+    Object key = getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD);
+    if (key != null) {
+      return key.toString();
+    }
+    return null;
+  }
+
+  @Override
+  public String getRecordKey(InternalRow row, Schema schema, TypedProperties props) {
+    String key = getRecordKey(row, schema);
+    if (key != null) {
+      return key;
+    }
+    String keyField = props.getString(RECORDKEY_FIELD_NAME.key(), null);
+    if (keyField == null) {
+      return null;
+    }
+    Object keyValue = getValue(row, schema, keyField);
+    return keyValue != null ? keyValue.toString() : null;
   }
 
   @Override
@@ -99,6 +119,25 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
     InternalRow row = rowOption.get();
     return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
+  }
+
+  @Override
+  public HoodieRecord<InternalRow> constructHoodieRecord(Option<InternalRow> rowOption,
+                                                         Map<String, Object> metadataMap,
+                                                         TypedProperties props) {
+    if (!rowOption.isPresent()) {
+      return new HoodieEmptyRecord<>(
+          new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY),
+              (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)),
+          HoodieRecord.HoodieRecordType.SPARK);
+    }
+
+    Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
+    String partitionPath = (String) metadataMap.get(INTERNAL_META_PARTITION_PATH);
+    InternalRow row = rowOption.get();
+    String recordKey = getRecordKey(row, schema, props);
+    HoodieKey key = new HoodieKey(recordKey, partitionPath);
+    return new HoodieSparkRecord(key, row, HoodieInternalRowUtils.getCachedSchema(schema), false);
   }
 
   @Override
@@ -123,7 +162,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
         HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns);
     return row -> (InternalRow) unsafeRowWriter.apply(row);
-
   }
 
   protected UnaryOperator<InternalRow> getIdentityProjection() {
