@@ -39,6 +39,7 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointUtils;
 import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -173,7 +174,23 @@ public class HoodieIncrSource extends RowSource {
   }
 
   @Override
+  protected Option<Checkpoint> translateCheckpoint(Option<Checkpoint> lastCheckpoint) {
+    // For Hudi incremental source, we'll let #fetchNextBatch to handle it since
+    // it involves heavy lifting by loading the timeline for analysis
+    return lastCheckpoint;
+  }
+
+  @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    if (CheckpointUtils.targetCheckpointV2(writeTableVersion)) {
+      return fetchNextBatchBasedOnCompletionTime(lastCheckpoint, sourceLimit);
+    } else {
+      throw new UnsupportedOperationException("Table version 6 and below not supported yet");
+    }
+  }
+
+  private Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatchBasedOnCompletionTime(
+      Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     checkRequiredConfigProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH));
     String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
     boolean readLatestOnMissingCkpt = getBooleanWithAltKeys(
@@ -181,7 +198,7 @@ public class HoodieIncrSource extends RowSource {
     IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy =
         (containsConfigProperty(props, HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY))
             ? IncrSourceHelper.MissingCheckpointStrategy.valueOf(
-                getStringWithAltKeys(props, HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY))
+            getStringWithAltKeys(props, HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY))
             : null;
     if (readLatestOnMissingCkpt) {
       missingCheckpointStrategy = IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST;
@@ -201,6 +218,7 @@ public class HoodieIncrSource extends RowSource {
         || (endCompletionTime = queryContext.getMaxCompletionTime())
         .equals(analyzer.getStartCompletionTime().orElseGet(() -> null))) {
       LOG.info("Already caught up. No new data to process");
+      // TODO(yihua): fix checkpoint translation here as an improvement
       return Pair.of(Option.empty(), lastCheckpoint.orElse(null));
     }
 

@@ -813,7 +813,7 @@ public class StreamSync implements Serializable, Closeable {
           !getBooleanWithAltKeys(props, CHECKPOINT_FORCE_SKIP)
               ? inputBatch.getCheckpointForNextBatch() != null
               ? inputBatch.getCheckpointForNextBatch().getCheckpointCommitMetadata(cfg)
-              : new CheckpointV2(null).getCheckpointCommitMetadata(cfg)
+              : new CheckpointV2((String) null).getCheckpointCommitMetadata(cfg)
               : Collections.emptyMap();
 
       if (hasErrors) {

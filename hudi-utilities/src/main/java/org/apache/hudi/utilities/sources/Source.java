@@ -22,6 +22,7 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.callback.SourceCommitCallback;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -29,6 +30,9 @@ import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointUtils;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV1;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -36,6 +40,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 
 /**
  * Represents a source from which we can tail data. Assumes a constructor that takes properties.
@@ -52,6 +58,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   protected transient JavaSparkContext sparkContext;
   protected transient SparkSession sparkSession;
   protected transient Option<SourceProfileSupplier> sourceProfileSupplier;
+  protected int writeTableVersion;
   private transient SchemaProvider overriddenSchemaProvider;
 
   private final SourceType sourceType;
@@ -73,6 +80,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     this.overriddenSchemaProvider = streamContext.getSchemaProvider();
     this.sourceType = sourceType;
     this.sourceProfileSupplier = streamContext.getSourceProfileSupplier();
+    this.writeTableVersion = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
   }
 
   @Deprecated
@@ -84,11 +92,40 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     LOG.info("In Hudi 1.0+, the checkpoint based on Hudi timeline is changed. "
         + "If your Source implementation relies on request time as the checkpoint, "
         + "you may consider migrating to completion time-based checkpoint by overriding "
-        + "Source#fetchNewDataFromCheckpoint");
+        + "Source#translateCheckpoint and Source#fetchNewDataFromCheckpoint");
     return fetchNewData(
         lastCheckpoint.isPresent()
             ? Option.of(lastCheckpoint.get().getCheckpointKey()) : Option.empty(),
         sourceLimit);
+  }
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  protected Option<Checkpoint> translateCheckpoint(Option<Checkpoint> lastCheckpoint) {
+    if (lastCheckpoint.isEmpty()) {
+      return Option.empty();
+    }
+    if (CheckpointUtils.targetCheckpointV2(writeTableVersion)) {
+      // V2 -> V2
+      if (lastCheckpoint.get() instanceof CheckpointV2) {
+        return lastCheckpoint;
+      }
+      // V1 -> V2
+      if (lastCheckpoint.get() instanceof CheckpointV1) {
+        CheckpointV2 newCheckpoint = new CheckpointV2(lastCheckpoint.get());
+        newCheckpoint.addV1Props();
+        return Option.of(newCheckpoint);
+      }
+    } else {
+      // V2 -> V1
+      if (lastCheckpoint.get() instanceof CheckpointV2) {
+        return Option.of(new CheckpointV1(lastCheckpoint.get()));
+      }
+      // V1 -> V1
+      if (lastCheckpoint.get() instanceof CheckpointV1) {
+        return lastCheckpoint;
+      }
+    }
+    throw new UnsupportedOperationException("Unsupported checkpoint type: " + lastCheckpoint.get());
   }
 
   /**
@@ -99,7 +136,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
    * @return
    */
   public final InputBatch<T> fetchNext(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    InputBatch<T> batch = fetchNewDataFromCheckpoint(lastCheckpoint, sourceLimit);
+    InputBatch<T> batch = fetchNewDataFromCheckpoint(translateCheckpoint(lastCheckpoint), sourceLimit);
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);

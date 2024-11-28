@@ -19,28 +19,47 @@
 
 package org.apache.hudi.utilities.streamer.checkpoint;
 
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.config.HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_RESET_KEY;
+
 public class CheckpointV1 extends Checkpoint {
-  public CheckpointV1(String value) {
-    this.checkpointKey = value;
+  public CheckpointV1(String key) {
+    this.checkpointKey = key;
+    this.checkpointResetKey = null;
+    this.checkpointIgnoreKey = null;
+  }
+
+  public CheckpointV1(Checkpoint checkpoint) {
+    this.checkpointKey = checkpoint.getCheckpointKey();
+    this.checkpointResetKey = checkpoint.getCheckpointResetKey();
+    this.checkpointIgnoreKey = checkpoint.getCheckpointIgnoreKey();
+  }
+
+  public CheckpointV1(HoodieCommitMetadata commitMetadata) {
+    this.checkpointKey = commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY);
+    this.checkpointResetKey = commitMetadata.getMetadata(CHECKPOINT_RESET_KEY);
+    this.checkpointIgnoreKey = commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY);
   }
 
   @Override
   public Map<String, String> getCheckpointCommitMetadata(HoodieStreamer.Config streamerConfig) {
-    return Collections.emptyMap();
-  }
-
-  @Override
-  public CheckpointV1 convertToCheckpointV1() {
-    return null;
-  }
-
-  @Override
-  public CheckpointV2 convertToCheckpointV2() {
-    return null;
+    Map<String, String> checkpointCommitMetadata = new HashMap<>();
+    if (checkpointKey != null) {
+      checkpointCommitMetadata.put(STREAMER_CHECKPOINT_KEY, getCheckpointKey());
+    }
+    // TODO(yihua): handle reset key translation?
+    if (streamerConfig.checkpoint != null) {
+      checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, streamerConfig.checkpoint);
+    }
+    if (streamerConfig.ignoreCheckpoint != null) {
+      checkpointCommitMetadata.put(CHECKPOINT_IGNORE_KEY, streamerConfig.ignoreCheckpoint);
+    }
+    return checkpointCommitMetadata;
   }
 }

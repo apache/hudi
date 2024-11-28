@@ -34,6 +34,8 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointUtils;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -186,7 +188,10 @@ public class IncrSourceHelper {
     RangeType rangeType;
 
     if (lastCheckpoint.isPresent() && !lastCheckpoint.get().getCheckpointKey().isEmpty()) {
-      startCompletionTime = lastCheckpoint.get().getCheckpointKey();
+      // Translate checkpoint
+      CheckpointV2 lastCheckpointV2 = CheckpointUtils.convertToCheckpointV2ForCommitTime(
+          lastCheckpoint.get(), metaClient);
+      startCompletionTime = lastCheckpointV2.getCheckpointKey();
       rangeType = RangeType.OPEN_CLOSED;
     } else if (missingCheckpointStrategy != null) {
       rangeType = RangeType.CLOSED_CLOSED;

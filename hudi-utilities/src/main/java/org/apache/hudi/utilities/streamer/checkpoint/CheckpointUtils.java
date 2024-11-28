@@ -22,13 +22,17 @@ package org.apache.hudi.utilities.streamer.checkpoint;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
@@ -42,9 +46,11 @@ import java.io.IOException;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_RESET_KEY;
-import static org.apache.hudi.utilities.streamer.checkpoint.Checkpoint.CHECKPOINT_IGNORE_KEY;
+import static org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
+import static org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
 
 public class CheckpointUtils {
   private static final Logger LOG = LoggerFactory.getLogger(CheckpointUtils.class);
@@ -54,13 +60,14 @@ public class CheckpointUtils {
                                                              TypedProperties props) throws IOException {
     Option<Checkpoint> checkpoint = Option.empty();
     if (commitsTimelineOpt.isPresent()) {
-      Option<String> checkpointStr = getCheckpointToResumeString(commitsTimelineOpt, streamerConfig, props);
-      checkpoint = checkpointStr.isPresent() ? Option.of(new CheckpointV2(checkpointStr.get())) : Option.empty();
+      checkpoint = getCheckpointToResumeString(commitsTimelineOpt, streamerConfig, props);
     }
 
     LOG.debug("Checkpoint from config: " + streamerConfig.checkpoint);
     if (!checkpoint.isPresent() && streamerConfig.checkpoint != null) {
-      checkpoint = Option.of(new CheckpointV2(streamerConfig.checkpoint));
+      int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
+      checkpoint = Option.of(targetCheckpointV2(writeTableVersion)
+          ? new CheckpointV2(streamerConfig.checkpoint) : new CheckpointV1(streamerConfig.checkpoint));
     }
     return checkpoint;
   }
@@ -74,10 +81,10 @@ public class CheckpointUtils {
    * @throws IOException
    */
   @VisibleForTesting
-  static Option<String> getCheckpointToResumeString(Option<HoodieTimeline> commitsTimelineOpt,
-                                                    HoodieStreamer.Config streamerConfig,
-                                                    TypedProperties props) throws IOException {
-    Option<String> resumeCheckpointStr = Option.empty();
+  static Option<Checkpoint> getCheckpointToResumeString(Option<HoodieTimeline> commitsTimelineOpt,
+                                                        HoodieStreamer.Config streamerConfig,
+                                                        TypedProperties props) throws IOException {
+    Option<Checkpoint> resumeCheckpoint = Option.empty();
     // try get checkpoint from commits(including commit and deltacommit)
     // in COW migrating to MOR case, the first batch of the deltastreamer will lost the checkpoint from COW table, cause the dataloss
     HoodieTimeline deltaCommitTimeline = commitsTimelineOpt.get().filter(instant -> instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
@@ -90,20 +97,22 @@ public class CheckpointUtils {
     if (lastCommit.isPresent()) {
       // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
       Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitsTimelineOpt.get());
+      int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
-        LOG.debug("Checkpoint reset from metadata: " + commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
-        if (streamerConfig.ignoreCheckpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY))
-            || !streamerConfig.ignoreCheckpoint.equals(commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY)))) {
+        Checkpoint checkpointFromCommit = getCheckpoint(commitMetadata);
+        LOG.debug("Checkpoint reset from metadata: " + checkpointFromCommit.getCheckpointResetKey());
+        if (streamerConfig.ignoreCheckpoint != null && (StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointIgnoreKey())
+            || !streamerConfig.ignoreCheckpoint.equals(checkpointFromCommit.getCheckpointIgnoreKey()))) {
           // we ignore any existing checkpoint and start ingesting afresh
-          resumeCheckpointStr = Option.empty();
-        } else if (streamerConfig.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
-            || !streamerConfig.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
-          resumeCheckpointStr = Option.of(streamerConfig.checkpoint);
-        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
+          resumeCheckpoint = Option.empty();
+        } else if (streamerConfig.checkpoint != null && (StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointResetKey())
+            || !streamerConfig.checkpoint.equals(checkpointFromCommit.getCheckpointResetKey()))) {
+          resumeCheckpoint = Option.of(targetCheckpointV2(writeTableVersion)
+              ? new CheckpointV2(streamerConfig.checkpoint) : new CheckpointV1(streamerConfig.checkpoint));
+        } else if (!StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointKey())) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
-          String value = commitMetadata.getMetadata(CHECKPOINT_KEY);
-          resumeCheckpointStr = Option.of(value);
+          resumeCheckpoint = Option.of(checkpointFromCommit);
         } else if (compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             LESSER_THAN, lastCommit.get().requestedTime())) {
           throw new HoodieStreamerException(
@@ -117,10 +126,23 @@ public class CheckpointUtils {
         }
       } else if (streamerConfig.checkpoint != null) {
         // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
-        resumeCheckpointStr = Option.of(streamerConfig.checkpoint);
+        resumeCheckpoint = Option.of(targetCheckpointV2(writeTableVersion)
+            ? new CheckpointV2(streamerConfig.checkpoint) : new CheckpointV1(streamerConfig.checkpoint));
       }
     }
-    return resumeCheckpointStr;
+    return resumeCheckpoint;
+  }
+
+  private static Checkpoint getCheckpoint(HoodieCommitMetadata commitMetadata) {
+    if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))
+        || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V2))) {
+      return new CheckpointV2(commitMetadata);
+    }
+    if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))
+        || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+      return new CheckpointV1(commitMetadata);
+    }
+    throw new HoodieException("Checkpoint is not found in the commit metadata: " + commitMetadata.getExtraMetadata());
   }
 
   public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline)
@@ -131,7 +153,9 @@ public class CheckpointUtils {
         HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
             .deserialize(instant, timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))
-            || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+            || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
+            || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))
+            || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V2))) {
           return Option.of(Pair.of(instant.toString(), commitMetadata));
         } else {
           return Option.empty();
@@ -154,5 +178,29 @@ public class CheckpointUtils {
         throw new HoodieIOException("failed to get latest instant with ValidCheckpointInfo", e);
       }
     }).orElse(Option.empty());
+  }
+
+  public static boolean targetCheckpointV2(int writeTableVersion) {
+    return writeTableVersion >= HoodieTableVersion.EIGHT.versionCode();
+  }
+
+  public static CheckpointV2 convertToCheckpointV2ForCommitTime(
+      Checkpoint checkpoint, HoodieTableMetaClient metaClient) {
+    if (checkpoint instanceof CheckpointV2) {
+      return (CheckpointV2) checkpoint;
+    }
+    if (checkpoint instanceof CheckpointV1) {
+      String instantTime = checkpoint.getCheckpointKey();
+      String completionTime = metaClient.getActiveTimeline()
+          .getInstantsAsStream()
+          .filter(s -> instantTime.equals(s.requestedTime()))
+          .map(s -> s.getCompletionTime())
+          .findFirst().orElse(null);
+      if (completionTime == null) {
+        throw new UnsupportedOperationException("Unable to find completion time for " + instantTime);
+      }
+      return new CheckpointV2(completionTime);
+    }
+    throw new UnsupportedOperationException("Unsupported checkpoint type: " + checkpoint.getClass());
   }
 }

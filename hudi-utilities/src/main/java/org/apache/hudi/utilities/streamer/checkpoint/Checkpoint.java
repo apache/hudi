@@ -21,26 +21,36 @@ package org.apache.hudi.utilities.streamer.checkpoint;
 
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
+import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
 /**
  * Class for representing checkpoint
  */
-public abstract class Checkpoint {
+public abstract class Checkpoint implements Serializable {
   public static final String CHECKPOINT_IGNORE_KEY = "deltastreamer.checkpoint.ignore_key";
 
   protected String checkpointKey;
-
-  public abstract Map<String, String> getCheckpointCommitMetadata(HoodieStreamer.Config streamerConfig);
-
-  public abstract Checkpoint convertToCheckpointV1();
-
-  public abstract Checkpoint convertToCheckpointV2();
+  protected String checkpointResetKey;
+  protected String checkpointIgnoreKey;
+  // These are extra props to be written to the commit metadata
+  protected Map<String, String> extraProps = new HashMap<>();
 
   public String getCheckpointKey() {
     return checkpointKey;
   }
+
+  public String getCheckpointResetKey() {
+    return checkpointResetKey;
+  }
+
+  public String getCheckpointIgnoreKey() {
+    return checkpointIgnoreKey;
+  }
+
+  public abstract Map<String, String> getCheckpointCommitMetadata(HoodieStreamer.Config streamerConfig);
 
   @Override
   public int hashCode() {
