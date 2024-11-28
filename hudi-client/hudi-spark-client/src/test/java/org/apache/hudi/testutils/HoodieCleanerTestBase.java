@@ -211,7 +211,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     HoodieCommitMetadata commitMeta = generateCommitMetadata(instantTime, partToFileIds);
     try (HoodieTableMetadataWriter metadataWriter = getMetadataWriter(config)) {
       metadataWriter.performTableServices(Option.of(instantTime));
-      metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
+      metadataWriter.update(commitMeta, instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
           serializeCommitMetadata(metaClient.getCommitMetadataSerDe(), commitMeta));
