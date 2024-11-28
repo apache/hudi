@@ -193,7 +193,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public void setJobStatus(String activeModule, String activityDescription) {
-    javaSparkContext.setJobGroup(activeModule, activityDescription);
+    javaSparkContext.setJobDescription(String.format("%s:%s", activeModule, activityDescription));
   }
 
   @Override
