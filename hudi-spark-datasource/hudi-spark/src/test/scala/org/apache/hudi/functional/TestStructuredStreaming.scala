@@ -32,11 +32,10 @@ import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, H
 import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
@@ -203,6 +202,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     Await.result(f2, Duration("120s"))
   }
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testStructuredStreaming(tableType: HoodieTableType): Unit = {

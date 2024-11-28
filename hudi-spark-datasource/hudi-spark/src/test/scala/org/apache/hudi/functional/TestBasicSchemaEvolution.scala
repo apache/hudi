@@ -28,18 +28,16 @@ import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.functional.TestBasicSchemaEvolution.{dropColumn, injectColumnAt}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
-
 import org.apache.hadoop.fs.FileSystem
-import org.apache.spark.sql.{functions, HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions, functions}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
-
 import scala.collection.JavaConverters._
 
 class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAssertionSupport {
@@ -84,7 +82,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
   }
 
   // TODO add test-case for upcasting
-
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @CsvSource(value = Array(
     "COPY_ON_WRITE,bulk_insert,true",

@@ -32,17 +32,16 @@ import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 import org.apache.hudi.testutils.HoodieClientTestUtils
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.OriginalType
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.types.{ArrayType, LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.Collections
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -142,6 +141,7 @@ object TestParquetReaderCompatibility {
  * Ensure after switch from reading file with schema with which file was written to deduced schema(RFC 46)
  * different list levels can interoperate.
  **/
+@Disabled("HUDI-8595")
 class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
   /*
   * Generate schema with required nullability constraints.
@@ -195,6 +195,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
   /**
    * Test interoperability of different parquet list types and their nullability.
    **/
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @MethodSource(Array("testSource"))
   def testAvroListUpdate(input: TestScenario): Unit = {

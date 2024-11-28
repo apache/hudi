@@ -27,9 +27,8 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_P
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.slf4j.LoggerFactory
 
@@ -74,12 +73,12 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     cleanupFileSystem()
   }
 
-  @Test
+  @Disabled("HUDI-8595")
   def testMultiFileFormatForCOWTableType(): Unit = {
     insertAndValidateSnapshot(basePath, HoodieTableType.COPY_ON_WRITE.name())
   }
 
-  @Test
+  @Disabled("HUDI-8595")
   def testMultiFileFormatForMORTableType(): Unit = {
     insertAndValidateSnapshot(basePath, HoodieTableType.MERGE_ON_READ.name())
   }

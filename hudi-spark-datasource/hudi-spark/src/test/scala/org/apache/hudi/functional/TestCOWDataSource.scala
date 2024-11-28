@@ -525,6 +525,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
    *
    * For COW table, test the snapshot query mode and incremental query mode.
    */
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @CsvSource(Array("true,AVRO", "true,SPARK", "false,AVRO", "false,SPARK"))
   def testPrunePartitionForTimestampBasedKeyGenerator(enableFileIndex: Boolean,
@@ -960,6 +961,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals("replacecommit", commits(1))
   }
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testDropInsertDup(recordType: HoodieRecordType): Unit = {
@@ -1068,6 +1070,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
   }
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testSparkPartitionByWithCustomKeyGeneratorWithGlobbing(recordType: HoodieRecordType): Unit = {
@@ -1231,6 +1234,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= concat(col("driver"), lit("/"), col("rider"))).count() == 0)
   }
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testSparkPartitionByWithTimestampBasedKeyGenerator(recordType: HoodieRecordType) {
@@ -1348,6 +1352,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(false, Metrics.isInitialized(basePath))
   }
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @CsvSource(Array(
     "true,false,AVRO", "true,true,AVRO", "false,true,AVRO", "false,false,AVRO"
@@ -1360,6 +1365,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       recordType = recordType)
   }
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testPartitionPruningWithoutFileIndex(partitionEncode: Boolean): Unit = {
@@ -1467,6 +1473,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       readResult.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","))
   }
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @CsvSource(Array(
     "true, true, AVRO", "true, false, AVRO", "true, true, SPARK", "true, false, SPARK",

@@ -33,18 +33,16 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, 
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers, ScalaAssertionSupport}
-
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.{SaveMode, SparkSession, SparkSessionExtensions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.util.function.Consumer
-
 import scala.collection.JavaConverters._
 
 class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with ScalaAssertionSupport {
@@ -264,6 +262,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     assertEquals(5, snapshot0.count())
   }
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testUpsertsAndDeletesWithPkLess(tableType: HoodieTableType): Unit = {

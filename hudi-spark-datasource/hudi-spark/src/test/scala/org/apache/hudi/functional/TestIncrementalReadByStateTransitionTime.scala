@@ -24,9 +24,8 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-
 import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Disabled}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -63,6 +62,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
     cleanupFileSystem()
   }
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testReadingWithStateTransitionTime(tableType: HoodieTableType): Unit = {

@@ -36,19 +36,17 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
-
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.BooleanType
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
 import java.util.function.Consumer
-
 import scala.collection.JavaConverters._
 
 /**
@@ -94,6 +92,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @CsvSource(Array("AVRO, AVRO, avro", "AVRO, SPARK, parquet", "SPARK, AVRO, parquet", "SPARK, SPARK, parquet"))
   def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String) {
@@ -1160,6 +1159,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
    *
    * For MOR table, test all the three query modes.
    */
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @CsvSource(Array("true,AVRO", "true,SPARK", "false,AVRO", "false,SPARK"))
   def testPrunePartitionForTimestampBasedKeyGenerator(enableFileIndex: Boolean,

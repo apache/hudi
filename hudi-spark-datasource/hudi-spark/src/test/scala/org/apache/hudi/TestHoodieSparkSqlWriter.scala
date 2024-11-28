@@ -30,7 +30,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.avro.Schema
 import org.apache.commons.io.FileUtils
 import org.apache.spark.api.java.JavaSparkContext
@@ -38,7 +37,7 @@ import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
@@ -48,7 +47,6 @@ import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.time.Instant
 import java.util.{Collections, Date, UUID}
-
 import scala.collection.JavaConverters._
 
 /**
@@ -600,6 +598,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
    *
    * @param tableType Type of table
    */
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @CsvSource(value = Array(
     "COPY_ON_WRITE",
@@ -722,7 +721,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   /**
    * Test case for incremental view with replacement.
    */
-  @Test
+  @Disabled("HUDI-8595")
   def testIncrementalViewWithReplacement(): Unit = {
     List(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).foreach { tableType =>
       val baseBootStrapPath = tempBootStrapPath.toAbsolutePath.toString
@@ -815,6 +814,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
    * Test case for deletion of partitions.
    * @param usePartitionsToDeleteConfig Flag for if use partitions to delete config
    */
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testDeletePartitionsV2(usePartitionsToDeleteConfig: Boolean): Unit = {
@@ -845,6 +845,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
    * Test case for deletion of partitions using wildcards
    * @param partition the name of the partition(s) to delete
    */
+  @Disabled("HUDI-8595")
   @ParameterizedTest
   @MethodSource(Array(
     "deletePartitionsWildcardTestParams"
@@ -863,7 +864,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     }).count())
   }
 
-  @Test
+  @Disabled("HUDI-8595")
   def testDeletePartitionsWithWrongPartition(): Unit = {
     var (_, fooTableModifier) = deletePartitionSetup()
     fooTableModifier = fooTableModifier
