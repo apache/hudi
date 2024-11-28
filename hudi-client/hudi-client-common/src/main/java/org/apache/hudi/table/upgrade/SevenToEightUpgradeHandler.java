@@ -243,15 +243,15 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       replacedFileName = replacedFileName.replace(instant.getAction(), SIX_TO_EIGHT_TIMELINE_ACTION_MAP.get(instant.getAction()));
     }
     try {
-      return renameTimelineV1InstantFileToV2Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, commitMetadataSerDeV2, activeTimelineV2);
+      return rewriteTimelineV1InstantFileToV2Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, commitMetadataSerDeV2, activeTimelineV2);
     } catch (IOException e) {
       LOG.warn("Can not to complete the upgrade from version seven to version eight. The reason for failure is {}", e.getMessage());
     }
     return false;
   }
 
-  static boolean renameTimelineV1InstantFileToV2Format(HoodieInstant instant, HoodieTableMetaClient metaClient, String originalFileName, String replacedFileName,
-                                                       CommitMetadataSerDeV1 commitMetadataSerDeV1, CommitMetadataSerDeV2 commitMetadataSerDeV2, ActiveTimelineV2 activeTimelineV2)
+  static boolean rewriteTimelineV1InstantFileToV2Format(HoodieInstant instant, HoodieTableMetaClient metaClient, String originalFileName, String replacedFileName,
+                                                        CommitMetadataSerDeV1 commitMetadataSerDeV1, CommitMetadataSerDeV2 commitMetadataSerDeV2, ActiveTimelineV2 activeTimelineV2)
       throws IOException {
     StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePathProvider().getTimelinePath(metaClient.getTableConfig(), metaClient.getBasePath()), originalFileName);
     StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getTimelinePath(metaClient.getTableConfig(), metaClient.getBasePath()), replacedFileName);

@@ -73,6 +73,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.UNDERSCORE;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -129,7 +130,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     try {
       downgradeFromLSMTimeline(table, config);
     } catch (Exception e) {
-      LOG.error("Failed to downgrade from LSM timeline", e);
+      LOG.warn("Failed to downgrade from LSM timeline");
     }
 
     // downgrade table properties
@@ -283,24 +284,28 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       replacedFileName = replacedFileName.replace(instant.getAction(), EIGHT_TO_SIX_TIMELINE_ACTION_MAP.get(instant.getAction()));
     }
     try {
-      return renameTimelineV2InstantFileToV1Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV2, commitMetadataSerDeV1, activeTimelineV1);
+      return rewriteTimelineV2InstantFileToV1Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV2, commitMetadataSerDeV1, activeTimelineV1);
     } catch (IOException e) {
       LOG.error("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
       throw new HoodieException(e);
     }
   }
 
-  static boolean renameTimelineV2InstantFileToV1Format(HoodieInstant instant, HoodieTableMetaClient metaClient, String originalFileName, String replacedFileName,
-                                                       CommitMetadataSerDeV2 commitMetadataSerDeV2, CommitMetadataSerDeV1 commitMetadataSerDeV1, ActiveTimelineV1 activeTimelineV1)
+  static boolean rewriteTimelineV2InstantFileToV1Format(HoodieInstant instant, HoodieTableMetaClient metaClient, String originalFileName, String replacedFileName,
+                                                        CommitMetadataSerDeV2 commitMetadataSerDeV2, CommitMetadataSerDeV1 commitMetadataSerDeV1, ActiveTimelineV1 activeTimelineV1)
       throws IOException {
     StoragePath fromPath = new StoragePath(TIMELINE_LAYOUT_V2.getTimelinePathProvider().getTimelinePath(metaClient.getTableConfig(), metaClient.getBasePath()), originalFileName);
     long modificationTime = instant.isCompleted() ? convertCompletionTimeToEpoch(instant) : -1;
     StoragePath toPath = new StoragePath(TIMELINE_LAYOUT_V1.getTimelinePathProvider().getTimelinePath(metaClient.getTableConfig(), metaClient.getBasePath()), replacedFileName);
     boolean success = true;
-    if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(DELTA_COMMIT_ACTION) || (instant.getAction().equals(REPLACE_COMMIT_ACTION) && instant.isCompleted())) {
-      Class<? extends HoodieCommitMetadata> clazz = instant.getAction().equals(REPLACE_COMMIT_ACTION) ? HoodieReplaceCommitMetadata.class : HoodieCommitMetadata.class;
-      HoodieCommitMetadata commitMetadata = commitMetadataSerDeV2.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), clazz);
-      Option<byte[]> data = commitMetadataSerDeV1.serialize(commitMetadata);
+    if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(DELTA_COMMIT_ACTION) ||
+        ((instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) && instant.isCompleted())) {
+      Option<byte[]> data;
+      if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) {
+        data = commitMetadataSerDeV1.serialize(HoodieReplaceCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class));
+      } else {
+        data = commitMetadataSerDeV1.serialize(commitMetadataSerDeV2.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class));
+      }
       String toPathStr = toPath.toUri().toString();
       activeTimelineV1.createFileInMetaPath(toPathStr, data, true);
       /*
