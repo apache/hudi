@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieCleanConfig.AUTO_CLEAN
 import org.apache.hudi.config.HoodieClusteringConfig.{INLINE_CLUSTERING, INLINE_CLUSTERING_MAX_COMMITS}
 import org.apache.hudi.config.HoodieCompactionConfig.{INLINE_COMPACT, INLINE_COMPACT_NUM_DELTA_COMMITS, PARQUET_SMALL_FILE_LIMIT}
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_SERVICES_ENABLED
+import org.apache.hudi.config.HoodieWriteConfig.{TABLE_SERVICES_ENABLED, TABLE_SERVICES_USE_FILE_GROUP_READER}
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -82,8 +82,8 @@ class TestCompactionWithFileGroupReader extends SparkClientFunctionalTestHarness
       LOG_FILE_FORMAT.key -> "parquet",
       LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
       RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
-      MERGE_USE_RECORD_POSITIONS.key -> "false"
-    )
+      MERGE_USE_RECORD_POSITIONS.key -> "false",
+      TABLE_SERVICES_USE_FILE_GROUP_READER.key -> "true")
 
     val serviceOptions = Map(
       TABLE_SERVICES_ENABLED.key -> "true",
@@ -92,8 +92,7 @@ class TestCompactionWithFileGroupReader extends SparkClientFunctionalTestHarness
       PARQUET_SMALL_FILE_LIMIT.key -> "0",
       AUTO_CLEAN.key -> "false",
       INLINE_CLUSTERING.key -> "false",
-      INLINE_CLUSTERING_MAX_COMMITS.key -> "1"
-    )
+      INLINE_CLUSTERING_MAX_COMMITS.key -> "1")
 
     val options = tableOptions ++ serviceOptions
 

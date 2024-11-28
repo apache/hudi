@@ -75,9 +75,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   public HoodieSparkEngineContext(JavaSparkContext jsc, SQLContext sqlContext) {
-    super(
-        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()),
-        new SparkTaskContextSupplier(sqlContext.conf(), jsc));
+    super(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
     this.javaSparkContext = jsc;
     this.sqlContext = sqlContext;
   }

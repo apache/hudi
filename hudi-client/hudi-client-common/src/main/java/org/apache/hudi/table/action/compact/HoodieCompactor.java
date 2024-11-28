@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -205,10 +204,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .collect(toList());
 
     // PATH 1: When the engine decides to return a valid reader context object.
-    boolean useReaderContext = config.getProps().getBoolean(
-        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
-        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue());
-    Option<HoodieReaderContext> readerContextOpt = taskContextSupplier.getReaderContext(metaClient, useReaderContext);
+    Option<HoodieReaderContext> readerContextOpt = compactionHandler.getReaderContext(metaClient);
     if (readerContextOpt.isPresent()) {
       return compactWithFileGroupReader(
           readerContextOpt.get(),

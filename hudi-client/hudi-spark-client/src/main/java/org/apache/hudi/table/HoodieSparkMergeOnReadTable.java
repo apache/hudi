@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -26,8 +28,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -59,13 +63,23 @@ import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.execution.datasources.FileFormat;
+import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.hudi.SparkAdapter;
+import org.apache.spark.sql.internal.SQLConf;
+import org.apache.spark.sql.sources.Filter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import scala.Tuple2;
+import scala.collection.JavaConverters;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 
@@ -91,6 +105,14 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
 
   HoodieSparkMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
+
+    // For Spark MOR table, use file group reader for table services, like compaction.
+    if (config.useFileGroupReaderWithinTableService()
+        && context instanceof HoodieSparkEngineContext
+        && HoodieTableType.MERGE_ON_READ == metaClient.getTableType()) {
+      HoodieSparkEngineContext hoodieSparkEngineContext = (HoodieSparkEngineContext) context;
+      prepareParquetReader(hoodieSparkEngineContext.getSqlContext().conf(), hoodieSparkEngineContext.jsc());
+    }
   }
 
   @Override
@@ -151,7 +173,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor<T> compactionExecutor = new RunCompactionActionExecutor<>(
         context, config, this, compactionInstantTime, new HoodieSparkMergeOnReadTableCompactor<>(),
-        new HoodieSparkCopyOnWriteTable<>(config, context, getMetaClient()), WriteOperationType.COMPACT);
+        new HoodieSparkMergeOnReadTable(config, context, getMetaClient()), WriteOperationType.COMPACT);
     return compactionExecutor.execute();
   }
 
@@ -228,5 +250,29 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
       throws HoodieIOException {
     // delegate to base class for MOR tables
     super.finalizeWrite(context, instantTs, stats);
+  }
+
+  private void prepareParquetReader(SQLConf sqlConf, JavaSparkContext jsc) {
+    scala.collection.immutable.Map<String, String> options =
+        scala.collection.immutable.Map$.MODULE$.<String, String>empty()
+            .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), "false"));
+
+    SparkAdapter sparkAdapter = SparkAdapterSupport$.MODULE$.sparkAdapter();
+    parquetReaderOpt = Option.of(sparkAdapter.createParquetFileReader(false, sqlConf, options, jsc.hadoopConfiguration()));
+    parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());
+  }
+
+  public Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient) {
+    SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
+    if (sparkParquetReader != null) {
+      List<Filter> filters = new ArrayList<>();
+      return Option.of(new SparkFileFormatInternalRowReaderContext(
+          sparkParquetReader,
+          // Need to verify this logic.
+          metaClient.getTableConfig().getRecordKeyFields().get()[0],
+          JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
+          JavaConverters.asScalaBufferConverter(filters).asScala().toSeq()));
+    }
+    return Option.empty();
   }
 }

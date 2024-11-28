@@ -807,6 +807,15 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
           + "Hudi write client and user is not expected to manually change the value.");
 
+  public static final ConfigProperty<String> TABLE_SERVICES_USE_FILE_GROUP_READER = ConfigProperty
+      .key("hoodie.services.use.file.group.reader")
+      .defaultValue("true")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
+          + "Hudi write client and user is not expected to manually change the value.");
+
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2792,6 +2801,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getSecondaryIndexParallelism() {
     return metadataConfig.getSecondaryIndexParallelism();
+  }
+
+  public boolean useFileGroupReaderWithinTableService() {
+    return getBoolean(TABLE_SERVICES_USE_FILE_GROUP_READER);
   }
 
   public static class Builder {

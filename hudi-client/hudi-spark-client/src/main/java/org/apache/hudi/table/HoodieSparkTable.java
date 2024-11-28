@@ -42,6 +42,8 @@ import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
+import org.apache.spark.broadcast.Broadcast;
+import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
 
 import java.io.IOException;
 
@@ -49,6 +51,9 @@ public abstract class HoodieSparkTable<T>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
   private volatile boolean isMetadataTableExists = false;
+
+  protected Option<SparkParquetReader> parquetReaderOpt = Option.empty();
+  protected Broadcast<SparkParquetReader> parquetReaderBroadcast;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -147,5 +152,4 @@ public abstract class HoodieSparkTable<T>
       HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
   }
-
 }

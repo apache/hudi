@@ -20,9 +20,12 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.IOException;
@@ -46,5 +49,9 @@ public interface HoodieCompactionHandler<T> {
                                                            Map<String, HoodieRecord<?>> recordMap,
                                                            Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     throw new HoodieNotSupportedException("Operation is not yet supported");
+  }
+
+  default Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient) {
+    return Option.empty();
   }
 }
