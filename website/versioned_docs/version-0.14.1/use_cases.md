@@ -134,5 +134,5 @@ Some examples of the Apache Hudi services that make this performance optimizatio
 - Multi-Dimensional Partitioning (Z-Ordering) - Traditional folder style partitioning on low-cardinality, while also 
 Z-Ordering data within files based on high-cardinality
 - Metadata Table - No more slow S3 file listings or throttling.
-- [Auto Cleaning](/docs/next/hoodie_cleaner) - Keeps your storage costs in check by automatically removing old versions of files.
+- [Auto Cleaning](/docs/next/cleaning) - Keeps your storage costs in check by automatically removing old versions of files.
 
