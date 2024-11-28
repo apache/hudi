@@ -252,10 +252,14 @@ public class TestMetadataPartitionType {
     assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index_"));
     assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index_idx"));
 
-    assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex("expr_index"));
-    assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex("expr_indexidx"));
-    assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index"));
-    assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_indexidx"));
+    assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.isExpressionOrSecondaryIndex("expr_index"),
+        "No MetadataPartitionType for partition path: expr_index");
+    assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.isExpressionOrSecondaryIndex("expr_indexidx"),
+        "No MetadataPartitionType for partition path: expr_indexidx");
+    assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index"),
+        "No MetadataPartitionType for partition path: secondary_index");
+    assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_indexidx"),
+        "No MetadataPartitionType for partition path: secondary_indexidx");
 
     for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
       if (partitionType != MetadataPartitionType.EXPRESSION_INDEX && partitionType != MetadataPartitionType.SECONDARY_INDEX) {
