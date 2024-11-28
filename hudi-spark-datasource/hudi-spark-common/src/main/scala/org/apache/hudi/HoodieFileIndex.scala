@@ -459,12 +459,12 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isSecondaryIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == SecondaryIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
-  private def isIndexEnabled: Boolean = indicesSupport.exists(idx => idx.isIndexAvailable)
+  private def isIndexAvailable: Boolean = indicesSupport.exists(idx => idx.isIndexAvailable)
 
   private def validateConfig(): Unit = {
-    if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexEnabled)) {
-      logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index, Record Level Index, or Expression Index" +
-        " to be enabled as well! " + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
+    if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexAvailable)) {
+      logWarning("Data skipping requires Metadata Table and at least one of the indices to be enabled! "
+        + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
         + s", isRecordIndexApplicable = $isRecordIndexEnabled, isExpressionIndexEnabled = $isExpressionIndexEnabled, " +
         s"isBucketIndexEnable = $isBucketIndexEnabled, isPartitionStatsIndexEnabled = $isPartitionStatsIndexEnabled)"
         + s", isBloomFiltersIndexEnabled = $isBloomFiltersIndexEnabled)")

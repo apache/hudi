@@ -330,9 +330,9 @@ public enum MetadataPartitionType {
   /**
    * Returns true if partition type is functional or secondary.
    */
-  public static boolean isGenericIndex(String metadataPartitionPath) {
-    return metadataPartitionPath.startsWith(SECONDARY_INDEX.getPartitionPath())
-        || metadataPartitionPath.startsWith(EXPRESSION_INDEX.getPartitionPath());
+  public static boolean isExpressionOrSecondaryIndex(String metadataPartitionPath) {
+    MetadataPartitionType partitionType = MetadataPartitionType.fromPartitionPath(metadataPartitionPath);
+    return partitionType.equals(SECONDARY_INDEX) || partitionType.equals(EXPRESSION_INDEX);
   }
 
   public static String getGenericIndexNameWithoutPrefix(String indexName) {

@@ -1028,7 +1028,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // For secondary index and expression index with wrong parameters, index definition for the MDT partition is
       // removed so that such indices are not recreated while initializing the writer.
       metadataPartitions.forEach(partition -> {
-        if (MetadataPartitionType.isGenericIndex(partition)) {
+        if (MetadataPartitionType.isExpressionOrSecondaryIndex(partition)) {
           metaClient.deleteIndexDefinition(partition);
         }
       });

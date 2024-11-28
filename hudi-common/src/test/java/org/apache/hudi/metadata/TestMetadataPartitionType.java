@@ -229,7 +229,7 @@ public class TestMetadataPartitionType {
   @Test
   public void testIndexNameWithoutPrefix() {
     for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
-      String userIndexName = MetadataPartitionType.isGenericIndex(partitionType.getPartitionPath()) ? "idx" : "";
+      String userIndexName = MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath()) ? "idx" : "";
       HoodieIndexDefinition indexDefinition = createIndexDefinition(partitionType, userIndexName);
       assertEquals(partitionType.getIndexNameWithoutPrefix(indexDefinition), userIndexName);
     }
@@ -246,20 +246,20 @@ public class TestMetadataPartitionType {
   }
 
   @Test
-  public void testIsGenericIndex() {
-    assertTrue(MetadataPartitionType.isGenericIndex("expr_index_"));
-    assertTrue(MetadataPartitionType.isGenericIndex("expr_index_idx"));
-    assertTrue(MetadataPartitionType.isGenericIndex("secondary_index_"));
-    assertTrue(MetadataPartitionType.isGenericIndex("secondary_index_idx"));
+  public void testIsExpressionOrSecondaryIndex() {
+    assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("expr_index_"));
+    assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("expr_index_idx"));
+    assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index_"));
+    assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index_idx"));
 
-    assertFalse(MetadataPartitionType.isGenericIndex("expr_index"));
-    assertFalse(MetadataPartitionType.isGenericIndex("expr_indexidx"));
-    assertFalse(MetadataPartitionType.isGenericIndex("secondary_index"));
-    assertFalse(MetadataPartitionType.isGenericIndex("secondary_indexidx"));
+    assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex("expr_index"));
+    assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex("expr_indexidx"));
+    assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index"));
+    assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_indexidx"));
 
     for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
       if (partitionType != MetadataPartitionType.EXPRESSION_INDEX && partitionType != MetadataPartitionType.SECONDARY_INDEX) {
-        assertFalse(MetadataPartitionType.isGenericIndex(partitionType.getPartitionPath()));
+        assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath()));
       }
     }
   }

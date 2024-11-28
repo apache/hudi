@@ -261,7 +261,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(expr='random')"
           checkNestedException(createIndexSql) ("Unsupported Spark function: random")
           createIndexSql = s"create index name_lower on $tableName using column_stats(ts)"
-          checkException(createIndexSql) ("Currently Column stats Index can only be created with a non identity expression")
+          checkException(createIndexSql) ("Column stats index without expression on any column can be created using datasource configs. " +
+            "Please refer https://hudi.apache.org/docs/metadata for more info")
           createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')"
           spark.sql(createIndexSql)
           metaClient = createMetaClient(spark, basePath)

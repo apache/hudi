@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.catalyst.analysis.Analyzer
@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, DropIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 
 class TestIndexSyntax extends HoodieSparkSqlTestBase {
 
@@ -92,7 +92,7 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Create Index Syntax with Simple record key") {
+  test("Test Create and Drop Index Syntax with Simple record key") {
     if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
@@ -149,7 +149,7 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Create Index Syntax with Complex record key") {
+  test("Test Create and Drop Index Syntax with Complex record key") {
     if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
@@ -181,7 +181,7 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
           spark.sql("set hoodie.metadata.record.index.enable=true")
 
           checkException(s"create index record_index on $tableName (price)")(
-            "Index can be only be created on all record key columns. Configured record key fields Set(id, price)"
+            "Index can be only be created on all record key columns. Configured record key fields Set(id, price). Input columns: Set(price)"
           )
           checkException(s"create index record_index on $tableName (id,ts)") (
             "Index can be created either on all record key columns or a non record key column"
@@ -196,6 +196,48 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         }
       }
     }
+  }
+
+  test("Test matchesRecordKeys API") {
+    val tableConfig = new HoodieTableConfig()
+
+    // Test with simple record key
+    tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "rk1")
+
+    var colNames:Set[String] = Set("rk1")
+    assertTrue(CreateIndexCommand.matchesRecordKeys(colNames, tableConfig))
+    colNames = Set("col1")
+    assertFalse(CreateIndexCommand.matchesRecordKeys(colNames, tableConfig))
+    colNames = Set()
+    assertFalse(CreateIndexCommand.matchesRecordKeys(colNames, tableConfig))
+    colNames = Set("rk1", "col1")
+    checkException(() => CreateIndexCommand.matchesRecordKeys(colNames, tableConfig)) (
+      "Index can be created either on all record key columns or a non record key column"
+    )
+
+    // Test with complex record key
+    tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "rk1,rk2")
+
+    colNames = Set("rk1", "rk2")
+    assertTrue(CreateIndexCommand.matchesRecordKeys(colNames, tableConfig))
+    colNames = Set("rk1")
+    checkException(() => CreateIndexCommand.matchesRecordKeys(colNames, tableConfig))(
+      "Index can be only be created on all record key columns. Configured record key fields Set(rk1, rk2). Input columns: Set(rk1)"
+    )
+    colNames = Set()
+    assertFalse(CreateIndexCommand.matchesRecordKeys(colNames, tableConfig))
+    colNames = Set("col1")
+    assertFalse(CreateIndexCommand.matchesRecordKeys(colNames, tableConfig))
+    colNames = Set("col1", "col2")
+    assertFalse(CreateIndexCommand.matchesRecordKeys(colNames, tableConfig))
+    colNames = Set("rk1", "col1")
+    checkException(() => CreateIndexCommand.matchesRecordKeys(colNames, tableConfig)) (
+      "Index can be created either on all record key columns or a non record key column"
+    )
+    colNames = Set("rk1", "rk2", "col1")
+    checkException(() => CreateIndexCommand.matchesRecordKeys(colNames, tableConfig)) (
+      "Index can be created either on all record key columns or a non record key column"
+    )
   }
 
   private def assertTableIdentifier(catalogTable: CatalogTable, expectedDatabaseName: String, expectedTableName: String): Unit = {

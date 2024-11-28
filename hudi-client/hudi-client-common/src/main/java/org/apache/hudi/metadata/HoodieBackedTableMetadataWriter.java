@@ -543,7 +543,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                                             HoodieIndexDefinition indexDefinition);
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeExpressionIndexPartition(String indexName, String instantTime) throws Exception {
-    HoodieIndexDefinition indexDefinition = getExpressionIndexDefinition(indexName);
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
     ValidationUtils.checkState(indexDefinition != null, "Expression Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
     List<Pair<String, Pair<String, Long>>> partitionFilePathSizeTriplet = new ArrayList<>();
@@ -566,7 +566,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return Pair.of(fileGroupCount, getExpressionIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime));
   }
 
-  private HoodieIndexDefinition getExpressionIndexDefinition(String indexName) {
+  private HoodieIndexDefinition getIndexDefinition(String indexName) {
     Option<HoodieIndexMetadata> expressionIndexMetadata = dataMetaClient.getIndexMetadata();
     if (expressionIndexMetadata.isPresent()) {
       return expressionIndexMetadata.get().getIndexDefinitions().get(indexName);
@@ -590,7 +590,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeSecondaryIndexPartition(String indexName) throws IOException {
-    HoodieIndexDefinition indexDefinition = getExpressionIndexDefinition(indexName);
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
 
@@ -1115,7 +1115,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param instantTime    timestamp at of the current update commit
    */
   private HoodieData<HoodieRecord> getExpressionIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
-    HoodieIndexDefinition indexDefinition = getExpressionIndexDefinition(indexPartition);
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
     List<Pair<String, Pair<String, Long>>> partitionFilePathPairs = new ArrayList<>();
     commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> writeStats.forEach(writeStat -> partitionFilePathPairs.add(
         Pair.of(writeStat.getPartitionPath(), Pair.of(new StoragePath(dataMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileSizeInBytes())))));
@@ -1159,7 +1159,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     List<String> keysToRemove = HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(engineContext, commitMetadata, dataWriteConfig.getMetadataConfig(),
         dataMetaClient, instantTime);
 
-    HoodieIndexDefinition indexDefinition = getExpressionIndexDefinition(indexPartition);
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
     // Fetch the secondary keys that each of the record keys ('keysToRemove') maps to
     // This is obtained by scanning the entire secondary index partition in the metadata table
     // This could be an expensive operation for a large commit (updating/deleting millions of rows)
