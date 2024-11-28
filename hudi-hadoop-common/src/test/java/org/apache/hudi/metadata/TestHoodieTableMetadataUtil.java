@@ -273,13 +273,17 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         metaClient,
         Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS));
     // Validate the result.
-    validatePartitionStats(result, instant1, instant2);
+    validatePartitionStats(result, instant1, instant2, 6);
   }
 
   private static void validatePartitionStats(HoodieData<HoodieRecord> result, String instant1, String instant2) {
+    validatePartitionStats(result, instant1, instant2, 15);
+  }
+
+  private static void validatePartitionStats(HoodieData<HoodieRecord> result, String instant1, String instant2, int expectedTotalRecords) {
     List<HoodieRecord> records = result.collectAsList();
     // 3 partitions * (2 + 3) columns = 15 partition stats records. 3 meta fields are indexed by default.
-    assertEquals(15, records.size());
+    assertEquals(expectedTotalRecords, records.size());
     assertEquals(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), records.get(0).getPartitionPath());
     ((HoodieMetadataPayload) result.collectAsList().get(0).getData()).getColumnStatMetadata().get().getColumnName();
     records.forEach(r -> {
