@@ -177,13 +177,7 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
                   }
                 ).foreach {
                   case (exp: Expression, recKeys: List[String]) =>
-                    exp match {
-                      // For IN, add each element individually to recordKeys
-                      case _: In => recordKeys = recordKeys ++ recKeys
-
-                      // For other cases, basically EqualTo, concatenate recKeys with the default separator
-                      case _ => recordKeys = recordKeys ++ recKeys
-                    }
+                    recordKeys = recordKeys ++ recKeys
                     recordKeyQueries = recordKeyQueries :+ exp
                 }
               }

@@ -25,8 +25,8 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.model.HoodieTableQueryType.SNAPSHOT
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.table.timeline.InstantComparison
+import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
@@ -148,19 +148,15 @@ object RecordLevelIndexSupport {
 
   def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String],
                                literalGenerator: Function2[AttributeReference, Literal, String]): Option[(Expression, List[String])] = {
-    filterQueryWithRecordKey(queryFilter, recordKeyOpt, literalGenerator, getDefaultAttributeFetcher())
+    filterQueryWithRecordKey(queryFilter, recordKeyOpt, literalGenerator, getDefaultAttributeFetcher())._1
   }
 
   def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], attributeFetcher: Function1[Expression, Expression]): Option[(Expression, List[String])] = {
-    filterQueryWithRecordKey(queryFilter, recordKeyOpt, getSimpleLiteralGenerator(), attributeFetcher)
-  }
-
-  def isSupported(expr: Expression): Boolean = {
-    expr.isInstanceOf[In] || expr.isInstanceOf[EqualTo] || expr.isInstanceOf[And]
+    filterQueryWithRecordKey(queryFilter, recordKeyOpt, getSimpleLiteralGenerator(), attributeFetcher)._1
   }
 
   def filterQueryWithRecordKey(queryFilter: Expression, recordKeyOpt: Option[String], literalGenerator: Function2[AttributeReference, Literal, String],
-                               attributeFetcher: Function1[Expression, Expression]): Option[(Expression, List[String])] = {
+                               attributeFetcher: Function1[Expression, Expression]): (Option[(Expression, List[String])], Boolean) = {
     queryFilter match {
       case equalToQuery: EqualTo =>
         val attributeLiteralTuple = getAttributeLiteralTuple(attributeFetcher.apply(equalToQuery.left), attributeFetcher.apply(equalToQuery.right)).orNull
@@ -169,12 +165,12 @@ object RecordLevelIndexSupport {
           val literal = attributeLiteralTuple._2
           if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
             val recordKeyLiteral = literalGenerator.apply(attribute, literal)
-            Option.apply(equalToQuery, List.apply(recordKeyLiteral))
+            (Option.apply(equalToQuery, List.apply(recordKeyLiteral)), true)
           } else {
-            Option.empty
+            (Option.empty, true)
           }
         } else {
-          Option.empty
+          (Option.empty, true)
         }
 
       case inQuery: In =>
@@ -200,35 +196,36 @@ object RecordLevelIndexSupport {
           case _ => validINQuery = false
         }
         if (validINQuery) {
-          Option.apply(inQuery, literals)
+          (Option.apply(inQuery, literals), true)
         } else {
-          Option.empty
+          (Option.empty, true)
         }
 
       // Handle And expression (composite filter)
       case andQuery: And =>
-        if (!isSupported(andQuery.left) || !isSupported(andQuery.right)) {
-          Option.empty
-        } else {
-          val leftResult = filterQueryWithRecordKey(andQuery.left, recordKeyOpt, literalGenerator, attributeFetcher)
-          val rightResult = filterQueryWithRecordKey(andQuery.right, recordKeyOpt, literalGenerator, attributeFetcher)
+        val leftResult = filterQueryWithRecordKey(andQuery.left, recordKeyOpt, literalGenerator, attributeFetcher)
+        val rightResult = filterQueryWithRecordKey(andQuery.right, recordKeyOpt, literalGenerator, attributeFetcher)
 
+        val isSupported = leftResult._2 && rightResult._2
+        if (!isSupported) {
+          (Option.empty, false)
+        } else {
           // If both left and right filters are valid, concatenate their results
-          (leftResult, rightResult) match {
+          (leftResult._1, rightResult._1) match {
             case (Some((leftExp, leftKeys)), Some((rightExp, rightKeys))) =>
               // Return concatenated expressions and record keys
-              Option.apply(And(leftExp, rightExp), leftKeys ++ rightKeys)
+              (Option.apply(And(leftExp, rightExp), leftKeys ++ rightKeys), true)
             case (Some((leftExp, leftKeys)), None) =>
               // Return concatenated expressions and record keys
-              Option.apply(leftExp, leftKeys)
+              (Option.apply(leftExp, leftKeys), true)
             case (None, Some((rightExp, rightKeys))) =>
               // Return concatenated expressions and record keys
-              Option.apply(rightExp, rightKeys)
-            case _ => Option.empty
+              (Option.apply(rightExp, rightKeys), true)
+            case _ => (Option.empty, true)
           }
         }
 
-      case _ => Option.empty
+      case _ => (Option.empty, false)
     }
   }
 
