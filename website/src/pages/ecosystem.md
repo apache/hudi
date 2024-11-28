@@ -37,3 +37,5 @@ In such cases, you can leverage another tool like Apache Spark or Apache Flink t
 | Apache Doris      | [Read](https://doris.apache.org/docs/ecosystem/external-table/hudi-external-table/)                                      |             |
 | Starrocks         | [Read](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/)                                                 | [Demo with HMS + Min.IO](https://github.com/StarRocks/demo/tree/master/documentation-samples/hudi)            |
 | Dremio            |                                                                                                                          |             |
+| Daft              | [Read](https://www.getdaft.io/projects/docs/en/stable/user_guide/integrations/hudi.html)                                 |             |
+| Ray Data          | [Read](https://docs.ray.io/en/master/data/api/input_output.html#hudi)                                                    |             |
