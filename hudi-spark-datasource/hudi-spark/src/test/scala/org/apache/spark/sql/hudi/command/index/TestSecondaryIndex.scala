@@ -92,15 +92,20 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             Seq("record_index", "record_index", "")
           )
 
-          spark.sql(s"create index idx_name on $tableName using secondary_index(name)")
+          // Secondary index can not be created for two columns at once
+          checkException(s"create index idx_name_price on $tableName (name,price)")(
+            "Only one column can be indexed for functional or secondary index."
+          )
+          // Secondary index is created by default for non record key column when index type is not specified
+          spark.sql(s"create index idx_name on $tableName (name)")
           checkAnswer(s"show indexes from default.$tableName")(
             Seq("secondary_index_idx_name", "secondary_index", "name"),
             Seq("record_index", "record_index", "")
           )
 
-          spark.sql(s"create index idx_price on $tableName using secondary_index(price)")
+          spark.sql(s"create index idx_price on $tableName (price)")
           // Create an index with the occupied name
-          checkException(s"create index idx_price on $tableName using secondary_index(price)")(
+          checkException(s"create index idx_price on $tableName (price)")(
             "Index already exists: idx_price"
           )
 
@@ -121,7 +126,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           // can not drop already dropped index
           checkException(s"drop index idx_name on $tableName")("Index does not exist: idx_name")
           // create index again
-          spark.sql(s"create index idx_name on $tableName using secondary_index(name)")
+          spark.sql(s"create index idx_name on $tableName (name)")
           // drop index should work now
           checkAnswer(s"drop index idx_name on $tableName")()
           checkAnswer(s"show indexes from $tableName")(
@@ -151,7 +156,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
           checkException(s"drop index idx_price on $tableName")("Index does not exist: idx_price")
 
-          checkExceptionContain(s"create index idx_price_1 on $tableName using secondary_index(field_not_exist)")(
+          checkExceptionContain(s"create index idx_price_1 on $tableName (field_not_exist)")(
             "Missing field field_not_exist"
           )
         }
@@ -178,7 +183,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             .build()
           assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
           // create secondary index
-          spark.sql(s"create index idx_city on $tableName using secondary_index(city)")
+          spark.sql(s"create index idx_city on $tableName (city)")
           metaClient = HoodieTableMetaClient.builder()
             .setBasePath(basePath)
             .setConf(HoodieTestUtils.getDefaultStorageConf)
@@ -214,7 +219,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             .build()
           assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
           // create secondary index throws error when trying to create on multiple fields at a time
-          checkException(sql = s"create index idx_city on $tableName using secondary_index(city,state)")(
+          checkException(sql = s"create index idx_city on $tableName (city,state)")(
             "Only one column can be indexed for functional or secondary index."
           )
         }
@@ -272,7 +277,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             .build()
           assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
           // create secondary index throws error when trying to create on multiple fields at a time
-          checkException(sql = s"create index idx_city on $tableName using secondary_index(city)")(
+          checkException(sql = s"create index idx_city on $tableName (city)")(
             "Secondary Index can only be enabled on table with OverwriteWithLatestAvroPayload payload class or Merge mode set to OVERWRITE_WITH_LATEST"
           )
         }
@@ -518,7 +523,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
     // Step 2: Create table and secondary index on 'rider' column
     spark.sql(s"CREATE TABLE $tableName USING hudi LOCATION '$basePath'")
-    spark.sql(s"create index idx_rider on $tableName using secondary_index(rider)")
+    spark.sql(s"create index idx_rider on $tableName (rider)")
     hudiOpts
   }
 

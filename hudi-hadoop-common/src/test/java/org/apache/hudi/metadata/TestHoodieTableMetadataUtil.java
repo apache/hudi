@@ -329,8 +329,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     result = getFileIDForFileGroup(MetadataPartitionType.SECONDARY_INDEX, 6, "secondary_index_idx_ts");
     assertEquals("secondary-index-idx-ts-0006-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.FUNCTIONAL_INDEX, 5, "func_index_ts");
-    assertEquals("func-index-ts-0005-0", result);
+    result = getFileIDForFileGroup(MetadataPartitionType.EXPRESSION_INDEX, 5, "expr_index_ts");
+    assertEquals("expr-index-ts-0005-0", result);
   }
 
   @Test

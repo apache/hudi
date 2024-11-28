@@ -293,7 +293,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
 
     // create secondary index
-    sparkSession.sql("create index idx_not_record_key_col on tbl using secondary_index(not_record_key_col)");
+    sparkSession.sql("create index idx_not_record_key_col on tbl (not_record_key_col)");
     validateSecondaryIndex();
 
     // updating record `not_record_key_col` column from `abc` to `cde`

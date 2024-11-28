@@ -316,26 +316,26 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
-  public static final ConfigProperty<Boolean> FUNCTIONAL_INDEX_ENABLE_PROP = ConfigProperty
+  public static final ConfigProperty<Boolean> EXPRESSION_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.functional.enable")
       .defaultValue(false)
       .sinceVersion("1.0.0")
-      .withDocumentation("Enable functional index within the Metadata Table. Note that this config is to enable/disable all functional indexes. "
-          + "To enable or disable each functional index individually, users still need to use CREATE/DROP INDEX SQL commands.");
+      .withDocumentation("Enable expression index within the Metadata Table. Note that this config is to enable/disable all expression indexes. "
+          + "To enable or disable each expression index individually, users still need to use CREATE/DROP INDEX SQL commands.");
 
-  public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_FILE_GROUP_COUNT = ConfigProperty
+  public static final ConfigProperty<Integer> EXPRESSION_INDEX_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.functional.file.group.count")
       .defaultValue(2)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("Metadata functional index partition file group count.");
+      .withDocumentation("Metadata expression index partition file group count.");
 
-  public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_PARALLELISM = ConfigProperty
+  public static final ConfigProperty<Integer> EXPRESSION_INDEX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".index.functional.parallelism")
       .defaultValue(200)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("Parallelism to use, when generating functional index.");
+      .withDocumentation("Parallelism to use, when generating expression index.");
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
@@ -501,16 +501,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(AUTO_INITIALIZE);
   }
 
-  public boolean isFunctionalIndexEnabled() {
-    return getBooleanOrDefault(FUNCTIONAL_INDEX_ENABLE_PROP);
+  public boolean isExpressionIndexEnabled() {
+    return getBooleanOrDefault(EXPRESSION_INDEX_ENABLE_PROP);
   }
 
-  public int getFunctionalIndexFileGroupCount() {
-    return getInt(FUNCTIONAL_INDEX_FILE_GROUP_COUNT);
+  public int getExpressionIndexFileGroupCount() {
+    return getInt(EXPRESSION_INDEX_FILE_GROUP_COUNT);
   }
 
-  public int getFunctionalIndexParallelism() {
-    return getInt(FUNCTIONAL_INDEX_PARALLELISM);
+  public int getExpressionIndexParallelism() {
+    return getInt(EXPRESSION_INDEX_PARALLELISM);
   }
 
   public boolean isPartitionStatsIndexEnabled() {
@@ -711,13 +711,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withFunctionalIndexFileGroupCount(int fileGroupCount) {
-      metadataConfig.setValue(FUNCTIONAL_INDEX_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+    public Builder withExpressionIndexFileGroupCount(int fileGroupCount) {
+      metadataConfig.setValue(EXPRESSION_INDEX_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
       return this;
     }
 
-    public Builder withFunctionalIndexParallelism(int parallelism) {
-      metadataConfig.setValue(FUNCTIONAL_INDEX_PARALLELISM, String.valueOf(parallelism));
+    public Builder withExpressionIndexParallelism(int parallelism) {
+      metadataConfig.setValue(EXPRESSION_INDEX_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 

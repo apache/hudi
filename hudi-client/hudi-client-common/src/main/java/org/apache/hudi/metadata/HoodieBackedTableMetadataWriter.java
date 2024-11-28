@@ -109,7 +109,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForFunctionalIndex;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFromBaseFiles;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromBaseFiles;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromFileSlices;
@@ -419,14 +419,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             fileGroupCountAndRecordsPair = initializeRecordIndexPartition();
             partitionName = RECORD_INDEX.getPartitionPath();
             break;
-          case FUNCTIONAL_INDEX:
-            Set<String> functionalIndexPartitionsToInit = getIndexPartitionsToInit(partitionType);
-            if (functionalIndexPartitionsToInit.isEmpty()) {
+          case EXPRESSION_INDEX:
+            Set<String> expressionIndexPartitionsToInit = getIndexPartitionsToInit(partitionType);
+            if (expressionIndexPartitionsToInit.isEmpty()) {
               continue;
             }
-            ValidationUtils.checkState(functionalIndexPartitionsToInit.size() == 1, "Only one functional index at a time is supported for now");
-            partitionName = functionalIndexPartitionsToInit.iterator().next();
-            fileGroupCountAndRecordsPair = initializeFunctionalIndexPartition(partitionName, instantTimeForPartition);
+            ValidationUtils.checkState(expressionIndexPartitionsToInit.size() == 1, "Only one expression index at a time is supported for now");
+            partitionName = expressionIndexPartitionsToInit.iterator().next();
+            fileGroupCountAndRecordsPair = initializeExpressionIndexPartition(partitionName, instantTimeForPartition);
             break;
           case PARTITION_STATS:
             fileGroupCountAndRecordsPair = initializePartitionStatsIndex(partitionInfoList);
@@ -529,7 +529,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return Pair.of(fileGroupCount, records);
   }
 
-  protected abstract HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
+  protected abstract HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
                                                                         HoodieIndexDefinition indexDefinition,
                                                                         HoodieTableMetaClient metaClient,
                                                                         int parallelism, Schema readerSchema,
@@ -542,9 +542,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                                             Map<String, String> recordKeySecondaryKeyMap,
                                                                             HoodieIndexDefinition indexDefinition);
 
-  private Pair<Integer, HoodieData<HoodieRecord>> initializeFunctionalIndexPartition(String indexName, String instantTime) throws Exception {
-    HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexName);
-    ValidationUtils.checkState(indexDefinition != null, "Functional Index definition is not present for index " + indexName);
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeExpressionIndexPartition(String indexName, String instantTime) throws Exception {
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
+    ValidationUtils.checkState(indexDefinition != null, "Expression Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
     List<Pair<String, Pair<String, Long>>> partitionFilePathSizeTriplet = new ArrayList<>();
     partitionFileSlicePairs.forEach(entry -> {
@@ -560,18 +560,18 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       });
     });
 
-    int fileGroupCount = dataWriteConfig.getMetadataConfig().getFunctionalIndexFileGroupCount();
-    int parallelism = Math.min(partitionFilePathSizeTriplet.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
-    Schema readerSchema = getProjectedSchemaForFunctionalIndex(indexDefinition, dataMetaClient);
-    return Pair.of(fileGroupCount, getFunctionalIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime));
+    int fileGroupCount = dataWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
+    int parallelism = Math.min(partitionFilePathSizeTriplet.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
+    Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient);
+    return Pair.of(fileGroupCount, getExpressionIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime));
   }
 
-  private HoodieIndexDefinition getFunctionalIndexDefinition(String indexName) {
-    Option<HoodieIndexMetadata> functionalIndexMetadata = dataMetaClient.getIndexMetadata();
-    if (functionalIndexMetadata.isPresent()) {
-      return functionalIndexMetadata.get().getIndexDefinitions().get(indexName);
+  private HoodieIndexDefinition getIndexDefinition(String indexName) {
+    Option<HoodieIndexMetadata> expressionIndexMetadata = dataMetaClient.getIndexMetadata();
+    if (expressionIndexMetadata.isPresent()) {
+      return expressionIndexMetadata.get().getIndexDefinitions().get(indexName);
     } else {
-      throw new HoodieIndexException("Functional Index definition is not present");
+      throw new HoodieIndexException("Expression Index definition is not present");
     }
   }
 
@@ -590,7 +590,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeSecondaryIndexPartition(String indexName) throws IOException {
-    HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexName);
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
 
@@ -1061,7 +1061,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()), commitMetadata);
         partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()).union(additionalUpdates));
       }
-      updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
+      updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
       updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
       return partitionToRecordMap;
     });
@@ -1080,48 +1080,48 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               dataWriteConfig.getWritesFileIdEncoding(), dataWriteConfig.getMetadataConfig());
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(records, commitMetadata);
       partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), records.union(additionalUpdates));
-      updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
+      updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
       return partitionToRecordMap;
     });
     closeInternal();
   }
 
   /**
-   * Update functional index from {@link HoodieCommitMetadata}.
+   * Update expression index from {@link HoodieCommitMetadata}.
    */
-  private void updateFunctionalIndexIfPresent(HoodieCommitMetadata commitMetadata, String instantTime, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap) {
-    if (!MetadataPartitionType.FUNCTIONAL_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
+  private void updateExpressionIndexIfPresent(HoodieCommitMetadata commitMetadata, String instantTime, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap) {
+    if (!MetadataPartitionType.EXPRESSION_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
       return;
     }
     dataMetaClient.getTableConfig().getMetadataPartitions()
         .stream()
-        .filter(partition -> partition.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX))
+        .filter(partition -> partition.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX))
         .forEach(partition -> {
-          HoodieData<HoodieRecord> functionalIndexRecords;
+          HoodieData<HoodieRecord> expressionIndexRecords;
           try {
-            functionalIndexRecords = getFunctionalIndexUpdates(commitMetadata, partition, instantTime);
+            expressionIndexRecords = getExpressionIndexUpdates(commitMetadata, partition, instantTime);
           } catch (Exception e) {
-            throw new HoodieMetadataException(String.format("Failed to get functional index updates for partition %s", partition), e);
+            throw new HoodieMetadataException(String.format("Failed to get expression index updates for partition %s", partition), e);
           }
-          partitionToRecordMap.put(partition, functionalIndexRecords);
+          partitionToRecordMap.put(partition, expressionIndexRecords);
         });
   }
 
   /**
-   * Loads the file slices touched by the commit due to given instant time and returns the records for the functional index.
+   * Loads the file slices touched by the commit due to given instant time and returns the records for the expression index.
    *
    * @param commitMetadata {@code HoodieCommitMetadata}
-   * @param indexPartition partition name of the functional index
+   * @param indexPartition partition name of the expression index
    * @param instantTime    timestamp at of the current update commit
    */
-  private HoodieData<HoodieRecord> getFunctionalIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
-    HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
+  private HoodieData<HoodieRecord> getExpressionIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
     List<Pair<String, Pair<String, Long>>> partitionFilePathPairs = new ArrayList<>();
     commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> writeStats.forEach(writeStat -> partitionFilePathPairs.add(
         Pair.of(writeStat.getPartitionPath(), Pair.of(new StoragePath(dataMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileSizeInBytes())))));
-    int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
-    Schema readerSchema = getProjectedSchemaForFunctionalIndex(indexDefinition, dataMetaClient);
-    return getFunctionalIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime);
+    int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
+    Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient);
+    return getExpressionIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime);
   }
 
   private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap,
@@ -1159,7 +1159,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     List<String> keysToRemove = HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(engineContext, commitMetadata, dataWriteConfig.getMetadataConfig(),
         dataMetaClient, instantTime);
 
-    HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
     // Fetch the secondary keys that each of the record keys ('keysToRemove') maps to
     // This is obtained by scanning the entire secondary index partition in the metadata table
     // This could be an expensive operation for a large commit (updating/deleting millions of rows)

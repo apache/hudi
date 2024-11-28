@@ -79,7 +79,7 @@ class TestEightToSevenDowngradeHandler {
   private File baseDir;
 
   private static final List<String> SAMPLE_METADATA_PATHS = Arrays.asList(
-      "func_index_random",
+      "expr_index_random",
       "secondary_index_random",
       "partition_stats",
       FILES.getPartitionPath(),
@@ -108,7 +108,7 @@ class TestEightToSevenDowngradeHandler {
 
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              metaClient, context, "func_index_random", true),
+              metaClient, context, "expr_index_random", true),
           times(1));
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(

@@ -63,7 +63,7 @@ class SecondaryIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Return true if metadata table is enabled and functional index metadata partition is available.
+   * Return true if metadata table is enabled and expression index metadata partition is available.
    */
   override def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled && metaClient.getIndexMetadata.isPresent && !metaClient.getIndexMetadata.get().getIndexDefinitions.isEmpty
@@ -98,7 +98,7 @@ class SecondaryIndexSupport(spark: SparkSession,
 
   /**
    * Returns the configured secondary key for the table
-   * TODO: [HUDI-8302] Handle multiple secondary indexes (similar to functional index)
+   * TODO: [HUDI-8302] Handle multiple secondary indexes (similar to expression index)
    */
   private def getSecondaryKeyConfig(queryReferencedColumns: Seq[String],
                                     metaClient: HoodieTableMetaClient): Option[(String, String)] = {
