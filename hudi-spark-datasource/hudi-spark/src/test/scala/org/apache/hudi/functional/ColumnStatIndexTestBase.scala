@@ -237,7 +237,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, convertScalaListToJavaList(sourceTableSchema.fieldNames)).asScala.toSet
 
     val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
-    val validationSortColumns = if (expectedColStatsSchema.fieldNames.contains("c5")) {
+    val validationSortColumns = if (indexedColumns.contains("c5")) {
       Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue",
       "c3_minValue", "c5_maxValue", "c5_minValue")
     } else {
