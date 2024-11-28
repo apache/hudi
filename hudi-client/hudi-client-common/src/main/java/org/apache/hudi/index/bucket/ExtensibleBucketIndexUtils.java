@@ -98,14 +98,27 @@ public class ExtensibleBucketIndexUtils {
     return new ExtensibleBucketIdentifier(metadata, false, bucketIdToFileIdMapping);
   }
 
+  /**
+   * Load or create metadata for the given partition.
+   */
   public static HoodieExtensibleBucketMetadata loadOrCreateMetadata(HoodieTable table, String partition) {
+    int bucketNum = table.getMetaClient().getTableConfig().getInitialBucketNumberForNewPartition();
+    return loadOrCreateMetadata(table, partition, bucketNum);
+  }
+
+  /**
+   * Load or create metadata for the given partition using the given bucket number.
+   * @param table Hoodie table
+   * @param partition Partition path
+   * @param bucketNum Initial bucket number
+   */
+  public static HoodieExtensibleBucketMetadata loadOrCreateMetadata(HoodieTable table, String partition, int bucketNum) {
     Option<HoodieExtensibleBucketMetadata> metadataOpt = loadMetadata(table, partition);
     if (metadataOpt.isPresent()) {
       return metadataOpt.get();
     }
 
     LOG.info("Failed to load extensible bucket metadata for partition " + partition + ". Creating new metadata");
-    int bucketNum = table.getMetaClient().getTableConfig().getInitialBucketNumberForNewPartition();
     HoodieExtensibleBucketMetadata metadata = HoodieExtensibleBucketMetadata.initialVersionMetadata(partition, bucketNum);
     if (saveMetadata(table, metadata, false)) {
       return metadata;
@@ -157,7 +170,7 @@ public class ExtensibleBucketIndexUtils {
       // max committed metadata file
       final String maxCommitMetaFileTs = commitMetaTss.isEmpty() ? null : commitMetaTss.last();
       // max updated metadata file
-      StoragePathInfo maxMetadataFile = hashingMetaFiles.size() > 0 ? hashingMetaFiles.get(hashingMetaFiles.size() - 1] : null;
+      StoragePathInfo maxMetadataFile = hashingMetaFiles.size() > 0 ? hashingMetaFiles.get(hashingMetaFiles.size() - 1) : null;
       // If single file present in metadata and if its default file return it
       if (maxMetadataFile != null && HoodieExtensibleBucketMetadata.getInstantFromFile(maxMetadataFile.getPath().getName()).equals(HoodieTimeline.INIT_INSTANT_TS)) {
         return loadMetadataFromGivenFile(table, maxMetadataFile);
@@ -212,7 +225,8 @@ public class ExtensibleBucketIndexUtils {
    */
   private static void createCommitMarker(HoodieTable table, StoragePath fileStatus, StoragePath metadataPartitionPath) throws IOException {
     HoodieStorage storage = table.getStorage();
-    StoragePath fullPath = new StoragePath(metadataPartitionPath, HoodieExtensibleBucketMetadata.getInstantFromFile(fileStatus.getName()) + HoodieExtensibleBucketMetadata.BUCKET_METADATA_COMMIT_FILE_SUFFIX);
+    StoragePath fullPath = new StoragePath(metadataPartitionPath,
+        HoodieExtensibleBucketMetadata.getInstantFromFile(fileStatus.getName()) + HoodieExtensibleBucketMetadata.BUCKET_METADATA_COMMIT_FILE_SUFFIX);
     if (storage.exists(fullPath)) {
       return;
     }

@@ -544,9 +544,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           case COPY_ON_WRITE:
             throw new HoodieNotSupportedException("Extensible Bucket is not supported for Copy on Write tables");
           case MERGE_ON_READ:
-            syncClient.updateSimpleToExtensibleBucket(snapshotTableName, initialBucketNum);
+            syncClient.updateExtensibleBucketMetadata(snapshotTableName, initialBucketNum);
             if (roTableName.isPresent()) {
-              syncClient.updateSimpleToExtensibleBucket(roTableName.get(), initialBucketNum);
+              syncClient.updateExtensibleBucketMetadata(roTableName.get(), initialBucketNum);
             }
             break;
           default:
@@ -556,14 +556,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       }
     } catch (RuntimeException e) {
       throw new HoodieException("Got runtime exception when convert bucket layout from simple-bucket to extensible-bucket " + tableName, e);
-    } finally {
-      if (syncClient != null) {
-        try {
-          syncClient.close();
-        } catch (Exception e) {
-          throw new HoodieException("SyncClient shutdown failed", e);
-        }
-      }
     }
   }
 

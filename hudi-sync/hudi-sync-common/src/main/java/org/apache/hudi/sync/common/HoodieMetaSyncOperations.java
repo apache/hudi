@@ -272,7 +272,7 @@ public interface HoodieMetaSyncOperations {
   /**
    * Update the table from simple bucket index to extensible bucket index
    */
-  default void updateSimpleToExtensibleBucket(String tableName, Integer defaultNumBuckets) {
+  default void updateExtensibleBucketMetadata(String tableName, int initialBucketNum) {
 
   }
 }
