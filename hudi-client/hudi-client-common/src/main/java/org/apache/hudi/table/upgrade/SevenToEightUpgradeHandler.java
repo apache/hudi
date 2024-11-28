@@ -82,9 +82,8 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    // If auto upgrade is disabled, set initial version and writer version to 6 and return
+    // If auto upgrade is disabled, set writer version to 6 and return
     if (!config.autoUpgrade()) {
-      setInitialVersion(config, table.getMetaClient().getTableConfig(), tablePropsToAdd);
       config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
       return tablePropsToAdd;
     }
@@ -102,9 +101,9 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     tablePropsToAdd.put(HoodieTableConfig.TIMELINE_PATH, HoodieTableConfig.TIMELINE_PATH.defaultValue());
     upgradePartitionFields(config, tableConfig, tablePropsToAdd);
     upgradeMergeMode(tableConfig, tablePropsToAdd);
-    setInitialVersion(config, tableConfig, tablePropsToAdd);
-    upgradeKeyGeneratorType(config, tableConfig, tablePropsToAdd);
-    upgradeBootstrapIndexType(config, tableConfig, tablePropsToAdd);
+    setInitialVersion(tableConfig, tablePropsToAdd);
+    upgradeKeyGeneratorType(tableConfig, tablePropsToAdd);
+    upgradeBootstrapIndexType(tableConfig, tablePropsToAdd);
 
     // Handle timeline upgrade:
     //  - Rewrite instants in active timeline to new format
@@ -162,7 +161,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  static void setInitialVersion(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+  static void setInitialVersion(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     if (tableConfig.contains(HoodieTableConfig.VERSION)) {
       tablePropsToAdd.put(HoodieTableConfig.INITIAL_VERSION, String.valueOf(tableConfig.getTableVersion().versionCode()));
     } else {
@@ -170,7 +169,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  static void upgradeBootstrapIndexType(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+  static void upgradeBootstrapIndexType(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     if (tableConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME) || tableConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_TYPE)) {
       String bootstrapIndexClass = BootstrapIndexType.getBootstrapIndexClassName(tableConfig);
       if (StringUtils.nonEmpty(bootstrapIndexClass)) {
@@ -180,7 +179,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  static void upgradeKeyGeneratorType(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+  static void upgradeKeyGeneratorType(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     String keyGenerator = tableConfig.getKeyGeneratorClassName();
     if (StringUtils.nonEmpty(keyGenerator)) {
       tablePropsToAdd.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGenerator);

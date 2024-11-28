@@ -99,7 +99,7 @@ public class TestSevenToEightUpgradeHandler {
     SevenToEightUpgradeHandler.upgradePartitionFields(config, tableConfig, tablePropsToAdd);
     assertEquals("partition_field", tablePropsToAdd.get(PARTITION_FIELDS));
 
-    SevenToEightUpgradeHandler.setInitialVersion(config, tableConfig, tablePropsToAdd);
+    SevenToEightUpgradeHandler.setInitialVersion(tableConfig, tablePropsToAdd);
     assertEquals("6", tablePropsToAdd.get(INITIAL_VERSION));
 
     // Mock record merge mode configuration for merging behavior
@@ -113,12 +113,12 @@ public class TestSevenToEightUpgradeHandler {
     when(tableConfig.getBooleanOrDefault(BOOTSTRAP_INDEX_ENABLE)).thenReturn(true);
     when(tableConfig.contains(BOOTSTRAP_INDEX_CLASS_NAME)).thenReturn(true);
     when(tableConfig.getString(BOOTSTRAP_INDEX_CLASS_NAME)).thenReturn(HFileBootstrapIndex.class.getName());
-    SevenToEightUpgradeHandler.upgradeBootstrapIndexType(config, tableConfig, tablePropsToAdd);
+    SevenToEightUpgradeHandler.upgradeBootstrapIndexType(tableConfig, tablePropsToAdd);
     assertTrue(tablePropsToAdd.containsKey(BOOTSTRAP_INDEX_CLASS_NAME));
     assertTrue(tablePropsToAdd.containsKey(BOOTSTRAP_INDEX_TYPE));
 
     // Simulate key generator type upgrade
-    SevenToEightUpgradeHandler.upgradeKeyGeneratorType(config, tableConfig, tablePropsToAdd);
+    SevenToEightUpgradeHandler.upgradeKeyGeneratorType(tableConfig, tablePropsToAdd);
     assertTrue(tablePropsToAdd.containsKey(KEY_GENERATOR_CLASS_NAME));
     assertTrue(tablePropsToAdd.containsKey(KEY_GENERATOR_TYPE));
   }

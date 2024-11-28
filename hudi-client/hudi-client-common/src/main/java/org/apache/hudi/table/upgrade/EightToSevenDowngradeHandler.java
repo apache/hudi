@@ -133,8 +133,8 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     downgradePartitionFields(config, metaClient.getTableConfig(), tablePropsToAdd);
     unsetInitialVersion(metaClient.getTableConfig(), tablePropsToAdd);
     unsetRecordMergeMode(metaClient.getTableConfig(), tablePropsToAdd);
-    downgradeKeyGeneratorType(config, metaClient.getTableConfig(), tablePropsToAdd);
-    downgradeBootstrapIndexType(config, metaClient.getTableConfig(), tablePropsToAdd);
+    downgradeKeyGeneratorType(metaClient.getTableConfig(), tablePropsToAdd);
+    downgradeBootstrapIndexType(metaClient.getTableConfig(), tablePropsToAdd);
 
     // Prepare parameters.
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
@@ -172,22 +172,24 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     tableConfig.getProps().remove(HoodieTableConfig.RECORD_MERGE_MODE.key());
   }
 
-  static void downgradeBootstrapIndexType(HoodieWriteConfig config,
-                                          HoodieTableConfig tableConfig,
+  static void downgradeBootstrapIndexType(HoodieTableConfig tableConfig,
                                           Map<ConfigProperty, String> tablePropsToAdd) {
-    String bootstrapIndexClassName = BootstrapIndexType.getBootstrapIndexClassName(config);
-    if (StringUtils.nonEmpty(bootstrapIndexClassName)) {
-      tablePropsToAdd.put(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME, bootstrapIndexClassName);
+    if (tableConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME) || tableConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_TYPE)) {
+      String bootstrapIndexClassName = BootstrapIndexType.getBootstrapIndexClassName(tableConfig);
+      if (StringUtils.nonEmpty(bootstrapIndexClassName)) {
+        tablePropsToAdd.put(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME, bootstrapIndexClassName);
+      }
     }
     tableConfig.getProps().remove(HoodieTableConfig.BOOTSTRAP_INDEX_TYPE.key());
   }
 
-  static void downgradeKeyGeneratorType(HoodieWriteConfig config,
-                                        HoodieTableConfig tableConfig,
+  static void downgradeKeyGeneratorType(HoodieTableConfig tableConfig,
                                         Map<ConfigProperty, String> tablePropsToAdd) {
-    String keyGenerator = KeyGeneratorType.getKeyGeneratorClassName(config);
-    if (StringUtils.nonEmpty(keyGenerator)) {
-      tablePropsToAdd.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGenerator);
+    if (tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME) || tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE)) {
+      String keyGenerator = KeyGeneratorType.getKeyGeneratorClassName(tableConfig);
+      if (StringUtils.nonEmpty(keyGenerator)) {
+        tablePropsToAdd.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGenerator);
+      }
     }
     tableConfig.getProps().remove(HoodieTableConfig.KEY_GENERATOR_TYPE.key());
   }
