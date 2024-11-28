@@ -60,6 +60,19 @@ public class UpgradeDowngrade {
 
   public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
+    // If table version is less than SIX, then we need to upgrade to SIX first before upgrading to any other version, irrespective of autoUpgrade flag
+    if (fromTableVersion.versionCode() < HoodieTableVersion.SIX.versionCode() && toWriteVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
+      throw new HoodieUpgradeDowngradeException(
+          String.format("Please upgrade table from version %s to %s before upgrading to version %s.", fromTableVersion, HoodieTableVersion.SIX.versionCode(), toWriteVersion));
+    }
+    // If autoUpgrade is disabled and metadata is enabled, and table version is SIX or SEVEN, while toWriteVersion is EIGHT or greater, then we should disable metadata first
+    if (!config.autoUpgrade() && metaClient.getTableConfig().isMetadataTableAvailable()
+        && (fromTableVersion == HoodieTableVersion.SIX || fromTableVersion == HoodieTableVersion.SEVEN) && toWriteVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
+      throw new HoodieUpgradeDowngradeException(
+          String.format("Please disable metadata table before upgrading from version %s to %s.", fromTableVersion, toWriteVersion));
+    }
+
+    // allow upgrades/downgrades otherwise.
     return toWriteVersion.versionCode() != fromTableVersion.versionCode();
   }
 

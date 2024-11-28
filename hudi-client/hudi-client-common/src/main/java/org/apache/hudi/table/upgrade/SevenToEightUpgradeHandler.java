@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
@@ -49,6 +50,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -87,8 +90,18 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // If auto upgrade is disabled, set writer version to 6 and return
     if (!config.autoUpgrade()) {
+      /**
+       * At this point, metadata should already be disabled (see {@link UpgradeDowngrade#needsUpgradeOrDowngrade(HoodieTableVersion)}).
+       * So, check either this is a metadata table itself,  or metadata table is disabled.
+       */
+      ValidationUtils.checkState(table.isMetadataTable() || !config.isMetadataTableEnabled(), "Metadata table should be disabled to write in table version SIX using 1.0.0." + metaClient.getBasePath());
       config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
       return tablePropsToAdd;
+    }
+
+    // If metadata is enabled for the data table, and existing metadata table is behind the data table, then delete it
+    if (!table.isMetadataTable() && config.isMetadataTableEnabled() && isMetadataTableBehindDataTable(config, metaClient)) {
+      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
     }
 
     // Rollback and run compaction in one step
@@ -135,6 +148,23 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     upgradeToLSMTimeline(table, context, config);
 
     return tablePropsToAdd;
+  }
+
+  private static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+    // if metadata table does not exist, then it is not behind
+    if (!metaClient.getTableConfig().isMetadataTableAvailable()) {
+      return false;
+    }
+    // get last commit instant in data table and metadata table
+    HoodieInstant lastCommitInstantInDataTable = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance())
+        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()))
+        .build();
+    HoodieInstant lastCommitInstantInMetadataTable = metadataTableMetaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
+    // if last commit instant in data table is greater than the last commit instant in metadata table, then metadata table is behind
+    return lastCommitInstantInDataTable != null && lastCommitInstantInMetadataTable != null
+        && InstantComparison.compareTimestamps(lastCommitInstantInMetadataTable.requestedTime(), InstantComparison.LESSER_THAN, lastCommitInstantInDataTable.requestedTime());
   }
 
   static void upgradePartitionFields(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {

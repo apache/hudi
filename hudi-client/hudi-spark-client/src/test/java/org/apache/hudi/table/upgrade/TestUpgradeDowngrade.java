@@ -177,10 +177,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     addNewTableParamsToProps(params);
     HoodieWriteConfig cfg = getConfigBuilder().withAutoUpgradeVersion(false).withProps(params).build();
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX);
-    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, null);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    // table version should still be 6 because auto upgrade is false
-    assertTableVersion(metaClient, HoodieTableVersion.SIX);
+    assertThrows(IllegalStateException.class, () ->
+        new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, null)
+    );
   }
 
   @Test
