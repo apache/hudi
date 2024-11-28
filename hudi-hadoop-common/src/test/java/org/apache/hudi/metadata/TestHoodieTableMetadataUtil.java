@@ -278,8 +278,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
   private static void validatePartitionStats(HoodieData<HoodieRecord> result, String instant1, String instant2) {
     List<HoodieRecord> records = result.collectAsList();
-    // 3 partitions * 2 columns = 6 partition stats records
-    assertEquals(6, records.size());
+    // 3 partitions * (2 + 3) columns = 15 partition stats records. 3 meta fields are indexed by default.
+    assertEquals(15, records.size());
     assertEquals(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), records.get(0).getPartitionPath());
     ((HoodieMetadataPayload) result.collectAsList().get(0).getData()).getColumnStatMetadata().get().getColumnName();
     records.forEach(r -> {
@@ -478,6 +478,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("timestamp");
     expected.add("_row_key");
     expected.add("partition_path");
+    expected.add("trip_type");
     expected.add("rider");
     expected.add("driver");
     expected.add("begin_lat");
@@ -490,6 +491,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("nation");
     expected.add("current_date");
     expected.add("current_ts");
+    expected.add("height");
     expected.add("_hoodie_is_deleted");
     assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA))));
     //test with avro schema with meta cols
