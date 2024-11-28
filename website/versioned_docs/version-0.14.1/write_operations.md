@@ -101,7 +101,7 @@ The following is an inside look on the Hudi write path and the sequence of event
    1. Now that the write is performed, we will go back and update the index.
 7. Commit
    1. Finally we commit all of these changes atomically. (A [callback notification](/docs/next/writing_data#commit-notifications) is exposed)
-8. [Clean](/docs/next/hoodie_cleaner) (if needed)
+8. [Clean](/docs/next/cleaning) (if needed)
    1. Following the commit, cleaning is invoked if needed.
 9. [Compaction](/docs/next/compaction)
    1. If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously
