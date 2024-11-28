@@ -369,7 +369,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     WriteStatus writestatus = initNewStatus(config, true, operation);
     long recordsWritten = 0;
     long errorRecords = 0;
-    try(HoodieFileWriter fileWriter = HoodieFileWriterFactory.getFileWriter(
+    try (HoodieFileWriter fileWriter = HoodieFileWriterFactory.getFileWriter(
         instantTime,
         newBaseFilePath,
         metaClient.getStorage(),
