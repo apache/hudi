@@ -99,7 +99,6 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
           //Disable first so that record index is not created during table creation
-          spark.sql("set hoodie.metadata.record.index.enable=false")
           spark.sql(
             s"""
                |create table $tableName (
@@ -111,7 +110,8 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
                | options (
                |  primaryKey ='id',
                |  type = '$tableType',
-               |  preCombineField = 'ts'
+               |  preCombineField = 'ts',
+               |  hoodie.metadata.enable = 'true'
                | )
                | partitioned by(ts)
                | location '$basePath'
@@ -119,9 +119,6 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-
-          spark.sql("set hoodie.metadata.enable=true")
-          spark.sql("set hoodie.metadata.record.index.enable=true")
 
           checkException(s"create index idx_ts on $tableName (id)") (
             "Record index should be named as record_index"
@@ -156,7 +153,6 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
           //Disable first so that record index is not created during table creation
-          spark.sql("set hoodie.metadata.record.index.enable=false")
           spark.sql(
             s"""
                |create table $tableName (
@@ -168,7 +164,8 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
                | options (
                |  primaryKey ='id,price',
                |  type = '$tableType',
-               |  preCombineField = 'ts'
+               |  preCombineField = 'ts',
+               |  hoodie.metadata.enable = 'true'
                | )
                | partitioned by(ts)
                | location '$basePath'
@@ -176,9 +173,6 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-
-          spark.sql("set hoodie.metadata.enable=true")
-          spark.sql("set hoodie.metadata.record.index.enable=true")
 
           checkException(s"create index record_index on $tableName (price)")(
             "Index can be only be created on all record key columns. Configured record key fields Set(id, price). Input columns: Set(price)"

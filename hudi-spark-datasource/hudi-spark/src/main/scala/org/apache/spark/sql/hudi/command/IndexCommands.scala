@@ -68,7 +68,7 @@ case class CreateIndexCommand(table: CatalogTable,
       ValidationUtils.checkArgument(CreateIndexCommand.matchesRecordKeys(columnsMap.keySet().asScala.toSet, metaClient.getTableConfig),
         "Input columns should match configured record key columns: " + metaClient.getTableConfig.getRecordKeyFieldProp)
       HoodieSparkIndexClient.getInstance(sparkSession).create(
-        metaClient, indexName, indexType, columnsMap, extraOpts.asJava)
+        metaClient, indexName, HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, columnsMap, extraOpts.asJava)
     } else if (StringUtils.isNullOrEmpty(indexType)) {
       val columnNames = columnsMap.keySet().asScala.toSet
       val derivedIndexType: String = if (CreateIndexCommand.matchesRecordKeys(columnNames, metaClient.getTableConfig)) {
