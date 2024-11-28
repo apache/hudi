@@ -61,7 +61,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
-import org.mortbay.util.SingletonList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +68,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.StreamSupport;
@@ -208,7 +208,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue());
     Option<HoodieReaderContext> readerContextOpt = taskContextSupplier.getReaderContext(metaClient, useReaderContext);
     if (readerContextOpt.isPresent()) {
-      return compactWithPartialUpdate(
+      return compactWithFileGroupReader(
           readerContextOpt.get(),
           instantTime,
           metaClient,
@@ -311,16 +311,16 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }
   }
 
-  List<WriteStatus> compactWithPartialUpdate(HoodieReaderContext readerContext,
-                                             String instantTime,
-                                             HoodieTableMetaClient metaClient,
-                                             CompactionOperation operation,
-                                             List<String> logFilePaths,
-                                             Schema readerSchema,
-                                             Option<InternalSchema> internalSchemaOpt,
-                                             TypedProperties props,
-                                             HoodieWriteConfig config,
-                                             TaskContextSupplier taskContextSupplier) throws IOException {
+  List<WriteStatus> compactWithFileGroupReader(HoodieReaderContext readerContext,
+                                               String instantTime,
+                                               HoodieTableMetaClient metaClient,
+                                               CompactionOperation operation,
+                                               List<String> logFilePaths,
+                                               Schema readerSchema,
+                                               Option<InternalSchema> internalSchemaOpt,
+                                               TypedProperties props,
+                                               HoodieWriteConfig config,
+                                               TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieTimer timer = HoodieTimer.start();
     timer.startTimer();
     List<HoodieLogFile> logFiles = logFilePaths.stream()
@@ -391,8 +391,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     writestatus.setTotalRecords(recordsWritten);
     writestatus.setTotalErrorRecords(errorRecords);
     setupWriteStatus(newBaseFilePath, writestatus, config, metaClient.getStorage(), timer);
-    List<WriteStatus> writeStatuses = SingletonList.newSingletonList(writestatus);
-    return writeStatuses;
+    return Collections.singletonList(writestatus);
   }
 
   private WriteStatus initNewStatus(HoodieWriteConfig config, boolean shouldTrackSuccessRecords, CompactionOperation operation) {
