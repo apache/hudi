@@ -15,6 +15,7 @@ module.exports = {
                 'overview',
                 'quick-start-guide',
                 'flink-quick-start-guide',
+                'python-rust-quick-start-guide',
                 'docker_demo',
                 'use_cases',
             ],
