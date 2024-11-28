@@ -30,7 +30,6 @@ import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -39,7 +38,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMeta
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.File
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
@@ -2265,7 +2264,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   }
 
-  /*test("Test multiple partition fields pruning") {
+  test("Test multiple partition fields pruning") {
 
     withTempDir { tmp =>
       val targetTable = generateTableName
@@ -2286,7 +2285,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  'preCombineField'='dt',
            |  'hoodie.index.type' = 'BUCKET',
            |  'hoodie.bucket.index.hash.field' = 'id',
-           |  'hoodie.bucket.index.num.buckets'=512
+           |  'hoodie.bucket.index.num.buckets'=512,
+           |  'hoodie.metadata.enable'='false'
            | )
            |partitioned by (`day`,`hour`)
            |location '${tmp.getCanonicalPath}/$targetTable'
@@ -2312,7 +2312,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         rddHead = rddHead.firstParent
       }
       assertResult(1)(rddHead.partitions.size)
-      countDownLatch.await
+      countDownLatch.await(1, TimeUnit.MINUTES)
       assert(listenerCallCount >= 1)
     }
   }
@@ -2338,7 +2338,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  'preCombineField'='dt',
            |  'hoodie.index.type' = 'BUCKET',
            |  'hoodie.bucket.index.hash.field' = 'id',
-           |  'hoodie.bucket.index.num.buckets'=512
+           |  'hoodie.bucket.index.num.buckets'=512,
+           |  'hoodie.metadata.enable'='false'
            | )
            |partitioned by (`day`)
            |location '${tmp.getCanonicalPath}/$targetTable'
@@ -2364,10 +2365,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         rddHead = rddHead.firstParent
       }
       assertResult(1)(rddHead.partitions.size)
-      countDownLatch.await
+      countDownLatch.await(1, TimeUnit.MINUTES)
       assert(listenerCallCount >= 1)
     }
-  } */
+  }
 
   test("Test inaccurate index type") {
     withTempDir { tmp =>
