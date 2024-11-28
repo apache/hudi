@@ -313,6 +313,7 @@ public class TimelineUtils {
     if (lastMaxCompletionTime.isPresent()) {
       // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
       HoodieTimeline hollowInstantsTimeline = ((HoodieTimeline) timeline).getCommitsTimeline()
+          .filterCompletedInstants()
           .filter(s -> compareTimestamps(s.requestedTime(), LESSER_THAN, exclusiveStartInstantTime))
           .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
       if (!hollowInstantsTimeline.empty()) {
