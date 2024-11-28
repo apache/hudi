@@ -785,9 +785,10 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts long,
+           |  partition long
            |) using hudi
-           | tblproperties (
+           | options (
            |  primaryKey ='id',
            |  type = 'mor',
            |  preCombineField = 'ts',
@@ -796,15 +797,15 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
            |  hoodie.table.initial.bucket.number = 1,
            |  hoodie.bucket.index.hash.field = 'id'
            | )
-           | partitioned by (ts)
+           | partitioned by (partition)
            | location '$basePath'
      """.stripMargin)
 
       spark.sql("set hoodie.compact.inline=false")
       spark.sql("set hoodie.compact.schedule.inline=false")
 
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1010)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1010)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1010, 1010)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1010, 1010)")
 
       val conf = new Configuration
       val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
@@ -813,7 +814,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(s"call run_clustering(table => '$tableName')")(
       "bucket-resizing target-num should be power of 2")
       metaClient.reloadActiveTimeline()
-      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+      assert(metaClient.getActiveTimeline.filterPendingClusteringTimeline().empty())
 
       // set bucket-resizing target bucket num
       spark.sql(s"set hoodie.clustering.plan.strategy.bucket.resizing.target.num = 4")
@@ -821,7 +822,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       metaClient.reloadActiveTimeline()
       assert(metaClient.getActiveTimeline.getCompletedReplaceTimeline.empty())
-      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(1 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       // show clustering operations
       val result = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
@@ -830,7 +831,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       assertResult(1)(result.length)
 
       // write more records during clustering, should rollback the clustering plan
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1010)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1010, 1010)")
 
       // show clustering operations
       val result2 = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
@@ -839,10 +840,10 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       assertResult(0)(result2.length)
 
       // verify the records
-      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-        Seq(1, "a1", 10.0, 1010),
-        Seq(2, "a2", 10.0, 1010),
-        Seq(3, "a3", 10.0, 1010)
+      checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1010, 1010),
+        Seq(2, "a2", 10.0, 1010, 1010),
+        Seq(3, "a3", 10.0, 1010, 1010)
       )
 
       // set bucket-resizing target bucket num and schedule again
@@ -851,23 +852,23 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       metaClient.reloadActiveTimeline()
       assert(metaClient.getActiveTimeline.getCompletedReplaceTimeline.empty())
-      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(1 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       // use reject-update-strategy
       spark.sql(s"set hoodie.clustering.updates.strategy =" + HoodieClusteringConfig.SPARK_REJECT_UPDATE_STRATEGY)
 
       // write more records during clustering, should reject the update
-      checkExceptionContain(s"insert into $tableName values(4, 'a4', 10, 1010)")("Not allowed to update the clustering file group")
+      checkExceptionContain(s"insert into $tableName values(4, 'a4', 10, 1010, 1010)")("Not allowed to update the clustering file group")
 
       // write more records but not in the same partition
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1011)")
+      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1011, 1011)")
 
       // execute the clustering plan
       spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')")
 
       metaClient.reloadActiveTimeline()
       assert(1 == metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.size())
-      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+      assert(metaClient.getActiveTimeline.filterPendingClusteringTimeline().empty())
 
       // show clustering operations
       val result3 = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
@@ -877,11 +878,11 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       assertResult(1)(result3.length)
 
       // verify the records
-      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-        Seq(1, "a1", 10.0, 1010),
-        Seq(2, "a2", 10.0, 1010),
-        Seq(3, "a3", 10.0, 1010),
-        Seq(4, "a4", 10.0, 1011)
+      checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1010, 1010),
+        Seq(2, "a2", 10.0, 1010, 1010),
+        Seq(3, "a3", 10.0, 1010, 1010),
+        Seq(4, "a4", 10.0, 1011, 1011)
       )
 
       // schedule again
@@ -893,7 +894,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"set hoodie.clustering.bucket.resizing.concurrent.write.enabled=true")
 
       // write more records during clustering, should success and not affect the clustering plan
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1010)")
+      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1010, 1010)")
 
       // show clustering operations
       val result4 = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
@@ -903,15 +904,15 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       assertResult(2)(result4.length)
       metaClient.reloadActiveTimeline()
       assert(1 == metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.size())
-      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(1 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       // verify now the records
-      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-        Seq(1, "a1", 10.0, 1010),
-        Seq(2, "a2", 10.0, 1010),
-        Seq(3, "a3", 10.0, 1010),
-        Seq(4, "a4", 10.0, 1011),
-        Seq(5, "a5", 10.0, 1010)
+      checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1010, 1010),
+        Seq(2, "a2", 10.0, 1010, 1010),
+        Seq(3, "a3", 10.0, 1010, 1010),
+        Seq(4, "a4", 10.0, 1011, 1011),
+        Seq(5, "a5", 10.0, 1010, 1010)
       )
 
       // execute the clustering plan
@@ -919,7 +920,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       metaClient.reloadActiveTimeline()
       assert(2 == metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.size())
-      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+      assert(metaClient.getActiveTimeline.filterPendingClusteringTimeline().empty())
 
       // show clustering operations
       val result5 = spark.sql(s"call show_clustering(table => '$tableName', show_involved_partition => true)")
@@ -929,12 +930,12 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       assertResult(2)(result5.length)
 
       // verify the records
-      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-        Seq(1, "a1", 10.0, 1010),
-        Seq(2, "a2", 10.0, 1010),
-        Seq(3, "a3", 10.0, 1010),
-        Seq(4, "a4", 10.0, 1011),
-        Seq(5, "a5", 10.0, 1010)
+      checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1010, 1010),
+        Seq(2, "a2", 10.0, 1010, 1010),
+        Seq(3, "a3", 10.0, 1010, 1010),
+        Seq(4, "a4", 10.0, 1011, 1011),
+        Seq(5, "a5", 10.0, 1010, 1010)
       )
     }
   }

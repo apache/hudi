@@ -20,18 +20,18 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.model.WriteOperationType.{BULK_INSERT, INSERT, UPSERT}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.spark.sql
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.scalatest.Inspectors.forAll
 
 import java.io.File
-import scala.util.Random;
+import scala.util.Random
 import scala.collection.JavaConversions._
 
 
@@ -135,10 +135,7 @@ class TestExtensibleBucketDataCorrectness extends HoodieSparkSqlTestBase {
   }
 
   def assertOperation(basePath: String, count: Int, operationType: WriteOperationType): Boolean = {
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(spark.sessionState.newHadoopConf())
-      .build()
+    val metaClient = createMetaClient(spark, basePath)
     val timeline = metaClient.getActiveTimeline.getAllCommitsTimeline
     assert(timeline.countInstants() == count)
     val latestCommit = timeline.lastInstant()
