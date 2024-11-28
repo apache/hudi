@@ -160,6 +160,9 @@ public class HoodieWriteStat implements Serializable {
   private Long maxEventTime;
 
   @Nullable
+  private String prevBaseFile;
+
+  @Nullable
   private RuntimeStats runtimeStats;
 
   public HoodieWriteStat() {
@@ -327,6 +330,14 @@ public class HoodieWriteStat implements Serializable {
     this.fileSizeInBytes = fileSizeInBytes;
   }
 
+  public String getPrevBaseFile() {
+    return prevBaseFile;
+  }
+
+  public void setPrevBaseFile(String prevBaseFile) {
+    this.prevBaseFile = prevBaseFile;
+  }
+
   public Long getMinEventTime() {
     return minEventTime;
   }
@@ -370,9 +381,9 @@ public class HoodieWriteStat implements Serializable {
   @Override
   public String toString() {
     return "HoodieWriteStat{fileId='" + fileId + '\'' + ", path='" + path + '\'' + ", prevCommit='" + prevCommit
-        + '\'' + ", numWrites=" + numWrites + ", numDeletes=" + numDeletes + ", numUpdateWrites=" + numUpdateWrites
-        + ", totalWriteBytes=" + totalWriteBytes + ", totalWriteErrors=" + totalWriteErrors + ", tempPath='" + tempPath
-        + '\'' + ", cdcStats='" + JsonUtils.toString(cdcStats)
+        + '\'' + ", prevBaseFile=" + prevBaseFile + '\'' + ", numWrites=" + numWrites + ", numDeletes=" + numDeletes
+        + ", numUpdateWrites=" + numUpdateWrites + ", totalWriteBytes=" + totalWriteBytes + ", totalWriteErrors="
+        + totalWriteErrors + ", tempPath='" + tempPath + '\'' + ", cdcStats='" + JsonUtils.toString(cdcStats)
         + '\'' + ", partitionPath='" + partitionPath + '\'' + ", totalLogRecords=" + totalLogRecords
         + ", totalLogFilesCompacted=" + totalLogFilesCompacted + ", totalLogSizeCompacted=" + totalLogSizeCompacted
         + ", totalUpdatedRecordsCompacted=" + totalUpdatedRecordsCompacted + ", totalLogBlocks=" + totalLogBlocks

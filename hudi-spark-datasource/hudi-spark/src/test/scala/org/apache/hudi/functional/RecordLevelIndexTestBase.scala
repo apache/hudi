@@ -322,9 +322,9 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
       writeConfig.getRecordIndexMinFileGroupCount, writeConfig.getRecordIndexMaxFileGroupCount,
       writeConfig.getRecordIndexGrowthFactor, writeConfig.getRecordIndexMaxFileGroupSizeBytes)
     assertEquals(estimatedFileGroupCount, getFileGroupCountForRecordIndex(writeConfig))
-    val prevDf = mergedDfList.last.drop("tip_history")
+    val prevDf = mergedDfList.last.drop("tip_history", "_hoodie_is_deleted")
     val nonMatchingRecords = readDf.drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
-      "_hoodie_partition_path", "_hoodie_file_name", "tip_history")
+      "_hoodie_partition_path", "_hoodie_file_name", "tip_history", "_hoodie_is_deleted")
       .join(prevDf, prevDf.columns, "leftanti")
     assertEquals(0, nonMatchingRecords.count())
     assertEquals(readDf.count(), prevDf.count())

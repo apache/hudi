@@ -29,7 +29,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestBaseFileUtils {
+public class TestBaseFileRecordParsingUtils {
   private static final String PARTITION_PATH = "partition";
   private static final String COLUMN_NAME = "columnName";
 
