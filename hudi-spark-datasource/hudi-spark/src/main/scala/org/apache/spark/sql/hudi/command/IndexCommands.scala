@@ -62,12 +62,12 @@ case class CreateIndexCommand(table: CatalogTable,
         throw new HoodieIndexException("Column stats index without expression on any column can be created using datasource configs. " +
           "Please refer https://hudi.apache.org/docs/metadata for more info")
       }
-      HoodieSparkIndexClient.getInstance(sparkSession).create(
+      new HoodieSparkIndexClient(sparkSession).create(
         metaClient, indexName, indexType, columnsMap, extraOpts.asJava)
     } else if (indexName.equals(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)) {
       ValidationUtils.checkArgument(CreateIndexCommand.matchesRecordKeys(columnsMap.keySet().asScala.toSet, metaClient.getTableConfig),
         "Input columns should match configured record key columns: " + metaClient.getTableConfig.getRecordKeyFieldProp)
-      HoodieSparkIndexClient.getInstance(sparkSession).create(
+      new HoodieSparkIndexClient(sparkSession).create(
         metaClient, indexName, HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, columnsMap, extraOpts.asJava)
     } else if (StringUtils.isNullOrEmpty(indexType)) {
       val columnNames = columnsMap.keySet().asScala.toSet
@@ -82,7 +82,7 @@ case class CreateIndexCommand(table: CatalogTable,
           throw new HoodieIndexException("Secondary Index can only be enabled on table with OverwriteWithLatestAvroPayload payload class or " + "Merge mode set to OVERWRITE_WITH_LATEST")
         }
       }
-      HoodieSparkIndexClient.getInstance(sparkSession).create(
+      new HoodieSparkIndexClient(sparkSession).create(
         metaClient, indexName, derivedIndexType, columnsMap, extraOpts.asJava)
     } else {
       throw new HoodieIndexException(String.format("%s is not supported", indexType))
@@ -135,7 +135,7 @@ case class DropIndexCommand(table: CatalogTable,
     // need to ensure that the index name is for a valid partition type
     val indexMetadataOpt = metaClient.getIndexMetadata
     if (metaClient.getTableConfig.getMetadataPartitions.contains(indexName)) {
-      HoodieSparkIndexClient.getInstance(sparkSession).drop(metaClient, indexName, ignoreIfNotExists)
+      new HoodieSparkIndexClient(sparkSession).drop(metaClient, indexName, ignoreIfNotExists)
     } else if (indexMetadataOpt.isPresent) {
       val indexMetadata = indexMetadataOpt.get
       val indexDefinitions = indexMetadata.getIndexDefinitions.values().stream()
@@ -147,7 +147,7 @@ case class DropIndexCommand(table: CatalogTable,
       if (indexDefinitions.isEmpty && !ignoreIfNotExists) {
         throw new HoodieIndexException(String.format("Index does not exist: %s", indexName))
       }
-      indexDefinitions.forEach(definition => HoodieSparkIndexClient.getInstance(sparkSession).drop(metaClient, definition.getIndexName, ignoreIfNotExists))
+      indexDefinitions.forEach(definition => new HoodieSparkIndexClient(sparkSession).drop(metaClient, definition.getIndexName, ignoreIfNotExists))
     } else if (!ignoreIfNotExists) {
       throw new HoodieIndexException(String.format("Index does not exist: %s", indexName))
     }

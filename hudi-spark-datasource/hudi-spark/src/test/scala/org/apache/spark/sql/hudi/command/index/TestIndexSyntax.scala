@@ -98,7 +98,6 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
-          //Disable first so that record index is not created during table creation
           spark.sql(
             s"""
                |create table $tableName (
@@ -152,7 +151,6 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
-          //Disable first so that record index is not created during table creation
           spark.sql(
             s"""
                |create table $tableName (

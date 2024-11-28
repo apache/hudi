@@ -74,20 +74,9 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
   private final SparkSession sparkSession;
 
-  private HoodieSparkIndexClient(SparkSession sparkSession) {
+  public HoodieSparkIndexClient(SparkSession sparkSession) {
     super();
     this.sparkSession = sparkSession;
-  }
-
-  public static HoodieSparkIndexClient getInstance(SparkSession sparkSession) {
-    if (_instance == null) {
-      synchronized (HoodieSparkIndexClient.class) {
-        if (_instance == null) {
-          _instance = new HoodieSparkIndexClient(sparkSession);
-        }
-      }
-    }
-    return _instance;
   }
 
   @Override
