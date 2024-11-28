@@ -26,24 +26,44 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
+import org.apache.spark.sql.execution.datasources.FileFormat;
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.hudi.SparkAdapter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.util.Utils;
 
 import java.io.Serializable;
+import java.util.Map;
 import java.util.function.Supplier;
 
+import scala.Tuple2;
 import scala.collection.immutable.HashMap;
+import scala.collection.immutable.Map$;
 import scala.collection.mutable.ArrayBuffer;
+import scala.collection.JavaConverters;
 
 /**
  * Spark task context supplier.
  */
 public class SparkTaskContextSupplier extends TaskContextSupplier implements Serializable {
+  private Option<SparkParquetReader> parquetReaderOpt = Option.empty();
+
+  public SparkTaskContextSupplier() {
+  }
+
+  public SparkTaskContextSupplier(Configuration configuration) {
+    SparkAdapter sparkAdapter = SparkAdapterSupport$.MODULE$.sparkAdapter();
+    scala.collection.immutable.Map<String, String> options =
+        scala.collection.immutable.Map$.MODULE$.<String, String>empty()
+            .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), "false"));
+    parquetReaderOpt = Option.of(sparkAdapter.createParquetFileReader(
+        false, SQLConf.get(), options, configuration));
+  }
 
   @Override
   public Supplier<Integer> getPartitionIdSupplier() {
@@ -103,11 +123,9 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
   // This reader context is used to read records before write, like compaction, clustering.
   @Override
   public Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient, boolean useReaderContext) {
-    if (useReaderContext) {
-      SparkParquetReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
-          false, SQLConf.get(), new HashMap<>(), (Configuration) metaClient.getStorageConf().unwrap());
+    if (useReaderContext && parquetReaderOpt.isPresent()) {
       return Option.of(new SparkFileFormatInternalRowReaderContext(
-          reader,
+          parquetReaderOpt.get(),
           metaClient.getTableConfig().getRecordKeyFields().get()[0],
           new ArrayBuffer<>(),
           new ArrayBuffer<>()));

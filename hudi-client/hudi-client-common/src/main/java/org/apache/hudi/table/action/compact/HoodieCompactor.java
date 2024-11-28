@@ -360,9 +360,11 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         FSUtils.makeBaseFileName(instantTime, writeToken, operation.getFileId(), ".parquet");
     // compaction has to use this schema.
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(readerSchema, config.allowOperationMetadataField());
+    StoragePath dirPath = FSUtils.constructAbsolutePath(metaClient.getBasePath().toString(), operation.getPartitionPath());
+    StoragePath newBaseFilePath = new StoragePath(dirPath, newFileName);
     HoodieFileWriter fileWriter = HoodieFileWriterFactory.getFileWriter(
         operation.getDataFileCommitTime().get(),
-        new StoragePath(newFileName),
+        newBaseFilePath,
         metaClient.getStorage(),
         config,
         writeSchemaWithMetaFields, taskContextSupplier, config.getRecordMerger().getRecordType());
@@ -380,13 +382,15 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         errorRecords++;
         writestatus.markFailure(record, t, record.getMetadata());
         LOG.error("Error write record: {}", record, t);
+      } finally {
+        fileWriter.close();
       }
     }
 
     // 4. Construct the return values.
     writestatus.setTotalRecords(recordsWritten);
     writestatus.setTotalErrorRecords(errorRecords);
-    setupWriteStatus(new StoragePath(newFileName), writestatus, config, metaClient.getStorage(), timer);
+    setupWriteStatus(newBaseFilePath, writestatus, config, metaClient.getStorage(), timer);
     List<WriteStatus> writeStatuses = SingletonList.newSingletonList(writestatus);
     return writeStatuses;
   }
