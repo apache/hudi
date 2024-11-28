@@ -35,6 +35,7 @@ import org.apache.spark.sql.execution.datasources.FileFormat;
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
 import org.apache.spark.sql.hudi.SparkAdapter;
 import org.apache.spark.sql.internal.SQLConf;
+import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.util.Utils;
 
 import java.io.Serializable;
@@ -127,8 +128,8 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
           sparkParquetReader,
           // Need to verify this logic.
           metaClient.getTableConfig().getRecordKeyFields().get()[0],
-          new ArrayBuffer<>(),
-          new ArrayBuffer<>()));
+          new ArrayBuffer<Filter>(),
+          new ArrayBuffer<Filter>()));
     }
     return Option.empty();
   }
