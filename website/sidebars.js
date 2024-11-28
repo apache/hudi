@@ -68,40 +68,40 @@ module.exports = {
             type: 'category',
             label: 'Table Services',
             items: [
-                'migration_guide',
+                'cleaning',
                 'compaction',
                 'clustering',
                 'metadata_indexing',
-                'hoodie_cleaner',
                 'rollbacks',
                 'markers',
                 'file_sizing',
-                'disaster_recovery',
-            ],
-        },
-        {
-            type: 'category',
-            label: 'Platform Services',
-            items: [
-                'snapshot_exporter',
-                'precommit_validator',
-                'platform_services_post_commit_callback',
                 {
                     type: 'category',
                     label: 'Syncing to Catalogs',
                     items: [
-                        'syncing_aws_glue_data_catalog',
-                        'syncing_datahub',
-                        'syncing_metastore',
-                        'gcp_bigquery',
-                        'syncing_xtable'
+                         'syncing_aws_glue_data_catalog',
+                         'syncing_datahub',
+                         'syncing_metastore',
+                         'gcp_bigquery',
+                         'syncing_xtable'
                     ],
                 }
             ],
         },
         {
             type: 'category',
-            label: 'Operations',
+            label: 'Platform & Tools',
+            items: [
+                'snapshot_exporter',
+                'precommit_validator',
+                'platform_services_post_commit_callback',
+                'disaster_recovery',
+                'migration_guide',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Operating Hudi',
             items: [
                 'performance',
                 'deployment',

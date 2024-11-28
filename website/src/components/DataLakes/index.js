@@ -7,11 +7,10 @@ const DataLake = () => {
             <div className="container">
                 <Title primaryText="What is" secondaryText="Hudi" />
                 <div className="sub-title text--center text--semibold margin-bottom--md">
-                    Apache Hudi is a transactional data lake platform that
-                    brings database and data warehouse capabilities to the
-                    data lake. Hudi reimagines slow old-school batch data
-                    processing with a powerful new incremental processing
-                    framework for low latency minute-level analytics.
+                    Apache Hudi is an open data lakehouse platform, built on a high-performance open table format
+                    to bring database functionality to your data lakes. <br/>
+                    Hudi reimagines slow old-school batch data processing with a
+                    powerful new incremental processing framework for low latency minute-level analytics.
                 </div>
 
                 <img

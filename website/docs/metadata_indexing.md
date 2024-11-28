@@ -1,5 +1,5 @@
 ---
-title: Metadata Indexing
+title: Metadata & Indexing
 summary: "In this page, we describe how to run metadata indexing asynchronously."
 toc: true
 last_modified_at:
