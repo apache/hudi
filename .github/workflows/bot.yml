@@ -111,7 +111,7 @@ jobs:
 #        run:
 #          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
-  test-spark-scala-tests:
+  test-spark-scala-common-tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -119,18 +119,6 @@ jobs:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.3"
             sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
-
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
-#
-#          - scalaProfile: "scala-2.12"
-#            sparkProfile: "spark3.5"
-#            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
-#
-#          - scalaProfile: "scala-2.13"
-#            sparkProfile: "spark3.5"
-#            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
       - uses: actions/checkout@v3
@@ -153,15 +141,39 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '3.5') || !endsWith(env.SCALA_PROFILE, '2.12') }} # skip test Spark 3.5 and Scala 2.12 as it's covered by Azure CI
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
-      - name: Scala FT - Spark
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES" $MVN_ARGS
+
+  test-spark-scala-non-common-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          architecture: x64
+      - name: Build Project
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '3.5') || !endsWith(env.SCALA_PROFILE, '2.12') }} # skip test Spark 3.5 and Scala 2.12 as it's covered by Azure CI
         run:
-          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_MODULES" $MVN_ARGS
 
 #  test-hudi-hadoop-mr-and-hudi-java-client:
 #    runs-on: ubuntu-latest
