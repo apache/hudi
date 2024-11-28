@@ -39,12 +39,12 @@ import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.util.Utils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 import scala.Tuple2;
 import scala.collection.JavaConverters;
-import scala.collection.mutable.ArrayBuffer;
-import scala.collection.mutable.Seq;
 
 /**
  * Spark task context supplier.
@@ -126,12 +126,13 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
   public Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient, boolean useReaderContext) {
     SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
     if (useReaderContext && sparkParquetReader != null) {
-      Seq<Filter> filters = Seq.empty();
+      List<Filter> filters = new ArrayList<>();
       return Option.of(new SparkFileFormatInternalRowReaderContext(
           sparkParquetReader,
           // Need to verify this logic.
           metaClient.getTableConfig().getRecordKeyFields().get()[0],
-          filters, filters));
+          JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
+          JavaConverters.asScalaBufferConverter(filters).asScala().toSeq()));
     }
     return Option.empty();
   }
