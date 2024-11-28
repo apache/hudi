@@ -68,8 +68,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
@@ -160,8 +158,6 @@ class TestEightToSevenDowngradeHandler {
     when(config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())).thenReturn("partition_field");
     when(tableConfig.getPartitionFieldProp()).thenReturn("partition_field");
     when(tableConfig.getKeyGeneratorClassName()).thenReturn("org.apache.hudi.keygen.CustomKeyGenerator");
-    /*when(tableConfig.contains(KEY_GENERATOR_CLASS_NAME)).thenReturn(true);
-    when(tableConfig.getString(KEY_GENERATOR_CLASS_NAME)).thenReturn("org.apache.hudi.keygen.CustomKeyGenerator");*/
     EightToSevenDowngradeHandler.downgradePartitionFields(config, tableConfig, tablePropsToAdd);
     assertTrue(tablePropsToAdd.containsKey(PARTITION_FIELDS));
     assertEquals("partition_field", tablePropsToAdd.get(PARTITION_FIELDS));
@@ -170,29 +166,6 @@ class TestEightToSevenDowngradeHandler {
     EightToSevenDowngradeHandler.unsetRecordMergeMode(tableConfig, tablePropsToAdd);
     assertFalse(tableConfig.getProps().containsKey(RECORD_MERGE_MODE.key()));
     assertTrue(tablePropsToAdd.containsKey(PAYLOAD_CLASS_NAME));
-
-    // Simulate table config values for key generator and bootstrap index
-    when(tableConfig.contains(isA(ConfigProperty.class))).thenAnswer(i -> {
-      Object arg0 = i.getArguments()[0];
-      if (arg0.equals(KEY_GENERATOR_CLASS_NAME.key())) {
-        return true;
-      } else if (arg0.equals(BOOTSTRAP_INDEX_CLASS_NAME.key())) {
-        return false;
-      } else {
-        return false;
-      }
-    });
-    when(tableConfig.getString(anyString())).thenAnswer(i -> {
-      Object arg0 = i.getArguments()[0];
-      if (arg0.equals(KEY_GENERATOR_CLASS_NAME.key())) {
-        return "org.apache.hudi.keygen.CustomKeyGenerator";
-      } else if (arg0.equals(BOOTSTRAP_INDEX_CLASS_NAME.key())) {
-        return null;
-      } else {
-        return null;
-      }
-    });
-
     EightToSevenDowngradeHandler.downgradeBootstrapIndexType(tableConfig, tablePropsToAdd);
     assertFalse(tablePropsToAdd.containsKey(BOOTSTRAP_INDEX_TYPE));
     assertFalse(tablePropsToAdd.containsKey(BOOTSTRAP_INDEX_CLASS_NAME));
