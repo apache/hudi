@@ -115,6 +115,53 @@ This setting specifies the maximum number of file groups whose base files meet t
         <category label="Apache Hudi" term="Apache Hudi"/>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Record Level Indexing in Apache Hudi]]></title>
+        <id>https://hudi.apache.org/blog/2024/11/12/record-level-indexing-in-apache-hudi</id>
+        <link href="https://hudi.apache.org/blog/2024/11/12/record-level-indexing-in-apache-hudi"/>
+        <updated>2024-11-12T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@prasadpal107/record-level-indexing-in-apache-hudi-0615804608ec">here</a></span>]]></content>
+        <author>
+            <name>Bibhu Pala</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="record index" term="record index"/>
+        <category label="record level index" term="record level index"/>
+        <category label="medium" term="medium"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Storing 200 Billion Entities: Notion’s Data Lake Project]]></title>
+        <id>https://hudi.apache.org/blog/2024/11/12/storing-200-billion-entities-notions</id>
+        <link href="https://hudi.apache.org/blog/2024/11/12/storing-200-billion-entities-notions"/>
+        <updated>2024-11-12T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.bytebytego.com/p/storing-200-billion-entities-notions">here</a></span>]]></content>
+        <author>
+            <name>ByteByteGo</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="use-case" term="use-case"/>
+        <category label="bytebytego" term="bytebytego"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Understanding COW and MOR in Apache Hudi: Choosing the Right Storage Strategy]]></title>
+        <id>https://hudi.apache.org/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi</id>
+        <link href="https://hudi.apache.org/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi"/>
+        <updated>2024-11-12T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://opstree.com/blog/2024/11/12/understanding-cow-and-mor-in-apache-hudi-choosing-the-right-storage-strategy/">here</a></span>]]></content>
+        <author>
+            <name>Deepak Nishad</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="cow" term="cow"/>
+        <category label="mor" term="mor"/>
+        <category label="opstree" term="opstree"/>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Column File Formats: How Hudi Leverages Parquet and ORC ]]></title>
         <id>https://hudi.apache.org/blog/2024/07/31/hudi-file-formats</id>
         <link href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats"/>
@@ -645,58 +692,6 @@ Starting with Hudi 0.13.0, <a href="https://hudi.apache.org/releases/release-0.1
         <category label="streaming ingestion" term="streaming ingestion"/>
         <category label="real-time datalake" term="real-time datalake"/>
         <category label="incremental processing" term="incremental processing"/>
-        <category label="devgenius" term="devgenius"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Hands-On Guide: Reading Data from Hudi Tables Incrementally, Joining with Delta Tables using HudiStreamer and SQL-Based Transformer]]></title>
-        <id>https://hudi.apache.org/blog/2024/04/03/hands-on-guide-reading-data-from-hudi-tables-joining-delta</id>
-        <link href="https://hudi.apache.org/blog/2024/04/03/hands-on-guide-reading-data-from-hudi-tables-joining-delta"/>
-        <updated>2024-04-03T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.linkedin.com/pulse/hands-on-guide-reading-data-from-hudi-tables-joining-delta-shah-vqivf/?trk=public_post_main-feed-card_feed-article-content">here</a></span>]]></content>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="deltastreamer" term="deltastreamer"/>
-        <category label="hudi streamer" term="hudi streamer"/>
-        <category label="delta" term="delta"/>
-        <category label="sql transformer" term="sql transformer"/>
-        <category label="linkedin" term="linkedin"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Record Level Indexing in Apache Hudi Delivers 70% Faster Point Lookups]]></title>
-        <id>https://hudi.apache.org/blog/2024/03/30/record-level-indexing-apache-hudi-delivers-70-faster-point</id>
-        <link href="https://hudi.apache.org/blog/2024/03/30/record-level-indexing-apache-hudi-delivers-70-faster-point"/>
-        <updated>2024-03-30T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.linkedin.com/pulse/record-level-indexing-apache-hudi-delivers-70-faster-point-shah-hlite/">here</a></span>]]></content>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="record level index" term="record level index"/>
-        <category label="performance" term="performance"/>
-        <category label="linkedin" term="linkedin"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Options on Kafka sink to open table Formats: Apache Iceberg and Apache Hudi]]></title>
-        <id>https://hudi.apache.org/blog/2024/03/23/options-on-kafka-sink-to-open-table-formats-apache-iceberg-and-apache-hudi</id>
-        <link href="https://hudi.apache.org/blog/2024/03/23/options-on-kafka-sink-to-open-table-formats-apache-iceberg-and-apache-hudi"/>
-        <updated>2024-03-23T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.devgenius.io/options-on-kafka-sink-to-open-table-formats-apache-iceberg-and-apache-hudi-f6839ddad978">here</a></span>]]></content>
-        <author>
-            <name>Albert Wong</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="apache iceberg" term="apache iceberg"/>
-        <category label="apache Kafka" term="apache Kafka"/>
-        <category label="kafka connect" term="kafka connect"/>
-        <category label="starrocks" term="starrocks"/>
         <category label="devgenius" term="devgenius"/>
     </entry>
 </feed>

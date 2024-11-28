@@ -4,10 +4,20 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/cn/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Fri, 21 Jun 2024 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sun, 17 Nov 2024 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>cn</language>
+        <item>
+            <title><![CDATA[Create Data Lake using aws Glue as beginner]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/11/17/Create-Data-Lake-using-aws-Glue-as-beginner</link>
+            <guid>https://hudi.apache.org/cn/videos/2024/11/17/Create-Data-Lake-using-aws-Glue-as-beginner</guid>
+            <pubDate>Sun, 17 Nov 2024 00:00:00 GMT</pubDate>
+            <category>guide</category>
+            <category>beginner</category>
+            <category>apache hudi</category>
+            <category>aws glue</category>
+        </item>
         <item>
             <title><![CDATA[4 Different Ways to fetch Apache Hudi Commit time in Python and PySpark]]></title>
             <link>https://hudi.apache.org/cn/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</link>
@@ -260,26 +270,6 @@
             <category>sql transformer</category>
             <category>join</category>
             <category>incremental processing</category>
-        </item>
-        <item>
-            <title><![CDATA[Building DataLakeHouse: XTable, MinIO, StarRocks, DeltaStreamer - Interoperating Hudi, IceBerg,Delta]]></title>
-            <link>https://hudi.apache.org/cn/videos/2024/03/30/Building-DataLakeHouse-using-XTableMinIO-StarRocks-DeltaStreamer---Interoperating-Hudi-IceBerg-and-Delta</link>
-            <guid>https://hudi.apache.org/cn/videos/2024/03/30/Building-DataLakeHouse-using-XTableMinIO-StarRocks-DeltaStreamer---Interoperating-Hudi-IceBerg-and-Delta</guid>
-            <pubDate>Sat, 30 Mar 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>apache hudi</category>
-            <category>apache iceberge</category>
-            <category>delta lake</category>
-            <category>apache xtable</category>
-            <category>hudi streamer</category>
-            <category>deltastreamer</category>
-            <category>starrocks</category>
-            <category>minio</category>
-            <category>lakehouse</category>
-            <category>data lakehouse</category>
-            <category>data skipping</category>
-            <category>rli</category>
-            <category>record level index</category>
         </item>
     </channel>
 </rss>
