@@ -19,6 +19,29 @@
             <category>aws glue</category>
         </item>
         <item>
+            <title><![CDATA[Practice of building a lakehouse based on Apache Hudi at Kuaishou Inc]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/10/22/practice-of-building-a-lakehouse-based-on-apache-hudi-at-kuaishou-inc</link>
+            <guid>https://hudi.apache.org/cn/videos/2024/10/22/practice-of-building-a-lakehouse-based-on-apache-hudi-at-kuaishou-inc</guid>
+            <pubDate>Tue, 22 Oct 2024 00:00:00 GMT</pubDate>
+            <category>guide</category>
+            <category>beginner</category>
+            <category>apache hudi</category>
+            <category>data lakehouse</category>
+            <category>lakehouse</category>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Read Hudi Tables on S3 Locally in Your PySpark Job | Essential Packages You Need to Use]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/10/06/learn-how-to-read-hudi-tables-on-s3-locally-in-your-pyspark-job</link>
+            <guid>https://hudi.apache.org/cn/videos/2024/10/06/learn-how-to-read-hudi-tables-on-s3-locally-in-your-pyspark-job</guid>
+            <pubDate>Sun, 06 Oct 2024 00:00:00 GMT</pubDate>
+            <category>guide</category>
+            <category>beginner</category>
+            <category>apache hudi</category>
+            <category>aws s3</category>
+            <category>python</category>
+            <category>pyspark</category>
+        </item>
+        <item>
             <title><![CDATA[4 Different Ways to fetch Apache Hudi Commit time in Python and PySpark]]></title>
             <link>https://hudi.apache.org/cn/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</link>
             <guid>https://hudi.apache.org/cn/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</guid>
@@ -236,40 +259,6 @@
             <category>data lakehouse</category>
             <category>lakehouse</category>
             <category>universal lakehouse</category>
-        </item>
-        <item>
-            <title><![CDATA[Build Universal Data lake with Posgres + Debezium+Kafka+DeltaSTreamer + Minio+HiveMetastore+Trino]]></title>
-            <link>https://hudi.apache.org/cn/videos/2024/04/06/Build-Universal-Data-lake-with-Posgres-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</link>
-            <guid>https://hudi.apache.org/cn/videos/2024/04/06/Build-Universal-Data-lake-with-Posgres-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</guid>
-            <pubDate>Sat, 06 Apr 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>apache kafka</category>
-            <category>debezium</category>
-            <category>postgres</category>
-            <category>deltastreamer</category>
-            <category>hudi streamer</category>
-            <category>trino</category>
-            <category>minio</category>
-            <category>apache hive</category>
-            <category>hive metastore</category>
-            <category>data lakehouse</category>
-            <category>lakehouse</category>
-            <category>universal lakehouse</category>
-        </item>
-        <item>
-            <title><![CDATA[Reading Data from Hudi INC & Joining with Delta Tables using HudiStreamer & SQL-Based Transformer]]></title>
-            <link>https://hudi.apache.org/cn/videos/2024/04/03/Reading-Data-from-Hudi-INC-and-Joining-with-Delta-Tables-using-HudiStreamer-and-SQL-Based-Transformer</link>
-            <guid>https://hudi.apache.org/cn/videos/2024/04/03/Reading-Data-from-Hudi-INC-and-Joining-with-Delta-Tables-using-HudiStreamer-and-SQL-Based-Transformer</guid>
-            <pubDate>Wed, 03 Apr 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>delta lake</category>
-            <category>sql transformer</category>
-            <category>join</category>
-            <category>incremental processing</category>
         </item>
     </channel>
 </rss>

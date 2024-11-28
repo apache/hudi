@@ -21,6 +21,35 @@
         <category label="aws glue" term="aws glue"/>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Practice of building a lakehouse based on Apache Hudi at Kuaishou Inc]]></title>
+        <id>https://hudi.apache.org/videos/2024/10/22/practice-of-building-a-lakehouse-based-on-apache-hudi-at-kuaishou-inc</id>
+        <link href="https://hudi.apache.org/videos/2024/10/22/practice-of-building-a-lakehouse-based-on-apache-hudi-at-kuaishou-inc"/>
+        <updated>2024-10-22T00:00:00.000Z</updated>
+        <author>
+            <name>Zhang Jing</name>
+        </author>
+        <category label="guide" term="guide"/>
+        <category label="beginner" term="beginner"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="lakehouse" term="lakehouse"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How to Read Hudi Tables on S3 Locally in Your PySpark Job | Essential Packages You Need to Use]]></title>
+        <id>https://hudi.apache.org/videos/2024/10/06/learn-how-to-read-hudi-tables-on-s3-locally-in-your-pyspark-job</id>
+        <link href="https://hudi.apache.org/videos/2024/10/06/learn-how-to-read-hudi-tables-on-s3-locally-in-your-pyspark-job"/>
+        <updated>2024-10-06T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+        <category label="guide" term="guide"/>
+        <category label="beginner" term="beginner"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="aws s3" term="aws s3"/>
+        <category label="python" term="python"/>
+        <category label="pyspark" term="pyspark"/>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[4 Different Ways to fetch Apache Hudi Commit time in Python and PySpark]]></title>
         <id>https://hudi.apache.org/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</id>
         <link href="https://hudi.apache.org/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark"/>
@@ -289,45 +318,5 @@
         <category label="data lakehouse" term="data lakehouse"/>
         <category label="lakehouse" term="lakehouse"/>
         <category label="universal lakehouse" term="universal lakehouse"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Build Universal Data lake with Posgres + Debezium+Kafka+DeltaSTreamer + Minio+HiveMetastore+Trino]]></title>
-        <id>https://hudi.apache.org/videos/2024/04/06/Build-Universal-Data-lake-with-Posgres-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</id>
-        <link href="https://hudi.apache.org/videos/2024/04/06/Build-Universal-Data-lake-with-Posgres-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino"/>
-        <updated>2024-04-06T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="apache kafka" term="apache kafka"/>
-        <category label="debezium" term="debezium"/>
-        <category label="postgres" term="postgres"/>
-        <category label="deltastreamer" term="deltastreamer"/>
-        <category label="hudi streamer" term="hudi streamer"/>
-        <category label="trino" term="trino"/>
-        <category label="minio" term="minio"/>
-        <category label="apache hive" term="apache hive"/>
-        <category label="hive metastore" term="hive metastore"/>
-        <category label="data lakehouse" term="data lakehouse"/>
-        <category label="lakehouse" term="lakehouse"/>
-        <category label="universal lakehouse" term="universal lakehouse"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Reading Data from Hudi INC & Joining with Delta Tables using HudiStreamer & SQL-Based Transformer]]></title>
-        <id>https://hudi.apache.org/videos/2024/04/03/Reading-Data-from-Hudi-INC-and-Joining-with-Delta-Tables-using-HudiStreamer-and-SQL-Based-Transformer</id>
-        <link href="https://hudi.apache.org/videos/2024/04/03/Reading-Data-from-Hudi-INC-and-Joining-with-Delta-Tables-using-HudiStreamer-and-SQL-Based-Transformer"/>
-        <updated>2024-04-03T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="delta lake" term="delta lake"/>
-        <category label="sql transformer" term="sql transformer"/>
-        <category label="join" term="join"/>
-        <category label="incremental processing" term="incremental processing"/>
     </entry>
 </feed>
