@@ -23,10 +23,12 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.storage.StoragePath;
+
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -51,7 +53,15 @@ public interface HoodieCompactionHandler<T> {
     throw new HoodieNotSupportedException("Operation is not yet supported");
   }
 
-  default Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient) {
+  default Option<HoodieReaderContext> getReaderContext(StoragePath basePath) {
+    return Option.empty();
+  }
+
+  default void prepareParquetReader() {
+    // NO operation.
+  }
+
+  default Option<Configuration> getStorageConfig() {
     return Option.empty();
   }
 }

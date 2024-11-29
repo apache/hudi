@@ -31,7 +31,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -44,6 +43,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.HoodieAppendHandle;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapDeltaCommitActionExecutor;
@@ -63,17 +64,22 @@ import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.execution.datasources.FileFormat;
+import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
 import org.apache.spark.sql.hudi.SparkAdapter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
+import org.apache.spark.util.SerializableConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -105,14 +111,6 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
 
   HoodieSparkMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
-
-    // For Spark MOR table, use file group reader for table services, like compaction.
-    if (config.useFileGroupReaderWithinTableService()
-        && context instanceof HoodieSparkEngineContext
-        && HoodieTableType.MERGE_ON_READ == metaClient.getTableType()) {
-      HoodieSparkEngineContext hoodieSparkEngineContext = (HoodieSparkEngineContext) context;
-      prepareParquetReader(hoodieSparkEngineContext.getSqlContext().conf(), hoodieSparkEngineContext.jsc());
-    }
   }
 
   @Override
@@ -252,17 +250,41 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
     super.finalizeWrite(context, instantTs, stats);
   }
 
-  private void prepareParquetReader(SQLConf sqlConf, JavaSparkContext jsc) {
+  public void prepareParquetReader() {
+    if ((!config.useFileGroupReaderWithinTableService())
+        || !(context instanceof HoodieSparkEngineContext)) {
+      LOG.warn("Did not prepare ParquetFileReader");
+      return;
+    }
+
+    HoodieSparkEngineContext hoodieSparkEngineContext = (HoodieSparkEngineContext) context;
+    SQLConf sqlConf = hoodieSparkEngineContext.getSqlContext().sessionState().conf();
+    JavaSparkContext jsc = hoodieSparkEngineContext.jsc();
+
     scala.collection.immutable.Map<String, String> options =
         scala.collection.immutable.Map$.MODULE$.<String, String>empty()
             .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), "false"));
 
     SparkAdapter sparkAdapter = SparkAdapterSupport$.MODULE$.sparkAdapter();
-    parquetReaderOpt = Option.of(sparkAdapter.createParquetFileReader(false, sqlConf, options, jsc.hadoopConfiguration()));
+    Configuration mergedConf = addSparkConfigurations(sqlConf, new HashMap<>());
+    mergeConfigurations(jsc.hadoopConfiguration(), mergedConf);
+
+    configurationBroadcast = jsc.broadcast(new SerializableConfiguration(mergedConf));
+    parquetReaderOpt = Option.of(sparkAdapter.createParquetFileReader(
+        false, sqlConf, options, configurationBroadcast.getValue().value()));
     parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());
+    LOG.info("ParquetFileReader object is broadcast");
   }
 
-  public Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient) {
+  @Override
+  public Option<HoodieReaderContext> getReaderContext(StoragePath basePath) {
+    if (parquetReaderBroadcast == null) {
+      LOG.warn("ParquetReader is not broadcast; cannot use file group reader");
+      return Option.empty();
+    }
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(new HadoopStorageConfiguration(configurationBroadcast.getValue().value())).build();
     SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
     if (sparkParquetReader != null) {
       List<Filter> filters = new ArrayList<>();
@@ -272,7 +294,48 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
           metaClient.getTableConfig().getRecordKeyFields().get()[0],
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq()));
+    } else {
+      LOG.warn("ParquetFileReader is null");
+      return Option.empty();
     }
-    return Option.empty();
+  }
+
+  @Override
+  public Option<Configuration> getStorageConfig() {
+    return Option.of(configurationBroadcast.getValue().value());
+  }
+
+  private Configuration addSparkConfigurations(SQLConf sqlConf, Map<String, String> options) {
+    Configuration hadoopConf = new Configuration(false);
+
+    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, ParquetReadSupport.class.getName());
+    // Assuming `sqlConf` is an instance of SQLConf
+    hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE().key(), sqlConf.sessionLocalTimeZone());
+    hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED().key(), sqlConf.nestedSchemaPruningEnabled());
+    hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE().key(), sqlConf.caseSensitiveAnalysis());
+    hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), sqlConf.isParquetBinaryAsString());
+    hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), sqlConf.isParquetINT96AsTimestamp());
+    // Using string value of this configuration to preserve compatibility across Spark versions
+    hadoopConf.setBoolean(
+        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG().key(),
+        Boolean.parseBoolean(sqlConf.getConfString(
+            SQLConf.LEGACY_PARQUET_NANOS_AS_LONG().key(),
+            SQLConf.LEGACY_PARQUET_NANOS_AS_LONG().defaultValueString()
+        ))
+    );
+
+    hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED().key(), sqlConf.parquetInferTimestampNTZEnabled());
+    // Assuming `options` is a Map<String, String>
+    boolean returningBatch = sqlConf.parquetVectorizedReaderEnabled()
+        && "true".equals(options.getOrDefault(FileFormat.OPTION_RETURNING_BATCH(), "false"));
+    hadoopConf.setBoolean(FileFormat.OPTION_RETURNING_BATCH(), returningBatch);
+
+    return hadoopConf;
+  }
+
+  private void mergeConfigurations(Configuration source, Configuration target) {
+    for (Map.Entry<String, String> entry : source) {
+      target.set(entry.getKey(), entry.getValue());
+    }
   }
 }

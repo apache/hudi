@@ -55,11 +55,13 @@ import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -143,6 +145,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
+    // Broadcast ParquetFileReader for file group reader if needed.
+    compactionHandler.prepareParquetReader();
     return context.parallelize(operations).map(operation -> compact(
         compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
         .flatMap(List::iterator);
@@ -204,17 +208,23 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .collect(toList());
 
     // PATH 1: When the engine decides to return a valid reader context object.
-    Option<HoodieReaderContext> readerContextOpt = compactionHandler.getReaderContext(metaClient);
+    Option<HoodieReaderContext> readerContextOpt = compactionHandler.getReaderContext(metaClient.getBasePath());
     if (readerContextOpt.isPresent()) {
+      Option<Configuration> configurationOpt = compactionHandler.getStorageConfig();
+      assert (configurationOpt.isPresent());
+      HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(metaClient.getBasePath())
+          .setConf(new HadoopStorageConfiguration(configurationOpt.get()))
+          .build();
       return compactWithFileGroupReader(
           readerContextOpt.get(),
           instantTime,
-          metaClient,
+          newMetaClient,
           operation,
           logFiles,
           readerSchema,
           internalSchemaOption,
-          config.getProps(),
+          metaClient.getTableConfig().getProps(),
           config,
           taskContextSupplier);
     }
@@ -366,10 +376,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     long recordsWritten = 0;
     long errorRecords = 0;
     try (HoodieFileWriter fileWriter = HoodieFileWriterFactory.getFileWriter(
-        instantTime,
-        newBaseFilePath,
-        metaClient.getStorage(),
-        config,
+        instantTime, newBaseFilePath, metaClient.getStorage(), config,
         writeSchemaWithMetaFields, taskContextSupplier, config.getRecordMerger().getRecordType())) {
       while (recordIterator.hasNext()) {
         T record = recordIterator.next();

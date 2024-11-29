@@ -44,6 +44,7 @@ import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.util.SerializableConfiguration;
 
 import java.io.IOException;
 
@@ -54,6 +55,7 @@ public abstract class HoodieSparkTable<T>
 
   protected Option<SparkParquetReader> parquetReaderOpt = Option.empty();
   protected Broadcast<SparkParquetReader> parquetReaderBroadcast;
+  protected Broadcast<SerializableConfiguration> configurationBroadcast;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
