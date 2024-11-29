@@ -153,6 +153,20 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
   /**
    * For the given instant, this method checks if it is already caught up or not.
    * If not, it waits until the instant is completed.
+   * <p>
+   * 1. single writer.
+   * a. pending ingestion commit: If no heartbeat, then we are good to ignore.
+   * b. pending table service commit: There won't be any heartbeat. If no heartbeat, then we are good to ignore (strictly assuming single writer and inline table service).
+   * <p>
+   * 2. streamer + async table service.
+   * a. pending ingestion commit: If no heartbeat, then we are good to ignore.
+   * b. pending table service commit: There won't be any heartbeat. If no heartbeat, then we are good to ignore because we assume that user stops the main writer to create the index.
+   * <p>
+   * 3. Multi-writer scenarios:
+   * a. Spark datasource ingestion (OR streamer all inline) going on. User is trying to build index via spark-sql concurrently (w/o stopping the main writer)
+   * b. deltastreamer + async table services ongoing. User concurrently builds the index via spark-sql.
+   * c. multi-writer spark-ds writers. User is trying to build index via spark-sql concurrently (w/o stopping the all other writer)
+   * For new indexes added in 1.0.0, these flows are experimental. TODO: HUDI-8607.
    *
    * @param instant HoodieInstant to check
    * @return True if instant is already caught up, or no heartbeat, or expired heartbeat. If heartbeat exists and not expired, then return false.

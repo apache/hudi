@@ -206,6 +206,40 @@ public class TestIndexingCatchupTask {
     assertTrue(task.awaitInstantCaughtUp(expiredInstant), "Expected null as the instant's heartbeat has expired.");
   }
 
+  /**
+   * Test case to cover the scenario where the heartbeat does not exist for the given instant.
+   * Validate that awaitInstantCaughtUp returns true when heartbeat does not exist for the given instant.
+   */
+  @Test
+  public void testNoHeartbeat() throws IOException {
+    HoodieInstant pendingInstantWithNoHeartbeat = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, "commit", "002");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/some/path")
+        .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .build();
+    // Simulate heartbeat exists and expired
+    when(table.getConfig()).thenReturn(writeConfig);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(metaClient.getStorage()).thenReturn(storage);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath("/some/path"));
+    when(storage.exists(any())).thenReturn(false);
+
+    AbstractIndexingCatchupTask task = new DummyIndexingCatchupTask(
+        metadataWriter,
+        Collections.singletonList(pendingInstantWithNoHeartbeat),
+        new HashSet<>(),
+        metaClient,
+        metadataMetaClient,
+        transactionManager,
+        "001",
+        engineContext,
+        table,
+        heartbeatClient
+    );
+
+    assertTrue(task.awaitInstantCaughtUp(pendingInstantWithNoHeartbeat), "Expected null as the instant's heartbeat has expired.");
+  }
+
   static class DummyIndexingCatchupTask extends AbstractIndexingCatchupTask {
     public DummyIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
                                     List<HoodieInstant> instantsToIndex,
