@@ -3417,6 +3417,17 @@ public class HoodieWriteConfig extends HoodieConfig {
             HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
       }
 
+      // for a single writer scenario, with all table services inline, lets set InProcessLockProvider
+      if (writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.SINGLE_WRITER && !writeConfig.areAnyTableServicesAsync()) {
+        if (writeConfig.getLockProviderClass() != null) {
+          // add logs only when explicitly overridden by the user.
+          LOG.warn(String.format("For a single writer mode, overriding lock provider class (%s) to %s. So, user configured lock provider %s may not take effect",
+              HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName(), writeConfig.getLockProviderClass()));
+        }
+        writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
+            InProcessLockProvider.class.getName());
+      }
+
       // We check if "hoodie.clean.failed.writes.policy"
       // is properly set to LAZY for multi-writers
       WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
