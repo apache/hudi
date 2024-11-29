@@ -81,7 +81,7 @@ class BucketIndexSupport(spark: SparkSession,
     val bucketIdsBitMapByFilter = filterQueriesWithBucketHashField(queryFilters)
 
     if (bucketIdsBitMapByFilter.isDefined && bucketIdsBitMapByFilter.get.cardinality() > 0) {
-      val allFilesName = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)._2
+      val allFilesName = getPrunedPartitionsAndFileNames(fileIndex, prunedPartitionsAndFileSlices)._2
       Option.apply(getCandidateFiles(allFilesName, bucketIdsBitMapByFilter.get))
     } else {
       Option.empty
