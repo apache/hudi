@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -38,8 +39,11 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.HoodieLogFormatReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -77,6 +81,7 @@ import java.util.stream.StreamSupport;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.DELETE_BLOCK;
 
 /**
  * A HoodieCompactor runs compaction on a hoodie table.
@@ -212,21 +217,26 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     if (readerContextOpt.isPresent()) {
       Option<Configuration> configurationOpt = compactionHandler.getStorageConfig();
       assert (configurationOpt.isPresent());
+
       HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.builder()
           .setBasePath(metaClient.getBasePath())
           .setConf(new HadoopStorageConfiguration(configurationOpt.get()))
           .build();
-      return compactWithFileGroupReader(
-          readerContextOpt.get(),
-          instantTime,
-          newMetaClient,
-          operation,
-          logFiles,
-          readerSchema,
-          internalSchemaOption,
-          metaClient.getTableConfig().getProps(),
-          config,
-          taskContextSupplier);
+      List<HoodieLogFile> hoodieLogFiles = logFiles.stream()
+          .map(p -> new HoodieLogFile(new StoragePath(p))).collect(toList());
+      if (!containsPartialUpdate(readerContextOpt.get(), hoodieLogFiles, metaClient)) {
+        return compactWithFileGroupReader(
+            readerContextOpt.get(),
+            instantTime,
+            newMetaClient,
+            operation,
+            hoodieLogFiles,
+            readerSchema,
+            internalSchemaOption,
+            metaClient.getTableConfig().getProps(),
+            config,
+            taskContextSupplier);
+      }
     }
 
     // PATH2: Otherwise.
@@ -323,7 +333,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                                String instantTime,
                                                HoodieTableMetaClient metaClient,
                                                CompactionOperation operation,
-                                               List<String> logFilePaths,
+                                               List<HoodieLogFile> logFiles,
                                                Schema readerSchema,
                                                Option<InternalSchema> internalSchemaOpt,
                                                TypedProperties props,
@@ -331,8 +341,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                                TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieTimer timer = HoodieTimer.start();
     timer.startTimer();
-    List<HoodieLogFile> logFiles = logFilePaths.stream()
-        .map(p -> new HoodieLogFile(new StoragePath(p))).collect(toList());
     Option<HoodieBaseFile> baseFileOpt =
         operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
     FileSlice fileSlice = new FileSlice(
@@ -433,5 +441,28 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
+  }
+
+  private boolean containsPartialUpdate(HoodieReaderContext readerContext,
+                                        List<HoodieLogFile> logFiles,
+                                        HoodieTableMetaClient metaClient) throws IOException {
+    HoodieLogFormatReader logFormatReaderWrapper = new HoodieLogFormatReader(
+        metaClient.getStorage(),
+        logFiles,
+        readerContext.getSchemaHandler().getRequiredSchema(),
+        true,
+        HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue(),
+        false,
+        metaClient.getTableConfig().getRecordKeyFields().get()[0],
+        readerContext.getSchemaHandler().getInternalSchema());
+    while (logFormatReaderWrapper.hasNext()) {
+      HoodieLogBlock block = logFormatReaderWrapper.next();
+      if (block.isDataOrDeleteBlock()
+          && (block.getBlockType() != DELETE_BLOCK
+          && ((HoodieDataBlock) block).containsPartialUpdates())) {
+        return true;
+      }
+    }
+    return false;
   }
 }
