@@ -1338,7 +1338,6 @@ public class HoodieTableMetadataUtil {
 
       List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig,
           Lazy.eagerly(tableSchema));
-
       if (columnsToIndex.isEmpty()) {
         // In case there are no columns to index, bail
         return engineContext.emptyHoodieData();
@@ -1405,7 +1404,10 @@ public class HoodieTableMetadataUtil {
                                                                            Option<HoodieRecordType> recordType) {
     List<String> columnsToIndex = metadataConfig.getColumnsEnabledForColumnStatsIndex();
     if (!columnsToIndex.isEmpty()) {
-      return columnsToIndex.stream().filter(fieldName -> !META_COL_SET_TO_INDEX.contains(fieldName));
+      // filter for top level fields here.
+      List<String> topLevelFields = tableSchema.isLeft() ? tableSchema.asLeft() :
+          (tableSchema.asRight().get().map(schema -> schema.getFields().stream().map(field -> field.name()).collect(toList())).orElse(new ArrayList<String>()));
+      return columnsToIndex.stream().filter(fieldName -> !META_COL_SET_TO_INDEX.contains(fieldName) && (topLevelFields.isEmpty() || topLevelFields.contains(fieldName)));
     }
     if (tableSchema.isLeft()) {
       return getFirstNFieldNames(tableSchema.asLeft().stream(), metadataConfig.maxColumnsToIndexForColStats());

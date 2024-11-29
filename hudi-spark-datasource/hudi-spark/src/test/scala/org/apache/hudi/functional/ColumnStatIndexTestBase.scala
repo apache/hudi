@@ -42,8 +42,10 @@ import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 
 import org.apache.spark.sql.functions.typedLit
+import org.apache.spark.sql.functions.{lit, struct, typedLit}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.catalyst.dsl.expressions.StringToAttributeConversionHelper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.provider.Arguments
@@ -92,12 +94,19 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     cleanupSparkContexts()
   }
 
-  protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams): Unit = {
+  protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams, addNestedFiled : Boolean = false): Unit = {
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource(params.dataSourcePath).toString
 
     // NOTE: Schema here is provided for validation that the input date is in the appropriate format
-    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+    val preInputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    val inputDF = if (addNestedFiled) {
+      preInputDF.withColumn("c9",
+        functions.struct("c2").withField("car_brand", lit("abc_brand")))
+    } else {
+      preInputDF
+    }
 
     val writeOptions: Map[String, String] = params.hudiOpts ++ params.metadataOpts
 
