@@ -22,6 +22,7 @@ package org.apache.hudi.table.action.index;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -279,10 +280,12 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
   private void catchupWithInflightWriters(HoodieTableMetadataWriter metadataWriter, List<HoodieInstant> instantsToIndex,
                                           HoodieTableMetaClient metadataMetaClient, Set<String> metadataCompletedTimestamps,
                                           List<HoodieIndexPartitionInfo> indexPartitionInfos) {
+    HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(table.getStorage(), table.getMetaClient().getBasePath().toString(),
+        table.getConfig().getHoodieClientHeartbeatIntervalInMs(), table.getConfig().getHoodieClientHeartbeatTolerableMisses());
     ExecutorService executorService = Executors.newFixedThreadPool(MAX_CONCURRENT_INDEXING);
     Future<?> indexingCatchupTaskFuture = executorService.submit(
         IndexingCatchupTaskFactory.createCatchupTask(indexPartitionInfos, metadataWriter, instantsToIndex, metadataCompletedTimestamps,
-            table.getMetaClient(), metadataMetaClient, currentCaughtupInstant, txnManager, context));
+            table, metadataMetaClient, currentCaughtupInstant, txnManager, context, heartbeatClient));
     try {
       LOG.info("Starting index catchup task");
       HoodieTimer timer = HoodieTimer.start();
@@ -293,6 +296,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
       throw new HoodieIndexException(String.format("Index catchup failed. Current indexed instant = %s. Aborting!", currentCaughtupInstant), e);
     } finally {
       executorService.shutdownNow();
+      heartbeatClient.close();
     }
   }
 
