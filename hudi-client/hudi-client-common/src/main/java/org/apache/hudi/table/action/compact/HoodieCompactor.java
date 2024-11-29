@@ -224,7 +224,10 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
           .build();
       List<HoodieLogFile> hoodieLogFiles = logFiles.stream()
           .map(p -> new HoodieLogFile(new StoragePath(p))).collect(toList());
-      if (!containsPartialUpdate(readerContextOpt.get(), hoodieLogFiles, metaClient)) {
+      // Currently we only use file group reader for compaction when there are partial updates.
+      // This could reduce the risk for MDT.
+      List<HoodieLogFile> logFilesCopy = new ArrayList<>(hoodieLogFiles);
+      if (containsPartialUpdate(readerSchema, internalSchemaOption, logFilesCopy, newMetaClient)) {
         return compactWithFileGroupReader(
             readerContextOpt.get(),
             instantTime,
@@ -233,7 +236,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
             hoodieLogFiles,
             readerSchema,
             internalSchemaOption,
-            metaClient.getTableConfig().getProps(),
+            newMetaClient.getTableConfig().getProps(),
             config,
             taskContextSupplier);
       }
@@ -348,6 +351,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         operation.getBaseInstantTime(),
         baseFileOpt.isPresent() ? baseFileOpt.get() : null,
         logFiles);
+
     // 1. Generate the input for fg reader.
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
@@ -364,10 +368,12 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         0,
         Long.MAX_VALUE,
         usePosition);
+
     // 2. Get the `HoodieFileGroupReaderIterator` from the fg reader.
     fileGroupReader.initRecordIterators();
     HoodieFileGroupReader.HoodieFileGroupReaderIterator<T> recordIterator
         = fileGroupReader.getClosableIterator();
+
     // 3. Write the record using parquet writer.
     String writeToken = FSUtils.makeWriteToken(
         taskContextSupplier.getPartitionIdSupplier().get(),
@@ -375,11 +381,10 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         taskContextSupplier.getAttemptIdSupplier().get());
     String newFileName =
         FSUtils.makeBaseFileName(instantTime, writeToken, operation.getFileId(), ".parquet");
-    // compaction has to use this schema.
+    // Compaction has to use this schema.
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(readerSchema, config.allowOperationMetadataField());
     StoragePath dirPath = FSUtils.constructAbsolutePath(metaClient.getBasePath().toString(), operation.getPartitionPath());
     StoragePath newBaseFilePath = new StoragePath(dirPath, newFileName);
-
     WriteStatus writestatus = initNewStatus(config, true, operation);
     long recordsWritten = 0;
     long errorRecords = 0;
@@ -443,24 +448,26 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     stat.setRuntimeStats(runtimeStats);
   }
 
-  private boolean containsPartialUpdate(HoodieReaderContext readerContext,
+  private boolean containsPartialUpdate(Schema readerSchema,
+                                        Option<InternalSchema> internalSchema,
                                         List<HoodieLogFile> logFiles,
                                         HoodieTableMetaClient metaClient) throws IOException {
-    HoodieLogFormatReader logFormatReaderWrapper = new HoodieLogFormatReader(
+    try (HoodieLogFormatReader logFormatReaderWrapper = new HoodieLogFormatReader(
         metaClient.getStorage(),
         logFiles,
-        readerContext.getSchemaHandler().getRequiredSchema(),
+        readerSchema,
         true,
         HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue(),
         false,
         metaClient.getTableConfig().getRecordKeyFields().get()[0],
-        readerContext.getSchemaHandler().getInternalSchema());
-    while (logFormatReaderWrapper.hasNext()) {
-      HoodieLogBlock block = logFormatReaderWrapper.next();
-      if (block.isDataOrDeleteBlock()
-          && (block.getBlockType() != DELETE_BLOCK
-          && ((HoodieDataBlock) block).containsPartialUpdates())) {
-        return true;
+        internalSchema != null ? internalSchema.orElse(null) : null)) {
+      while (logFormatReaderWrapper.hasNext()) {
+        HoodieLogBlock block = logFormatReaderWrapper.next();
+        if (block.isDataOrDeleteBlock()
+            && (block.getBlockType() != DELETE_BLOCK
+            && ((HoodieDataBlock) block).containsPartialUpdates())) {
+          return true;
+        }
       }
     }
     return false;

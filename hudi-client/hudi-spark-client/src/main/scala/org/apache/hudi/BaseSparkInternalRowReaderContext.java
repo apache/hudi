@@ -46,6 +46,7 @@ import scala.Function1;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
@@ -99,6 +100,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       return key;
     }
     String keyField = props.getString(RECORDKEY_FIELD_NAME.key(), null);
+    if (keyField == null) keyField = props.getString(RECORDKEY_FIELDS.key(), null);
     if (keyField == null) {
       return null;
     }
