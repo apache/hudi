@@ -54,13 +54,13 @@ public class HoodieIndexingConfig extends HoodieConfig {
   public static final String INDEX_DEFINITION_FILE = "index.properties";
   public static final String INDEX_DEFINITION_FILE_BACKUP = "index.properties.backup";
   public static final ConfigProperty<String> INDEX_NAME = ConfigProperty
-      .key("hoodie.functional.index.name")
+      .key("hoodie.expression.index.name")
       .noDefaultValue()
       .sinceVersion("1.0.0")
       .withDocumentation("Name of the expression index. This is also used for the partition name in the metadata table.");
 
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
-      .key("hoodie.functional.index.type")
+      .key("hoodie.expression.index.type")
       .defaultValue(MetadataPartitionType.COLUMN_STATS.name())
       .withValidValues(
           MetadataPartitionType.COLUMN_STATS.name(),
@@ -73,7 +73,7 @@ public class HoodieIndexingConfig extends HoodieConfig {
           + "and there are functions or expressions in the command then a expression index using column stats will be created.");
 
   public static final ConfigProperty<String> INDEX_FUNCTION = ConfigProperty
-      .key("hoodie.functional.index.function")
+      .key("hoodie.expression.index.function")
       .noDefaultValue()
       .sinceVersion("1.0.0")
       .withDocumentation("Function to be used for building the expression index.");
