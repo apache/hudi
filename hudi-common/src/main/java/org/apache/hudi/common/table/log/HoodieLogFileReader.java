@@ -108,7 +108,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     //       further
     StoragePath updatedPath = FSUtils.makeQualified(storage, logFile.getPath());
     this.logFile = updatedPath.equals(logFile.getPath()) ? logFile : new HoodieLogFile(updatedPath, logFile.getFileSize());
-    this.logFileSize = logFile.getFileSize() <= 0 ? storage.getPathInfo(logFile.getPath()).getLength() : logFile.getFileSize();
+    this.logFileSize = this.logFile.getFileSize() <= 0 ? getFileLength(storage, this.logFile) : this.logFile.getFileSize();
     this.bufferSize = bufferSize;
     this.inputStream = getDataInputStream(this.storage, this.logFile, bufferSize);
     this.readerSchema = readerSchema;
@@ -471,6 +471,14 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       return storage.openSeekable(logFile.getPath(), bufferSize, true);
     } catch (IOException e) {
       throw new HoodieIOException("Unable to get seekable input stream for " + logFile, e);
+    }
+  }
+
+  public static long getFileLength(HoodieStorage storage, HoodieLogFile logFile) {
+    try {
+      return storage.getPathInfo(logFile.getPath()).getLength();
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to get file length for " + logFile, e);
     }
   }
 }
