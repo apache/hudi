@@ -197,8 +197,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
-      latestCompletedCommit,
+      latestCompletedCommit = latestCompletedCommit,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -215,8 +214,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath1,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
-      latestCompletedCommit,
+      latestCompletedCommit = latestCompletedCommit,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -248,7 +246,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      false,
+      shouldValidate = false,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -259,7 +257,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      false,
+      shouldValidate = false,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -289,8 +287,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
-      latestCompletedCommit,
+      latestCompletedCommit = latestCompletedCommit,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -381,7 +378,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -394,7 +391,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -427,7 +423,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -443,7 +439,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -460,7 +456,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -494,7 +489,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -510,7 +505,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -527,7 +522,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
