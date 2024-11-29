@@ -8,27 +8,28 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 
 import SlackCommunity from '@site/src/components/SlackCommunity';
 
-Welcome to Apache Hudi! This overview will provide a high level summary of what Apache Hudi is and will orient you on
+Hello there! This overview will provide a high level summary of what Apache Hudi is and will orient you on
 how to learn more to get started.
 
 ## What is Apache Hudi
-Apache Hudi (pronounced “hoodie”) is the next generation [streaming data lake platform](/blog/2021/07/21/streaming-data-lake-platform).
- Hudi brings core warehouse and database functionality directly to a data lake. Hudi provides [tables](/docs/next/sql_ddl),
+
+Apache Hudi (pronounced "hoodie") pioneered the concept of "[transactional data lakes](https://www.uber.com/blog/hoodie/)", which is more popularly known today as
+the data lakehouse architecture. Today, Hudi has grown into an [open data lakehouse platform](/blog/2021/07/21/streaming-data-lake-platform), with a open table format purpose-built for high performance writes on
+incremental data pipelines and fast query performance due to comprehensive table optimizations.
+
+Hudi brings core database functionality directly to a data lake - [tables](/docs/next/sql_ddl),
 [transactions](/docs/next/timeline), [efficient upserts/deletes](/docs/next/write_operations), [advanced indexes](/docs/next/indexing),
 [ingestion services](/docs/hoodie_streaming_ingestion), data [clustering](/docs/next/clustering)/[compaction](/docs/next/compaction) optimizations,
-and [concurrency](/docs/next/concurrency_control) all while keeping your data in open source file formats.
+and [concurrency control](/docs/next/concurrency_control) all while keeping your data in open file formats. Not only is Apache Hudi great for streaming workloads,
+but it also allows you to create efficient incremental batch pipelines. Apache Hudi can easily be used on any [cloud storage platform](/docs/cloud).
+Hudi’s advanced performance optimizations, make analytical queries/pipelines faster with any of the popular query engines including, Apache Spark, Flink, Presto, Trino, Hive, etc.
 
-Not only is Apache Hudi great for streaming workloads, but it also allows you to create efficient incremental batch pipelines.
 Read the docs for more [use case descriptions](/docs/use_cases) and check out [who's using Hudi](/powered-by), to see how some of the
 largest data lakes in the world including [Uber](https://eng.uber.com/uber-big-data-platform/), [Amazon](https://aws.amazon.com/blogs/big-data/how-amazon-transportation-service-enabled-near-real-time-event-analytics-at-petabyte-scale-using-aws-glue-with-apache-hudi/),
 [ByteDance](http://hudi.apache.org/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance),
 [Robinhood](https://s.apache.org/hudi-robinhood-talk) and more are transforming their production data lakes with Hudi.
 
-Apache Hudi can easily be used on any [cloud storage platform](/docs/cloud).
-Hudi’s advanced performance optimizations, make analytical workloads faster with any of
-the popular query engines including, Apache Spark, Flink, Presto, Trino, Hive, etc.
-
-[Hudi-rs](https://github.com/apache/hudi-rs) is the native Rust implementation for Apache Hudi, which also provides bindings to Python. It 
+[Hudi-rs](https://github.com/apache/hudi-rs) is the native Rust implementation for Apache Hudi, which also provides bindings to Python. It
 expands the use of Apache Hudi for a diverse range of use cases in the non-JVM ecosystems.
 
 ## Core Concepts to Learn
@@ -39,7 +40,7 @@ If you are relatively new to Apache Hudi, it is important to be familiar with a 
 - [Hudi Table Types](/docs/next/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
 - [Hudi Query Types](/docs/next/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
 
-See more in the "Concepts" section of the docs.
+See more in the "Design & Concepts" section of the docs.
 
 Take a look at recent [blog posts](/blog) that go in depth on certain topics or use cases.
 
@@ -51,12 +52,10 @@ Sometimes the fastest way to learn is by doing. Try out these Quick Start resour
 - [Flink Quick Start Guide](/docs/flink-quick-start-guide) – if you primarily use Apache Flink
 - [Python/Rust Quick Start Guide (Hudi-rs)](/docs/python-rust-quick-start-guide) - if you primarily use Python or Rust
 
-If you want to experience Apache Hudi integrated into an end to end demo with Kafka, Spark, Hive, Presto, etc, try out the Docker Demo:
-
-- [Docker Demo](/docs/docker_demo)
+If you want to experience Apache Hudi integrated into an end to end demo with Kafka, Spark, Hive, Presto, etc, try out the [Docker Demo](/docs/docker_demo)
 
 ## Connect With The Community
-Apache Hudi is community focused and community led and welcomes new-comers with open arms. Leverage the following
+Apache Hudi is community-focused and community-led and welcomes new-comers with open arms. Leverage the following
 resources to learn more, engage, and get help as you get started.
 
 ### Join in on discussions
