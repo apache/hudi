@@ -24,7 +24,7 @@ down by areas on our [stack](/docs/hudi_stack).
 | 2.0.0       | Dec 2025 |
 
 
-## Transactions Database Layer
+## Storage Engine
 
 | Feature                                              | Target Release | Tracking                                                                                                                                                                       |
 |------------------------------------------------------|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -68,7 +68,7 @@ down by areas on our [stack](/docs/hudi_stack).
 | Replace Dataframe write path for Spark                  | 1.1.0	         | [HUDI-4857](https://issues.apache.org/jira/browse/HUDI-4857)                                                                                                                             |
 
 
-## Platform Services
+## Platform Components
 
 | Feature                                                                                           | Target Release | Tracking                                                                                                                               |
 |---------------------------------------------------------------------------------------------------|----------------|----------------------------------------------------------------------------------------------------------------------------------------|
