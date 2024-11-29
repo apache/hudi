@@ -5,71 +5,107 @@ toc_min_heading_level: 2
 toc_max_heading_level: 4
 ---
 
-At its core, Hudi maintains a `timeline` which is a log of all actions performed on the table at different `instants` of time that helps provide instantaneous views of the table,
-while also efficiently supporting retrieval of data in the order of arrival. A Hudi instant consists of the following components
+Changes to table state (writes, table services, schema changes, etc) are recorded as **_actions_** in the Hudi **_timeline_**. The Hudi timeline is a log of all actions performed 
+on the table at different **_instants_** (points in time). It is a key component of Hudi's architecture, acting as a source of truth for the state of the table. All instant times
+used on the timeline follow [TrueTime](https://research.google/pubs/spanner-truetime-and-the-cap-theorem/) semantics, and are monotonically increasing globally across various 
+processes involved. See TrueTime section below for more details.
 
-* `Instant action` : Type of action performed on the table
-* `Instant time` : Instant time is typically a timestamp (e.g: 20190117010349), which monotonically increases in the order of action's begin time.
-* `state` : current state of the instant
+Each action has the following attributes associated with it.
 
-Hudi guarantees that the actions performed on the timeline are atomic & timeline consistent based on the instant time. 
-Atomicity is achieved by relying on the atomic puts to the underlying storage to move the write operations through various states in the timeline.
-This is achieved on the underlying DFS (in the case of S3/Cloud Storage, by an atomic PUT operation) and can be observed by files of the pattern `<instant>.<action>.<state>` in Hudi’s timeline.
+* **requested instant** : Instant time representing when the action was requested on the timeline. An immutable plan for the action should be generated before the action is requested. 
+* **completed instant** : Instant time representing when the action was completed on the timeline. All relevant changes to table data/metadata should be made before the action is completed.
+* **state** :  state of the action. valid states are `REQUESTED`, `INFLIGHT` and `COMPLETED` during an action's lifecycle.
+* **type** : the kind of action performed. See below for full list of actions.
 
-### Actions
-Key actions performed include
+![Timeline actions](/assets/images/hudi-timeline-actions.png)
+<p align = "center">Figure: Actions in the timeline</p>
 
-* `COMMITS` - A commit denotes an **atomic write** of a batch of records into a table.
-* `CLEANS` - Background activity that gets rid of older versions of files in the table, that are no longer needed.
-* `DELTA_COMMIT` - A delta commit refers to an **atomic write** of a batch of records into a  MergeOnRead type table, where some/all of the data could be just written to delta logs.
-* `COMPACTION` - Background activity to reconcile differential data structures within Hudi e.g: moving updates from row based log files to columnar formats. Internally, compaction manifests as a special commit on the timeline
-* `ROLLBACK` - Indicates that a commit/delta commit was unsuccessful & rolled back, removing any partial files produced during such a write
-* `SAVEPOINT` - Marks certain file groups as "saved", such that cleaner will not delete them. It helps restore the table to a point on the timeline, in case of disaster/data recovery scenarios.
+### Action Types
 
-### States
-Any given instant can be
-in one of the following states
+Following are the valid action types.
 
-* `REQUESTED` - Denotes an action has been scheduled, but has not initiated
-* `INFLIGHT` - Denotes that the action is currently being performed
-* `COMPLETED` - Denotes completion of an action on the timeline
+* **COMMIT** - Write operation denoting an atomic write of a batch of records into a base files in the table.
+* **DELTA_COMMIT** - Write operation denoting an atomic write of a batch of records into merge-on-read type table, where some/all of the data could be just written to delta logs.
+* **REPLACE_COMMIT** - Write operation that atomically replaces a set of file groups in the table with another. Used for implementing batch write operations like _insert_overwrite_, _delete_partition_ etc, as well as table services 
+  like clustering.
+* **CLEANS** - Table service that removes older file slices that are no longer needed from the table, by deleting those files.
+* **COMPACTION** - Table service to reconcile differential data between base and delta files, by merging delta files into base files. 
+* **LOGCOMPACTION** - Table service to merge multiple small log files into a bigger log file in the same file slice. 
+* **CLUSTERING** - Table service to rewrite existing file groups with optimized sort order or storage layouts, as new file groups in the table.
+* **INDEXING** - Table service to build an index of a requested type on a column of the table, consistent with the state of the table at the completed instant in face of ongoing writes.
+* **ROLLBACK** - Indicates that an unsuccessful write operation was rolled back, removing any partial/uncommitted files produced during such a write from storage.
+* **SAVEPOINT** - Marks certain file slices as "saved", such that cleaner will not delete them. It helps restore the table to a point on the timeline, in case of disaster/data recovery scenarios or perform time-travel queries as of those instants.
+* **RESTORE** - Restores a table to a given savepoint on the timeline, in case of disaster/data recovery scenarios.
 
-All the actions in requested/inflight states are stored in the active timeline as files named *
-*_\<begin\_instant\_time>.\<action\_type>.\<requested|inflight>_**. Completed actions are stored along with a time that
-denotes when the action was completed, in a file named *
-*_\<begin\_instant\_time>\_\<completion\_instant\_time>.\<action\_type>.**
-<figure>
-    <img className="docimage" src={require("/assets/images/hudi_timeline.png").default} alt="hudi_timeline.png" />
-</figure>
+In some cases, action types in the completed state may be different from requested/inflight states, but still tracked by the same requested instant. For e.g. _CLUSTERING_ as in requested/inflight state, 
+becomes _REPLACE_COMMIT_ in completed state. Compactions complete as _COMMIT_ action on the timeline producing new base files. In general, multiple write operations from the storage engine
+may map to the same action on the timeline.
 
-Example above shows upserts happenings between 10:00 and 10:20 on a Hudi table, roughly every 5 mins, leaving commit metadata on the Hudi timeline, along
-with other background cleaning/compactions. One key observation to make is that the commit time indicates the `arrival time` of the data (10:20AM), while the actual data
-organization reflects the actual time or `event time`, the data was intended for (hourly buckets from 07:00). These are two key concepts when reasoning about tradeoffs between latency and completeness of data.
+### State Transitions
+Actions go through state transitions on the timeline, with each transition recorded by a file of the pattern `<requsted instant>.<action>.<state>`(for other states) or 
+`<requsted instant>_<completed instant>.<action>` (for COMPLETED state). Hudi guarantees that the state transitions are atomic and timeline consistent based on the instant time.
+Atomicity is achieved by relying on the atomic operations on the underlying storage (e.g. PUT calls to S3/Cloud Storage).
 
-When there is late arriving data (data intended for 9:00 arriving >1 hr late at 10:20), we can see the upsert producing new data into even older time buckets/folders.
-With the help of the timeline, an incremental query attempting to get all new data that was committed successfully since 10:00 hours, is able to very efficiently consume
-only the changed files without say scanning all the time buckets > 07:00.
+Valid state transitions are as follows:
 
-### Active and Archived timeline
-Hudi divides the entire timeline into active and archived timeline. As the name suggests active timeline is consulted all
-the time to serve metadata on valid data files and to ensure reads on the timeline does not incur unnecessary latencies 
-as timeline grows, the active timeline needs to be bounded on the metadata (timeline instants) it can serve. To ensure this, 
-after certain thresholds the archival kicks in to move older timeline events to the archived timeline. In general, archival 
-timeline is never contacted for regular operations of the table and is merely used for book-keeping and debugging purposes.
-Any instants seen under “.hoodie” directory refers to active timeline and those archived goes into “.hoodie/archived” folder.
+* `[       ] -> REQUESTED` - Denotes an action has been scheduled, but has not initiated by any process yet. 
+  Note that the process requesting the action can be different from the process that will perform/complete the action.
+* `REQUESTED -> INFLIGHT` - Denotes that the action is currently being performed by some process.
+* `INFLIGHT -> REQUESTED` or `INFLIGHT -> INFLIGHT` - A process can safely fail many times while performing the action.
+* `INFLIGHT -> COMPLETED` - Denotes that the action has been completed successfully.
 
-#### LSM Timeline
+The current state of an action on the timeline is the highest state recorded for that action on the timeline, with states ordered as `REQUESTED < INFLIGHT < COMPLETED`.
+
+### TrueTime Generation
+
+Time in distributed systems has been studied literally for [decades](https://lamport.azurewebsites.net/pubs/chandy.pdf). Google Spanner’s 
+[TrueTime](https://research.google/pubs/spanner-truetime-and-the-cap-theorem/) API addresses the challenges of managing time in distributed systems by providing a globally 
+synchronized clock with bounded uncertainty. Traditional systems struggle with clock drift and lack of a consistent timeline, but TrueTime ensures that all nodes operate with 
+a common notion of time, defined by a strict interval of uncertainty. This enables Spanner to achieve external consistency in distributed transactions, allowing it to assign 
+timestamps with confidence that no other operation in the past or future will conflict, solving age-old issues of clock synchronization and causality. Several OLTP databases 
+like Spanner, [CockroachDB](https://www.cockroachlabs.com/blog/living-without-atomic-clocks/) rely on TrueTime.
+
+Hudi uses these semantics for instant times on the timeline, to provide unique monotonically increasing instant values. TrueTime can be generated by a single shared time generator
+process or by having each process generate its own time and waiting for time >= maximum expected clock drift across all processes within a distributed lock. Locking ensures only one
+process is generating time at a time and waiting ensures enough time passes such that any new time generated is guaranteed to be greater than the previous time.
+
+![Timeline actions](/assets/images/hudi-timeline-truetime.png)
+<p align = "center">Figure: TrueTime generation for processes A & B</p>
+
+The figure above shows how time generated by process A and B are monotonically increasing, even though process B has a lower local clock than A at the start, by waiting for uncertainty window of x ms to pass.    
+In fact, given Hudi targets transaction durations > 1 second, we can afford to operate with a much higher uncertainty bound (> 100ms) guaranteeing extremely high fidelity time generation.
+
+### Ordering of Actions
+
+Thus, actions appear on the timeline as an interval starting at the requested instant and ending at the completed instant. Such actions can be ordered by completion time to
+
+- **Commit time ordering** : To obtain serializable execution order of writes performed consistent with typical relational databases, the actions can be ordered by completed instant.
+- **Event time ordering**: Data lakehouses ultimately deal with streams of data (CDC, events, slowly changing data etc), where ordering is dependent on business fields in 
+ the data. In such cases, actions can be ordered by commit time, while the records themselves are further merged in order of a specified event time field.
+
+Hudi relies on ordering of requested instants of certain actions against completed instants of other actions, to implement non-blocking table service operations or concurrent streaming model
+writes with event time ordering.
+
+
+### Active Timeline and History
+
+Hudi implements the timeline as a Log Structured Merge ([LSM](https://en.wikipedia.org/wiki/Log-structured_merge-tree)) tree under the `.hoodie/timeline` directory. Unlike typical LSM implementations, 
+the memory component and the write-ahead-log are at once replaced by [avro](https://avro.apache.org/) serialized files containing individual actions (**_active timeline_**) for high durability and inter-process co-ordination.
+All actions on the Hudi table are created in the active timeline a new entry and periodically actions are archived from the active timeline to the LSM structure (timeline history). 
+As the name suggests active timeline is consulted all the time to build a consistent view of data and archiving completed actions ensures reads on the timeline does not incur unnecessary latencies 
+as timeline grows. The key invariant around such archiving is that any side effects from completed/pending actions (e.g. uncommitted files) are removed from storage, before archiving them.
+
+#### LSM Timeline History
 
 As mentioned above, active timeline has limited log history to be fast, while archived timeline is expensive to access
 during reads or writes, especially with high write throughput. To overcome this limitation, Hudi introduced the LSM (
 log-structured merge) tree based timeline. Completed actions, their plans and completion metadata are stored in a more
-scalable LSM tree based archived timeline organized in an **_archived_** storage location under the `.hoodie` metadata
-path. The new timeline format is enabled by default and going forward, we will refer to the archived timeline as LSM 
-timeline. It consists of Apache Parquet files with action instant data and bookkeeping metadata files, in the following
+scalable LSM tree based archived timeline organized in an **_history_** storage folder under the `.hoodie/timeline` metadata
+path. It consists of Apache Parquet files with action instant data and bookkeeping metadata files, in the following
 manner.
 
 ```bash
-/.hoodie/archived/ 					
+/.hoodie/timeline/history/ 					
 ├── _version_      					        <-- stores the manifest version that is current
 ├── manifest_1                              <-- manifests store list of files in timeline
 ├── manifest_2                              <-- compactions, cleaning, writes produce new manifest files
@@ -87,11 +123,11 @@ One can read more about the details of LSM timeline in Hudi 1.0 specs. To unders
 In the above figure, each level is a tree sorted by instant times. We can see that for a bunch of commits the metadata
 is stored in a parquet file. As and when more commits are accumulated, they get compacted and pushed down to lower level
 of the tree. Each new operation to the timeline yields a new snapshot version. The advantage of such a structure is that
-we can keep the top level in memory, and still load the remaining levels efficiently from the disk if we need to walk
+we can keep the top level in memory if needed, and still load the remaining levels efficiently from the disk if we need to walk
 back longer history. The LSM timeline compaction frequency is controlled by`hoodie.timeline.compaction.batch.size` i.e. 
 for every _N_ parquet files in the current level, they are merged and flush as a compacted file in the next level.
 
-### Archival Configs 
+### Timeline Archival Configs 
 Basic configurations that control archival.
 
 #### Spark write client configs 

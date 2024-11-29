@@ -1,5 +1,5 @@
 ---
-title: "Python/Rust Quick Start (Hudi-rs)"
+title: "Python/Rust Quick Start"
 toc: true
 last_modified_at: 2024-11-28T12:53:57+08:00
 ---
