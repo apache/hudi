@@ -59,7 +59,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name()
   ) ++ metadataOpts
 
-  test("Test Create/Show/Drop Secondary Index") {
+  test("Test Create/Show/Drop Secondary Index with External Table") {
     if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
@@ -86,6 +86,14 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
                | location '$basePath'
        """.stripMargin)
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+          spark.sql(s"""DROP TABLE if exists $tableName""")
+          // Use the same base path as above
+          spark.sql(
+            s"""CREATE TABLE $tableName USING hudi options (
+               |     hoodie.metadata.record.index.enable = 'true'
+               | ) LOCATION '$basePath'""".stripMargin)
+
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
           checkAnswer(s"show indexes from default.$tableName")(
