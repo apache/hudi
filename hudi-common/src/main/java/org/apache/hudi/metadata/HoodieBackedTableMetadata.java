@@ -75,6 +75,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
@@ -799,8 +800,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Parallel lookup keys from each file slice
     Map<String, String> reverseSecondaryKeyMap = new HashMap<>(recordKeys.size());
     getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Lookup secondary keys from metadata table partition " + partitionName);
-    getEngineContext().map(partitionFileSlices, fileSlice -> reverseLookupSecondaryKeys(partitionName, recordKeys, fileSlice), partitionFileSlices.size()).forEach(reverseSecondaryKeyMap::putAll);
+    List<Pair<String, String>> secondaryToRecordKeyPairList = getEngineContext().flatMap(partitionFileSlices,
+        (SerializableFunction<FileSlice, Stream<Pair<String, String>>>) v1 -> reverseLookupSecondaryKeys(partitionName, recordKeys, v1)
+            .entrySet().stream()
+            .map(entry -> Pair.of(entry.getKey(), entry.getValue())).collect(Collectors.toList()).stream(), partitionFileSlices.size());
 
+    secondaryToRecordKeyPairList.forEach(pair -> reverseSecondaryKeyMap.put(pair.getKey(), pair.getValue()));
     return reverseSecondaryKeyMap;
   }
 
