@@ -662,6 +662,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |  preCombineField = 'ts',
                |  hoodie.datasource.write.recordkey.field = 'id',
                |  hoodie.metadata.index.partition.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.enable = 'true',
                |  hoodie.metadata.index.column.stats.column.list = 'price',
                |  hoodie.populate.meta.fields = 'false'
                |)

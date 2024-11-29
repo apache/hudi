@@ -60,6 +60,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
     HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
+    HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
     HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
   )
   val commonOpts: Map[String, String] = Map(

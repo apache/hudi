@@ -370,7 +370,11 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
       tableName += "test_secondary_index_with_partition_stats_index" + (if (isPartitioned) "_partitioned" else "") + sqlTableType
       val partitionedByClause = if (isPartitioned) "partitioned by(partition_key_col)" else ""
-      val partitionStatsEnable = if (isPartitioned) "'hoodie.metadata.index.partition.stats.enable' = 'true'," else ""
+      val partitionStatsEnable = if (isPartitioned)
+        s"""
+           |'hoodie.metadata.index.partition.stats.enable' = 'true',
+           |'hoodie.metadata.index.column.stats.enable' = 'true',
+        """.stripMargin else ""
       val columnsToIndex = if (isPartitioned) "'hoodie.metadata.index.column.stats.column.list' = 'name'," else ""
 
       spark.sql(
