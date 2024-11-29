@@ -93,9 +93,8 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
   @Override
   public void run() {
     for (HoodieInstant instant : instantsToIndex) {
-      // metadata index already updated for this instant
-      instant = awaitInstantCaughtUp(instant);
-      if (instant == null) {
+      // Already caught up to this instant, or no heartbeat, or heartbeat expired for this instant
+      if (awaitInstantCaughtUp(instant)) {
         continue;
       }
       // if instant completed, ensure that there was metadata commit, else update metadata for this completed instant
@@ -156,19 +155,25 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
    * If not, it waits until the instant is completed.
    *
    * @param instant HoodieInstant to check
-   * @return null if instant is already caught up, else the instant after it is completed.
+   * @return True if instant is already caught up, or no heartbeat, or expired heartbeat. If heartbeat exists and not expired, then return false.
    */
-  HoodieInstant awaitInstantCaughtUp(HoodieInstant instant) {
+  boolean awaitInstantCaughtUp(HoodieInstant instant) {
     if (!metadataCompletedInstants.isEmpty() && metadataCompletedInstants.contains(instant.requestedTime())) {
       currentCaughtupInstant = instant.requestedTime();
-      return null;
+      return true;
     }
     if (!instant.isCompleted()) {
-      // check if instant heartbeat expired, if so then ignore this instant
+      // check heartbeat
       try {
+        // if no heartbeat, then ignore this instant
+        if (!HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), metaClient.getBasePath().toString(), instant.requestedTime())) {
+          LOG.info("Ignoring instant " + instant + " as no heartbeat found");
+          return true;
+        }
+        // if heartbeat exists, but expired, then ignore this instant
         if (table.getConfig().getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instant.requestedTime())) {
           LOG.info("Ignoring instant " + instant + " as heartbeat expired");
-          return null;
+          return true;
         }
       } catch (IOException e) {
         throw new HoodieIOException("Unable to check if heartbeat expired for instant " + instant, e);
@@ -180,7 +185,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
         throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);
       }
     }
-    return instant;
+    return false;
   }
 
   private void reloadTimelineWithWait(HoodieInstant instant) throws InterruptedException {

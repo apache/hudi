@@ -31,6 +31,8 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -48,7 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -131,9 +133,13 @@ public class TestIndexingCatchupTask {
         .withPath("/some/path")
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
         .build();
-    // Simulate lazy clean policy and heartbeat expired
+    // Simulate heartbeat exists and not expired
     when(table.getConfig()).thenReturn(writeConfig);
-    when(heartbeatClient.isHeartbeatExpired("002")).thenReturn(false);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(metaClient.getStorage()).thenReturn(storage);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath("/some/path"));
+    when(storage.exists(any())).thenReturn(true);
+    when(heartbeatClient.isHeartbeatExpired("001")).thenReturn(false);
 
     AbstractIndexingCatchupTask task = new DummyIndexingCatchupTask(
         metadataWriter,
@@ -176,8 +182,12 @@ public class TestIndexingCatchupTask {
         .withPath("/some/path")
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
         .build();
-    // Simulate lazy clean policy and heartbeat expired
+    // Simulate heartbeat exists and expired
     when(table.getConfig()).thenReturn(writeConfig);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(metaClient.getStorage()).thenReturn(storage);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath("/some/path"));
+    when(storage.exists(any())).thenReturn(true);
     when(heartbeatClient.isHeartbeatExpired("002")).thenReturn(true);
 
     AbstractIndexingCatchupTask task = new DummyIndexingCatchupTask(
@@ -193,8 +203,7 @@ public class TestIndexingCatchupTask {
         heartbeatClient
     );
 
-    HoodieInstant result = task.awaitInstantCaughtUp(expiredInstant);
-    assertNull(result, "Expected null as the instant's heartbeat has expired.");
+    assertTrue(task.awaitInstantCaughtUp(expiredInstant), "Expected null as the instant's heartbeat has expired.");
   }
 
   static class DummyIndexingCatchupTask extends AbstractIndexingCatchupTask {

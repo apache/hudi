@@ -42,10 +42,9 @@ public class IndexingCatchupTaskFactory {
                                                       HoodieTableMetaClient metadataMetaClient,
                                                       String currentCaughtupInstant,
                                                       TransactionManager transactionManager,
-                                                      HoodieEngineContext engineContext) {
+                                                      HoodieEngineContext engineContext,
+                                                      HoodieHeartbeatClient heartbeatClient) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(table.getStorage(), metaClient.getBasePath().toString(), table.getConfig().getHoodieClientHeartbeatIntervalInMs(),
-        table.getConfig().getHoodieClientHeartbeatTolerableMisses());
     boolean hasRecordLevelIndexing = indexPartitionInfos.stream()
         .anyMatch(partitionInfo -> partitionInfo.getMetadataPartitionPath().equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
     if (hasRecordLevelIndexing) {
