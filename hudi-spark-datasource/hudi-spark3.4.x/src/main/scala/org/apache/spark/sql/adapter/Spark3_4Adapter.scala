@@ -56,6 +56,8 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
         //       on top of it
         case PhysicalOperation(_, _, DataSourceV2Relation(v2: V2TableWithV1Fallback, _, _, _, _)) if isHoodieTable(v2.v1Table) =>
           Some(v2.v1Table)
+        case ResolvedTable(_, _, V1Table(v1Table), _) if isHoodieTable(v1Table) =>
+          Some(v1Table)
         case _ => None
       }
     }
