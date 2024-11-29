@@ -52,12 +52,14 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -85,6 +87,11 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Properties properties = new Properties();
     properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
+    List<Schema.Field> fields = new ArrayList<>();
+    fields.add(new Schema.Field(FIELD_1, Schema.create(Schema.Type.STRING), null, null));
+    fields.add(new Schema.Field(FIELD_2, Schema.create(Schema.Type.STRING), null, null));
+    Schema simpleSchema = Schema.createRecord("simpleSchema", null, null, false, fields);
+
     writeConfig = HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
         .withPath(metaClient.getBasePath())
@@ -98,6 +105,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
             .build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())
         .withTableServicesEnabled(true)
+        .withSchema(simpleSchema.toString())
         .build();
 
     writeClient = getHoodieWriteClient(writeConfig);
