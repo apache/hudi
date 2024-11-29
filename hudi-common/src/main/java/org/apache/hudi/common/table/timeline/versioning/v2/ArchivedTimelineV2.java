@@ -48,11 +48,11 @@ import java.util.function.Function;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 
 public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchivedTimeline {
-  private static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
+  public static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
   public static final String COMPLETION_TIME_ARCHIVED_META_FIELD = "completionTime";
-  private static final String ACTION_ARCHIVED_META_FIELD = "action";
-  private static final String METADATA_ARCHIVED_META_FIELD = "metadata";
-  private static final String PLAN_ARCHIVED_META_FIELD = "plan";
+  public static final String ACTION_ARCHIVED_META_FIELD = "action";
+  public static final String METADATA_ARCHIVED_META_FIELD = "metadata";
+  public static final String PLAN_ARCHIVED_META_FIELD = "plan";
   private HoodieTableMetaClient metaClient;
   private final Map<String, byte[]> readCommits = new ConcurrentHashMap<>();
 

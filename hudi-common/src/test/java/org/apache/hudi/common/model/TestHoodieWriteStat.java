@@ -53,6 +53,12 @@ public class TestHoodieWriteStat {
     writeStat.setPath(basePath, finalizeFilePath);
     assertEquals(finalizeFilePath, new StoragePath(basePath, writeStat.getPath()));
 
+    // test prev base file
+    StoragePath prevBaseFilePath = new StoragePath(partitionPath, FSUtils.makeBaseFileName(instantTime, "2-0-3", fileName,
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
+    writeStat.setPrevBaseFile(prevBaseFilePath.toString());
+    assertEquals(prevBaseFilePath.toString(), writeStat.getPrevBaseFile());
+
     // test for null tempFilePath
     writeStat = new HoodieWriteStat();
     writeStat.setPath(basePath, finalizeFilePath);

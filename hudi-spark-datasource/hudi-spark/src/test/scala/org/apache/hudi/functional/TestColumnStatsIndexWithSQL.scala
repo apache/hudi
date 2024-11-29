@@ -68,6 +68,29 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParams"))
+  def testMetadataColumnStatsIndexWithSQLWithLimitedIndexes(testCase: ColumnStatsTestCase): Unit = {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.key() -> "3"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+    ) ++ metadataOpts
+    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true, useShortSchema = true)
+  }
+
+  @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParamsForMOR"))
   def testMetadataColumnStatsIndexSQLWithInMemoryIndex(testCase: ColumnStatsTestCase): Unit = {
     val metadataOpts = Map(
@@ -204,25 +227,33 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     verifyFileIndexAndSQLQueries(commonOpts)
   }
 
-  private def setupTable(testCase: ColumnStatsTestCase, metadataOpts: Map[String, String], commonOpts: Map[String, String], shouldValidate: Boolean): Unit = {
+  private def setupTable(testCase: ColumnStatsTestCase, metadataOpts: Map[String, String], commonOpts: Map[String, String],
+                         shouldValidate: Boolean, useShortSchema: Boolean = false): Unit = {
+    val filePostfix = if (useShortSchema) {
+      "-short-schema"
+    } else {
+      ""
+    }
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
-      expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
+      expectedColStatsSourcePath = s"index/colstats/column-stats-index-table${filePostfix}.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      shouldValidateManually = !useShortSchema,
       saveMode = SaveMode.Overwrite))
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
-      expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
+      expectedColStatsSourcePath = s"index/colstats/updated-column-stats-index-table${filePostfix}.json",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      shouldValidateManually = !useShortSchema,
       saveMode = SaveMode.Append))
 
     // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
     //       deferred updates), diverging from COW
     val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
-      "index/colstats/cow-updated2-column-stats-index-table.json"
+      s"index/colstats/cow-updated2-column-stats-index-table${filePostfix}.json"
     } else {
-      "index/colstats/mor-updated2-column-stats-index-table.json"
+      s"index/colstats/mor-updated2-column-stats-index-table${filePostfix}.json"
     }
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
@@ -230,7 +261,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate))
+      shouldValidate,
+      shouldValidateManually = !useShortSchema))
   }
 
   def verifyFileIndexAndSQLQueries(opts: Map[String, String], isTableDataSameAsAfterSecondInstant: Boolean = false, verifyFileCount: Boolean = true): Unit = {

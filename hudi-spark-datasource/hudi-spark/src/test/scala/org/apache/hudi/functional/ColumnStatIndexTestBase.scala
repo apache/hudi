@@ -33,10 +33,14 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
+
 import org.apache.spark.sql._
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
+import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
+
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.DataFrame
@@ -49,6 +53,7 @@ import java.sql.{Date, Timestamp}
 import java.util
 import java.util.List
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 import scala.util.Random
 
@@ -115,8 +120,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       // Currently, routine manually validating the column stats (by actually reading every column of every file)
       // only supports parquet files. Therefore we skip such validation when delta-log files are present, and only
       // validate in following cases: (1) COW: all operations; (2) MOR: insert only.
-      val shouldValidateColumnStatsManually = params.testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
-        params.operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      val shouldValidateColumnStatsManually = (params.testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
+        params.operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)) && params.shouldValidateManually
 
       validateColumnStatsIndex(
         params.testCase, params.metadataOpts, params.expectedColStatsSourcePath, shouldValidateColumnStatsManually, params.latestCompletedCommit)
@@ -228,17 +233,16 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-    val indexedColumns: Set[String] = {
-      val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
-      if (customIndexedColumns.isEmpty) {
-        sourceTableSchema.fieldNames.toSet
-      } else {
-        customIndexedColumns.asScala.toSet
-      }
-    }
+    val indexedColumns: Set[String] = HoodieTableMetadataUtil
+      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, convertScalaListToJavaList(sourceTableSchema.fieldNames)).asScala.toSet
+
     val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
-    val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue",
+    val validationSortColumns = if (indexedColumns.contains("c5")) {
+      Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue",
       "c3_minValue", "c5_maxValue", "c5_minValue")
+    } else {
+      Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue", "c3_minValue")
+    }
 
     columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>
       // Match against expected column stats table
@@ -363,6 +367,7 @@ object ColumnStatIndexTestBase {
                                    operation: String,
                                    saveMode: SaveMode,
                                    shouldValidate: Boolean = true,
+                                   shouldValidateManually: Boolean = true,
                                    latestCompletedCommit: String = null,
                                    numPartitions: Integer = 4,
                                    parquetMaxFileSize: Integer = 10 * 1024,

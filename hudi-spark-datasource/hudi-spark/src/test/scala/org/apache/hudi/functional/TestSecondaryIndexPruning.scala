@@ -19,27 +19,26 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.{ActionType, FileSlice, HoodieBaseFile, HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode, TypedProperties}
+import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{HoodieMetadataException, HoodieMetadataIndexException, HoodieWriteConflictException}
+import org.apache.hudi.config._
+import org.apache.hudi.exception.{HoodieMetadataIndexException, HoodieWriteConflictException}
 import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, MetadataPartitionType, SparkHoodieBackedTableMetadataWriter}
+import org.apache.hudi.metadata._
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.util.{JFunction, JavaConversions}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSparkUtils}
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
@@ -52,7 +51,6 @@ import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import org.scalatest.Assertions.{assertResult, assertThrows}
 
 import java.util.concurrent.Executors
-
 import scala.collection.JavaConverters
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -74,7 +72,9 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     RECORDKEY_FIELD.key -> "record_key_col",
     PARTITIONPATH_FIELD.key -> "partition_key_col",
     HIVE_STYLE_PARTITIONING.key -> "true",
-    PRECOMBINE_FIELD.key -> "ts"
+    PRECOMBINE_FIELD.key -> "ts",
+    HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+    DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name()
   ) ++ metadataOpts
   var mergedDfList: List[DataFrame] = List.empty
   var tableName = "hoodie_"
@@ -99,7 +99,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  primaryKey ='record_key_col',
            |  hoodie.metadata.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -110,7 +111,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       // create secondary index without RLI and assert exception
       assertThrows[HoodieMetadataIndexException] {
-        spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+        spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       }
     }
   }
@@ -143,7 +144,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | $partitionedByClause
            | location '$basePath'
@@ -156,7 +158,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -179,7 +181,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       verifyQueryPredicate(hudiOpts, "not_record_key_col")
 
       // create another secondary index on non-string column
-      spark.sql(s"create index idx_ts on $tableName using secondary_index(ts)")
+      spark.sql(s"create index idx_ts on $tableName (ts)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.reload(metaClient)
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_ts"))
@@ -241,7 +243,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -254,7 +257,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -303,7 +306,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | $partitionedByClause
            | location '$basePath'
@@ -316,7 +320,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -386,7 +390,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  $partitionStatsEnable
            |  $columnsToIndex
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | $partitionedByClause
            | location '$basePath'
@@ -399,7 +404,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'nehru', 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'patel', 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_secondary_key_col on $tableName using secondary_index(secondary_key_col)")
+      spark.sql(s"create index idx_secondary_key_col on $tableName (secondary_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -422,7 +427,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       verifyQueryPredicate(hudiOpts, "secondary_key_col")
 
       // create another secondary index on non-string column
-      spark.sql(s"create index idx_ts on $tableName using secondary_index(ts)")
+      spark.sql(s"create index idx_ts on $tableName (ts)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.reload(metaClient)
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_ts"))
@@ -475,7 +480,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | PARTITIONED BY (partition_key_col)
            | LOCATION '$basePath'
@@ -484,7 +490,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
 
       val executor = Executors.newFixedThreadPool(2)
       implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
@@ -573,7 +579,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key} = '1'
+           |  ${HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key} = '1',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -591,7 +598,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -657,7 +664,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '2'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '2',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -669,7 +677,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -735,7 +743,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -748,7 +757,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'abc', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -806,7 +815,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -819,7 +829,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'abc', 'p1')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p1')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -870,7 +880,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -883,7 +894,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'def', 'p1')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p1')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -945,7 +956,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '20',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -958,7 +970,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'abc', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -1026,7 +1038,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key} = '1'
+           |  ${HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key} = '1',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -1051,7 +1064,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       confirmLastCommitType(ActionType.replacecommit)
 
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.reload(metaClient)
       // validate the secondary index records themselves
@@ -1111,8 +1124,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
   }
 
-
-
   private def confirmLastCommitType(actionType: ActionType): Unit = {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val instants = metaClient.getActiveTimeline.getInstants
@@ -1151,7 +1162,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -1163,7 +1175,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
 
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -1227,7 +1239,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |    hoodie.metadata.enable = 'true',
            |    hoodie.metadata.record.index.enable = 'true',
            |    hoodie.datasource.write.recordkey.field = 'id',
-           |    hoodie.enable.data.skipping = 'true'
+           |    hoodie.enable.data.skipping = 'true',
+           |    hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | PARTITIONED BY (city, state)
            | location '$basePath'
@@ -1257,12 +1270,12 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      spark.sql(s"create index idx_rider_$tableName ON $tableName USING secondary_index(rider)")
+      spark.sql(s"create index idx_rider_$tableName ON $tableName (rider)")
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where rider = 'rider-E'")(
         Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas"))
       verifyQueryPredicate(hudiOpts, "rider")
 
-      spark.sql(s"create index idx_driver_$tableName ON $tableName USING secondary_index(driver)")
+      spark.sql(s"create index idx_driver_$tableName ON $tableName (driver)")
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where driver = 'driver-P'")(
         Seq(1695516137, "trip4", "rider-F", "driver-P", 34.15, "houston", "texas")
       )
@@ -1330,7 +1343,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -1344,7 +1358,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // Create secondary indexes for different data types
       val secondaryIndexColumns = Seq("string_col", "int_col", "bigint_col", "double_col", "decimal_col", "timestamp_col", "boolean_col")
       secondaryIndexColumns.foreach { col =>
-        spark.sql(s"create index idx_$col on $tableName using secondary_index($col)")
+        spark.sql(s"create index idx_$col on $tableName ($col)")
       }
 
       // Validate indexes created successfully
@@ -1418,7 +1432,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -1433,7 +1448,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val secondaryIndexColumns = Seq("struct_col", "array_col", "map_col")
       secondaryIndexColumns.foreach { col =>
         assertThrows[HoodieMetadataIndexException] {
-          spark.sql(s"create index idx_$col on $tableName using secondary_index($col)")
+          spark.sql(s"create index idx_$col on $tableName ($col)")
         }
       }
     }

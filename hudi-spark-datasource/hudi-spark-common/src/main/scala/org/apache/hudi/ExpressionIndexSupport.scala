@@ -19,9 +19,9 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.FunctionalIndexSupport._
+import org.apache.hudi.ExpressionIndexSupport._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.HoodieSparkFunctionalIndex.SPARK_FUNCTION_MAP
+import org.apache.hudi.HoodieSparkExpressionIndex.SPARK_FUNCTION_MAP
 import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -42,7 +42,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
 
-class FunctionalIndexSupport(spark: SparkSession,
+class ExpressionIndexSupport(spark: SparkSession,
                              metadataConfig: HoodieMetadataConfig,
                              metaClient: HoodieTableMetaClient)
   extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
@@ -50,7 +50,7 @@ class FunctionalIndexSupport(spark: SparkSession,
   // NOTE: Since [[metadataConfig]] is transient this has to be eagerly persisted, before this will be passed on to the executor
   private val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
 
-  override def getIndexName: String = FunctionalIndexSupport.INDEX_NAME
+  override def getIndexName: String = ExpressionIndexSupport.INDEX_NAME
 
   override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
                                          queryFilters: Seq[Expression],
@@ -58,14 +58,14 @@ class FunctionalIndexSupport(spark: SparkSession,
                                          prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
                                          shouldPushDownFilesFilter: Boolean
                                         ): Option[Set[String]] = {
-    lazy val functionalIndexPartitionOpt = getFunctionalIndexPartitionAndLiterals(queryFilters)
-    if (isIndexAvailable && queryFilters.nonEmpty && functionalIndexPartitionOpt.nonEmpty) {
-      val (indexPartition, literals) = functionalIndexPartitionOpt.get
+    lazy val expressionIndexPartitionOpt = getExpressionIndexPartitionAndLiterals(queryFilters)
+    if (isIndexAvailable && queryFilters.nonEmpty && expressionIndexPartitionOpt.nonEmpty) {
+      val (indexPartition, literals) = expressionIndexPartitionOpt.get
       val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
       if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
         val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
         val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)
-        val indexDf = loadFunctionalIndexDataFrame(indexPartition, prunedPartitions, readInMemory)
+        val indexDf = loadExpressionIndexDataFrame(indexPartition, prunedPartitions, readInMemory)
         Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
       } else if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
         val prunedPartitionAndFileNames = getPrunedPartitionsAndFileNamesMap(prunedPartitionsAndFileSlices, includeLogFiles = true)
@@ -83,14 +83,14 @@ class FunctionalIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Return true if metadata table is enabled and functional index metadata partition is available.
+   * Return true if metadata table is enabled and expression index metadata partition is available.
    */
   def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled && metaClient.getIndexMetadata.isPresent && !metaClient.getIndexMetadata.get().getIndexDefinitions.isEmpty
   }
 
   def filterQueriesWithFunctionalFilterKey(queryFilters: Seq[Expression], sourceFieldOpt: Option[String]): List[Tuple2[Expression, List[String]]] = {
-    var functionalIndexQueries: List[Tuple2[Expression, List[String]]] = List.empty
+    var expressionIndexQueries: List[Tuple2[Expression, List[String]]] = List.empty
     for (query <- queryFilters) {
       filterQueryWithRecordKey(query, sourceFieldOpt, (expr: Expression) => {
         expr match {
@@ -99,11 +99,11 @@ class FunctionalIndexSupport(spark: SparkSession,
         }
       }).foreach({
         case (exp: Expression, literals: List[String]) =>
-          functionalIndexQueries = functionalIndexQueries :+ Tuple2.apply(exp, literals)
+          expressionIndexQueries = expressionIndexQueries :+ Tuple2.apply(exp, literals)
       })
     }
 
-    functionalIndexQueries
+    expressionIndexQueries
   }
 
   /**
@@ -119,11 +119,11 @@ class FunctionalIndexSupport(spark: SparkSession,
    * @return An `Option` containing the index partition identifier if a matching index definition is found.
    *         Returns `None` if no matching index definition is found.
    */
-  private def getFunctionalIndexPartitionAndLiterals(queryFilters: Seq[Expression]): Option[Tuple2[String, List[String]]] = {
+  private def getExpressionIndexPartitionAndLiterals(queryFilters: Seq[Expression]): Option[Tuple2[String, List[String]]] = {
     val indexDefinitions = metaClient.getIndexMetadata.get().getIndexDefinitions.asScala
     if (indexDefinitions.nonEmpty) {
       val functionDefinitions = indexDefinitions.values
-        .filter(definition => MetadataPartitionType.fromPartitionPath(definition.getIndexName).equals(MetadataPartitionType.FUNCTIONAL_INDEX))
+        .filter(definition => MetadataPartitionType.fromPartitionPath(definition.getIndexName).equals(MetadataPartitionType.EXPRESSION_INDEX))
         .toList
       var indexPartitionAndLiteralsOpt: Option[Tuple2[String, List[String]]] = Option.empty
       functionDefinitions.foreach(indexDefinition => {
@@ -148,9 +148,9 @@ class FunctionalIndexSupport(spark: SparkSession,
    * column name.
    */
   private def extractQueryAndLiterals(queryFilters: Seq[Expression], indexDefinition: HoodieIndexDefinition): Option[(Expression, List[String])] = {
-    val functionalIndexQueries = filterQueriesWithFunctionalFilterKey(queryFilters, Option.apply(indexDefinition.getSourceFields.get(0)))
+    val expressionIndexQueries = filterQueriesWithFunctionalFilterKey(queryFilters, Option.apply(indexDefinition.getSourceFields.get(0)))
     var queryAndLiteralsOpt: Option[(Expression, List[String])] = Option.empty
-    functionalIndexQueries.foreach { tuple =>
+    expressionIndexQueries.foreach { tuple =>
       val (expr, literals) = (tuple._1, tuple._2)
       val functionNameOption = SPARK_FUNCTION_MAP.asScala.keys.find(expr.toString.contains)
       val functionName = functionNameOption.getOrElse("identity")
@@ -161,12 +161,12 @@ class FunctionalIndexSupport(spark: SparkSession,
     queryAndLiteralsOpt
   }
 
-  def loadFunctionalIndexDataFrame(indexPartition: String,
+  def loadExpressionIndexDataFrame(indexPartition: String,
                                    prunedPartitions: Set[String],
                                    shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
       val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
-      val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadFunctionalIndexForColumnsInternal(
+      val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadExpressionIndexForColumnsInternal(
         indexDefinition.getSourceFields.asScala.toSeq, prunedPartitions, indexPartition, shouldReadInMemory)
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(JFunction.toJavaSerializableFunction(it => {
@@ -188,11 +188,11 @@ class FunctionalIndexSupport(spark: SparkSession,
     colStatsDF.select(targetColumnStatsIndexColumns.map(col): _*)
   }
 
-  private def loadFunctionalIndexForColumnsInternal(targetColumns: Seq[String],
+  private def loadExpressionIndexForColumnsInternal(targetColumns: Seq[String],
                                                     prunedPartitions: Set[String],
                                                     indexPartition: String,
                                                     shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
-    // Read Metadata Table's Functional Index records into [[HoodieData]] container by
+    // Read Metadata Table's Expression Index records into [[HoodieData]] container by
     //    - Fetching the records from CSI by key-prefixes (encoded column names)
     //    - Extracting [[HoodieMetadataColumnStats]] records
     //    - Filtering out nulls
@@ -260,7 +260,7 @@ class FunctionalIndexSupport(spark: SparkSession,
   }
 }
 
-object FunctionalIndexSupport {
+object ExpressionIndexSupport {
   val INDEX_NAME = "FUNCTIONAL"
   /**
    * Target Column Stats Index columns which internally are mapped onto fields of the corresponding

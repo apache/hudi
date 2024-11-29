@@ -21,7 +21,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.index.functional.HoodieFunctionalIndex;
+import org.apache.hudi.index.functional.HoodieExpressionIndex;
 
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.functions;
@@ -30,7 +30,7 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieSparkFunctionalIndex implements HoodieFunctionalIndex<Column, Column>, Serializable {
+public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column, Column>, Serializable {
 
   /**
    * Custom interface to support Spark functions
@@ -195,10 +195,10 @@ public class HoodieSparkFunctionalIndex implements HoodieFunctionalIndex<Column,
   private Map<String, String> options;
   private SparkFunction sparkFunction;
 
-  public HoodieSparkFunctionalIndex() {
+  public HoodieSparkExpressionIndex() {
   }
 
-  public HoodieSparkFunctionalIndex(String indexName, String indexFunction, List<String> orderedSourceFields, Map<String, String> options) {
+  public HoodieSparkExpressionIndex(String indexName, String indexFunction, List<String> orderedSourceFields, Map<String, String> options) {
     this.indexName = indexName;
     this.indexFunction = indexFunction;
     this.orderedSourceFields = orderedSourceFields;

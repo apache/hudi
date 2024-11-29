@@ -23,14 +23,16 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.keygen.KeyGenUtils
+import org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
-import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, In, Literal}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
+import scala.util.control.Breaks.{break, breakable}
 import scala.util.control.NonFatal
 
 abstract class SparkBaseIndexSupport(spark: SparkSession,
@@ -144,9 +146,10 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Given query filters, it filters the EqualTo and IN queries on simple record key columns and returns a tuple of
+   * Given query filters, it filters the EqualTo and IN queries on record key columns and returns a tuple of
    * list of such queries and list of record key literals present in the query.
    * If record index is not available, it returns empty list for record filters and record keys
+   *
    * @param queryFilters The queries that need to be filtered.
    * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
@@ -155,32 +158,63 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       (List.empty, List.empty)
     } else {
       var recordKeyQueries: List[Expression] = List.empty
-      var recordKeys: List[String] = List.empty
-      for (query <- queryFilters) {
-        val recordKeyOpt = getRecordKeyConfig
-        RecordLevelIndexSupport.filterQueryWithRecordKey(query, recordKeyOpt).foreach({
-          case (exp: Expression, recKeys: List[String]) =>
-            recordKeys = recordKeys ++ recKeys
-            recordKeyQueries = recordKeyQueries :+ exp
-        })
-      }
+      var compositeRecordKeys: List[String] = List.empty
+      val recordKeyOpt = getRecordKeyConfig
+      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+      recordKeyOpt.foreach { recordKeysArray =>
+        // Handle composite record keys
+        breakable {
+          // Iterate configured record keys and fetch literals for every record key
+          for (recordKey <- recordKeysArray) {
+            var recordKeys: List[String] = List.empty
+            for (query <- queryFilters) {
+              {
+                RecordLevelIndexSupport.filterQueryWithRecordKey(query, Option.apply(recordKey),
+                  if (isComplexRecordKey) {
+                    RecordLevelIndexSupport.getComplexKeyLiteralGenerator()
+                  } else {
+                    RecordLevelIndexSupport.getSimpleLiteralGenerator()
+                  }
+                ).foreach {
+                  case (exp: Expression, recKeys: List[String]) =>
+                    recordKeys = recordKeys ++ recKeys
+                    recordKeyQueries = recordKeyQueries :+ exp
+                }
+              }
+            }
 
-      Tuple2.apply(recordKeyQueries, recordKeys)
+            if (recordKeys.isEmpty) {
+              // No literals found for the record key, therefore filtering can not be performed
+              recordKeyQueries = List.empty
+              compositeRecordKeys = List.empty
+              break()
+            } else if (!isComplexRecordKey || compositeRecordKeys.isEmpty) {
+              compositeRecordKeys = recordKeys
+            } else {
+              // Combine literals for this configured record key with literals for the other configured record keys
+              // If there are two literals for rk1, rk2, rk3 each. A total of 8 combinations will be generated
+              var tempCompositeRecordKeys: List[String] = List.empty
+              for (compRecKey <- compositeRecordKeys) {
+                for (recKey <- recordKeys) {
+                  tempCompositeRecordKeys = tempCompositeRecordKeys :+ (compRecKey + DEFAULT_RECORD_KEY_PARTS_SEPARATOR + recKey)
+                }
+              }
+              compositeRecordKeys = tempCompositeRecordKeys
+            }
+          }
+        }
+      }
+      (recordKeyQueries, compositeRecordKeys)
     }
   }
 
   /**
-   * Returns the configured record key for the table if it is a simple record key else returns empty option.
+   * Returns the configured record key for the table.
    */
-  private def getRecordKeyConfig: Option[String] = {
+  private def getRecordKeyConfig: Option[Array[String]] = {
     val recordKeysOpt: org.apache.hudi.common.util.Option[Array[String]] = metaClient.getTableConfig.getRecordKeyFields
-    val recordKeyOpt = recordKeysOpt.map[String](JFunction.toJavaFunction[Array[String], String](arr =>
-      if (arr.length == 1) {
-        arr(0)
-      } else {
-        null
-      }))
-    Option.apply(recordKeyOpt.orElse(null))
+    // Convert the Hudi Option to Scala Option and return if present
+    Option(recordKeysOpt.orElse(null)).filter(_.nonEmpty)
   }
 
 }

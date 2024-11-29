@@ -21,7 +21,7 @@ package org.apache.spark.sql.execution.benchmark
 import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.timeline.{ActiveAction, CompletionTimeQueryView, HoodieArchivedTimeline, HoodieInstant, LSMTimeline}
+import org.apache.hudi.common.table.timeline.{ActiveAction, HoodieInstant, LSMTimeline}
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_GENERATOR, TIMELINE_FACTORY}
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
@@ -100,7 +100,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         new CompletionTimeQueryViewV2(metaClient).getInstantTimes(startTs + 1 + 1000 + "", startTs + commitsNum + 1000 + "", earliestStartTimeFunc)
       }
       benchmark.run()
-      val totalSize = LSMTimeline.latestSnapshotManifest(metaClient).getFiles.asScala
+      val totalSize = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath).getFiles.asScala
         .map(f => f.getFileLen)
         .sum
       println("Total file size in bytes: " + totalSize)
