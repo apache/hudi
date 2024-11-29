@@ -448,7 +448,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_1");
     expected.add("col_7");
     expected.add("col_11");
-    expected.add("_hoodie_commit_seqno");
     assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
 
     //test with avro schema
