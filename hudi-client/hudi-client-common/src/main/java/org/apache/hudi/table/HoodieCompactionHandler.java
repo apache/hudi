@@ -53,14 +53,17 @@ public interface HoodieCompactionHandler<T> {
     throw new HoodieNotSupportedException("Operation is not yet supported");
   }
 
+  // Prepare broadcast variables.
+  default void prepareBroadcastVariables() {
+    // NO operation.
+  }
+
+  // Create reader context based on broadcast variables.
   default Option<HoodieReaderContext> getReaderContext(StoragePath basePath) {
     return Option.empty();
   }
 
-  default void prepareParquetReader() {
-    // NO operation.
-  }
-
+  // Fetch broadcast storage config.
   default Option<Configuration> getStorageConfig() {
     return Option.empty();
   }

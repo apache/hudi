@@ -808,7 +808,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "Hudi write client and user is not expected to manually change the value.");
 
   public static final ConfigProperty<String> TABLE_SERVICES_USE_FILE_GROUP_READER = ConfigProperty
-      .key("hoodie.services.use.file.group.reader")
+      .key("hoodie.table.services.use.file.group.reader")
       .defaultValue("true")
       .markAdvanced()
       .sinceVersion("1.0.0")

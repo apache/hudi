@@ -250,7 +250,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
     super.finalizeWrite(context, instantTs, stats);
   }
 
-  public void prepareParquetReader() {
+  public void prepareBroadcastVariables() {
     if ((!config.useFileGroupReaderWithinTableService())
         || !(context instanceof HoodieSparkEngineContext)) {
       LOG.warn("Did not prepare ParquetFileReader");
