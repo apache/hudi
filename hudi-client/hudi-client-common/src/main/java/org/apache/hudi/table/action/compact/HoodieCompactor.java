@@ -224,10 +224,11 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
 
-    if (broadcastManagerOpt.isPresent() && !isMetadataTable(metaClient)) { // For spark, but not MDT.
+    boolean isPartialUpdateEnabled = config.getBooleanOrDefault(
+        "hoodie.spark.sql.merge.into.partial.updates", false);
+    if (isPartialUpdateEnabled && broadcastManagerOpt.isPresent() && !isMetadataTable(metaClient)) {
       return compactUsingFileGroupReader(logFiles, readerSchema, instantTime, internalSchemaOption, config, operation, metaClient, broadcastManagerOpt, taskContextSupplier);
     } else {
-      // if not for partail update, we can go through regular way of compacting.
       return compactUsingLegacyMethod(storage, logFiles, readerSchema, executionHelper, instantTime, maxInstantTime, instantRange, internalSchemaOption, config,
           maxMemoryPerCompaction, operation, metaClient, compactionHandler);
     }
