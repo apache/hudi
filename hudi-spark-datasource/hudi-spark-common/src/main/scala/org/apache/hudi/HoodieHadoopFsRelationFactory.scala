@@ -79,6 +79,9 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   protected lazy val basePath: StoragePath = metaClient.getBasePath
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
+  // very much not recommended to use a partition column as the precombine
+  private lazy val partitionColumnsHasPrecombine = preCombineFieldOpt.isDefined && partitionColumns.contains(preCombineFieldOpt.get)
+
   private lazy val keygenTypeHasVariablePartitionCols = isTimestampKeygen || isCustomKeygen
 
   private lazy val isTimestampKeygen = !isNullOrEmpty(tableConfig.getKeyGeneratorClassName) &&
@@ -89,12 +92,9 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     (tableConfig.getKeyGeneratorClassName.equals(classOf[CustomKeyGenerator].getName) ||
     tableConfig.getKeyGeneratorClassName.equals(classOf[CustomAvroKeyGenerator].getName))
 
-  protected lazy val partitionColumnsToRead: Seq[String] = if (shouldExtractPartitionValuesFromPartitionPath || !keygenTypeHasVariablePartitionCols) {
-    Seq.empty
-  } else if (isTimestampKeygen) {
+  private lazy val variableTimestampKeygenPartitionCols = if (isTimestampKeygen) {
     tableConfig.getPartitionFields.orElse(Array.empty).toSeq
-  } else {
-    //it's custom keygen
+  } else if (isCustomKeygen) {
     val timestampFieldsOpt = CustomAvroKeyGenerator.getTimestampFields(tableConfig)
     if (timestampFieldsOpt.isPresent) {
       timestampFieldsOpt.get().asScala.toSeq
@@ -103,6 +103,21 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
       // For older tables the partition type may not be available so falling back to partition fields in those cases
       tableConfig.getPartitionFields.orElse(Array.empty).toSeq
     }
+  } else {
+    Seq.empty
+  }
+
+  protected lazy val partitionColumnsToRead: Seq[String] = (
+    shouldExtractPartitionValuesFromPartitionPath,
+    keygenTypeHasVariablePartitionCols,
+    partitionColumnsHasPrecombine
+  ) match {
+    case (true, _, _) => Seq.empty
+    case (false, true, false) => variableTimestampKeygenPartitionCols
+    case (false, true, true) if variableTimestampKeygenPartitionCols.contains(preCombineFieldOpt.get) => variableTimestampKeygenPartitionCols
+    case (false, true, true) => variableTimestampKeygenPartitionCols :+ preCombineFieldOpt.get
+    case (false, false, true) => Seq(preCombineFieldOpt.get)
+    case (false, false, false) => Seq.empty
   }
 
   protected lazy val (tableAvroSchema: Schema, internalSchemaOpt: Option[InternalSchema]) = {

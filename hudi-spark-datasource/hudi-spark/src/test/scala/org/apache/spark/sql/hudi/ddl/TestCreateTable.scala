@@ -1555,4 +1555,34 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       )("Failed to create catalog table in metastore")
     }
   }
+
+  test("Test Create Table with Same Value for Partition and Precombine") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = '$tableType',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by(ts)
+             | location '$basePath'
+       """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        // check query result
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'")(
+          Seq(1, "a1")
+        )
+      }
+    }
+  }
 }
