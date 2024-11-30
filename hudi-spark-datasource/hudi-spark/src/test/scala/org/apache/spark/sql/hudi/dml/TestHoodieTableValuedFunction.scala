@@ -245,7 +245,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | """.stripMargin
           )
           val result1DF = spark.sql(s"select * from hudi_filesystem_view('$identifier', 'price*')")
-          result1DF.show(false)
           val result1Array = result1DF.select(
             col("Partition_Path")
           ).orderBy("Partition_Path").take(10)
@@ -484,7 +483,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val result2DF = spark.sql(s"select * from hudi_query_timeline('$identifier', 'false')")
-          result2DF.show(false)
           val result2Array = result2DF.select(
             col("action"),
             col("state"),
@@ -507,7 +505,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val result3DF = spark.sql(s"select * from hudi_query_timeline('$identifier', 'true')")
-          result3DF.show(false)
           val result3Array = result3DF.select(
             col("action"),
             col("state"),
@@ -535,7 +532,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           val result5DF = spark.sql(
             s"select * from hudi_query_timeline('$identifier', 'false')  where action = '$action'"
           )
-          result5DF.show(false)
           val result5Array = result5DF.select(
             col("action"),
             col("state"),
@@ -555,7 +551,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           val result6DF = spark.sql(
             s"select action, state from hudi_query_timeline('$identifier', 'false')  where timestamp > '202312190000000'"
           )
-          result6DF.show(false)
           val result6Array = result6DF.take(10)
           checkAnswer(result6Array)(
             Seq(action, "COMPLETED"),
