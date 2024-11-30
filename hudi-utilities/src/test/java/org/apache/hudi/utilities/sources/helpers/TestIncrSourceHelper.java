@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.sources.TestS3EventsHoodieIncrSource;
+import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV1;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -364,14 +365,16 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     String orderColumn = "_hoodie_commit_time";
     String keyColumn = "s3.object.key";
     String limitColumn = "s3.object.size";
-    QueryInfo queryInfo = IncrSourceHelper.generateQueryInfo(jsc, basePath(), 5, Option.of(startInstant), null,
+    QueryInfo queryInfo = IncrSourceHelper.generateQueryInfo(jsc, basePath(), 5,
+        Option.of(new CheckpointV1(startInstant)), null,
         TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty());
     assertEquals(String.valueOf(Integer.parseInt(commitTimeForReads) - 1), queryInfo.getPreviousInstant());
     assertEquals(commitTimeForReads, queryInfo.getStartInstant());
     assertEquals(commitTimeForWrites, queryInfo.getEndInstant());
 
     startInstant = commitTimeForWrites;
-    queryInfo = IncrSourceHelper.generateQueryInfo(jsc, basePath(), 5, Option.of(startInstant), null,
+    queryInfo = IncrSourceHelper.generateQueryInfo(jsc, basePath(), 5,
+        Option.of(new CheckpointV1(startInstant)), null,
         TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty());
     assertEquals(commitTimeForReads, queryInfo.getPreviousInstant());
     assertEquals(commitTimeForWrites, queryInfo.getStartInstant());
