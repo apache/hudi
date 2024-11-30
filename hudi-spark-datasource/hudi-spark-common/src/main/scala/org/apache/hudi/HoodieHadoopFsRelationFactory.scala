@@ -39,7 +39,8 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
-import org.apache.spark.sql.{SparkSession, SQLContext}
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources._
@@ -65,7 +66,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val options: Map[String, String],
                                                  val schemaSpec: Option[StructType],
                                                  val isBootstrap: Boolean
-                                                ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory {
+                                                ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory with Logging {
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
   protected lazy val optParams: Map[String, String] = options
   protected lazy val hadoopConfig: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
@@ -107,17 +108,29 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     Seq.empty
   }
 
-  protected lazy val partitionColumnsToRead: Seq[String] = (
-    shouldExtractPartitionValuesFromPartitionPath,
-    keygenTypeHasVariablePartitionCols,
-    partitionColumnsHasPrecombine
-  ) match {
-    case (true, _, _) => Seq.empty
-    case (false, true, false) => variableTimestampKeygenPartitionCols
-    case (false, true, true) if variableTimestampKeygenPartitionCols.contains(preCombineFieldOpt.get) => variableTimestampKeygenPartitionCols
-    case (false, true, true) => variableTimestampKeygenPartitionCols :+ preCombineFieldOpt.get
-    case (false, false, true) => Seq(preCombineFieldOpt.get)
-    case (false, false, false) => Seq.empty
+  protected lazy val partitionColumnsToRead: Seq[String] = {
+    if (shouldExtractPartitionValuesFromPartitionPath) {
+      Seq.empty
+    } else if (partitionColumnsHasPrecombine) {
+      logWarning(s"Not recommended for field '${preCombineFieldOpt.get}' to be both precombine and partition")
+      if (keygenTypeHasVariablePartitionCols) {
+        // still need to read any timestamp/custom keygen timestamp columns
+        if (variableTimestampKeygenPartitionCols.contains(preCombineFieldOpt.get)) {
+          // precombine is already included in the list
+          variableTimestampKeygenPartitionCols
+        } else {
+          // precombine is not included in the list so we append it
+          variableTimestampKeygenPartitionCols :+ preCombineFieldOpt.get
+        }
+      } else {
+        // not timestamp/custom keygen so just need to read precombine
+        Seq(preCombineFieldOpt.get)
+      }
+    } else if (keygenTypeHasVariablePartitionCols) {
+      variableTimestampKeygenPartitionCols
+    } else {
+      Seq.empty
+    }
   }
 
   protected lazy val (tableAvroSchema: Schema, internalSchemaOpt: Option[InternalSchema]) = {
