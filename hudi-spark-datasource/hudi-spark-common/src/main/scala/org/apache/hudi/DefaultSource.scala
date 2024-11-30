@@ -302,7 +302,6 @@ object DefaultSource {
               resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
             }
           case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-            // TODO(yihua): new HadoopFsRelationBasedFactory has gaps around instant time filtering?
             if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_VERSION)) {
               val writeTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_VERSION.key))
               if (writeTableVersion >= 8) {
@@ -345,11 +344,29 @@ object DefaultSource {
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-            if (useNewParquetFileFormat) {
-              new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+            if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_VERSION)) {
+              val writeTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_VERSION.key))
+              if (writeTableVersion >= 8) {
+                if (useNewParquetFileFormat) {
+                  new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                } else {
+                  MergeOnReadIncrementalRelationV2(sqlContext, parameters, metaClient, userSchema)
+                }
+              } else {
+                MergeOnReadIncrementalRelationV1(sqlContext, parameters, metaClient, userSchema)
+              }
             } else {
-              MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+              if (metaClient.getTableConfig.getTableVersion.versionCode() >= 8) {
+                if (useNewParquetFileFormat) {
+                  new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                } else {
+                  MergeOnReadIncrementalRelationV2(sqlContext, parameters, metaClient, userSchema)
+                }
+              } else {
+                MergeOnReadIncrementalRelationV1(sqlContext, parameters, metaClient, userSchema)
+              }
             }
 
           case (_, _, true) =>
