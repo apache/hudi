@@ -184,17 +184,23 @@ public class CheckpointUtils {
     return writeTableVersion >= HoodieTableVersion.EIGHT.versionCode();
   }
 
+  // TODO(yihua): for checkpoint translation, handle cases where the checkpoint is not exactly the
+  // instant or completion time
   public static CheckpointV2 convertToCheckpointV2ForCommitTime(
       Checkpoint checkpoint, HoodieTableMetaClient metaClient) {
     if (checkpoint instanceof CheckpointV2) {
       return (CheckpointV2) checkpoint;
     }
     if (checkpoint instanceof CheckpointV1) {
+      // V1 -> V2 translation
+      // TODO(yihua): handle USE_TRANSITION_TIME in V1
+      // TODO(yihua): handle different ordering between requested and completion time
+      // TODO(yihua): handle timeline history / archived timeline
       String instantTime = checkpoint.getCheckpointKey();
       String completionTime = metaClient.getActiveTimeline()
           .getInstantsAsStream()
           .filter(s -> instantTime.equals(s.requestedTime()))
-          .map(s -> s.getCompletionTime())
+          .map(HoodieInstant::getCompletionTime)
           .findFirst().orElse(null);
       if (completionTime == null) {
         throw new UnsupportedOperationException("Unable to find completion time for " + instantTime);
@@ -202,5 +208,30 @@ public class CheckpointUtils {
       return new CheckpointV2(completionTime);
     }
     throw new UnsupportedOperationException("Unsupported checkpoint type: " + checkpoint.getClass());
+  }
+
+  public static CheckpointV1 convertToCheckpointV1ForCommitTime(
+      Checkpoint checkpoint, HoodieTableMetaClient metaClient) {
+    if (checkpoint instanceof CheckpointV1) {
+      return (CheckpointV1) checkpoint;
+    }
+    if (checkpoint instanceof CheckpointV2) {
+      // V2 -> V1 translation
+      // TODO(yihua): handle USE_TRANSITION_TIME in V1
+      // TODO(yihua): handle different ordering between requested and completion time
+      // TODO(yihua): handle timeline history / archived timeline
+      String completionTime = checkpoint.getCheckpointKey();
+      String instantTime = metaClient.getActiveTimeline()
+          .getInstantsAsStream()
+          .filter(s -> completionTime.equals(s.getCompletionTime()))
+          .map(HoodieInstant::requestedTime)
+          .findFirst().orElse(null);
+      if (instantTime == null) {
+        throw new UnsupportedOperationException("Unable to find requested time for " + completionTime);
+      }
+      return new CheckpointV1(instantTime);
+    }
+    throw new UnsupportedOperationException("Unsupported checkpoint type: " + checkpoint.getClass());
+
   }
 }

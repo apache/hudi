@@ -116,7 +116,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     QueryInfo queryInfo =
         IncrSourceHelper.generateQueryInfo(
             sparkContext, srcPath, numInstantsPerFetch,
-            Option.of(cloudObjectIncrCheckpoint.getCommit()),
+            Option.of(new CheckpointV2(cloudObjectIncrCheckpoint.getCommit())),
             missingCheckpointStrategy, handlingMode,
             HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             CloudObjectsSelectorCommon.S3_OBJECT_KEY,

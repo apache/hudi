@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelationV2, MergeOnReadIncrementalRelation, SparkAdapterSupport}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -146,7 +146,7 @@ class HoodieStreamSource(
         val rdd = tableType match {
           case HoodieTableType.COPY_ON_WRITE =>
             val serDe = sparkAdapter.createSparkRowSerDe(schema)
-            new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient, rangeType)
+            new IncrementalRelationV2(sqlContext, incParams, Some(schema), metaClient, rangeType)
               .buildScan()
               .map(serDe.serializeRow)
           case HoodieTableType.MERGE_ON_READ =>

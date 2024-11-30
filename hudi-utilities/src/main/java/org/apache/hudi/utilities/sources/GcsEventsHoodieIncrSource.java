@@ -171,7 +171,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
     QueryInfo queryInfo = generateQueryInfo(
         sparkContext, srcPath, numInstantsPerFetch,
-        Option.of(cloudObjectIncrCheckpoint.getCommit()),
+        Option.of(new CheckpointV2(cloudObjectIncrCheckpoint.getCommit())),
         missingCheckpointStrategy, handlingMode, HoodieRecord.COMMIT_TIME_METADATA_FIELD,
         CloudObjectsSelectorCommon.GCS_OBJECT_KEY,
         CloudObjectsSelectorCommon.GCS_OBJECT_SIZE, true,
