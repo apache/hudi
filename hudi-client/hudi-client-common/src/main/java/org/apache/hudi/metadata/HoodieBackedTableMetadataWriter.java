@@ -1176,7 +1176,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .sum();
     // approximate task partition size of 100MB
     // (TODO: make this configurable)
-    long targetPartitionSize = 100_000_000L;
+    long targetPartitionSize = 100 * 1024 * 1024;
     int parallelism = (int) Math.max(1, (totalWriteBytesForSecondaryIndex + targetPartitionSize - 1) / targetPartitionSize);
 
     return readSecondaryKeysFromBaseFiles(

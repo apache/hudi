@@ -847,7 +847,7 @@ public class HoodieTableMetadataUtil {
       }).sum();
       // approximate task partition size of 100MB
       // (TODO: make this configurable)
-      long targetPartitionSize = 100_000_000L;
+      long targetPartitionSize = 100 * 1024 * 1024;
       parallelism = (int) Math.max(1, (totalWriteBytesForRLI + targetPartitionSize - 1) / targetPartitionSize);
       return reduceByKeys(recordIndexRecords, parallelism);
     } catch (Exception e) {
