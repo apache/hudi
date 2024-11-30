@@ -20,6 +20,8 @@ package org.apache.hudi.utilities.sources.debezium;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.CheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
@@ -32,8 +34,6 @@ import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
-import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;

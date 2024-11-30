@@ -20,11 +20,11 @@ package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;

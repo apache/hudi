@@ -19,12 +19,12 @@
 package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
-import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;

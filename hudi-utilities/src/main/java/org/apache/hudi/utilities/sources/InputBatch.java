@@ -19,11 +19,11 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.CheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;

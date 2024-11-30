@@ -17,18 +17,18 @@
  * under the License.
  */
 
-package org.apache.hudi.utilities.streamer.checkpoint;
+package org.apache.hudi.common.table.checkpoint;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.config.HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
-import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_RESET_KEY;
+import static org.apache.hudi.common.table.checkpoint.CheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
+import static org.apache.hudi.common.table.checkpoint.CheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1;
 
 public class CheckpointV2 extends Checkpoint {
+  // TODO(yihua): decouple the keys for Hudi Streamer
   public static final String STREAMER_CHECKPOINT_KEY_V2 = "streamer.checkpoint.key.v2";
   public static final String STREAMER_CHECKPOINT_RESET_KEY_V2 = "streamer.checkpoint.reset.key.v2";
 
@@ -49,22 +49,25 @@ public class CheckpointV2 extends Checkpoint {
   }
 
   public void addV1Props() {
-    this.extraProps.put(STREAMER_CHECKPOINT_KEY, checkpointKey);
-    this.extraProps.put(CHECKPOINT_RESET_KEY, checkpointResetKey);
+    this.extraProps.put(STREAMER_CHECKPOINT_KEY_V1, checkpointKey);
+    this.extraProps.put(STREAMER_CHECKPOINT_RESET_KEY_V1, checkpointResetKey);
   }
 
   @Override
-  public Map<String, String> getCheckpointCommitMetadata(HoodieStreamer.Config streamerConfig) {
+  public Map<String, String> getCheckpointCommitMetadata(String overrideResetKey,
+                                                         String overrideIgnoreKey) {
     Map<String, String> checkpointCommitMetadata = new HashMap<>();
     if (checkpointKey != null) {
       checkpointCommitMetadata.put(STREAMER_CHECKPOINT_KEY_V2, getCheckpointKey());
     }
     // TODO(yihua): handle reset key translation?
-    if (streamerConfig.checkpoint != null) {
-      checkpointCommitMetadata.put(STREAMER_CHECKPOINT_RESET_KEY_V2, streamerConfig.checkpoint);
+    // streamerConfig.checkpoint
+    if (overrideResetKey != null) {
+      checkpointCommitMetadata.put(STREAMER_CHECKPOINT_RESET_KEY_V2, overrideResetKey);
     }
-    if (streamerConfig.ignoreCheckpoint != null) {
-      checkpointCommitMetadata.put(CHECKPOINT_IGNORE_KEY, streamerConfig.ignoreCheckpoint);
+    // streamerConfig.ignoreCheckpoint
+    if (overrideIgnoreKey != null) {
+      checkpointCommitMetadata.put(CHECKPOINT_IGNORE_KEY, overrideIgnoreKey);
     }
     checkpointCommitMetadata.putAll(extraProps);
     return checkpointCommitMetadata;

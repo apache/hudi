@@ -19,6 +19,7 @@
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -29,7 +30,6 @@ import org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
-import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 

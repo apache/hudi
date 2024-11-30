@@ -46,6 +46,8 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.CheckpointV2;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -99,9 +101,6 @@ import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.streamer.HoodieStreamer.Config;
-import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointUtils;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
@@ -544,7 +543,7 @@ public class StreamSync implements Serializable, Closeable {
    */
   public Pair<InputBatch, Boolean> readFromSource(String instantTime, HoodieTableMetaClient metaClient) throws IOException {
     // Retrieve the previous round checkpoints, if any
-    Option<Checkpoint> checkpointToResume = CheckpointUtils.getCheckpointToResumeFrom(commitsTimelineOpt, cfg, props);
+    Option<Checkpoint> checkpointToResume = StreamerCheckpointUtils.getCheckpointToResumeFrom(commitsTimelineOpt, cfg, props);
     LOG.info("Checkpoint to resume from : " + checkpointToResume);
 
     int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;
@@ -812,8 +811,10 @@ public class StreamSync implements Serializable, Closeable {
       Map<String, String> checkpointCommitMetadata =
           !getBooleanWithAltKeys(props, CHECKPOINT_FORCE_SKIP)
               ? inputBatch.getCheckpointForNextBatch() != null
-              ? inputBatch.getCheckpointForNextBatch().getCheckpointCommitMetadata(cfg)
-              : new CheckpointV2((String) null).getCheckpointCommitMetadata(cfg)
+              ? inputBatch.getCheckpointForNextBatch().getCheckpointCommitMetadata(
+              cfg.checkpoint, cfg.ignoreCheckpoint)
+              : new CheckpointV2((String) null).getCheckpointCommitMetadata(
+              cfg.checkpoint, cfg.ignoreCheckpoint)
               : Collections.emptyMap();
 
       if (hasErrors) {
@@ -823,7 +824,7 @@ public class StreamSync implements Serializable, Closeable {
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
       if (errorTableWriter.isPresent()) {
         // Commit the error events triggered so far to the error table
-        Option<String> commitedInstantTime = CheckpointUtils.getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
+        Option<String> commitedInstantTime = StreamerCheckpointUtils.getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
         boolean errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
         if (!errorTableSuccess) {
           switch (errorWriteFailureStrategy) {

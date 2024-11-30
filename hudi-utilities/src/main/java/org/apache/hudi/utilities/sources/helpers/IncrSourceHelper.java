@@ -21,6 +21,10 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
+import org.apache.hudi.common.table.checkpoint.CheckpointV1;
+import org.apache.hudi.common.table.checkpoint.CheckpointV2;
 import org.apache.hudi.common.table.log.InstantRange.RangeType;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,10 +37,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.streamer.SourceProfile;
-import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointUtils;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV1;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 import java.util.function.Function;
 
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.convertToCheckpointV1ForCommitTime;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
@@ -58,7 +59,6 @@ import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.MISSING_CHECKPOINT_STRATEGY;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.READ_LATEST_INSTANT_ON_MISSING_CKPT;
-import static org.apache.hudi.utilities.streamer.checkpoint.CheckpointUtils.convertToCheckpointV1ForCommitTime;
 import static org.apache.spark.sql.functions.col;
 import static org.apache.spark.sql.functions.sum;
 

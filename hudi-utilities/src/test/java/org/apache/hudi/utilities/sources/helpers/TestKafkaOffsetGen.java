@@ -19,13 +19,13 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.CheckpointV2;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;

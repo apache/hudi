@@ -17,9 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.utilities.streamer.checkpoint;
-
-import org.apache.hudi.utilities.streamer.HoodieStreamer;
+package org.apache.hudi.common.table.checkpoint;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -50,7 +48,8 @@ public abstract class Checkpoint implements Serializable {
     return checkpointIgnoreKey;
   }
 
-  public abstract Map<String, String> getCheckpointCommitMetadata(HoodieStreamer.Config streamerConfig);
+  public abstract Map<String, String> getCheckpointCommitMetadata(String overrideResetKey,
+                                                                  String overrideIgnoreKey);
 
   @Override
   public int hashCode() {

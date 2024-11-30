@@ -19,6 +19,8 @@
 package org.apache.hudi.integ.testsuite.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.CheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -26,8 +28,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
-import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;

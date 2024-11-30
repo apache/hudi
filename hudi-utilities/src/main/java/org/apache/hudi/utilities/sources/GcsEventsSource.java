@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.CheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -29,8 +31,6 @@ import org.apache.hudi.utilities.sources.helpers.gcs.MessageBatch;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity;
 import org.apache.hudi.utilities.sources.helpers.gcs.MetadataMessage;
 import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
-import org.apache.hudi.utilities.streamer.checkpoint.Checkpoint;
-import org.apache.hudi.utilities.streamer.checkpoint.CheckpointV2;
 
 import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.spark.api.java.JavaSparkContext;
