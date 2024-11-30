@@ -82,9 +82,11 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
   @Override
   public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
     Pair<List<Schema.Field>,List<Schema.Field>> dataAndMetaCols = super.getBootstrapRequiredFields();
-    if (readerContext.supportsParquetRowIndex()) {
-      if (!dataAndMetaCols.getLeft().isEmpty() && !dataAndMetaCols.getRight().isEmpty()) {
+    if (readerContext.supportsParquetRowIndex() && (this.needsBootstrapMerge || this.needsMORMerge)) {
+      if (!dataAndMetaCols.getLeft().isEmpty()) {
         dataAndMetaCols.getLeft().add(getPositionalMergeField());
+      }
+      if (!dataAndMetaCols.getRight().isEmpty()) {
         dataAndMetaCols.getRight().add(getPositionalMergeField());
       }
     }

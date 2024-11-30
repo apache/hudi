@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 
 import org.apache.spark.sql.Dataset;
@@ -47,33 +48,47 @@ public class TestBootstrapRead extends TestBootstrapReadBase {
       Boolean[] dashPartitions = {true,false};
       HoodieTableType[] tableType = {COPY_ON_WRITE, MERGE_ON_READ};
       Integer[] nPartitions = {0, 1, 2};
+      HoodieRecord.HoodieRecordType[] recordTypes = {HoodieRecord.HoodieRecordType.AVRO};
       for (HoodieTableType tt : tableType) {
         for (Boolean dash : dashPartitions) {
           for (String bt : bootstrapType) {
             for (Integer n : nPartitions) {
-              // can't be mixed bootstrap if it's nonpartitioned
-              // don't need to test slash partitions if it's nonpartitioned
-              if ((!bt.equals("mixed") && dash) || n > 0) {
-                b.add(Arguments.of(bt, dash, tt, n));
+              for (HoodieRecord.HoodieRecordType rt : recordTypes) {
+                // can't be mixed bootstrap if it's nonpartitioned
+                // don't need to test slash partitions if it's nonpartitioned
+                if ((!bt.equals("mixed") && dash) || n > 0) {
+                  b.add(Arguments.of(bt, dash, tt, n, rt, true));
+                  if (tt.equals(MERGE_ON_READ)) {
+                    b.add(Arguments.of(bt, dash, tt, n, rt, false));
+                  }
+                }
               }
             }
           }
         }
       }
     } else {
-      b.add(Arguments.of("metadata", true, COPY_ON_WRITE, 0));
-      b.add(Arguments.of("mixed", false, MERGE_ON_READ, 2));
+      b.add(Arguments.of("metadata", true, COPY_ON_WRITE, 0, HoodieRecord.HoodieRecordType.AVRO, true));
+      b.add(Arguments.of("mixed", false, MERGE_ON_READ, 1, HoodieRecord.HoodieRecordType.AVRO, false));
+      b.add(Arguments.of("mixed", false, MERGE_ON_READ, 2, HoodieRecord.HoodieRecordType.AVRO, true));
     }
     return b.build();
   }
 
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testBootstrapFunctional(String bootstrapType, Boolean dashPartitions, HoodieTableType tableType, Integer nPartitions) {
+  public void testBootstrapFunctional(String bootstrapType,
+                                      Boolean dashPartitions,
+                                      HoodieTableType tableType,
+                                      Integer nPartitions,
+                                      HoodieRecord.HoodieRecordType recordType,
+                                      Boolean hasPrecombine) {
     this.bootstrapType = bootstrapType;
     this.dashPartitions = dashPartitions;
     this.tableType = tableType;
     this.nPartitions = nPartitions;
+    this.recordType = recordType;
+    this.hasPrecombine = hasPrecombine;
     setupDirs();
 
     // do bootstrap

@@ -313,8 +313,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String orderingField = ConfigUtils.getOrderingField(props);
+    if (StringUtils.isNullOrEmpty(orderingField)) {
+      return 0;
+    }
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     scala.Option<NestedFieldPath> cachedNestedFieldPath =
         HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
     if (cachedNestedFieldPath.isDefined()) {
