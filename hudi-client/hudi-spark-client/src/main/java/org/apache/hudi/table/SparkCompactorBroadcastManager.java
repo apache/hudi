@@ -34,7 +34,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.execution.datasources.FileFormat;
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
-import org.apache.spark.sql.hudi.SparkAdapter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.util.SerializableConfiguration;
@@ -47,25 +46,25 @@ import java.util.List;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
 
-public class SparkPartialUpdateReaderContext extends PartialUpdateReaderContext {
+public class SparkCompactorBroadcastManager extends CompactorBroadcastManager {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SparkPartialUpdateReaderContext.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkCompactorBroadcastManager.class);
 
   private final transient HoodieEngineContext context;
 
-  protected Broadcast<SQLConf> sqlConfBroadcast;
   protected Option<SparkParquetReader> parquetReaderOpt = Option.empty();
+  protected Broadcast<SQLConf> sqlConfBroadcast;
   protected Broadcast<SparkParquetReader> parquetReaderBroadcast;
   protected Broadcast<SerializableConfiguration> configurationBroadcast;
 
-  public SparkPartialUpdateReaderContext(HoodieEngineContext context) {
+  public SparkCompactorBroadcastManager(HoodieEngineContext context) {
     this.context = context;
   }
 
   // Prepare broadcast variables.
   @Override
-  public void prepareReaderContext() {
-    // this needs to be fixed.
+  public void prepareAndBroadcast() {
+    // This needs to be fixed.
     if (!(context instanceof HoodieSparkEngineContext)) {
       throw new HoodieIOException("Expected to be called using Engine's context and not local context");
     }
@@ -81,20 +80,19 @@ public class SparkPartialUpdateReaderContext extends PartialUpdateReaderContext 
             .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), Boolean.toString(returningBatch)));
 
     // Do broadcast.
-    SparkAdapter sparkAdapter = SparkAdapterSupport$.MODULE$.sparkAdapter();
     sqlConfBroadcast = jsc.broadcast(sqlConf);
     configurationBroadcast = jsc.broadcast(new SerializableConfiguration(jsc.hadoopConfiguration()));
     // TODO: Disable vectorization as of now. Assign it based on relevant settings.
     // TODO: Verify if we can construct the reader on the executor side if we has broadcast all necessary variables.
-    parquetReaderOpt = Option.of(sparkAdapter.createParquetFileReader(
+    parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
     parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());
   }
 
   @Override
-  public Option<HoodieReaderContext> getReaderContext(StoragePath basePath) {
+  public Option<HoodieReaderContext> retrieveFileGroupReaderContext(StoragePath basePath) {
     if (parquetReaderBroadcast == null) {
-      LOG.warn("ParquetReader is not broadcast; cannot use file group reader");
+      LOG.warn("ParquetReader is not broadcast; cannot create file group reader");
       return Option.empty();
     }
 
@@ -118,8 +116,7 @@ public class SparkPartialUpdateReaderContext extends PartialUpdateReaderContext 
   }
 
   @Override
-  public Option<Configuration> getStorageConfig() {
+  public Option<Configuration> retrieveStorageConfig() {
     return Option.of(configurationBroadcast.getValue().value());
   }
-
 }

@@ -29,9 +29,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.CompactorBroadcastManager;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.PartialUpdateReaderContext;
-import org.apache.hudi.table.SparkPartialUpdateReaderContext;
+import org.apache.hudi.table.SparkCompactorBroadcastManager;
 
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
@@ -62,7 +62,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T>
   }
 
   @Override
-  public Option<PartialUpdateReaderContext> getPartialUpdateReaderContext(HoodieEngineContext context) {
-    return Option.of(new SparkPartialUpdateReaderContext(context));
+  public Option<CompactorBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context) {
+    return Option.of(new SparkCompactorBroadcastManager(context));
   }
 }

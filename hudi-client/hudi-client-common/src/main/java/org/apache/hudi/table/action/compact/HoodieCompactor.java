@@ -24,12 +24,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -54,7 +52,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
@@ -64,9 +61,9 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.table.CompactorBroadcastManager;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.PartialUpdateReaderContext;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
@@ -95,7 +92,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
 
-  public Option<PartialUpdateReaderContext> getPartialUpdateReaderContext(HoodieEngineContext context) {
+  public Option<CompactorBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context) {
     return Option.empty();
   }
 
@@ -160,26 +157,14 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
-    // do one upfront processing to detect if we need partial update.
-    // if yes, call prepareBroadcast.
-    HoodiePairData<CompactionOperation, Boolean> operationPartialUpdatePair = context.parallelize(operations)
-        .mapToPair(operation -> Pair.of(operation, containsPartialUpdate(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
-            instantRange, taskContextSupplier, executionHelper)));
-    // should we persist operationPartialUpdatePair?
-
-    boolean containsPartialUpdate = operationPartialUpdatePair.values().collectAsList().stream().anyMatch(partialUpdate -> partialUpdate);
-    Option<PartialUpdateReaderContext> partialUpdateReaderContextOpt = Option.empty();
-    if (containsPartialUpdate) {
-      partialUpdateReaderContextOpt = getPartialUpdateReaderContext(context);
-      // Broadcast ParquetFileReader for file group reader if needed.
-      ValidationUtils.checkArgument(partialUpdateReaderContextOpt.isPresent(), "Partial update cannot be supported without PartialUpdateReaderContext");
-      partialUpdateReaderContextOpt.get().prepareReaderContext();
+    // Broadcast necessary information.
+    Option<CompactorBroadcastManager> broadcastManagerOpt = getCompactorBroadcastManager(context);
+    if (broadcastManagerOpt.isPresent()) {
+      broadcastManagerOpt.get().prepareAndBroadcast();
     }
-
-    Option<PartialUpdateReaderContext> finalPartialUpdateReaderContextOpt = partialUpdateReaderContextOpt;
-    return operationPartialUpdatePair.map((SerializableFunction<Pair<CompactionOperation, Boolean>, List<WriteStatus>>) v1 -> compact(
-        compactionHandler, metaClient, config, v1.getKey(), compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper,
-        finalPartialUpdateReaderContextOpt, v1.getValue())).flatMap((SerializableFunction<List<WriteStatus>, Iterator<WriteStatus>>) List::iterator);
+    return context.parallelize(operations).map(operation -> compact(
+        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper, broadcastManagerOpt))
+        .flatMap(List::iterator);
   }
 
   /**
@@ -191,58 +176,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    CompactionOperation operation,
                                    String instantTime,
                                    String maxInstantTime,
-                                   TaskContextSupplier taskContextSupplier,
-                                   boolean containsPartialUpdate) throws IOException {
+                                   TaskContextSupplier taskContextSupplier) throws IOException {
     return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime, Option.empty(),
-        taskContextSupplier, new CompactionExecutionHelper(), Option.empty(), containsPartialUpdate);
-  }
-
-  private boolean containsPartialUpdate(HoodieCompactionHandler compactionHandler,
-                                   HoodieTableMetaClient metaClient,
-                                   HoodieWriteConfig config,
-                                   CompactionOperation operation,
-                                   String instantTime,
-                                   String maxInstantTime,
-                                   Option<InstantRange> instantRange,
-                                   TaskContextSupplier taskContextSupplier,
-                                   CompactionExecutionHelper executionHelper) throws IOException {
-    HoodieStorage storage = metaClient.getStorage();
-    Schema readerSchema;
-    Option<InternalSchema> internalSchemaOption = Option.empty();
-    if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
-      readerSchema = new Schema.Parser().parse(config.getSchema());
-      internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
-      // its safe to modify config here, since we are running in task side.
-      ((HoodieTable) compactionHandler).getConfig().setDefault(config);
-    } else {
-      readerSchema = HoodieAvroUtils.addMetadataFields(
-          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
-    }
-    LOG.info("Compaction operation started for base file: " + operation.getDataFileName() + " and delta files: " + operation.getDeltaFileNames()
-        + " for commit " + instantTime);
-    // TODO - FIX THIS
-    // Reads the entire avro file. Always only specific blocks should be read from the avro file
-    // (failure recover).
-    // Load all the delta commits since the last compaction commit and get all the blocks to be
-    // loaded and load it using CompositeAvroLogReader
-    // Since a DeltaCommit is not defined yet, reading all the records. revisit this soon.
-
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
-    LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
-
-    List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
-            new StoragePath(FSUtils.constructAbsolutePath(
-                metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
-        .collect(toList());
-    HoodieMergedLogRecordScanner scanner = getLogRecordScanner(storage, metaClient.getBasePath(), logFiles, readerSchema,
-        executionHelper, instantTime, maxInstantTime,
-        instantRange,
-        internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()), config, maxMemoryPerCompaction,
-        operation, metaClient, true);
-
-    boolean logFilesContainsPartialUpdates = scanner.isContainingPartialUpdates();
-    scanner.close();
-    return logFilesContainsPartialUpdates;
+        taskContextSupplier, new CompactionExecutionHelper(), Option.empty());
   }
 
   /**
@@ -257,8 +193,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper,
-                                   Option<PartialUpdateReaderContext> partialUpdateReaderContextOpt,
-                                   boolean containsPartialUpdate) throws IOException {
+                                   Option<CompactorBroadcastManager> broadcastManagerOpt
+  ) throws IOException {
     HoodieStorage storage = metaClient.getStorage();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
@@ -288,8 +224,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
 
-    if (containsPartialUpdate) { // if the file slice contains partial update
-      return compactUsingFileGroupReader(logFiles, readerSchema, instantTime, internalSchemaOption, config, operation, metaClient, partialUpdateReaderContextOpt, taskContextSupplier);
+    if (broadcastManagerOpt.isPresent() && !isMetadataTable(metaClient)) { // For spark, but not MDT.
+      return compactUsingFileGroupReader(logFiles, readerSchema, instantTime, internalSchemaOption, config, operation, metaClient, broadcastManagerOpt, taskContextSupplier);
     } else {
       // if not for partail update, we can go through regular way of compacting.
       return compactUsingLegacyMethod(storage, logFiles, readerSchema, executionHelper, instantTime, maxInstantTime, instantRange, internalSchemaOption, config,
@@ -300,13 +236,13 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
   private List<WriteStatus> compactUsingFileGroupReader(List<String> logFiles, Schema readerSchema, String instantTime,
                                                         Option<InternalSchema> internalSchemaOption, HoodieWriteConfig config,
                                                         CompactionOperation operation, HoodieTableMetaClient metaClient,
-                                                        Option<PartialUpdateReaderContext> partialUpdateReaderContextOpt,
+                                                        Option<CompactorBroadcastManager> partialUpdateReaderContextOpt,
                                                         TaskContextSupplier taskContextSupplier) throws IOException {
-    PartialUpdateReaderContext partialUpdateReaderContext = partialUpdateReaderContextOpt.get();
+    CompactorBroadcastManager compactorBroadcastManager = partialUpdateReaderContextOpt.get();
     // PATH 1: When the engine decides to return a valid reader context object.
-    Option<HoodieReaderContext> readerContextOpt = partialUpdateReaderContext.getReaderContext(metaClient.getBasePath());
+    Option<HoodieReaderContext> readerContextOpt = compactorBroadcastManager.retrieveFileGroupReaderContext(metaClient.getBasePath());
     ValidationUtils.checkArgument(readerContextOpt.isPresent(),"ReaderContext has to be set for compaction using new file group reader ");
-    Option<Configuration> configurationOpt = partialUpdateReaderContext.getStorageConfig();
+    Option<Configuration> configurationOpt = compactorBroadcastManager.retrieveStorageConfig();
     ValidationUtils.checkArgument(configurationOpt.isPresent(), "Custom Configuration has to be set for compaction using new file group reader ");
 
     HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.builder()
@@ -575,5 +511,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       }
     }
     return false;
+  }
+
+  private boolean isMetadataTable(HoodieTableMetaClient metaClient) {
+    return metaClient.getBasePath().getParent().getName().equals(".hoodie");
   }
 }

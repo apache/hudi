@@ -26,21 +26,20 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.io.Serializable;
 
-public class PartialUpdateReaderContext implements Serializable {
+public class CompactorBroadcastManager implements Serializable {
 
-  // Prepare broadcast variables.
-  public void prepareReaderContext() {
+  // Prepare and broadcast necessary information needed by compactor.
+  public void prepareAndBroadcast() {
     // NO operation.
   }
 
-  // Create reader context based on broadcast variables.
-  public Option<HoodieReaderContext> getReaderContext(StoragePath basePath) {
+  // Fetch fg reader context based on broadcast variables.
+  public Option<HoodieReaderContext> retrieveFileGroupReaderContext(StoragePath basePath) {
     return Option.empty();
   }
 
   // Fetch broadcast storage config.
-  public Option<Configuration> getStorageConfig() {
+  public Option<Configuration> retrieveStorageConfig() {
     return Option.empty();
   }
-
 }
