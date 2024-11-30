@@ -1148,7 +1148,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val partitionFilter: Expression = EqualTo(AttributeReference("c8", IntegerType)(), Literal(9))
         val (isPruned, prunedPaths) = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq(partitionFilter))
         assertTrue(isPruned)
-        val prunedPartitionAndFileNames = expressionIndexSupport.getPrunedPartitionsAndFileNames(prunedPaths, includeLogFiles = true)
+        val prunedPartitionAndFileNames = expressionIndexSupport.getPrunedPartitionsAndFileNames(fileIndex, prunedPaths)
         assertTrue(prunedPartitionAndFileNames._1.size == 1) // partition
         assertTrue(prunedPartitionAndFileNames._2.size == 1) // log file
         assertTrue(FSUtils.isLogFile(prunedPartitionAndFileNames._2.head))
