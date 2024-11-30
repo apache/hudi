@@ -837,6 +837,18 @@ public class HoodieTableMetadataUtil {
 
       // there are chances that same record key from data table has 2 entries (1 delete from older partition and 1 insert to newer partition)
       // lets do reduce by key to ignore the deleted entry.
+      // first deduce parallelism to avoid too few tasks for large number of records.
+      long totalWriteBytesForRLI = allWriteStats.stream().mapToLong(writeStat -> {
+        // if there are no inserts or deletes, we can ignore this write stat for RLI
+        if (writeStat.getNumInserts() == 0 && writeStat.getNumDeletes() == 0) {
+          return 0;
+        }
+        return writeStat.getTotalWriteBytes();
+      }).sum();
+      // approximate task partition size of 100MB
+      // (TODO: make this configurable)
+      long targetPartitionSize = 100_000_000L;
+      parallelism = (int) Math.max(1, (totalWriteBytesForRLI + targetPartitionSize - 1) / targetPartitionSize);
       return reduceByKeys(recordIndexRecords, parallelism);
     } catch (Exception e) {
       throw new HoodieException("Failed to generate RLI records for metadata table", e);
