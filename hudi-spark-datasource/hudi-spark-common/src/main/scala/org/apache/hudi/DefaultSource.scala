@@ -303,25 +303,30 @@ object DefaultSource {
             }
           case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
             // TODO(yihua): new HadoopFsRelationBasedFactory has gaps around instant time filtering?
-            //if (useNewParquetFileFormat) {
-            //  new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
-            //    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
-            //} else {
             if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_VERSION)) {
               val writeTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_VERSION.key))
               if (writeTableVersion >= 8) {
-                new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.CLOSED_CLOSED)
+                if (useNewParquetFileFormat) {
+                  new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                } else {
+                  new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.CLOSED_CLOSED)
+                }
               } else {
                 new IncrementalRelationV1(sqlContext, parameters, userSchema, metaClient)
               }
             } else {
               if (metaClient.getTableConfig.getTableVersion.versionCode() >= 8) {
-                new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.CLOSED_CLOSED)
+                if (useNewParquetFileFormat) {
+                  new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                } else {
+                  new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.CLOSED_CLOSED)
+                }
               } else {
                 new IncrementalRelationV1(sqlContext, parameters, userSchema, metaClient)
               }
             }
-          //}
 
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
             if (useNewParquetFileFormat) {
@@ -340,12 +345,12 @@ object DefaultSource {
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-            //if (useNewParquetFileFormat) {
-            //  new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
-            //    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
-            //} else {
-            MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
-          //}
+            if (useNewParquetFileFormat) {
+              new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+                sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+            } else {
+              MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+            }
 
           case (_, _, true) =>
             if (useNewParquetFileFormat) {
