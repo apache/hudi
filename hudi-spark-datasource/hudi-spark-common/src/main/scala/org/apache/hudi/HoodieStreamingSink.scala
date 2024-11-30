@@ -23,27 +23,29 @@ import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, Spark
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteConcurrencyMode}
-import org.apache.hudi.common.table.marker.MarkerType
-import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.util.ValidationUtils.checkArgument
+import org.apache.hudi.common.table.marker.MarkerType
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, ConfigUtils}
+import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
 import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
 import org.apache.spark.sql.streaming.OutputMode
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 import org.slf4j.LoggerFactory
 
 import java.lang
 import java.util.function.{BiConsumer, Function}
+
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
+// TODO(yihua): handle V1/V2 checkpoint
 class HoodieStreamingSink(sqlContext: SQLContext,
                           options: Map[String, String],
                           partitionColumns: Seq[String],

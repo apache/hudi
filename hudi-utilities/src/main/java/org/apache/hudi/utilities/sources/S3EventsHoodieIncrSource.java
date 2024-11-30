@@ -111,6 +111,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    // TODO(yihua): Make sure for cloud incremental source, it still uses Checkpoint V1 and 0.x incremental read
     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint = CloudObjectIncrCheckpoint.fromString(lastCheckpoint);
     HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     QueryInfo queryInfo =

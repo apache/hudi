@@ -44,6 +44,7 @@ import org.apache.spark.sql.types.StructType
   * @param schemaOption
   * @param parameters
   */
+// TODO(yihua): handle V1/V2 checkpoint
 class HoodieStreamSource(
     sqlContext: SQLContext,
     metadataPath: String,
