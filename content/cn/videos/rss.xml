@@ -42,6 +42,29 @@
             <category>pyspark</category>
         </item>
         <item>
+            <title><![CDATA[Create Apache Hudi table using Glue(in catalog) by reading streaming data from AWS Kinesis]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/09/26/Create-Apache-Hudi-Table-Using-Glue-in-Catalog-By-Reading-Streaming-Data-From-AWS-Kinesis</link>
+            <guid>https://hudi.apache.org/cn/videos/2024/09/26/Create-Apache-Hudi-Table-Using-Glue-in-Catalog-By-Reading-Streaming-Data-From-AWS-Kinesis</guid>
+            <pubDate>Thu, 26 Sep 2024 00:00:00 GMT</pubDate>
+            <category>guide</category>
+            <category>how-to</category>
+            <category>apache hudi</category>
+            <category>aws glue</category>
+            <category>amazon kinesis</category>
+        </item>
+        <item>
+            <title><![CDATA[How to Consume Apache Hudi Tables in Snowflake, Iceberg, and Athena | Hands-On Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2024/09/01/how-to-consume-apache-hudi-tables-in-snowflake-iceberg-and-athena-hands-on-labs</link>
+            <guid>https://hudi.apache.org/cn/videos/2024/09/01/how-to-consume-apache-hudi-tables-in-snowflake-iceberg-and-athena-hands-on-labs</guid>
+            <pubDate>Sun, 01 Sep 2024 00:00:00 GMT</pubDate>
+            <category>guide</category>
+            <category>how-to</category>
+            <category>apache hudi</category>
+            <category>apache iceberg</category>
+            <category>athena</category>
+            <category>snowflake</category>
+        </item>
+        <item>
             <title><![CDATA[4 Different Ways to fetch Apache Hudi Commit time in Python and PySpark]]></title>
             <link>https://hudi.apache.org/cn/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</link>
             <guid>https://hudi.apache.org/cn/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</guid>
@@ -225,40 +248,6 @@
             <category>python</category>
             <category>frontend</category>
             <category>flask</category>
-        </item>
-        <item>
-            <title><![CDATA[Hudi with Kyuubi, a distributed & multi-tenant gateway, to provide serverless SQL on lakehouses]]></title>
-            <link>https://hudi.apache.org/cn/videos/2024/04/22/Hudi-with-Kyuubi-a-distributed-and-multi-tenant-gateway-to-provide-serverless-SQL-on-lakehouses</link>
-            <guid>https://hudi.apache.org/cn/videos/2024/04/22/Hudi-with-Kyuubi-a-distributed-and-multi-tenant-gateway-to-provide-serverless-SQL-on-lakehouses</guid>
-            <pubDate>Mon, 22 Apr 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>apache kyuubi</category>
-            <category>serverless</category>
-            <category>lakehouse</category>
-            <category>data lakehouse</category>
-        </item>
-        <item>
-            <title><![CDATA[Build Universal Data lake with MySQL + Debezium+Kafka+DeltaSTreamer + Minio+HiveMetastore+Trino]]></title>
-            <link>https://hudi.apache.org/cn/videos/2024/04/10/Build-Universal-Data-lake-with-MySQL-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</link>
-            <guid>https://hudi.apache.org/cn/videos/2024/04/10/Build-Universal-Data-lake-with-MySQL-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</guid>
-            <pubDate>Wed, 10 Apr 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>apache kafka</category>
-            <category>debezium</category>
-            <category>mysql</category>
-            <category>deltastreamer</category>
-            <category>hudi streamer</category>
-            <category>trino</category>
-            <category>minio</category>
-            <category>apache hive</category>
-            <category>hive metastore</category>
-            <category>data lakehouse</category>
-            <category>lakehouse</category>
-            <category>universal lakehouse</category>
         </item>
     </channel>
 </rss>

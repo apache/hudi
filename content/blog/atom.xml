@@ -312,376 +312,121 @@ This setting specifies the maximum number of file groups whose base files meet t
         <category label="devgenius" term="devgenius"/>
     </entry>
     <entry>
-        <title type="html"><![CDATA[Column File Formats: How Hudi Leverages Parquet and ORC ]]></title>
-        <id>https://hudi.apache.org/blog/2024/07/31/hudi-file-formats</id>
-        <link href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats"/>
-        <updated>2024-07-31T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Introduction]]></summary>
-        <content type="html"><![CDATA[<h2 class="anchor anchorWithStickyNavbar_LWe7" id="introduction">Introduction<a href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats#introduction" class="hash-link" aria-label="Direct link to Introduction" title="Direct link to Introduction">​</a></h2>
-<p>Apache Hudi emerges as a game-changer in the big data ecosystem by transforming data lakes into transactional hubs. Unlike traditional data lakes which struggle with updates and deletes, Hudi empowers users with functionalities like data ingestion, streaming updates (upserts), and even deletions. This allows for efficient incremental processing, keeping your data pipelines agile and data fresh for real-time analytics. Hudi seamlessly integrates with existing storage solutions and boasts compatibility with popular columnar file formats like <a href="https://parquet.apache.org/" target="_blank" rel="noopener noreferrer">Parquet</a> and <a href="https://orc.apache.org/" target="_blank" rel="noopener noreferrer">ORC</a>. Choosing the right file format is crucial for optimized performance and efficient data manipulation within Hudi, as it directly impacts processing speed and storage efficiency. This blog will delve deeper into these features, and explore the significance of file format selection.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="how-does-data-storage-work-in-apache-hudi">How does data storage work in Apache Hudi<a href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats#how-does-data-storage-work-in-apache-hudi" class="hash-link" aria-label="Direct link to How does data storage work in Apache Hudi" title="Direct link to How does data storage work in Apache Hudi">​</a></h2>
-<p><img decoding="async" loading="lazy" src="https://miro.medium.com/v2/resize:fit:600/format:webp/0*_NFdQLaRGiqDuK3V.png" alt="Hudi COW MOR" class="img_ev3q"></p>
-<p>Apache Hudi offers two table storage options: Copy-on-Write (COW) and Merge-on-Read (MOR).</p>
-<ul>
-<li><a href="https://hudi.apache.org/docs/table_types#copy-on-write-table" target="_blank" rel="noopener noreferrer">COW tables</a>:<!-- -->
-<ul>
-<li>Data is stored in base files, with Parquet and ORC being the supported formats.</li>
-<li>Updates involve rewriting the entire base file with the modified data.</li>
-</ul>
-</li>
-<li><a href="https://hudi.apache.org/docs/table_types#merge-on-read-table" target="_blank" rel="noopener noreferrer">MOR tables</a>:<!-- -->
-<ul>
-<li>Data resides in base files, again supporting Parquet and ORC formats.</li>
-<li>Updates are stored in separate delta files (using Apache Avro format) and later merged with the base file by a periodic compaction process in the background.</li>
-</ul>
-</li>
-</ul>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="parquet-vs-orc-for-your-apache-hudi-base-file">Parquet vs ORC for your Apache Hudi Base File<a href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats#parquet-vs-orc-for-your-apache-hudi-base-file" class="hash-link" aria-label="Direct link to Parquet vs ORC for your Apache Hudi Base File" title="Direct link to Parquet vs ORC for your Apache Hudi Base File">​</a></h2>
-<p>Choosing the right file format for your Hudi environment depends on your specific needs. Here's a breakdown of Parquet, and ORC along with their strengths, weaknesses, and ideal use cases within Hudi:</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="apache-parquet">Apache Parquet<a href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats#apache-parquet" class="hash-link" aria-label="Direct link to Apache Parquet" title="Direct link to Apache Parquet">​</a></h3>
-<p><a href="https://parquet.apache.org/" target="_blank" rel="noopener noreferrer">Apache Parquet</a> is a columnar storage file format. It’s designed for efficiency and performance, and it’s particularly well-suited for running complex queries on large datasets.</p>
-<p>Pros of Parquet:</p>
-<ul>
-<li>Columnar Storage: Unlike row-based files, Parquet is columnar-oriented. This means it stores data by columns, which allows for more efficient disk I/O and compression. It reduces the amount of data transferred from disk to memory, leading to faster query performance.</li>
-<li>Compression: Parquet has good compression and encoding schemes. It reduces the disk storage space and improves performance, especially for columnar data retrieval, which is a common case in data analytics.</li>
-</ul>
-<p>Cons of Parquet:</p>
-<ul>
-<li>Write-heavy Workloads: Since Parquet performs column-wise compression and encoding, the cost of writing data can be high for write-heavy workloads.</li>
-<li>Small Data Sets: Parquet may not be the best choice for small datasets because the advantages of its columnar storage model aren’t as pronounced.</li>
-</ul>
-<p>Use Cases for Parquet:</p>
-<ul>
-<li>Parquet is an excellent choice when dealing with large, complex, and nested data structures, especially for read-heavy workloads. Its columnar storage approach makes it an excellent choice for <a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/" target="_blank" rel="noopener noreferrer">data lakehouse</a> solutions where aggregation queries are common.</li>
-</ul>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="optimized-row-columnar-orc">Optimized Row Columnar (ORC)<a href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats#optimized-row-columnar-orc" class="hash-link" aria-label="Direct link to Optimized Row Columnar (ORC)" title="Direct link to Optimized Row Columnar (ORC)">​</a></h3>
-<p><a href="https://orc.apache.org/" target="_blank" rel="noopener noreferrer">Apache ORC</a> is another popular file format that is self-describing, and type-aware columnar file format.</p>
-<p>Pros of ORC:</p>
-<ul>
-<li>Compression: ORC provides impressive compression rates that minimize storage space. It also includes lightweight indexes stored within the file, helping to improve read performance.</li>
-<li>Complex Types: ORC supports complex types, including structs, lists, maps, and union types.</li>
-</ul>
-<p>Cons of ORC:</p>
-<ul>
-<li>Less Community Support: Compared to Parquet, ORC has less community support, meaning fewer resources, libraries, and tools for this file format.</li>
-<li>Write Costs: Similar to Parquet, ORC may have high write costs due to its columnar nature.</li>
-</ul>
-<p>Use Cases for ORC:</p>
-<ul>
-<li>ORC is commonly used in cases where high-speed writing is necessary.</li>
-</ul>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="choosing-the-right-format">Choosing the Right Format:<a href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats#choosing-the-right-format" class="hash-link" aria-label="Direct link to Choosing the Right Format:" title="Direct link to Choosing the Right Format:">​</a></h2>
-<ul>
-<li>Prioritize query performance: If complex analytical queries are your primary use case, Parquet is the clear winner due to its superior columnar access.</li>
-<li>Balance performance and cost: ORC offers a good balance between read/write performance and compression, making it suitable for general-purpose data storage in Hudi.</li>
-</ul>
-<p>Remember, the best format depends on your specific Hudi application. Consider your workload mix, and performance requirements to make an informed decision.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion">​</a></h2>
-<p>In conclusion, understanding file formats is crucial for optimizing your Hudi data management. Parquet for COW and MOR tables excels in analytical queries with its columnar storage and rich metadata. ORC for COW and MOR tables strikes a balance between read/write performance and compression for general-purpose storage. Avro comes into play for storing delta table data in MOR tables. By considering these strengths, you can make informed decisions on file formats to best suit your big data workloads within the Hudi framework.</p>
-<p>Unleash the power of Apache Hudi for your big data challenges! Head over to <a href="https://hudi.apache.org/" target="_blank" rel="noopener noreferrer">https://hudi.apache.org/</a> and dive into the quickstarts to get started. Want to learn more? Join our vibrant Hudi community! Attend the monthly Community Call or hop into the Apache Hudi Slack to ask questions and gain deeper insights.</p>]]></content>
+        <title type="html"><![CDATA[Change query support in Apache Hudi (0.15)]]></title>
+        <id>https://hudi.apache.org/blog/2024/09/30/change-query-support-in-apache-hudi-0-15</id>
+        <link href="https://hudi.apache.org/blog/2024/09/30/change-query-support-in-apache-hudi-0-15"/>
+        <updated>2024-09-30T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://jack-vanlightly.com/analyses/2024/9/27/change-query-support-in-apache-hudi">here</a></span>]]></content>
         <author>
-            <name>Albert Wong</name>
+            <name>Jack Vanlightly</name>
         </author>
-        <category label="Data Lake" term="Data Lake"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Apache Parquet" term="Apache Parquet"/>
-        <category label="Apache ORC" term="Apache ORC"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Understanding Data Lake Change Data Capture]]></title>
-        <id>https://hudi.apache.org/blog/2024/07/30/data-lake-cdc</id>
-        <link href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc"/>
-        <updated>2024-07-30T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Introduction]]></summary>
-        <content type="html"><![CDATA[<h2 class="anchor anchorWithStickyNavbar_LWe7" id="introduction">Introduction<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#introduction" class="hash-link" aria-label="Direct link to Introduction" title="Direct link to Introduction">​</a></h2>
-<p>In data management, two concepts have garnered significant attention: data lakes and change data capture (CDC).</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="data-lake">Data Lake<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#data-lake" class="hash-link" aria-label="Direct link to Data Lake" title="Direct link to Data Lake">​</a></h3>
-<p>Data lakes serve as vast repositories that store raw data in its native format until needed for analytics.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="change-data-capture">Change Data Capture<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#change-data-capture" class="hash-link" aria-label="Direct link to Change Data Capture" title="Direct link to Change Data Capture">​</a></h3>
-<p>Change Data Capture (CDC) is a technique used to identify and capture data changes, ensuring that the data remains fresh and consistent across various systems.</p>
-<p>Combining CDC with data lakes can significantly simplify data management by addressing several challenges commonly faced by ETL pipelines delivering data from transactional databases to analytical databases. These include maintaining data freshness, ensuring consistency, and improving efficiency in data handling. This article will explore the integration between data lakes and CDC, their benefits, implementation methods, key technologies and tools involved, best practices, and how to choose the right tools for your needs.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="cdc-architecture-pattern">CDC architecture pattern<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#cdc-architecture-pattern" class="hash-link" aria-label="Direct link to CDC architecture pattern" title="Direct link to CDC architecture pattern">​</a></h2>
-<p><img decoding="async" loading="lazy" alt="CDC Architecture" src="https://hudi.apache.org/assets/images/database-cdc-e9ee525e81a47e7744ae4f408c4e1d8f.png" width="632" height="260" class="img_ev3q"></p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="common-cdc-components">Common CDC Components<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#common-cdc-components" class="hash-link" aria-label="Direct link to Common CDC Components" title="Direct link to Common CDC Components">​</a></h3>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="change-detection">Change Detection<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#change-detection" class="hash-link" aria-label="Direct link to Change Detection" title="Direct link to Change Detection">​</a></h4>
-<h5 class="anchor anchorWithStickyNavbar_LWe7" id="timestamp-based--query-based">Timestamp-based / Query-based:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#timestamp-based--query-based" class="hash-link" aria-label="Direct link to Timestamp-based / Query-based:" title="Direct link to Timestamp-based / Query-based:">​</a></h5>
-<p>This method relies on table schemas to include a column to indicate when it was previously modified, i.e. LAST_UPDATED etc. Whenever the source system is updated, the LAST_UPDATED column should be designed to get updated with the current timestamp. This column can then be queried by consumer applications to get the records, and process the records that have been previously updated.</p>
-<p><img decoding="async" loading="lazy" alt="Timestamp-based CDC" src="https://hudi.apache.org/assets/images/ts-based-cdc-30ce5c2462ea39b02dbf9a93467a360a.png" width="1121" height="359" class="img_ev3q"></p>
-<h5 class="anchor anchorWithStickyNavbar_LWe7" id="pros">Pros:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#pros" class="hash-link" aria-label="Direct link to Pros:" title="Direct link to Pros:">​</a></h5>
-<ul>
-<li>Its simple to implement and use</li>
-</ul>
-<h5 class="anchor anchorWithStickyNavbar_LWe7" id="cons">Cons:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#cons" class="hash-link" aria-label="Direct link to Cons:" title="Direct link to Cons:">​</a></h5>
-<ul>
-<li>If source applications did not have the timestamp columns, the database design needs to be changed to include it</li>
-<li>Only supports soft deletes and not DELETE operations in the source table. This is because, once a DELETE operation is performed on the source database the record is removed and the consumer applications cannot track it automatically without the help of a custom log table or an audit trail.</li>
-<li>As there is no metadata to track, schema evolution scenarios require custom implementations to track the source database schema changes and update the target database schema appropriately. This is complex and hard to implement.</li>
-</ul>
-<h5 class="anchor anchorWithStickyNavbar_LWe7" id="trigger-based">Trigger-based:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#trigger-based" class="hash-link" aria-label="Direct link to Trigger-based:" title="Direct link to Trigger-based:">​</a></h5>
-<p>In a trigger-based CDC design, database triggers are used to detect changes in the data and are used to update target tables accordingly. This method involves having trigger functions automatically executed to capture and store any changes from the source table in the target table; these target tables are commonly referred to as <strong>shadow tables</strong> or <strong>change tables</strong>. For example, in this method, stored procedures are triggered when there are specific events in the source database, such as INSERTs, UPDATEs, DELETEs.</p>
-<p><img decoding="async" loading="lazy" alt="Trigger-based CDC" src="https://hudi.apache.org/assets/images/trigger-based-cdc-51c20f90024a12e97cbc728cfc7c0ed4.png" width="880" height="285" class="img_ev3q"></p>
-<h5 class="anchor anchorWithStickyNavbar_LWe7" id="pros-1">Pros:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#pros-1" class="hash-link" aria-label="Direct link to Pros:" title="Direct link to Pros:">​</a></h5>
-<ul>
-<li>Simple to implement</li>
-<li>Triggers are supported natively by most database engines</li>
-</ul>
-<h5 class="anchor anchorWithStickyNavbar_LWe7" id="cons-1">Cons:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#cons-1" class="hash-link" aria-label="Direct link to Cons:" title="Direct link to Cons:">​</a></h5>
-<ul>
-<li>Maintenance overhead - requires maintaining separate trigger for each operation in each table</li>
-<li>Performance overhead - in a highly concurrent database, addition of these triggers may significantly impact performance</li>
-<li>Trigger-based CDC does not inherently provide mechanisms for informing downstream applications about schema changes, complicating consumer-side adaptations.</li>
-</ul>
-<h5 class="anchor anchorWithStickyNavbar_LWe7" id="log-based">Log-based:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#log-based" class="hash-link" aria-label="Direct link to Log-based:" title="Direct link to Log-based:">​</a></h5>
-<p>Databases maintain transaction logs, a file that records all transactions and database modifications made by each transaction. By reading this log, CDC tools can identify what data has been changed, when it changed and the type of change. Because this method reads changes directly from the database transaction log, ensuring low-latency and minimal impact on database performance.</p>
-<p><img decoding="async" loading="lazy" alt="Log-based CDC" src="https://hudi.apache.org/assets/images/log-based-cdc-92eff429e89653b892b63f1af3485ac6.png" width="1301" height="320" class="img_ev3q"></p>
-<h5 class="anchor anchorWithStickyNavbar_LWe7" id="pros-2">Pros:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#pros-2" class="hash-link" aria-label="Direct link to Pros:" title="Direct link to Pros:">​</a></h5>
-<ul>
-<li>Supports all kinds of database transactions i.e. INSERTs, UPDATEs, DELETEs</li>
-<li>Minimal performance impact on the source/operational databases</li>
-<li>No schema changes required in source databases</li>
-<li>With a table format support, i.e. Apache Hudi, schema evolution <a href="https://hudi.apache.org/docs/schema_evolution/" target="_blank" rel="noopener noreferrer">can be supported</a></li>
-</ul>
-<h5 class="anchor anchorWithStickyNavbar_LWe7" id="cons-2">Cons:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#cons-2" class="hash-link" aria-label="Direct link to Cons:" title="Direct link to Cons:">​</a></h5>
-<ul>
-<li>No standardization in publishing the transactional logs between databases - this results in complex design and development overhead to implement support for different database vendors</li>
-</ul>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="data-extraction">Data Extraction<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#data-extraction" class="hash-link" aria-label="Direct link to Data Extraction" title="Direct link to Data Extraction">​</a></h4>
-<p>Once changes are detected, the CDC system extracts the relevant data. This includes the type of operation (insert, update, delete), the affected rows, and the before-and-after state of the data if applicable.</p>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="data-transformation">Data Transformation<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#data-transformation" class="hash-link" aria-label="Direct link to Data Transformation" title="Direct link to Data Transformation">​</a></h4>
-<p>Extracted data often needs to be transformed before it can be used. This might include converting data formats, applying business rules, or enriching the data with additional context.</p>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="data-loading">Data Loading<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#data-loading" class="hash-link" aria-label="Direct link to Data Loading" title="Direct link to Data Loading">​</a></h4>
-<p>The transformed data is then loaded into the target system. This could be another database, a data warehouse, a data lake, or a real-time analytics platform. The loading process ensures that the target system reflects the latest state of the source database.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="why-combine-cdc-with-data-lakes">Why Combine CDC with Data Lakes?<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#why-combine-cdc-with-data-lakes" class="hash-link" aria-label="Direct link to Why Combine CDC with Data Lakes?" title="Direct link to Why Combine CDC with Data Lakes?">​</a></h2>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="flexibility">Flexibility<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#flexibility" class="hash-link" aria-label="Direct link to Flexibility" title="Direct link to Flexibility">​</a></h3>
-<p>In general, data lakes offer more flexibility at a lower cost, because of its tendency to support storing any type of data i.e. unstructured, semi-structured and structured data while data warehouses typically only support structured and in some cases semi-structured. This flexibility allows users to maintain a single source of truth and access the same dataset from different query engines. For example, the dataset stored in S3, can be queried using Redshift Spectrum and Amazon Athena.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="cost-effective">Cost-effective<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#cost-effective" class="hash-link" aria-label="Direct link to Cost-effective" title="Direct link to Cost-effective">​</a></h3>
-<p>Data lakes, when compared to data warehouses, are generally cheaper in terms of storage costs as the volume grows in time. This allows users to implement a medallion architecture which involves storing a huge volume of data in three different levels i.e. bronze, silver and gold layer tables. Over time, data lake users typically implement tiered storage which further reduces storage cost by moving infrequently accessed data to colder storage systems. In a traditional data warehouse implementation, storage costs will be higher to maintain different levels of data and will continue growing as the source database grows.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="streamlined-etl-processes">Streamlined ETL Processes<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#streamlined-etl-processes" class="hash-link" aria-label="Direct link to Streamlined ETL Processes" title="Direct link to Streamlined ETL Processes">​</a></h3>
-<p>CDC simplifies the Extract, Transform, Load (ETL) processes by continuously capturing and applying changes to the data lake. This streamlining reduces the complexity and resource intensity of traditional ETL operations, often involving bulk data transfers and significant processing overhead. By only dealing with data changes, CDC makes the process more efficient and reduces the load on source systems.</p>
-<p>For organizations using multiple ingestion pipelines, for example a combination of CDC pipelines, ERP data ingestion, IOT sensor data, having a common storage layer may simplify data processing while giving you the opportunity to build unified tables combining data from different sources.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="designing-a-cdc-architecture">Designing a CDC Architecture<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#designing-a-cdc-architecture" class="hash-link" aria-label="Direct link to Designing a CDC Architecture" title="Direct link to Designing a CDC Architecture">​</a></h2>
-<p>For organizations with specific needs or unique data environments, developing custom CDC solutions is a common practice, especially with open source tools/frameworks. These solutions offer flexibility and can be tailored to meet the exact requirements of the business. However, developing custom CDC solutions requires significant expertise and resources, making it a viable option for organizations with complex data needs. Examples include Debezium/Airbyte combined Apache Kafka.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="solution">Solution:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#solution" class="hash-link" aria-label="Direct link to Solution:" title="Direct link to Solution:">​</a></h3>
-<p>Apache Hudi is an open-source framework designed to streamline incremental data processing and data pipeline development. It efficiently handles business requirements such as data lifecycle management and enhances data quality.
-Starting with Hudi 0.13.0, <a href="https://hudi.apache.org/releases/release-0.13.0#change-data-capture" target="_blank" rel="noopener noreferrer">the CDC feature was introduced natively</a>, allowing logging before and after images of the changed records, along with the associated write operation type.</p>
-<p>This enables users to</p>
-<ul>
-<li>Perform record-level insert, update, and delete for privacy regulations and simplified pipelines – for privacy regulations like GDPR and CCPA, companies need to perform record-level updates and deletions to comply with individuals' rights such as the "right to be forgotten" or consent changes. Without support for record-level updates/deletes this required custom solutions to track individual changes and rewrite large data sets for minor updates. With Apache Hudi, you can use familiar operations (insert, update, upsert, delete), and Hudi will track transactions and make granular changes in the data lake, simplifying your data pipelines.</li>
-<li>Simplified and efficient file management and near real-time data access – Streaming IoT and ingestion pipelines need to handle data insertion and update events without creating performance issues due to numerous small files. Hudi automatically tracks changes and merges files to maintain optimal sizes, eliminating the need for custom solutions to manage and rewrite small files.</li>
-<li>Simplify CDC data pipeline development – meaning users can store data in the data lake using open storage formats, while integrations with Presto, Apache Hive, Apache Spark, and various data catalogs give you near real-time access to updated data using familiar tools.</li>
-</ul>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="revised-architecture">Revised architecture:<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#revised-architecture" class="hash-link" aria-label="Direct link to Revised architecture:" title="Direct link to Revised architecture:">​</a></h4>
-<p><img decoding="async" loading="lazy" alt="CDC Architecture with Apache Hudi" src="https://hudi.apache.org/assets/images/hudi-cdc-263ca6e0f40b6bff91517bd02c798e2d.jpg" width="1337" height="601" class="img_ev3q"></p>
-<p>In this architecture, with the addition of the data processing layer, we have added two important components</p>
-<ul>
-<li><strong>A data catalog</strong> – acting as a metadata repository for all your data assets across various data sources. This component is updated by the writer i.e. Spark/Flink and is used by the readers i.e. Presto/Trino. Common examples include AWS Glue Catalog, Hive Metastore and Unity Catalog.</li>
-<li><strong>A schema registry</strong> – acting centralized repository for managing and validating schemas. It decouples schemas from producers and consumers, which allows applications to serialize and deserialize messages. Schema registry is also important to ensure data quality. Common examples include, Confluent schema registry, Apicurio schema registry and Glue schema registry.</li>
-<li><strong>Apache Hudi</strong> – acting as a platform used in conjunction with Spark/Flink which refers to the schema registry and writes to the data lake and simultaneously catalogs the data to the data catalog.</li>
-</ul>
-<p>The tables written by Spark/Flink + Hudi can now be queried from popular query engines such as Presto, Trino, Amazon Redshift, and Spark SQL.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="implementation-blogsguides">Implementation Blogs/Guides<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#implementation-blogsguides" class="hash-link" aria-label="Direct link to Implementation Blogs/Guides" title="Direct link to Implementation Blogs/Guides">​</a></h2>
-<p>Over time, the Apache Hudi community has written great step-by-step blogs/guides to help implement Change Data Capture architectures. Some of these blogs can be referred to <a href="https://hudi.apache.org/blog/tags/cdc" target="_blank" rel="noopener noreferrer">here</a>.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2024/07/30/data-lake-cdc#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion">​</a></h2>
-<p>Combining data lakes with Change Data Capture (CDC) techniques offers a powerful solution for addressing the challenges associated with maintaining data freshness, consistency, and efficiency in ETL pipelines.</p>
-<p>Several methods exist for implementing CDC, including timestamp-based, trigger-based, and log-based approaches, each with its own advantages and drawbacks. Log-based CDC, in particular, stands out for its minimal performance impact on source databases and support for various transactions, though it requires handling different database vendors' transaction log formats.</p>
-<p>Using tools like Apache Hudi can significantly enhance the CDC process by streamlining incremental data processing and data pipeline development. Hudi provides efficient storage management, supports record-level operations for privacy regulations, and offers near real-time access to data. It also simplifies the management of streaming data and ingestion pipelines by automatically tracking changes and optimizing file sizes, thereby reducing the need for custom solutions.</p>]]></content>
-        <author>
-            <name>Sagar Lakshmipathy</name>
-        </author>
-        <category label="Data Lake" term="Data Lake"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Change Data Capture" term="Change Data Capture"/>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
         <category label="CDC" term="CDC"/>
+        <category label="Change Data Capture" term="Change Data Capture"/>
+        <category label="jack-vanlightly" term="jack-vanlightly"/>
     </entry>
     <entry>
-        <title type="html"><![CDATA[What is a Data Lakehouse & How does it Work?]]></title>
-        <id>https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse</id>
-        <link href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse"/>
-        <updated>2024-07-11T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[A data lakehouse is a hybrid data architecture that combines the best attributes of data warehouses and data lakes to address their respective limitations. This innovative approach to data management brings the transactional capabilities of data warehouses to cloud-based data lakes, offering scalability at lower costs.]]></summary>
-        <content type="html"><![CDATA[<p>A data lakehouse is a hybrid data architecture that combines the best attributes of data warehouses and data lakes to address their respective limitations. This innovative approach to data management brings the transactional capabilities of data warehouses to cloud-based data lakes, offering scalability at lower costs.</p>
-<p><img decoding="async" loading="lazy" alt="/assets/images/blog/dlh_new.png" src="https://hudi.apache.org/assets/images/dlh_new-ae34f6d692de93292db9eb4e19690670.png" width="2323" height="1259" class="img_ev3q">
-</p><p align="center">Figure: Data Lakehouse Architecture</p><p></p>
-<p>The lakehouse architecture supports the management of various data types, such as structured, semi-structured, and unstructured, and caters to a wide range of use cases, including business intelligence, machine learning, and real-time streaming. This flexibility enables businesses to move away from the traditional two-tier architecture—using warehouses for relational workloads and data lakes for machine learning and advanced analytics. As a result, organizations can reduce operational costs and streamline their data strategies by working on a single data store.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="the-evolution-of-data-storage-solutions-how-did-we-go-from-warehouses-to-lakes-to-lakehouses">The Evolution of Data Storage Solutions: How did we go from Warehouses to Lakes to Lakehouses?<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#the-evolution-of-data-storage-solutions-how-did-we-go-from-warehouses-to-lakes-to-lakehouses" class="hash-link" aria-label="Direct link to The Evolution of Data Storage Solutions: How did we go from Warehouses to Lakes to Lakehouses?" title="Direct link to The Evolution of Data Storage Solutions: How did we go from Warehouses to Lakes to Lakehouses?">​</a></h2>
-<p>Historically, organizations have been investing in building centralized and scalable data architectures to enable more data access and to support different types of analytical workloads. As demand for these workloads has grown, data architectures have evolved to address the complex needs of modern data processing and storage.</p>
-<p>Data warehouses were among the first to serve as centralized repositories for structured workloads, allowing organizations to derive historical insights from disparate data sources. However, they also introduce challenges, including proprietary storage formats that can result in lock-in issues, and limited support for analytical workloads, particularly with unstructured data like machine learning.</p>
-<p>Data lakes emerged as the next generation of analytics architectures, enabling organizations to scale storage and compute independently, thereby optimizing resources and enhancing cost efficiency. They support storing all types of data—structured, semi-structured, and unstructured—in low-cost storage systems using open file formats like <a href="https://parquet.apache.org/" target="_blank" rel="noopener noreferrer">Apache Parquet</a> and <a href="https://orc.apache.org/" target="_blank" rel="noopener noreferrer">Apache ORC</a>. Although data lakes offer flexibility with their schema-on-read approach, they lack transactional capabilities (ACID characteristics) and often face challenges related to data quality and governance.</p>
-<p>The challenges presented by these two data management approaches led to the development of a new architecture called data lakehouse. A lakehouse brings the transactional capabilities of database management systems (DBMS) to scalable data lakes, enabling running various types of workloads on open storage formats.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="introducing-data-lakehouses">Introducing: Data Lakehouses<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#introducing-data-lakehouses" class="hash-link" aria-label="Direct link to Introducing: Data Lakehouses" title="Direct link to Introducing: Data Lakehouses">​</a></h2>
-<p>A data lakehouse combines the reliability and performance of data warehouses with the scalability and cost-effectiveness of data lakes. This combined approach enables features such as time-travel, indexing, schema evolution, and performance optimization capabilities on openly accessible formats.</p>
-<p>Specifically, a lakehouse architecture is characterized by the following attributes.</p>
-<ul>
-<li>
-<p><strong>Open Data Architecture</strong>: A lakehouse stores data in open storage formats. This allows various analytical workloads to be run by different engines (from multiple vendors) on the same data, preventing lock-in to proprietary formats.</p>
-</li>
-<li>
-<p><strong>Support for Varied Data Types &amp; Workloads</strong>: Data lakehouses accommodate a diverse range of data types—including structured, semi-structured, and unstructured—and are therefore equipped to handle various analytical workloads, such as business intelligence, machine learning, and real-time analytics.</p>
-</li>
-<li>
-<p><strong>Transactional support</strong>: Data lakehouses enhance reliability and consistency by providing ACID guarantees in transactions, such as INSERT or UPDATE, akin to those in an RDBMS-OLAP system. This ensures safe, concurrent reads and writes.</p>
-</li>
-<li>
-<p><strong>Less data copies</strong>: A data lakehouse minimizes data duplication since the compute engine can directly access data from open storage formats.</p>
-</li>
-<li>
-<p><strong>Schema management</strong>: Data lakehouses ensure that a specific schema is adhered to when writing new data into the storage. They also facilitate schema evolution over time without the need to rewrite the entire table, thus reducing storage and operational costs.</p>
-</li>
-<li>
-<p><strong>Data Quality and Governance</strong>: Lakehouses ensure data integrity and incorporate robust governance and auditing mechanisms. These features uphold high data quality standards, facilitate regulatory compliance (such as GDPR), and enable secure data management practices.</p>
-</li>
-</ul>
-<p>A data lakehouse architecture consists of six technical components that are modular, offering the flexibility to select and combine the best technologies based on specific requirements.</p>
-<ol>
-<li>
-<p><strong>Lake Storage</strong>: The storage is where files from various operational systems land after ingestion through ETL/ELT processes. Cloud object stores such as Amazon S3, Azure Blob, and Google Cloud Storage support any type of data and can scale to virtually unlimited volumes. Their cost-effectiveness is a significant advantage over traditional data warehouse storage costs.</p>
-</li>
-<li>
-<p><strong>File Format: File Format</strong>: In a lakehouse architecture, file formats like Apache Parquet or ORC store the actual raw data on object storage. These open formats enable multiple engines to consume the data for various workloads. Being typically column-oriented, they offer significant advantages in data reading.</p>
-</li>
-<li>
-<p><strong>Table Format</strong>: A key component of a lakehouse architecture is the table format, which is open in nature and acts as a metadata layer above file formats like Apache Parquet. This layer abstracts the complexity of the physical data structure by defining a schema on top of immutable data files. It allows different engines to concurrently read and write on the same dataset, supporting ACID-based transactions. Table formats like <a href="https://hudi.apache.org/" target="_blank" rel="noopener noreferrer">Apache Hudi</a>, <a href="https://iceberg.apache.org/" target="_blank" rel="noopener noreferrer">Apache Iceberg</a>, and <a href="https://delta.io/" target="_blank" rel="noopener noreferrer">Delta Lake</a> bring essential features such as schema evolution, partitioning, and time travel.</p>
-</li>
-<li>
-<p><strong>Storage Engine</strong>: The storage engine in a lakehouse orchestrates essential data management tasks including clustering, compaction, cleaning, and indexing to streamline data organization in cloud object storages for improved query performance. Both open source and proprietary lakehouse platforms are equipped with native storage engines that enhance these capabilities, optimizing the storage layout effectively.</p>
-</li>
-<li>
-<p><strong>Catalog</strong>: Often referred to as a metastore, the catalog is a crucial component of the lakehouse architecture that facilitates efficient search and discovery by tracking all tables and their metadata. It records table names, schemas (column names and types), and references to each table's specific metadata (table format).</p>
-</li>
-<li>
-<p><strong>Compute Engine</strong>: The compute engine in a lakehouse processes data and ensures efficient read and write performance. It interacts with data using read and write APIs provided by table formats. Compute engines are tailored to specific workloads, with options such as <a href="https://trino.io/" target="_blank" rel="noopener noreferrer">Trino</a> and <a href="https://prestodb.io/" target="_blank" rel="noopener noreferrer">Presto</a> for low-latency ad hoc SQL, <a href="https://flink.apache.org/" target="_blank" rel="noopener noreferrer">Apache Flink</a> for streaming, and <a href="https://spark.apache.org/" target="_blank" rel="noopener noreferrer">Apache Spark</a> for machine learning tasks.</p>
-</li>
-</ol>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="advantages-of-data-lakehouses">Advantages of Data Lakehouses<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#advantages-of-data-lakehouses" class="hash-link" aria-label="Direct link to Advantages of Data Lakehouses" title="Direct link to Advantages of Data Lakehouses">​</a></h2>
-<p>A lakehouse architecture, characterized by its open data storage formats and cost-effective options, offers numerous advantages. Here are some key benefits:</p>
-<table><thead><tr><th>Attributes</th><th>Description</th></tr></thead><tbody><tr><td>Open Data Foundation</td><td>Data in a lakehouse is stored in open file formats like Apache Parquet and table formats such as Apache Hudi, Iceberg, or Delta Lake. This allows various engines to concurrently work on the same data, enhancing accessibility and compatibility.</td></tr><tr><td>Unified Data Platform</td><td>Lakehouses combine the functionalities of data warehouses and lakes into a single platform, supporting both types of workloads efficiently. This integration simplifies data management and accelerates analytics processes.</td></tr><tr><td>Centralized Data Repository for Diverse Data Types</td><td>A lakehouse architecture can store and manage structured, semi-structured, and unstructured data, serving different types of analytical workloads.</td></tr><tr><td>Cost Efficiency</td><td>Using low-cost cloud storage options and reducing the need for managing multiple systems significantly lowers overall engineering and ETL costs.</td></tr><tr><td>Performance and Scalability</td><td>Lakehouses allow independent scaling of storage and compute resources, which can be adjusted based on demand, ensuring high concurrency and cost-effective scalability.</td></tr><tr><td>Enhanced Query Performance</td><td>Lakehouse’s storage engine component optimizes data layout in formats like Parquet and ORC to offer high performance comparable to traditional data warehouses, on large datasets.</td></tr><tr><td>Data Governance and Management</td><td>Lakehouses centralize data storage and management, streamlining the deployment of governance policies and security measures. This consolidation makes it easier to monitor, control, and secure data.</td></tr><tr><td>Improved Data Quality and Consistency</td><td>Lakehouses enforce strict schema adherence and provide transactional consistency, which minimizes write job failures and ensures data reliability.</td></tr><tr><td>Support for various Compute Engines</td><td>A lakehouse architecture supports SQL-based engines, ML tools, and streaming engines, making it versatile for handling diverse analytical demands on a single data store.</td></tr></tbody></table>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="implementing-a-data-lakehouse">Implementing a Data Lakehouse<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#implementing-a-data-lakehouse" class="hash-link" aria-label="Direct link to Implementing a Data Lakehouse" title="Direct link to Implementing a Data Lakehouse">​</a></h2>
-<p>The modular and open design of data lakehouse architecture allows for selection of best-of-breed engines and tools according to specific requirements. Therefore, the implementation of a lakehouse can vary based on the use case. This section outlines common considerations for implementing a lakehouse architecture. Given the variability in complexity (workloads, security, etc.) and tool stack, large-scale implementations may require tailored approaches.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="data-ingestion">Data Ingestion<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#data-ingestion" class="hash-link" aria-label="Direct link to Data Ingestion" title="Direct link to Data Ingestion">​</a></h3>
-<p>The first phase in a lakehouse architecture involves extracting and loading data into a cloud-based low cost data lake such as <a href="https://aws.amazon.com/s3/" target="_blank" rel="noopener noreferrer">Amazon S3</a>, where it lands in its raw format (Parquet files). This approach utilizes the "schema-on-read" method, which means there's no need to process data immediately upon arrival. Once the data is in place, transformation logic can be applied to shift towards a "schema-on-write" setup, which organizes the data for specific analytical workloads such as ad hoc SQL queries or machine learning.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="metadata--transactional-layer">Metadata &amp; Transactional Layer<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#metadata--transactional-layer" class="hash-link" aria-label="Direct link to Metadata &amp; Transactional Layer" title="Direct link to Metadata &amp; Transactional Layer">​</a></h3>
-<p>To enable transactional capabilities, Apache Hudi, Apache Iceberg or Delta Lake can be chosen as the table format. They provide a robust metadata layer with a table-like schema atop the physical data files in the object store. Together with the storage engine, they bring in data optimization strategies to maintain fast and efficient query performance. The metadata layer also facilitates capabilities such as time-travel querying, version rollbacks, and schema evolution akin to a traditional data warehouse.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="processing-layer">Processing Layer<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#processing-layer" class="hash-link" aria-label="Direct link to Processing Layer" title="Direct link to Processing Layer">​</a></h3>
-<p>The compute engine is a crucial component in a lakehouse architecture that processes the data files managed by the table format. Depending on the specific workload, SQL-based distributed query engines like Presto or Trino can be used for ad-hoc interactive analytics, or Apache Spark for distributed ETL tasks. Lakehouse table formats provide several optimizations such as indexes, and statistics, along with data layout optimizations including clustering, compaction, and Z-ordering. These enable the compute engines to achieve performance comparable to traditional data warehouses.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="catalog-layer">Catalog Layer<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#catalog-layer" class="hash-link" aria-label="Direct link to Catalog Layer" title="Direct link to Catalog Layer">​</a></h3>
-<p>The catalog layer in a lakehouse architecture is responsible for tracking all tables and maintaining essential metadata. It ensures that data is easily accessible to query engines, supporting efficient data management, accessibility, and governance. Options for catalog implementation include Unity Catalog, AWS Glue, Hive Metastore, and file system-based ones. This layer plays a key role in upholding data quality and governance standards by establishing policies for data validation, security measures, and compliance protocols.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="use-cases">Use Cases<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#use-cases" class="hash-link" aria-label="Direct link to Use Cases" title="Direct link to Use Cases">​</a></h2>
-<p>A Lakehouse architecture is used for a multitude of use cases. Here are some prominent examples.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="unified-batch--streaming">Unified Batch &amp; Streaming<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#unified-batch--streaming" class="hash-link" aria-label="Direct link to Unified Batch &amp; Streaming" title="Direct link to Unified Batch &amp; Streaming">​</a></h3>
-<p>Traditional analytics architectures often separate real-time and batch storage, using specialized data stores for real-time insights and data lakes for delayed batch processing. Lakehouse platforms bridge this divide by introducing streaming capabilities to data lakes, allowing data ingestion within minutes and the creation of faster incremental pipelines. This integration reduces data freshness issues and eliminates the need for significant upfront infrastructure investments, making it a scalable and cost-effective solution for complex analytics.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="diverse-analytical-workloads">Diverse Analytical Workloads<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#diverse-analytical-workloads" class="hash-link" aria-label="Direct link to Diverse Analytical Workloads" title="Direct link to Diverse Analytical Workloads">​</a></h3>
-<p>Lakehouse architecture supports various data types—structured, semi-structured, and unstructured—enabling users to run both BI and ML workloads on the same dataset without the need for costly data duplication or movement. This unified approach allows data scientists and analysts to easily access and manipulate data for training ML models, deploying AI algorithms, and conducting in-depth BI analysis. By eliminating the need to create and maintain separate BI extracts and cubes, lakehouses reduce both storage and compute costs while maintaining a simple, self-service model for end-users. As a result, organizations can streamline their data operations and enhance analytical flexibility, making it easier to derive insights across different domains.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="cost-effective-data-management">Cost-Effective Data Management<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#cost-effective-data-management" class="hash-link" aria-label="Direct link to Cost-Effective Data Management" title="Direct link to Cost-Effective Data Management">​</a></h3>
-<p>Lakehouses leverage the low-cost storage of cloud-based data lakes while providing sophisticated data management and querying capabilities similar to data warehouses. This dual advantage makes it an economical choice for startups and enterprises alike that need to manage costs without compromising on analytics capabilities. Additionally, the open, unified architecture of a lakehouse eliminates non-monetary costs, such as running and maintaining ETL pipelines and creating multiple data copies, further streamlining operations.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="real-world-examples">Real World Examples<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#real-world-examples" class="hash-link" aria-label="Direct link to Real World Examples" title="Direct link to Real World Examples">​</a></h2>
-<p>ByteDance, Notion and Halodoc are some of the examples of how lakehouse architecture is being adopted in the industry. <a href="https://hudi.apache.org/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance/" target="_blank" rel="noopener noreferrer">ByteDance</a> has built an exabyte-level data lakehouse using Apache Hudi to enhance their recommendation systems. The implementation of Hudi's Merge-on-read (MOR) tables, indexing, and Multi-Version Concurrency Control (MVCC) features allow ByteDance to provide real-time machine learning capabilities, providing instant and relevant recommendations.</p>
-<p><a href="https://www.notion.so/blog/building-and-scaling-notions-data-lake" target="_blank" rel="noopener noreferrer">Notion</a> scaled its data infrastructure by building an in-house lakehouse to handle rapid data growth and meet product demands, especially for Notion AI. The architecture uses S3 for storage, Kafka and Debezium for data ingestion, and Apache Hudi for efficient data management. This setup resulted in significant cost savings, faster data ingestion, and enhanced capabilities for analytics and product development.</p>
-<p>Similarly, <a href="https://blogs.halodoc.io/lake-house-architecture-halodoc-data-platform-2-0/" target="_blank" rel="noopener noreferrer">Halodoc's</a> adoption of a lakehouse architecture allows them to enhance healthcare services by enabling real-time processing and analytics. This architecture helps Halodoc tackle challenges associated with managing vast healthcare data volumes, thus improving patient care through faster, more accurate decision-making and supporting both batch and stream processing crucial for timely health interventions.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="key-data-lakehouse-technologies">Key Data Lakehouse Technologies<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#key-data-lakehouse-technologies" class="hash-link" aria-label="Direct link to Key Data Lakehouse Technologies" title="Direct link to Key Data Lakehouse Technologies">​</a></h2>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="open-source-solutions">Open Source Solutions<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#open-source-solutions" class="hash-link" aria-label="Direct link to Open Source Solutions" title="Direct link to Open Source Solutions">​</a></h3>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="apache-hudi">Apache Hudi<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#apache-hudi" class="hash-link" aria-label="Direct link to Apache Hudi" title="Direct link to Apache Hudi">​</a></h4>
-<p>Apache Hudi is an open source <a href="https://hudi.apache.org/docs/hudi_stack" target="_blank" rel="noopener noreferrer">transactional data lakehouse platform</a> built around a database kernel. It provides table-level abstractions over open file formats like Apache Parquet and ORC thereby delivering core warehouse and database functionalities directly in the data lake and supporting transactional capabilities such as updates and deletes.</p>
-<p>Hudi also incorporates critical table services tightly integrated with its database kernel. These services can be run automatically, managing aspects like table bookkeeping, metadata, and storage layouts across both ingested and derived data. These capabilities, combined with specific platform services (ingestion, catalog sync tool, admin CLI, etc.) in Hudi, elevates its role from merely a table format to a comprehensive and robust data lakehouse platform. Apache Hudi has a broad support for various data sources and query engines, such as Apache Spark, Apache Flink, AWS Athena, Presto, Trino and StarRocks.</p>
-<p><img decoding="async" loading="lazy" alt="Hudi Stack" src="https://hudi.apache.org/assets/images/hstck_new-a0f2451aad8bf4e2003f1efb98c5e179.png" width="2076" height="1400" class="img_ev3q">
-</p><p align="center">Figure: Apache Hudi Architectural stack</p><p></p>
-<p>Below are some of the key features of Hudi’s lakehouse platform.</p>
-<ul>
-<li><strong>Mutability Support</strong>: Hudi enables quick updates and deletions through an efficient, pluggable <a href="https://hudi.apache.org/docs/indexing/" target="_blank" rel="noopener noreferrer">indexing</a> mechanism supporting workloads such as streaming, out-of-order data, and data deduplication.</li>
-<li><strong>Incremental Processing</strong>: Hudi optimizes for efficiency by enabling <a href="https://hudi.apache.org/blog/2020/08/18/hudi-incremental-processing-on-data-lakes/" target="_blank" rel="noopener noreferrer">incremental processing</a> of new data. This feature allows you to replace traditional batch processing pipelines with more dynamic, incremental streaming, enhancing data ingestion and reducing processing times for analytical workloads.</li>
-<li><strong>ACID Transactions</strong>: Hudi brings ACID transactional guarantees to data lakes, offering consistent and atomic writes along with different <a href="https://hudi.apache.org/docs/concurrency_control" target="_blank" rel="noopener noreferrer">concurrency control</a> techniques essential for managing longer-running transactions.</li>
-<li><strong>Time Travel</strong>: Hudi includes capabilities for <a href="https://hudi.apache.org/docs/sql_queries#time-travel-query" target="_blank" rel="noopener noreferrer">querying</a> historical data, allowing users to roll back to previous versions of tables to debug or audit changes.</li>
-<li><strong>Comprehensive Table Management</strong>: Hudi brings automated table services that continuously orchestrate <a href="https://hudi.apache.org/docs/clustering" target="_blank" rel="noopener noreferrer">clustering</a>, <a href="https://hudi.apache.org/docs/compaction" target="_blank" rel="noopener noreferrer">compaction</a>, <a href="https://hudi.apache.org/docs/hoodie_cleaner" target="_blank" rel="noopener noreferrer">cleaning</a>, and indexing, ensuring high performance for analytical queries.</li>
-<li><strong>Query Performance Optimization</strong>: Hudi introduces a novel <a href="https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi" target="_blank" rel="noopener noreferrer">multi-modal indexing</a> subsystem that speeds up write transactions and enhances query performance, especially in large or wide tables.</li>
-<li><strong>Schema Evolution and Enforcement</strong>: With Hudi, you can <a href="https://hudi.apache.org/docs/schema_evolution" target="_blank" rel="noopener noreferrer">adapt the schema</a> of your tables as your data evolves, enhancing pipeline resilience by quickly identifying and preventing potential data integrity issues.</li>
-</ul>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="apache-iceberg">Apache Iceberg<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#apache-iceberg" class="hash-link" aria-label="Direct link to Apache Iceberg" title="Direct link to Apache Iceberg">​</a></h4>
-<p>Apache Iceberg is a table format designed for managing large-scale analytical datasets in cloud data lakes, facilitating a lakehouse architecture. Technically, Iceberg serves as a table format specification, providing APIs and libraries that enable compute engines to interact with tables according to this specification. It introduces features essential for data lake workloads, including schema evolution, hidden partitioning, ACID-compliant transactions, and time travel capabilities. These features ensure robust data management, akin to that found in traditional data warehouses.</p>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="delta-lake">Delta Lake<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#delta-lake" class="hash-link" aria-label="Direct link to Delta Lake" title="Direct link to Delta Lake">​</a></h4>
-<p>Delta Lake is another open source table format that enables building a lakehouse architecture on top of cloud data lakes. By offering an ACID-compliant layer that operates over cloud object stores, Delta Lake addresses the typical performance and consistency issues associated with data lakes. It enables features like schema enforcement and evolution, time travel, efficient metadata handling and DML operations, which are crucial for handling large-scale workloads on data lakes effectively.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="vendor-lakehouse-platforms">Vendor Lakehouse Platforms<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#vendor-lakehouse-platforms" class="hash-link" aria-label="Direct link to Vendor Lakehouse Platforms" title="Direct link to Vendor Lakehouse Platforms">​</a></h3>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="onehouse">Onehouse<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#onehouse" class="hash-link" aria-label="Direct link to Onehouse" title="Direct link to Onehouse">​</a></h4>
-<p><a href="https://www.onehouse.ai/product" target="_blank" rel="noopener noreferrer">Onehouse</a> offers a universal data platform that streamlines data ingestion and transformation into a lakehouse architecture. It eliminates lakehouse table format friction by working seamlessly with Apache Hudi, Apache Iceberg and Delta Lake tables (thanks to <a href="https://xtable.apache.org/" target="_blank" rel="noopener noreferrer">Apache XTable</a>). The platform supports continuous data ingestion from diverse sources, including events streams such as Kafka, databases and cloud storage, enabling real-time data updates while ensuring data integrity through automated table optimizations and rigorous data quality measures. Onehouse provides a fully managed ingestion pipeline with serverless autoscaling and cost-efficient infrastructure. With its flexible querying capabilities across multiple engines and formats, Onehouse empowers organizations to efficiently manage and utilize their data.</p>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="databricks">Databricks<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#databricks" class="hash-link" aria-label="Direct link to Databricks" title="Direct link to Databricks">​</a></h4>
-<p>The <a href="https://www.databricks.com/product/data-intelligence-platform" target="_blank" rel="noopener noreferrer">Databricks</a> Lakehouse Platform unifies data engineering, machine learning, and analytics on a single platform. It combines the reliability, governance, and performance of data warehouses with the scalability, flexibility, and low cost of data lakes. By offering Delta Lake as its foundational storage layer and <a href="https://docs.delta.io/latest/delta-uniform.html" target="_blank" rel="noopener noreferrer">UniFormat</a> for interoperability between Apache Iceberg and Apache Hudi, the platform supports ACID transactions, scalable metadata handling, and unifies batch and streaming data processing.</p>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="snowflake">Snowflake<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#snowflake" class="hash-link" aria-label="Direct link to Snowflake" title="Direct link to Snowflake">​</a></h4>
-<p>The <a href="https://www.snowflake.com/en/data-cloud/platform/" target="_blank" rel="noopener noreferrer">Snowflake</a> Data Cloud provides a unified, fully managed platform for seamless data management and advanced analytics capabilities. It offers near-infinite scalability, robust security, and native support for diverse data types and SQL workloads. Snowflake currently supports Apache Iceberg as the open table format to facilitate a lakehouse architecture. This integration allows users to leverage Iceberg's rich table metadata and Parquet file storage within Snowflake's ecosystem, enabling seamless data handling, multi-table transactions, dynamic data masking, and row-level security, all while using customer-supplied cloud storage.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="the-future-of-data-lakehouses">The Future of Data Lakehouses<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#the-future-of-data-lakehouses" class="hash-link" aria-label="Direct link to The Future of Data Lakehouses" title="Direct link to The Future of Data Lakehouses">​</a></h2>
-<p>The future of data lakehouses is shaped by their truly open data architecture, which meets the ongoing need for flexible, scalable, and cost-effective data management solutions. They offer a unified platform capable of efficiently handling both streaming and batch workloads, supporting a wide array of analytical workloads including BI and ML. With the rapid advancement of artificial intelligence, including generative AI, there is an increasing demand for robust platforms that provide the foundation for building and deploying powerful models. Lakehouse architecture rises to this challenge, offering a solid base for the evolving demands of modern data analytics.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion">​</a></h2>
-<p>The data lakehouse architecture utilizes an open data foundation to blend the best features of data lakes and warehouses, establishing a versatile platform that effectively handles a range of analytical workloads. This architecture marries cost-effective data management with robust performance, offering a cohesive system for both batch and streaming data processes. By enabling organizations to work on a single data store, this approach not only simplifies management but also equips businesses to swiftly integrate new technologies and adapt to evolving market demands. Additionally, by supporting diverse data types and analytical workloads, the lakehouse framework eliminates the need for a two-tier architecture, which helps save costs and enhances the efficiency of data teams.</p>]]></content>
-        <author>
-            <name>Dipankar Mazumdar</name>
-        </author>
-        <category label="data lakehouse" term="data lakehouse"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Apache Iceberg" term="Apache Iceberg"/>
-        <category label="Delta Lake" term="Delta Lake"/>
-        <category label="Open Architecture" term="Open Architecture"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[How to use Apache Hudi with Databricks]]></title>
-        <id>https://hudi.apache.org/blog/2024/06/18/how-to-use-apache-hudi-with-databricks</id>
-        <link href="https://hudi.apache.org/blog/2024/06/18/how-to-use-apache-hudi-with-databricks"/>
-        <updated>2024-06-18T00:00:00.000Z</updated>
+        <title type="html"><![CDATA[Hudi, Iceberg and Delta Lake: Data Lake Table Formats Compared]]></title>
+        <id>https://hudi.apache.org/blog/2024/09/24/hudi-iceberg-and-delta-lake-data-lake-table-formats-compared</id>
+        <link href="https://hudi.apache.org/blog/2024/09/24/hudi-iceberg-and-delta-lake-data-lake-table-formats-compared"/>
+        <updated>2024-09-24T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.onehouse.ai/blog/how-to-use-apache-hudi-with-databricks">here</a></span>]]></content>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://lakefs.io/blog/hudi-iceberg-and-delta-lake-data-lake-table-formats-compared/">here</a></span>]]></content>
         <author>
-            <name>Sagar Lakshmipathy</name>
+            <name>Oz Katz</name>
         </author>
         <category label="blog" term="blog"/>
         <category label="apache hudi" term="apache hudi"/>
-        <category label="databricks" term="databricks"/>
-        <category label="onehouse" term="onehouse"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Apache Hudi: A Deep Dive with Python Code Examples]]></title>
-        <id>https://hudi.apache.org/blog/2024/06/07/apache-hudi-a-deep-dive-with-python-code-examples</id>
-        <link href="https://hudi.apache.org/blog/2024/06/07/apache-hudi-a-deep-dive-with-python-code-examples"/>
-        <updated>2024-06-07T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.harshdaiya.com/apache-hudi-a-deep-dive-with-python-code-examples">here</a></span>]]></content>
-        <author>
-            <name>Harsh Daiya</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="python" term="python"/>
-        <category label="pyspark" term="pyspark"/>
-        <category label="harshdaiya" term="harshdaiya"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Apache Hudi vs. Delta Lake: Choosing the Right Tool for Your Data Lake on AWS]]></title>
-        <id>https://hudi.apache.org/blog/2024/05/27/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws</id>
-        <link href="https://hudi.apache.org/blog/2024/05/27/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws"/>
-        <updated>2024-05-27T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@siladityaghosh/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws-8b97c66a5a12">here</a></span>]]></content>
-        <author>
-            <name>Siladitya Ghosh</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
+        <category label="apache iceberg" term="apache iceberg"/>
         <category label="delta lake" term="delta lake"/>
         <category label="comparison" term="comparison"/>
-        <category label="medium" term="medium"/>
+        <category label="lakefs" term="lakefs"/>
     </entry>
     <entry>
-        <title type="html"><![CDATA[Use AWS Data Exchange to seamlessly share Apache Hudi datasets]]></title>
-        <id>https://hudi.apache.org/blog/2024/05/22/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets</id>
-        <link href="https://hudi.apache.org/blog/2024/05/22/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets"/>
-        <updated>2024-05-22T00:00:00.000Z</updated>
+        <title type="html"><![CDATA[Hands-on with Apache Hudi and Spark]]></title>
+        <id>https://hudi.apache.org/blog/2024/09/22/hands-on-with-apache-hudi-and-spark</id>
+        <link href="https://hudi.apache.org/blog/2024/09/22/hands-on-with-apache-hudi-and-spark"/>
+        <updated>2024-09-22T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aws.amazon.com/blogs/big-data/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets/">here</a></span>]]></content>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.devgenius.io/hands-on-with-apache-hudi-ce45869b5eff">here</a></span>]]></content>
         <author>
-            <name>Saurabh Bhutyani, Ankith Ede, and Chandra Krishnan</name>
+            <name>Sanjeet Shukla</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="Apache Hudi" term="Apache Hudi"/>
+        <category label="Apache Spark" term="Apache Spark"/>
+        <category label="devgenius" term="devgenius"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How Apache Hudi transformed Yuno’s data lake]]></title>
+        <id>https://hudi.apache.org/blog/2024/09/17/how-apache-hudi-transformed-yuno-s-data-lake</id>
+        <link href="https://hudi.apache.org/blog/2024/09/17/how-apache-hudi-transformed-yuno-s-data-lake"/>
+        <updated>2024-09-17T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.y.uno/post/how-apache-hudi-transformed-yunos-data-lake">here</a></span>]]></content>
+        <author>
+            <name>Nahuel Leandro Mazzitelli</name>
         </author>
         <category label="blog" term="blog"/>
         <category label="apache hudi" term="apache hudi"/>
-        <category label="aws data exchange" term="aws data exchange"/>
-        <category label="amazon emr" term="amazon emr"/>
-        <category label="amazon s3" term="amazon s3"/>
-        <category label="amazon athena" term="amazon athena"/>
-        <category label="data sahring" term="data sahring"/>
+        <category label="cow" term="cow"/>
+        <category label="mor" term="mor"/>
+        <category label="record index" term="record index"/>
+        <category label="record level index" term="record level index"/>
+        <category label="clustering" term="clustering"/>
+        <category label="cleaning" term="cleaning"/>
+        <category label="bloom index" term="bloom index"/>
+        <category label="fiel sizing" term="fiel sizing"/>
+        <category label="y.uno" term="y.uno"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Uber’s Big Data Revolution: From MySQL to Hadoop and Beyond]]></title>
+        <id>https://hudi.apache.org/blog/2024/09/14/Ubers-Big-Data-Revolution-From-MySQL-to-Hadoop-and-Beyond</id>
+        <link href="https://hudi.apache.org/blog/2024/09/14/Ubers-Big-Data-Revolution-From-MySQL-to-Hadoop-and-Beyond"/>
+        <updated>2024-09-14T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://vutr.substack.com/p/ubers-big-data-revolution-from-mysql">here</a></span>]]></content>
+        <author>
+            <name>Vu Trinh</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="use-case" term="use-case"/>
+        <category label="substack" term="substack"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Comparing Apache Hudi, Apache Iceberg, and Delta Lake]]></title>
+        <id>https://hudi.apache.org/blog/2024/09/11/comparing-apache-hudi-apache-iceberg-and-delta-lake</id>
+        <link href="https://hudi.apache.org/blog/2024/09/11/comparing-apache-hudi-apache-iceberg-and-delta-lake"/>
+        <updated>2024-09-11T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.cloudthat.com/resources/blog/comparing-apache-hudi-apache-iceberg-and-delta-lake">here</a></span>]]></content>
+        <author>
+            <name>Vasanth Kumar R</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="apache iceberg" term="apache iceberg"/>
+        <category label="delta lake" term="delta lake"/>
+        <category label="comparison" term="comparison"/>
+        <category label="cloudthat" term="cloudthat"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Use Apache Hudi tables in Athena for Spark]]></title>
+        <id>https://hudi.apache.org/blog/2024/09/09/use-apache-hudi-tables-in-athena-for-spark</id>
+        <link href="https://hudi.apache.org/blog/2024/09/09/use-apache-hudi-tables-in-athena-for-spark"/>
+        <updated>2024-09-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://docs.aws.amazon.com/athena/latest/ug/notebooks-spark-table-formats-apache-hudi.html">here</a></span>]]></content>
+        <author>
+            <name>Amazon</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="athena" term="athena"/>
+        <category label="amazon spark" term="amazon spark"/>
         <category label="amazon" term="amazon"/>
     </entry>
 </feed>

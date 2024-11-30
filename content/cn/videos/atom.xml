@@ -50,6 +50,35 @@
         <category label="pyspark" term="pyspark"/>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Create Apache Hudi table using Glue(in catalog) by reading streaming data from AWS Kinesis]]></title>
+        <id>https://hudi.apache.org/cn/videos/2024/09/26/Create-Apache-Hudi-Table-Using-Glue-in-Catalog-By-Reading-Streaming-Data-From-AWS-Kinesis</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/09/26/Create-Apache-Hudi-Table-Using-Glue-in-Catalog-By-Reading-Streaming-Data-From-AWS-Kinesis"/>
+        <updated>2024-09-26T00:00:00.000Z</updated>
+        <author>
+            <name>LetsLearnWithChinnoVino</name>
+        </author>
+        <category label="guide" term="guide"/>
+        <category label="how-to" term="how-to"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="aws glue" term="aws glue"/>
+        <category label="amazon kinesis" term="amazon kinesis"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to Consume Apache Hudi Tables in Snowflake, Iceberg, and Athena | Hands-On Labs]]></title>
+        <id>https://hudi.apache.org/cn/videos/2024/09/01/how-to-consume-apache-hudi-tables-in-snowflake-iceberg-and-athena-hands-on-labs</id>
+        <link href="https://hudi.apache.org/cn/videos/2024/09/01/how-to-consume-apache-hudi-tables-in-snowflake-iceberg-and-athena-hands-on-labs"/>
+        <updated>2024-09-01T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+        <category label="guide" term="guide"/>
+        <category label="how-to" term="how-to"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="apache iceberg" term="apache iceberg"/>
+        <category label="athena" term="athena"/>
+        <category label="snowflake" term="snowflake"/>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[4 Different Ways to fetch Apache Hudi Commit time in Python and PySpark]]></title>
         <id>https://hudi.apache.org/cn/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</id>
         <link href="https://hudi.apache.org/cn/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark"/>
@@ -278,45 +307,5 @@
         <category label="python" term="python"/>
         <category label="frontend" term="frontend"/>
         <category label="flask" term="flask"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Hudi with Kyuubi, a distributed & multi-tenant gateway, to provide serverless SQL on lakehouses]]></title>
-        <id>https://hudi.apache.org/cn/videos/2024/04/22/Hudi-with-Kyuubi-a-distributed-and-multi-tenant-gateway-to-provide-serverless-SQL-on-lakehouses</id>
-        <link href="https://hudi.apache.org/cn/videos/2024/04/22/Hudi-with-Kyuubi-a-distributed-and-multi-tenant-gateway-to-provide-serverless-SQL-on-lakehouses"/>
-        <updated>2024-04-22T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="apache kyuubi" term="apache kyuubi"/>
-        <category label="serverless" term="serverless"/>
-        <category label="lakehouse" term="lakehouse"/>
-        <category label="data lakehouse" term="data lakehouse"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Build Universal Data lake with MySQL + Debezium+Kafka+DeltaSTreamer + Minio+HiveMetastore+Trino]]></title>
-        <id>https://hudi.apache.org/cn/videos/2024/04/10/Build-Universal-Data-lake-with-MySQL-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino</id>
-        <link href="https://hudi.apache.org/cn/videos/2024/04/10/Build-Universal-Data-lake-with-MySQL-+-Debezium+Kafka+DeltaSTreamer-+-Minio+HiveMetastore+Trino"/>
-        <updated>2024-04-10T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="apache kafka" term="apache kafka"/>
-        <category label="debezium" term="debezium"/>
-        <category label="mysql" term="mysql"/>
-        <category label="deltastreamer" term="deltastreamer"/>
-        <category label="hudi streamer" term="hudi streamer"/>
-        <category label="trino" term="trino"/>
-        <category label="minio" term="minio"/>
-        <category label="apache hive" term="apache hive"/>
-        <category label="hive metastore" term="hive metastore"/>
-        <category label="data lakehouse" term="data lakehouse"/>
-        <category label="lakehouse" term="lakehouse"/>
-        <category label="universal lakehouse" term="universal lakehouse"/>
     </entry>
 </feed>
