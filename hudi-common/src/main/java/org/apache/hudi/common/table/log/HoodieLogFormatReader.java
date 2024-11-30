@@ -47,9 +47,9 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
-  public HoodieLogFormatReader(HoodieStorage storage, List<HoodieLogFile> logFiles, Schema readerSchema,
-                               boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
-                               String recordKeyField, InternalSchema internalSchema) throws IOException {
+  HoodieLogFormatReader(HoodieStorage storage, List<HoodieLogFile> logFiles, Schema readerSchema,
+                        boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
+                        String recordKeyField, InternalSchema internalSchema) throws IOException {
     this.logFiles = logFiles;
     this.storage = storage;
     this.readerSchema = readerSchema;

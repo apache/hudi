@@ -89,7 +89,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
-  private boolean onlyDetectPartialUpdates;
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -103,8 +102,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
                                          InternalSchema internalSchema,
                                          Option<String> keyFieldOverride,
                                          boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
-                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
-                                         boolean onlyDetectPartialUpdates) {
+                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
         hoodieTableMetaClientOption);
@@ -114,7 +112,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
       this.scannedPrefixes = new HashSet<>();
-      this.onlyDetectPartialUpdates = onlyDetectPartialUpdates;
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -128,16 +125,16 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
    * Scans delta-log files processing blocks
    */
   public final void scan() {
-    scan(false, false);
+    scan(false);
   }
 
-  public final void scan(boolean skipProcessingBlocks, boolean onlyDetectPartialUpdates) {
+  public final void scan(boolean skipProcessingBlocks) {
     if (forceFullScan) {
       // NOTE: When full-scan is enforced, scanning is invoked upfront (during initialization)
       return;
     }
 
-    scanInternal(Option.empty(), skipProcessingBlocks, onlyDetectPartialUpdates);
+    scanInternal(Option.empty(), skipProcessingBlocks);
   }
 
   /**
@@ -163,7 +160,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       return;
     }
 
-    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.fullKeySpec(missingKeys)), false, false);
+    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.fullKeySpec(missingKeys)), false);
   }
 
   /**
@@ -196,7 +193,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     //       and will have to scan every time as we can't know (based on just
     //       the records cached) whether particular prefix was scanned or just records
     //       matching the prefix looked up (by [[scanByFullKeys]] API)
-    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.prefixKeySpec(missingKeyPrefixes)), false, false);
+    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.prefixKeySpec(missingKeyPrefixes)), false);
     scannedPrefixes.addAll(missingKeyPrefixes);
   }
 
@@ -204,8 +201,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     // Do the scan and merge
     timer.startTimer();
 
-    // to be fixed.
-    scanInternal(Option.empty(), false, onlyDetectPartialUpdates);
+    scanInternal(Option.empty(), false);
 
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
@@ -347,7 +343,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
     protected HoodieTableMetaClient hoodieTableMetaClient;
-    protected boolean onlyDetectPartialUpdates;
 
     @Override
     public Builder withStorage(HoodieStorage storage) {
@@ -471,12 +466,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     }
 
     @Override
-    public Builder onlyDetectPartialUpdates(boolean onlyDetectPartialUpdates) {
-      this.onlyDetectPartialUpdates = onlyDetectPartialUpdates;
-      return this;
-    }
-
-    @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(
@@ -489,7 +478,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
           Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
-          Option.ofNullable(hoodieTableMetaClient), onlyDetectPartialUpdates);
+          Option.ofNullable(hoodieTableMetaClient));
     }
   }
 }

@@ -66,7 +66,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   }
 
   public final void scan(boolean skipProcessingBlocks) {
-    scanInternal(Option.empty(), skipProcessingBlocks, false);
+    scanInternal(Option.empty(), skipProcessingBlocks);
   }
 
   /**
@@ -211,12 +211,6 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     public HoodieUnMergedLogRecordScanner.Builder withTableMetaClient(
         HoodieTableMetaClient hoodieTableMetaClient) {
       this.hoodieTableMetaClient = hoodieTableMetaClient;
-      return this;
-    }
-
-    @Override
-    public AbstractHoodieLogRecordScanner.Builder onlyDetectPartialUpdates(boolean onlyDetectPartialUpdates) {
-      // no op
       return this;
     }
 
