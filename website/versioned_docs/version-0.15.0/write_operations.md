@@ -87,7 +87,7 @@ The following is an inside look on the Hudi write path and the sequence of event
 
 1. [Deduping](/docs/configurations#hoodiecombinebeforeinsert)
    1. First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
-2. [Index Lookup](/docs/next/indexing)
+2. [Index Lookup](/docs/next/indexes)
    1. Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
 3. [File Sizing](/docs/next/file_sizing)
    1. Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
@@ -96,7 +96,7 @@ The following is an inside look on the Hudi write path and the sequence of event
 5. Write I/O
    1. Now we actually do the write operations which is either creating a new base file, appending to the log file,
    or versioning an existing base file.
-6. Update [Index](/docs/next/indexing)
+6. Update [Index](/docs/next/indexes)
    1. Now that the write is performed, we will go back and update the index.
 7. Commit
    1. Finally we commit all of these changes atomically. ([Post-commit callback](/docs/next/platform_services_post_commit_callback) can be configured.)

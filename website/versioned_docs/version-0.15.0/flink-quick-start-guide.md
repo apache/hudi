@@ -458,7 +458,7 @@ feature is that it now lets you author streaming pipelines on streaming or batch
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
   - [Hudi Timeline](/docs/next/timeline) – How Hudi manages transactions and other table services
-  - [Hudi File Layout](/docs/next/file_layouts) - How the files are laid out on storage
+  - [Hudi File Layout](/docs/next/storage_layouts) - How the files are laid out on storage
   - [Hudi Table Types](/docs/next/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
   - [Hudi Query Types](/docs/next/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
 

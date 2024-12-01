@@ -67,7 +67,7 @@ together to build out the platform. Such an open platform is also essential for 
   you need to get an open data platform up and running.
 - Examples of open services that make performance optimization or management easy include: [auto file sizing](/docs/next/file_sizing) to solve the "small files" problem,
   [clustering](/docs/next/clustering) to co-locate data next to each other, [compaction](/docs/next/compaction) to allow tuning of low latency ingestion + fast read queries, 
-  [indexing](/docs/next/indexing) - for faster writes/queries, Multi-Dimensional Partitioning (Z-Ordering), automatic cleanup of uncommitted data with marker mechanism, 
+  [indexing](/docs/next/indexes) - for faster writes/queries, Multi-Dimensional Partitioning (Z-Ordering), automatic cleanup of uncommitted data with marker mechanism, 
   [auto cleaning](/docs/next/cleaning) to automatically removing old versions of files.
 - Hudi provides rich options for pre-sorting/loading data efficiently and then follow on with rich set of data clustering techniques to manage file sizes and data distribution within a table. In each case, Hudi provides high-degree of configurability in terms of when/how often these services are scheduled, planned and executed. For e.g. Hudi ships with a handful of common planning strategies for compaction and clustering.
 - Along with compatibility with other open table formats like [Apache Iceberg](https://iceberg.apache.org/)/[Delta Lake](https://delta.io/), and catalog sync services to various data catalogs, Hudi is one of the most open choices for your data foundation.

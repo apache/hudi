@@ -14,7 +14,7 @@ how to learn more to get started.
 ## What is Apache Hudi
 Apache Hudi (pronounced “hoodie”) is the next generation [streaming data lake platform](/blog/2021/07/21/streaming-data-lake-platform).
 Apache Hudi brings core warehouse and database functionality directly to a data lake. Hudi provides [tables](/docs/next/sql_ddl),
-[transactions](/docs/next/timeline), [efficient upserts/deletes](/docs/next/write_operations), [advanced indexes](/docs/next/indexing),
+[transactions](/docs/next/timeline), [efficient upserts/deletes](/docs/next/write_operations), [advanced indexes](/docs/next/indexes),
 [streaming ingestion services](/docs/next/hoodie_streaming_ingestion), data [clustering](/docs/next/clustering)/[compaction](/docs/next/compaction) optimizations,
 and [concurrency](/docs/next/concurrency_control) all while keeping your data in open source file formats.
 
@@ -31,7 +31,7 @@ the popular query engines including, Apache Spark, Flink, Presto, Trino, Hive, e
 ## Core Concepts to Learn
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
 - [Hudi Timeline](/docs/next/timeline) – How Hudi manages transactions and other table services
-- [Hudi File Layout](/docs/next/file_layouts) - How the files are laid out on storage
+- [Hudi File Layout](/docs/next/storage_layouts) - How the files are laid out on storage
 - [Hudi Table Types](/docs/next/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
 - [Hudi Query Types](/docs/next/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
 
