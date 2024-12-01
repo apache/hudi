@@ -74,7 +74,7 @@ Cassandra and Clickhouse.
 ![Indexes](/assets/images/hudi-stack-indexes.png)
 <p align = "center">Figure: Indexes in Hudi</p>
 
-[Indexes](./indexing) in Hudi enhance query planning, minimizing I/O, speeding up response times and providing faster writes with low merge costs. The [metadata table](./metadata/#metadata-table-indices) acts 
+[Indexes](./indexes) in Hudi enhance query planning, minimizing I/O, speeding up response times and providing faster writes with low merge costs. The [metadata table](./metadata/#metadata-table-indices) acts 
 as an additional [indexing system](./metadata#supporting-multi-modal-index-in-hudi) and brings the benefits of indexes generally to both the readers and writers. Compute engines can leverage various indexes in the metadata
 table, like file listings, column statistics, bloom filters, record-level indexes, and [expression indexes](https://github.com/apache/hudi/blob/master/rfc/rfc-63/rfc-63.md) to quickly generate optimized query plans and improve read 
 performance. In addition to the metadata table indexes, Hudi supports simple join based indexing, bloom filters stored in base file footers, external key-value stores like HBase, 

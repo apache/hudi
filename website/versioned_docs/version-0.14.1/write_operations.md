@@ -92,7 +92,7 @@ The following is an inside look on the Hudi write path and the sequence of event
    1. Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
 3. [File Sizing](/docs/next/file_sizing)
    1. Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
-4. [Partitioning](/docs/next/file_layouts)
+4. [Partitioning](/docs/next/storage_layouts)
    1. We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created
 5. Write I/O
    1. Now we actually do the write operations which is either creating a new base file, appending to the log file,

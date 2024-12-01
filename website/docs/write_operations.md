@@ -122,7 +122,7 @@ The following is an inside look on the Hudi write path and the sequence of event
 1. [Deduping](/docs/configurations#hoodiecombinebeforeinsert) : First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
 2. [Index Lookup](/docs/next/indexes) : Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
 3. [File Sizing](/docs/next/file_sizing): Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
-4. [Partitioning](/docs/next/file_layouts): We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created
+4. [Partitioning](/docs/next/storage_layouts): We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created
 5. Write I/O :Now we actually do the write operations which is either creating a new base file, appending to the log file,
    or versioning an existing base file.
 6. Update [Index](/docs/next/indexes): Now that the write is performed, we will go back and update the index.
