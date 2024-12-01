@@ -88,6 +88,10 @@ Hudi can keep all the intermediate changes (I / -U / U / D) of messages, then co
 data warehouse ETL pipeline (Incremental computing). Hudi MOR table stores messages in the forms of rows, which supports the retention of all change logs (Integration at the format level).
 All changelog records can be consumed with Flink streaming reader.
 
+
+FIXME-VC: all of this needs to be reviewed.. and docs should nudge user towards the right direction i.e CDC queries vs using changelog mode. 
+Call out any breaking changes here in 1.x.. provide guidance to move off.. 
+
 #### Options
 
 |  Option Name  | Required | Default | Remarks |

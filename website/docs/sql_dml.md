@@ -167,6 +167,11 @@ For a Hudi table with user configured primary keys, the join condition in `Merge
 For a Table where Hudi auto generates primary keys, the join condition in MIT can be on any arbitrary data columns.
 :::
 
+### Merge Into (Partial)
+
+FIXME-VC: extend example to showcase/highlight partial merges and it helps to only update columns necessary.. 
+
+
 ### Delete From
 
 You can remove data from a Hudi table using the `DELETE FROM` statement.

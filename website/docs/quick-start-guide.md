@@ -415,6 +415,11 @@ spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 </Tabs
 >
 
+## Index data {#indexing}
+
+FIXME-vc: show a secondary expression index .. and tease functionality. 
+
+
 ## Update data {#upserts}
 
 Hudi tables can be updated by streaming in a DataFrame or using a standard UPDATE statement.
@@ -1078,6 +1083,8 @@ use-cases like applying database CDC logs to a Hudi table, where a given record 
 Hudi also uses this mechanism to support out-of-order data arrival into a table, where records may need to be resolved in a different order than their commit time. 
 For e.g using a _created_at_ timestamp field as the precombine field will prevent older versions of a record from overwriting newer ones or being exposed to queries, even 
 if they are written at a later commit time to the table. This is one of the key features, that makes Hudi, best suited for dealing with streaming data.
+
+FIXME-vc: connect this to merge modes, as needed? we should push that as the way forward.. instead of payloads.. 
 
 <Tabs
 groupId="programming-language"

@@ -21,6 +21,7 @@ Using session properties, you can specify various options around data skipping a
 ```sql
 -- You can turn on any relevant options for data skipping and indexing. 
 -- for e.g. the following turns on data skipping based on column stats
+-- FIXME-VC: simplify these configs as needed.. metadata is always enabled on reader now?
 SET hoodie.enable.data.skipping=true;
 SET hoodie.metadata.column.stats.enable=true;
 SET hoodie.metadata.enable=true;
@@ -38,6 +39,16 @@ Users are encouraged to migrate to Hudi versions > 0.12.x, for the best spark ex
 using path filters. We expect that native integration with Spark's optimized table readers along with Hudi's automatic table
 management will yield great performance benefits in those versions.
 :::
+
+### Snapshot Query with Index Acceleration
+
+FIXME-vc: break up the index example .. and show how pruning happens based on different indexes here.. 
+
+### Snapshot Query with Event Time Ordering
+FIXME-vc: need to show a table with event time ordering, show in DDL and connect the same here.
+
+### Snapshot Query with Custom merge mode
+FIXME-vc: need to show a simple custom merger during DDL and connect it here.. 
 
 ### Time Travel Query
 
@@ -67,6 +78,8 @@ FROM hudi_table_changes(
 )
 ```
 
+FIXME-VC: add note on checkpoint translation from 0.x to 1.x. same for incremental query below
+
 ### Incremental Query
 
 Incremental queries are useful when you want to obtain the latest values for all records that have changed after a given commit time. They help author incremental data pipelines with
@@ -92,6 +105,9 @@ see all changes in a given time window and not just the latest values.
 :::
 
 Please refer to [configurations](/docs/basic_configurations) section for the important configuration options.
+
+### Query Indexes and Timeline
+FIXME-vc: show how timeline, MT can all be queried using SQL... break the sections up as needed.
 
 ## Flink SQL
 Once the Flink Hudi tables have been registered to the Flink catalog, they can be queried using the Flink SQL. It supports all query types across both Hudi table types,
@@ -151,6 +167,8 @@ select * from hudi_table/*+ OPTIONS('read.start-commit'='earliest', 'read.end-co
 ```
 
 #### Options
+FIXME-VC: anything needed here? to be inline for favoring CDC query experience ... or checkpoint translation caveats.. 
+
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
 | `read.start-commit` | `false` | the latest commit | Specify `earliest` to consume from the start commit |
