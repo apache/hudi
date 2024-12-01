@@ -18,9 +18,6 @@
 
 package org.apache.hudi.index.bucket;
 
-import org.apache.hudi.client.utils.LazyIterableIterator;
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -31,7 +28,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -49,8 +45,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
 /**
  * Simple bucket index implementation, with fixed bucket number.
@@ -151,23 +145,26 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
   }
 
   @Override
-  public <R> HoodieData<HoodieRecord<R>> tagLocation(
-      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable)
-      throws HoodieIndexException {
-    Map<String, Map<Integer, HoodieRecordLocation>> partitionPathFileIDList = new HashMap<>();
-    return records.mapPartitions(iterator -> new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
-      @Override
-      protected HoodieRecord<R> computeNext() {
-        HoodieRecord record = inputItr.next();
-        int bucketId = getBucketID(record.getKey());
-        String partitionPath = record.getPartitionPath();
-        if (!partitionPathFileIDList.containsKey(partitionPath)) {
-          partitionPathFileIDList.put(partitionPath, loadBucketIdToFileIdMappingForPartition(hoodieTable, partitionPath));
-        }
-        HoodieRecordLocation loc = partitionPathFileIDList.get(partitionPath).getOrDefault(bucketId, null);
-        return tagAsNewRecordIfNeeded(record, Option.ofNullable(loc));
-      }
-      }, false);
+  protected BucketIndexLocationMapper getBucketLevelLocationMapper(HoodieTable table, String partitionPath) {
+    return new SimpleBucketIndexLocationMapper(table, partitionPath);
   }
+
+  private class SimpleBucketIndexLocationMapper implements BucketIndexLocationMapper {
+    private final HoodieTable table;
+    private final String partitionPath;
+    private final Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping;
+
+    public SimpleBucketIndexLocationMapper(HoodieTable table, String partitionPath) {
+      this.table = table;
+      this.partitionPath = partitionPath;
+      this.bucketIdToFileIdMapping = loadBucketIdToFileIdMappingForPartition(table, partitionPath);
+    }
+
+    @Override
+    public Option<HoodieRecordLocation> getRecordLocation(HoodieRecord record) {
+      int bucketId = getBucketID(record.getKey());
+      return Option.ofNullable(bucketIdToFileIdMapping.get(bucketId));
+    }
+  }
+
 }
