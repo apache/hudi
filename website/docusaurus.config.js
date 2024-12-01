@@ -133,6 +133,10 @@ module.exports = {
             to: "/docs/next/cleaning",
           },
           {
+            from: ["/docs/next/indexing"],
+            to: "/docs/next/indexes",
+          },
+          {
             from: ["/docs/releases", "/docs/next/releases"],
             to: "/releases/release-0.15.0",
           },

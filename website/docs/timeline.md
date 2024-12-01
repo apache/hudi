@@ -12,7 +12,7 @@ processes involved. See TrueTime section below for more details.
 
 Each action has the following attributes associated with it.
 
-* **requested instant** : Instant time representing when the action was requested on the timeline. An immutable plan for the action should be generated before the action is requested. 
+* **requested instant** : Instant time representing when the action was requested on the timeline and acts as the transaction id. An immutable plan for the action should be generated before the action is requested. 
 * **completed instant** : Instant time representing when the action was completed on the timeline. All relevant changes to table data/metadata should be made before the action is completed.
 * **state** :  state of the action. valid states are `REQUESTED`, `INFLIGHT` and `COMPLETED` during an action's lifecycle.
 * **type** : the kind of action performed. See below for full list of actions.
@@ -86,9 +86,9 @@ Thus, actions appear on the timeline as an interval starting at the requested in
 Hudi relies on ordering of requested instants of certain actions against completed instants of other actions, to implement non-blocking table service operations or concurrent streaming model
 writes with event time ordering.
 
+###  Timeline Components
 
-### Active Timeline and History
-
+#### Active Timeline
 Hudi implements the timeline as a Log Structured Merge ([LSM](https://en.wikipedia.org/wiki/Log-structured_merge-tree)) tree under the `.hoodie/timeline` directory. Unlike typical LSM implementations, 
 the memory component and the write-ahead-log are at once replaced by [avro](https://avro.apache.org/) serialized files containing individual actions (**_active timeline_**) for high durability and inter-process co-ordination.
 All actions on the Hudi table are created in the active timeline a new entry and periodically actions are archived from the active timeline to the LSM structure (timeline history). 
@@ -96,7 +96,7 @@ As the name suggests active timeline is consulted all the time to build a consis
 as timeline grows. The key invariant around such archiving is that any side effects from completed/pending actions (e.g. uncommitted files) are removed from storage, before archiving them.
 
 #### LSM Timeline History
-
+    
 As mentioned above, active timeline has limited log history to be fast, while archived timeline is expensive to access
 during reads or writes, especially with high write throughput. To overcome this limitation, Hudi introduced the LSM (
 log-structured merge) tree based timeline. Completed actions, their plans and completion metadata are stored in a more
@@ -130,7 +130,7 @@ for every _N_ parquet files in the current level, they are merged and flush as a
 ### Timeline Archival Configs 
 Basic configurations that control archival.
 
-#### Spark write client configs 
+#### Spark configs 
 
 | Config Name                           | Default       | Description                                                                                                                                                                                                                                            | 
 |---------------------------------------|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| 
