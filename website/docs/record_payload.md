@@ -1,5 +1,5 @@
 ---
-title: Record Payload 
+title: Record Mergers 
 keywords: [hudi, merge, upsert, precombine]
 toc: true
 toc_min_heading_level: 2
@@ -40,7 +40,7 @@ Payload class can be specified using the below configs. For more advanced config
 | ---------------------------------------| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | payload.class                          | org.apache.hudi.common.model.EventTimeAvroPayload (Optional)           | Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for the option in-effective<br /><br /> `Config Param: PAYLOAD_CLASS_NAME`                    |
 
-### Existing Payloads
+### Record Payloads
 
 #### OverwriteWithLatestAvroPayload
 ```scala

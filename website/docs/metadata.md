@@ -1,5 +1,5 @@
 ---
-title: Metadata Table
+title: Table Metadata
 keywords: [ hudi, metadata, S3 file listings]
 ---
 

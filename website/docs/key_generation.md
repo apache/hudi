@@ -4,56 +4,61 @@ summary: "In this page, we describe key generation in Hudi."
 toc: true
 last_modified_at:
 ---
-Every record in Hudi is uniquely identified by a primary key, which is a pair of record key and partition path where the record belongs to.
-Using primary keys, Hudi can impose a) partition level uniqueness integrity constraint b) enable fast updates and deletes on records. 
-One should choose the partitioning scheme wisely as it could be a determining factor for your ingestion and query latency.
-Some use cases do not have a naturally present record key, for ex. log ingestion type of payloads. For these type of use cases,
-users do not have to specify the record key field explicitly anymore and Hudi can automatically generate record keys 
-(from Hudi version 0.14.0, Hudi can automatically generate record keys if not specified explicitly) that are efficient
-for compute, storage and read to meet the uniqueness requirements of the primary key. 
 
-In general, Hudi supports both partitioned and global indexes. For a dataset with partitioned index(which is most commonly used), 
-each record is uniquely identified by a pair of record key and partition path. But for a dataset with global index, each record 
-is uniquely identified by just the record key. There won't be any duplicate record keys across partitions.
+Hudi needs some way to point to records in the table, so that base/log files can be merged efficiently for updates/deletes, 
+index entries can reference these rows and records can move around within the table from clustering without side effects.
+In fact, most databases adopt similar techniques. Every record in Hudi is uniquely identified a pair of record key and an optional 
+partition path that can limit the scope of the key's uniqueness (non-global indexing). For tables with a global index, records are 
+identified by just the record key such that uniqueness is applied across partitions.
+
+Using keys, Hudi can impose partition/table level uniqueness integrity constraint as well as enable fast updates and deletes on records. Record keys are materialized in a 
+special `_hoodie_record_key` field in the table, to ensure key uniqueness is maintained even when the record generation is changed 
+during the table's lifetime. Without materialization, there are no guarantees that the past data written for a new key is unique across the table.
+
+Hudi offers many ways to generate record keys from the input data during writes.
+
+ * For Java client/Spark/Flink writers, Hudi provides built-in key generator classes (described below) as well as an [interface](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java) 
+   to write custom implementations.
+
+ * SQL engines offer options to pass in key fields and use `PARTITIONED BY` clauses to control partitioning.
+
+By default, Hudi auto-generates keys for INSERT, BULK_INSERT write operations, that are efficient
+for compute, storage and read to meet the uniqueness requirements of the primary key. Auto generated keys are highly 
+compressible compared to UUIDs costing about $0.023 per GB in cloud storage and 3-10x computationally lighter to generate 
+than base64/uuid encoded keys.
 
 ## Key Generators
 
-Hudi provides several key generators out of the box that users can use based on their need, while having a pluggable
-implementation for users to implement and use their own KeyGenerator. This page goes over all different types of key
-generators that are readily available to use.
-
-[Here](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java)
-is the interface for KeyGenerator in Hudi for your reference.
+Hudi provides several key generators out of the box for JVM users can use based on their need, while having a pluggable
+interface for users to implement and use their own.
 
 Before diving into different types of key generators, let’s go over some of the common configs relevant to key generators.
 
-| Config Name                                                                              | Default          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------------------------------------------------------------------------- |------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| hoodie.datasource.write.recordkey.field             | N/A (Optional)   | Record key field. Value to be used as the `recordKey` component of `HoodieKey`. <ul><li>When configured, actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`. </li><li>When not configured record key will be automatically generated by Hudi. This feature is handy for use cases like log ingestion that do not have a naturally present record key.</li></ul> <br />`Config Param: RECORDKEY_FIELD_NAME`                                                                                                                                                                                             |
-| hoodie.datasource.write.partitionpath.field       | N/A (Optional)   | Partition path field. Value to be used at the partitionPath component of HoodieKey. This needs to be specified if a partitioned table is desired. Actual value obtained by invoking .toString()<br />`Config Param: PARTITIONPATH_FIELD_NAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| hoodie.datasource.write.keygenerator.class   | N/A (Optional)   | Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` extract a key out of incoming records. <ul><li>When set, the configured value takes precedence to be in effect and automatic inference is not triggered.</li><li>When not configured, if `hoodie.datasource.write.keygenerator.type` is set, the configured value is used else automatic inference is triggered.</li><li>In case of auto generated record keys, if neither the key generator class nor type are configured, Hudi will also auto infer the partitioning. for eg, if partition field is not configured, hudi will assume its non-partitioned. </li></ul> <br />`Config Param: KEYGENERATOR_CLASS_NAME` |
+| Config Name                                     | Default          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|-------------------------------------------------|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.datasource.write.recordkey.field         | N/A (Optional)   | Record key field. Value to be used as the `recordKey` component of `HoodieKey`. <ul><li>When configured, actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`. </li><li>When not configured record key will be automatically generated by Hudi. This feature is handy for use cases like log ingestion that do not have a naturally present record key.</li></ul> <br />`Config Param: RECORDKEY_FIELD_NAME`                                                                                                                                                                                             |
+| hoodie.datasource.write.partitionpath.field     | N/A (Optional)   | Partition path field. Value to be used at the partitionPath component of HoodieKey. This needs to be specified if a partitioned table is desired. Actual value obtained by invoking .toString()<br />`Config Param: PARTITIONPATH_FIELD_NAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| hoodie.datasource.write.keygenerator.type       | SIMPLE           | String representing key generator type <br/><br />`Config Param: KEYGENERATOR_TYPE`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| hoodie.datasource.write.keygenerator.class      | N/A (Optional)   | Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` extract a key out of incoming records. <ul><li>When set, the configured value takes precedence to be in effect and automatic inference is not triggered.</li><li>When not configured, if `hoodie.datasource.write.keygenerator.type` is set, the configured value is used else automatic inference is triggered.</li><li>In case of auto generated record keys, if neither the key generator class nor type are configured, Hudi will also auto infer the partitioning. for eg, if partition field is not configured, hudi will assume its non-partitioned. </li></ul> <br />`Config Param: KEYGENERATOR_CLASS_NAME` |
 | hoodie.datasource.write.hive_style_partitioning | false (Optional) | Flag to indicate whether to use Hive style partitioning. If set true, the names of partition folders follow &lt;partition_column_name&gt;=&lt;partition_value&gt; format. By default false (the names of partition folders are only partition values)<br /><br />`Config Param: HIVE_STYLE_PARTITIONING_ENABLE`                                                                                                                                                                                                                                                                                                                                                                                 |
-| hoodie.datasource.write.partitionpath.urlencode     | false (Optional) | Should we url encode the partition path value, before creating the folder structure.<br /><br />`Config Param: URL_ENCODE_PARTITIONING`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| hoodie.datasource.write.partitionpath.urlencode | false (Optional) | Should we url encode the partition path value, before creating the folder structure.<br /><br />`Config Param: URL_ENCODE_PARTITIONING`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 For all advanced configs refer [here](https://hudi.apache.org/docs/next/configurations#KEY_GENERATOR).
 
-Lets go over different key generators available to be used with Hudi.
+### [SIMPLE](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/SimpleKeyGenerator.java)
 
-### [SimpleKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/SimpleKeyGenerator.java)
+This is the most commonly used option. Record key is generated from two fields from the schema, one for record key and one for partition path.  Values are interpreted as is from dataframe and converted to string. 
 
-Record key refers to one field(column in dataframe) by name and partition path refers to one field (single column in dataframe)
-by name. This is one of the most commonly used one. Values are interpreted as is from dataframe and converted to string. 
-
-### [ComplexKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/ComplexKeyGenerator.java)
+### [COMPLEX](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/ComplexKeyGenerator.java)
 Both record key and partition paths comprise one or more than one field by name(combination of multiple fields). Fields
 are expected to be comma separated in the config value. For example ```"Hoodie.datasource.write.recordkey.field" : “col1,col4”```
 
-### [NonpartitionedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
+### [NON_PARTITION](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
 If your hudi dataset is not partitioned, you could use this “NonpartitionedKeyGenerator” which will return an empty
 partition for all records. In other words, all records go to the same partition (which is empty “”)
 
 
-### [CustomKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/CustomKeyGenerator.java)
+### [CUSTOM](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/CustomKeyGenerator.java)
 This is a generic implementation of KeyGenerator where users are able to leverage the benefits of SimpleKeyGenerator,
 ComplexKeyGenerator and TimestampBasedKeyGenerator all at the same time. One can configure record key and partition
 paths as a single field or a combination of fields. 
@@ -87,12 +92,7 @@ hoodie.datasource.write.partitionpath.field=country:SIMPLE,date:TIMESTAMP
 ``` 
 This will create the partition path in the format `<country_name>/<date>` or `country=<country_name>/date=<date>` depending on whether you want hive style partitioning or not.
 
-### Bring your own implementation
-You can implement your own custom key generator by extending the public API class here:
-
-https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java
-
-### [TimestampBasedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/TimestampBasedKeyGenerator.java)
+### [TIMESTAMP](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/TimestampBasedKeyGenerator.java)
 This key generator relies on timestamps for the partition field. The field values are interpreted as timestamps
 and not just converted to string while generating partition path value for records.  Record key is same as before where it is chosen by
 field name.  Users are expected to set few more configs to use this KeyGenerator.
@@ -210,3 +210,6 @@ Partition path generated from key generator: "2020040118"
 Input field value: "20200401" <br/>
 Partition path generated from key generator: "04/01/2020"
 
+## Related Resources
+
+* [Hudi metafields demystified](https://www.onehouse.ai/blog/hudi-metafields-demystified)

@@ -44,7 +44,9 @@ Metadata about the table is stored at a location on storage, referred to as **_b
 |   └── hoodie.properties           <-- Table Configs
 │   └── metadata/                   <-- Metadata
 |       └── files/                  <-- Files that make up the table
-|       └── col_stats/              <-- Statistics on files and columns
+|       └── col_stats/
+│   └── timeline/                   <-- active timeline
+|       └── history/                <-- timeline history
 ├── americas/                       <-- Data stored as folder tree
 │   ├── brazil/
 │   │   └── sao_paulo               <-- Partition Path 
