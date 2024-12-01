@@ -112,12 +112,12 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> insert(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records) {
-    return new SparkInsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, records).execute();
+    return new SparkInsertCommitActionExecutor<>((HoodieSparkEngineContext)context, config, this, instantTime, records).execute();
   }
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsert(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records,
-                                                                 Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     return new SparkBulkInsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config,
         this, instantTime, records, userDefinedBulkInsertPartitioner).execute();
   }
@@ -139,19 +139,19 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
-                                                                    HoodieData<HoodieRecord<T>> preppedRecords) {
+      HoodieData<HoodieRecord<T>> preppedRecords) {
     return new SparkUpsertPreppedCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords).execute();
   }
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> insertPrepped(HoodieEngineContext context, String instantTime,
-                                                                    HoodieData<HoodieRecord<T>> preppedRecords) {
+      HoodieData<HoodieRecord<T>> preppedRecords) {
     return new SparkInsertPreppedCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords).execute();
   }
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context, String instantTime,
-                                                                        HoodieData<HoodieRecord<T>> preppedRecords, Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+      HoodieData<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     return new SparkBulkInsertPreppedCommitActionExecutor((HoodieSparkEngineContext) context, config,
         this, instantTime, preppedRecords, userDefinedBulkInsertPartitioner).execute();
   }
@@ -181,12 +181,12 @@ public class HoodieSparkCopyOnWriteTable<T>
   public Option<HoodieClusteringPlan> scheduleClustering(HoodieEngineContext context,
                                                          String instantTime,
                                                          Option<Map<String, String>> extraMetadata) {
-    return new ClusteringPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
+    return new ClusteringPlanActionExecutor<>(context, config,this, instantTime, extraMetadata).execute();
   }
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> cluster(HoodieEngineContext context,
-                                                              String clusteringInstantTime) {
+                                                           String clusteringInstantTime) {
     return new SparkExecuteClusteringCommitActionExecutor<>(context, config, this, clusteringInstantTime).execute();
   }
 
@@ -224,8 +224,7 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   /**
    * Delete expired partition by config
-   *
-   * @param context     HoodieEngineContext
+   * @param context HoodieEngineContext
    * @param instantTime Instant Time for the action
    * @return HoodieWriteMetadata
    */
@@ -249,7 +248,7 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
-                                              Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
     Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
     return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
         dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
@@ -301,4 +300,5 @@ public class HoodieSparkCopyOnWriteTable<T>
   public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
     return new RestorePlanActionExecutor<>(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
   }
+
 }
