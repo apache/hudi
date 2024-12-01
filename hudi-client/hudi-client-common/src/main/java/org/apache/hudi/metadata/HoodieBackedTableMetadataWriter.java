@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -84,6 +85,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -1167,7 +1169,15 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // This could be an expensive operation for a large commit (updating/deleting millions of rows)
     Map<String, String> recordKeySecondaryKeyMap = metadata.getSecondaryKeys(keysToRemove, indexDefinition.getIndexName());
     HoodieData<HoodieRecord> deletedRecords = getDeletedSecondaryRecordMapping(engineContext, recordKeySecondaryKeyMap, indexDefinition);
-    int parallelism = Math.min(partitionFilePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
+    // first deduce parallelism to avoid too few tasks for large number of records.
+    long totalWriteBytesForSecondaryIndex = commitMetadata.getPartitionToWriteStats().values().stream()
+        .flatMap(Collection::stream)
+        .mapToLong(HoodieWriteStat::getTotalWriteBytes)
+        .sum();
+    // approximate task partition size of 100MB
+    // (TODO: make this configurable)
+    long targetPartitionSize = 100 * 1024 * 1024;
+    int parallelism = (int) Math.max(1, (totalWriteBytesForSecondaryIndex + targetPartitionSize - 1) / targetPartitionSize);
 
     return readSecondaryKeysFromBaseFiles(
         engineContext,
