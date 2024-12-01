@@ -183,7 +183,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
         fn()
       }
     }, msg)
-    assertTrue(exp.getMessage.contains("org.apache.spark.SparkFileNotFoundException"),
-      "Expected to fail with 'org.apache.spark.SparkFileNotFoundException' but the message was: " + exp.getMessage)
+    assertTrue(exp.getMessage.contains("FileNotFoundException"),
+      "Expected to fail with 'FileNotFoundException' but the message was: " + exp.getMessage)
   }
 }
