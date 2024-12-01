@@ -265,18 +265,24 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     final int numFileSlices = partitionFileSlices.size();
     checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
-    // Parallel lookup for large sized partitions with many file slices
-    // Partition the keys by the file slice which contains it
-    ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keys, numFileSlices);
-    result = new HashMap<>(keys.size());
-    getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
-    getEngineContext().map(partitionedKeys, keysList -> {
-      if (keysList.isEmpty()) {
-        return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
-      }
-      int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
-      return lookupKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
-    }, partitionedKeys.size()).forEach(result::putAll);
+    // Lookup keys from each file slice
+    if (numFileSlices == 1) {
+      // Optimization for a single slice for smaller metadata table partitions
+      result = lookupKeysFromFileSlice(partitionName, keys, partitionFileSlices.get(0));
+    } else {
+      // Parallel lookup for large sized partitions with many file slices
+      // Partition the keys by the file slice which contains it
+      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keys, numFileSlices);
+      result = new HashMap<>(keys.size());
+      getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
+      getEngineContext().map(partitionedKeys, keysList -> {
+        if (keysList.isEmpty()) {
+          return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
+        }
+        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
+        return lookupKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
+      }, partitionedKeys.size()).forEach(result::putAll);
+    }
 
     return result;
   }
@@ -306,18 +312,24 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     final int numFileSlices = partitionFileSlices.size();
     checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
-    // Parallel lookup for large sized partitions with many file slices
-    // Partition the keys by the file slice which contains it
-    ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keys, numFileSlices);
-    result = new HashMap<>(keys.size());
-    getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
-    getEngineContext().map(partitionedKeys, keysList -> {
-      if (keysList.isEmpty()) {
-        return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
-      }
-      int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
-      return lookupAllKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
-    }, partitionedKeys.size()).forEach(map -> result.putAll((Map<String, List<HoodieRecord<HoodieMetadataPayload>>>) map));
+    // Lookup keys from each file slice
+    if (numFileSlices == 1) {
+      // Optimization for a single slice for smaller metadata table partitions
+      result = lookupAllKeysFromFileSlice(partitionName, keys, partitionFileSlices.get(0));
+    } else {
+      // Parallel lookup for large sized partitions with many file slices
+      // Partition the keys by the file slice which contains it
+      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keys, numFileSlices);
+      result = new HashMap<>(keys.size());
+      getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
+      getEngineContext().map(partitionedKeys, keysList -> {
+        if (keysList.isEmpty()) {
+          return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
+        }
+        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
+        return lookupAllKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
+      }, partitionedKeys.size()).forEach(map -> result.putAll((Map<String, List<HoodieRecord<HoodieMetadataPayload>>>) map));
+    }
 
     return result;
   }
