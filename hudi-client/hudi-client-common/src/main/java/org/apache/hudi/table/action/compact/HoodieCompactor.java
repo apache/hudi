@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -39,11 +38,8 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.log.HoodieLogFormatReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -83,7 +79,6 @@ import java.util.stream.StreamSupport;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
-import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.DELETE_BLOCK;
 
 /**
  * A HoodieCompactor runs compaction on a hoodie table.
@@ -352,7 +347,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
         .withTableMetaClient(metaClient)
-        .onlyDetectPartialUpdates(onlyDeducePartialUpdates)
         .build();
   }
 
@@ -487,31 +481,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
-  }
-
-  private boolean containsPartialUpdate(Schema readerSchema,
-                                        Option<InternalSchema> internalSchema,
-                                        List<HoodieLogFile> logFiles,
-                                        HoodieTableMetaClient metaClient) throws IOException {
-    try (HoodieLogFormatReader logFormatReaderWrapper = new HoodieLogFormatReader(
-        metaClient.getStorage(),
-        logFiles,
-        readerSchema,
-        true,
-        HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue(),
-        false,
-        metaClient.getTableConfig().getRecordKeyFields().get()[0],
-        internalSchema != null ? internalSchema.orElse(null) : null)) {
-      while (logFormatReaderWrapper.hasNext()) {
-        HoodieLogBlock block = logFormatReaderWrapper.next();
-        if (block.isDataOrDeleteBlock()
-            && (block.getBlockType() != DELETE_BLOCK
-            && ((HoodieDataBlock) block).containsPartialUpdates())) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 
   private boolean isMetadataTable(HoodieTableMetaClient metaClient) {
