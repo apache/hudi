@@ -1557,100 +1557,105 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Create Table with Same Value for Partition and Precombine") {
-    withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
-        // simple partition path
-        val tableName = generateTableName
-        val basePath = s"${tmp.getCanonicalPath}/$tableName"
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = '$tableType',
-             |  preCombineField = 'ts'
-             | )
-             | partitioned by(ts)
-             | location '$basePath'
+    withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          // simple partition path
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | partitioned by(ts)
+               | location '$basePath'
        """.stripMargin)
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        checkAnswer(s"select id, name from $tableName")(
-          Seq(1, "a1")
-        )
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000)
-        )
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          spark.sql(s"insert into $tableName values(1, 'a2', 10, 1000)")
+          checkAnswer(s"select id, name from $tableName")(
+            Seq(1, "a2")
+          )
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a2", 10.0, 1000)
+          )
 
-        // complex keygen, variable timestamp partition is precombine
-        val tableName2 = generateTableName
-        val basePath2 = s"${tmp.getCanonicalPath}/$tableName2"
-        spark.sql(
-          s"""
-             |create table $tableName2 (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  segment string,
-             |  ts long
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = '$tableType',
-             |  preCombineField = 'ts',
-             |  'hoodie.datasource.write.partitionpath.field' = 'segment:simple,ts:timestamp',
-             |  'hoodie.datasource.write.keygenerator.class' = 'org.apache.hudi.keygen.CustomKeyGenerator',
-             |  'hoodie.keygen.timebased.timestamp.type' = 'SCALAR',
-             |  'hoodie.keygen.timebased.output.dateformat' = 'YYYY',
-             |  'hoodie.keygen.timebased.timestamp.scalar.time.unit' = 'seconds'
-             | )
-             | partitioned by(segment,ts)
-             | location '$basePath2'
+          // complex keygen, variable timestamp partition is precombine
+          val tableName2 = generateTableName
+          val basePath2 = s"${tmp.getCanonicalPath}/$tableName2"
+          spark.sql(
+            s"""
+               |create table $tableName2 (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  segment string,
+               |  ts long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts',
+               |  'hoodie.datasource.write.partitionpath.field' = 'segment:simple,ts:timestamp',
+               |  'hoodie.datasource.write.keygenerator.class' = 'org.apache.hudi.keygen.CustomKeyGenerator',
+               |  'hoodie.keygen.timebased.timestamp.type' = 'SCALAR',
+               |  'hoodie.keygen.timebased.output.dateformat' = 'YYYY',
+               |  'hoodie.keygen.timebased.timestamp.scalar.time.unit' = 'seconds'
+               | )
+               | partitioned by(segment,ts)
+               | location '$basePath2'
        """.stripMargin)
-        spark.sql(s"insert into $tableName2 values(1, 'a1', 10, 'seg1', 1000)")
-        checkAnswer(s"select id, name from $tableName2")(
-          Seq(1, "a1")
-        )
-        checkAnswer(s"select id, name, price, segment, ts from $tableName2")(
-          Seq(1, "a1", 10.0, "seg1", 1000)
-        )
+          spark.sql(s"insert into $tableName2 values(1, 'a1', 10, 'seg1', 1000)")
+          spark.sql(s"insert into $tableName2 values(1, 'a2', 10, 'seg1', 1000)")
+          checkAnswer(s"select id, name from $tableName2")(
+            Seq(1, "a2")
+          )
+          checkAnswer(s"select id, name, price, segment, ts from $tableName2")(
+            Seq(1, "a2", 10.0, "seg1", 1000)
+          )
 
-        // complex keygen, simple partition is precombine
-        val tableName3 = generateTableName
-        val basePath3 = s"${tmp.getCanonicalPath}/$tableName3"
-        spark.sql(
-          s"""
-             |create table $tableName3 (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  segment string,
-             |  ts long
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = '$tableType',
-             |  preCombineField = 'segment',
-             |  'hoodie.datasource.write.partitionpath.field' = 'segment:simple,ts:timestamp',
-             |  'hoodie.datasource.write.keygenerator.class' = 'org.apache.hudi.keygen.CustomKeyGenerator',
-             |  'hoodie.keygen.timebased.timestamp.type' = 'SCALAR',
-             |  'hoodie.keygen.timebased.output.dateformat' = 'YYYY',
-             |  'hoodie.keygen.timebased.timestamp.scalar.time.unit' = 'seconds'
-             | )
-             | partitioned by(segment,ts)
-             | location '$basePath3'
+          // complex keygen, simple partition is precombine
+          val tableName3 = generateTableName
+          val basePath3 = s"${tmp.getCanonicalPath}/$tableName3"
+          spark.sql(
+            s"""
+               |create table $tableName3 (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  segment string,
+               |  ts long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'segment',
+               |  'hoodie.datasource.write.partitionpath.field' = 'segment:simple,ts:timestamp',
+               |  'hoodie.datasource.write.keygenerator.class' = 'org.apache.hudi.keygen.CustomKeyGenerator',
+               |  'hoodie.keygen.timebased.timestamp.type' = 'SCALAR',
+               |  'hoodie.keygen.timebased.output.dateformat' = 'YYYY',
+               |  'hoodie.keygen.timebased.timestamp.scalar.time.unit' = 'seconds'
+               | )
+               | partitioned by(segment,ts)
+               | location '$basePath3'
        """.stripMargin)
-        spark.sql(s"insert into $tableName3 values(1, 'a1', 10, 'seg1', 1000)")
-        checkAnswer(s"select id, name from $tableName3")(
-          Seq(1, "a1")
-        )
-        checkAnswer(s"select id, name, price, segment, ts from $tableName3")(
-          Seq(1, "a1", 10.0, "seg1", 1000)
-        )
+          spark.sql(s"insert into $tableName3 values(1, 'a1', 10, 'seg1', 1000)")
+          spark.sql(s"insert into $tableName3 values(1, 'a2', 10, 'seg1', 1000)")
+          checkAnswer(s"select id, name from $tableName3")(
+            Seq(1, "a2")
+          )
+          checkAnswer(s"select id, name, price, segment, ts from $tableName3")(
+            Seq(1, "a2", 10.0, "seg1", 1000)
+          )
+        }
       }
     }
   }
