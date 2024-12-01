@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.HoodieCompactionConfig
-import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
+import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE, WRITE_TABLE_VERSION}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql.streaming.StreamTest
@@ -38,7 +38,9 @@ class TestStreamingSource extends StreamTest {
     PRECOMBINE_FIELD.key -> "ts",
     INSERT_PARALLELISM_VALUE.key -> "4",
     UPSERT_PARALLELISM_VALUE.key -> "4",
-    DELETE_PARALLELISM_VALUE.key -> "4"
+    DELETE_PARALLELISM_VALUE.key -> "4",
+    WRITE_TABLE_VERSION.key -> "6"
+
   )
   private val columns = Seq("id", "name", "price", "ts")
 
@@ -199,6 +201,7 @@ class TestStreamingSource extends StreamTest {
       val df = spark.readStream
         .format("org.apache.hudi")
         .option(START_OFFSET.key(), timestamp)
+        .option(WRITE_TABLE_VERSION.key, "6")
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -223,6 +226,7 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
         .format("org.apache.hudi")
+        .option(WRITE_TABLE_VERSION.key, "6")
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -267,7 +271,7 @@ class TestStreamingSource extends StreamTest {
       // If the request time is used, i.e., V1, then the second record is included in the output.
       // Otherwise, only third record in the output.
       val startTimestamp = instants.get(1).requestedTime
-
+      
       for (incrementalReadTableVersion <- List(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.EIGHT.versionCode())) {
         val df = spark.readStream
           .format("org.apache.hudi")
