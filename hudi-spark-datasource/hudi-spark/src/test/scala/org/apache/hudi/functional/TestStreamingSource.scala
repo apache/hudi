@@ -17,20 +17,19 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceReadOptions.START_OFFSET
+import org.apache.hudi.DataSourceReadOptions.{INCREMENTAL_READ_VERSION, START_OFFSET}
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.HoodieCompactionConfig
-import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
+import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE, WRITE_TABLE_VERSION}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
-
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.{Row, SaveMode}
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class TestStreamingSource extends StreamTest {
 
@@ -40,7 +39,9 @@ class TestStreamingSource extends StreamTest {
     PRECOMBINE_FIELD.key -> "ts",
     INSERT_PARALLELISM_VALUE.key -> "4",
     UPSERT_PARALLELISM_VALUE.key -> "4",
-    DELETE_PARALLELISM_VALUE.key -> "4"
+    DELETE_PARALLELISM_VALUE.key -> "4",
+    WRITE_TABLE_VERSION.key -> "6"
+
   )
   private val columns = Seq("id", "name", "price", "ts")
 
@@ -201,6 +202,7 @@ class TestStreamingSource extends StreamTest {
       val df = spark.readStream
         .format("org.apache.hudi")
         .option(START_OFFSET.key(), timestamp)
+        .option(WRITE_TABLE_VERSION.key, "6")
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -225,6 +227,7 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
         .format("org.apache.hudi")
+        .option(WRITE_TABLE_VERSION.key, "6")
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -246,6 +249,47 @@ class TestStreamingSource extends StreamTest {
         .filter(JavaConversions.getPredicate(
           e => e.isCompleted && HoodieTimeline.COMMIT_ACTION.equals(e.getAction)))
         .countInstants() > 0)
+    }
+  }
+
+  test("Test checkpoint translation") {
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
+      val metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(COPY_ON_WRITE)
+        .setTableName(getTableName(tablePath))
+        .setRecordKeyFields("id")
+        .setPreCombineField("ts")
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+
+      addData(tablePath, Seq(("1", "a1", "10", "000")))
+      addData(tablePath, Seq(("2", "a1", "11", "001")))
+      addData(tablePath, Seq(("3", "a1", "12", "002")))
+
+      val instants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.getInstants
+      assertEquals(3, instants.size())
+
+      // If the request time is used, i.e., V1, then the second record is included in the output.
+      // Otherwise, only third record in the output.
+      val startTimestamp = instants.get(1).requestedTime
+
+      for (readerVersion <- List("6", "8")) {
+        for (writerVersion <- List("6", "8")) {
+          val df = spark.readStream
+            .format("org.apache.hudi")
+            .option(START_OFFSET.key, startTimestamp)
+            .option(INCREMENTAL_READ_VERSION.key, readerVersion)
+            .option(WRITE_TABLE_VERSION.key, writerVersion)
+            .load(tablePath)
+            .select("id", "name", "price", "ts")
+
+          testStream(df)(
+            AssertOnQuery { q => q.processAllAvailable(); true },
+            // Start after the first commit
+            CheckAnswerRows(Seq(Row("2", "a1", "11", "001"), Row("3", "a1", "12", "002")), lastOnly = true, isSorted = false)
+          )
+        }
+      }
     }
   }
 
