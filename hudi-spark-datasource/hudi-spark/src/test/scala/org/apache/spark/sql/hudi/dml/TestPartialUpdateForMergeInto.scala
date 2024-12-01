@@ -27,17 +27,15 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
-
 import org.apache.avro.Schema
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.util.function.Predicate
 import java.util.{Collections, List, Optional}
-
 import scala.collection.JavaConverters._
 
 class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
@@ -121,6 +119,9 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
       spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
+      // set compaction configs
+      spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT.key} = true")
+      spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key} = 1")
       // Write inserts to log block
       spark.sql(s"set ${HoodieIndexConfig.INDEX_TYPE.key} = INMEMORY")
 
@@ -282,6 +283,9 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
       spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
+      // set compaction configs
+      spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT.key} = true")
+      spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key} = 2")
 
       // Create a table with five data fields
       spark.sql(
@@ -321,6 +325,30 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 25.0, 1260, "a3: desc3"),
         Seq(4, "a4", 70.0, 1270, "a4: desc4")
       )
+
+      // do one more partial update with changed fields: "description" and "_ts" and inserts
+      spark.sql(
+        s"""
+           |merge into $tableName t0
+           |using ( select 1 as id, 'a1' as name, '' as price, 1023 as _ts, 'a1: updated desc1' as description
+           |union select 2 as id, 'a2' as name, '' as price, 1270 as _ts, 'a2: updated desc2' as description
+           |union select 5 as id, 'a5' as name, 80 as price, 1280 as _ts, 'a5: desc5' as description) s0
+           |on t0.id = s0.id
+           |when matched then update set description = s0.description, _ts = s0._ts
+           |when not matched then insert *
+           |""".stripMargin)
+
+      // do one more round of partial update with changed fields: "price" and "_ts" and inserts
+      spark.sql(
+        s"""
+           |merge into $tableName t0
+           |using ( select 1 as id, 'a1' as name, 15 as price, 1025 as _ts, 'a1: updated desc1' as description
+           |union select 2 as id, 'a2' as name, 22 as price, 1275 as _ts, 'a2: updated desc2' as description
+           |union select 6 as id, 'a6' as name, 90 as price, 1290 as _ts, 'a6: desc6' as description) s0
+           |on t0.id = s0.id
+           |when matched then update set price = s0.price, _ts = s0._ts
+           |when not matched then insert *
+           |""".stripMargin)
 
       if (tableType.equals("mor")) {
         validateLogBlock(basePath, 1, Seq(Seq("price", "_ts")), true)

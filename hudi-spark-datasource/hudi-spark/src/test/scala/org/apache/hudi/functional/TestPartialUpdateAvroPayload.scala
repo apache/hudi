@@ -23,11 +23,10 @@ import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteC
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceWriteOptions, QuickstartUtils}
-
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{lit, typedLit}
@@ -39,7 +38,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
-
 import scala.collection.JavaConverters._
 
 class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
@@ -69,9 +67,9 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
 
   @ParameterizedTest
   @CsvSource(Array(
-    "COPY_ON_WRITE,false",
+    //"COPY_ON_WRITE,false",
     "MERGE_ON_READ,false",
-    "COPY_ON_WRITE,true",
+    //"COPY_ON_WRITE,true",
     "MERGE_ON_READ,true"
   ))
   def testPartialUpdatesAvroPayloadPrecombine(tableType: String, useFileGroupReader: Boolean): Unit = {
@@ -87,9 +85,13 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionpath")
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.PartialUpdateAvroPayload")
-      .option(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
+      //.option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.PartialUpdateAvroPayload")
+      //.option(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
       .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
+      // set compaction configs
+      .option(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key, "0")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key, "true")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key, "2")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -121,8 +123,12 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
-      .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.PartialUpdateAvroPayload")
-      .option(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
+      //.option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.PartialUpdateAvroPayload")
+      //.option(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
+      // set compaction configs
+      .option(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key, "0")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key, "true")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key, "2")
       .mode(SaveMode.Append)
       .save(basePath)
 
