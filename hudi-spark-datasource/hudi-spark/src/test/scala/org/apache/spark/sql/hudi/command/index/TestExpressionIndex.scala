@@ -68,7 +68,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     initQueryIndexConf()
   }
 
-  test("Test Expression Index With Hive Sync Non Partitioned Table") {
+  test("Test Expression Index With Hive Sync Non Partitioned External Table") {
     // There is a big difference between Java class loader architecture of versions 1.8 and 17.
     // Hive 2.3.7 is compiled with Java 1.8, and the class loader used there throws error when Hive APIs are run on Java 17.
     // So we special case this test only for Java 8.
@@ -96,12 +96,16 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
        """.stripMargin)
           // ts=1000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+          spark.sql(s"""DROP TABLE if exists $tableName""")
+          // Use the same base path as above
+          spark.sql(s"""CREATE TABLE $tableName USING hudi LOCATION '$basePath'""")
+          // create expression index
+          spark.sql(s"""create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd HH:mm');""")
           // ts=100000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-02'
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 100000)")
           // ts=10000000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 10000000)")
-          // create expression index
-          spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd HH:mm')")
           val metaClient = createMetaClient(spark, basePath)
           assertTrue(metaClient.getIndexMetadata.isPresent)
           val expressionIndexMetadata = metaClient.getIndexMetadata.get()
@@ -139,6 +143,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           hiveClient.close()
           tool.close()
           HiveTestUtil.shutdown()
+
+          spark.sql(s"""DROP TABLE if exists $tableName""")
         }
       }
     }
@@ -1142,7 +1148,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val partitionFilter: Expression = EqualTo(AttributeReference("c8", IntegerType)(), Literal(9))
         val (isPruned, prunedPaths) = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq(partitionFilter))
         assertTrue(isPruned)
-        val prunedPartitionAndFileNames = expressionIndexSupport.getPrunedPartitionsAndFileNames(prunedPaths, includeLogFiles = true)
+        val prunedPartitionAndFileNames = expressionIndexSupport.getPrunedPartitionsAndFileNames(fileIndex, prunedPaths)
         assertTrue(prunedPartitionAndFileNames._1.size == 1) // partition
         assertTrue(prunedPartitionAndFileNames._2.size == 1) // log file
         assertTrue(FSUtils.isLogFile(prunedPartitionAndFileNames._2.head))

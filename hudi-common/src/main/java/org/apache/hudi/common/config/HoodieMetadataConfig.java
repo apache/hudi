@@ -62,7 +62,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
-  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
+  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   // Enable metrics for internal Metadata Table
   public static final ConfigProperty<Boolean> METRICS_ENABLE = ConfigProperty
@@ -178,8 +178,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(32)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("Maximum number of columns to generate column stats for. If the config `" + COLUMN_STATS_INDEX_FOR_COLUMNS.key() + "` is set then then this config will be ignored."
-       + "If unset, then column stats will be generated for the first n columns in the table schema");
+      .withDocumentation("Maximum number of columns to generate column stats for. If the config `"
+          + COLUMN_STATS_INDEX_FOR_COLUMNS.key() + "` is set, this config will be ignored. "
+          + "If the config `" + COLUMN_STATS_INDEX_FOR_COLUMNS.key() + "` is not set, "
+          + "the column stats of the first `n` columns (`n` defined by this config) in the "
+          + "table schema are generated.");
 
   public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY = "in-memory";
   public static final String COLUMN_STATS_INDEX_PROCESSING_MODE_ENGINE = "engine";
@@ -325,21 +328,25 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
   public static final ConfigProperty<Boolean> EXPRESSION_INDEX_ENABLE_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".index.functional.enable")
+      .key(METADATA_PREFIX + ".index.expression.enable")
       .defaultValue(false)
       .sinceVersion("1.0.0")
-      .withDocumentation("Enable expression index within the Metadata Table. Note that this config is to enable/disable all expression indexes. "
-          + "To enable or disable each expression index individually, users still need to use CREATE/DROP INDEX SQL commands.");
+      .withDocumentation("Enable expression index within the metadata table. "
+          + " When this configuration property is enabled (`true`), the Hudi writer automatically "
+          + " keeps all expression indexes consistent with the data table. "
+          + " When disabled (`false`), all expression indexes are deleted. "
+          + " Note that individual expression index can only be created through a `CREATE INDEX` "
+          + " and deleted through a `DROP INDEX` statement in Spark SQL.");
 
   public static final ConfigProperty<Integer> EXPRESSION_INDEX_FILE_GROUP_COUNT = ConfigProperty
-      .key(METADATA_PREFIX + ".index.functional.file.group.count")
+      .key(METADATA_PREFIX + ".index.expression.file.group.count")
       .defaultValue(2)
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Metadata expression index partition file group count.");
 
   public static final ConfigProperty<Integer> EXPRESSION_INDEX_PARALLELISM = ConfigProperty
-      .key(METADATA_PREFIX + ".index.functional.parallelism")
+      .key(METADATA_PREFIX + ".index.expression.parallelism")
       .defaultValue(200)
       .markAdvanced()
       .sinceVersion("1.0.0")
@@ -370,13 +377,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.secondary.enable")
       .defaultValue(true)
       .sinceVersion("1.0.0")
-      .withDocumentation("Enable secondary index within the Metadata Table.");
-
-  public static final ConfigProperty<String> SECONDARY_INDEX_COLUMN = ConfigProperty
-      .key(METADATA_PREFIX + ".index.secondary.column")
-      .noDefaultValue()
-      .sinceVersion("1.0.0")
-      .withDocumentation("Column for which secondary index will be enabled within the Metadata Table.");
+      .withDocumentation("Enable secondary index within the metadata table. "
+          + " When this configuration property is enabled (`true`), the Hudi writer automatically "
+          + " keeps all secondary indexes consistent with the data table. "
+          + " When disabled (`false`), all secondary indexes are deleted. "
+          + " Note that individual secondary index can only be created through a `CREATE INDEX` "
+          + " and deleted through a `DROP INDEX` statement in Spark SQL. ");
 
   public static final ConfigProperty<Integer> SECONDARY_INDEX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.parallelism")
@@ -540,10 +546,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public boolean isSecondaryIndexEnabled() {
     // Secondary index is enabled only iff record index (primary key index) is also enabled
     return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP);
-  }
-
-  public String getSecondaryIndexColumn() {
-    return getString(SECONDARY_INDEX_COLUMN);
   }
 
   public int getSecondaryIndexParallelism() {

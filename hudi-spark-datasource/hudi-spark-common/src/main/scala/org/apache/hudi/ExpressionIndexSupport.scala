@@ -64,7 +64,7 @@ class ExpressionIndexSupport(spark: SparkSession,
       val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
       if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
         val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
-        val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)
+        val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(fileIndex, prunedPartitionsAndFileSlices)
         val indexDf = loadExpressionIndexDataFrame(indexPartition, prunedPartitions, readInMemory)
         Some(getCandidateFiles(indexDf, queryFilters, prunedFileNames))
       } else if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {

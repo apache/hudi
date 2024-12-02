@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -90,8 +91,10 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
   public Option<HoodieClusteringPlan> execute() {
     Option<HoodieClusteringPlan> planOption = createClusteringPlan();
     if (planOption.isPresent()) {
+      // To support writing and reading with table version SIX, we need to allow instant action to be REPLACE_COMMIT_ACTION
+      String action =  TimelineLayoutVersion.LAYOUT_VERSION_2.equals(table.getMetaClient().getTimelineLayoutVersion()) ? HoodieTimeline.CLUSTERING_ACTION : HoodieTimeline.REPLACE_COMMIT_ACTION;
       HoodieInstant clusteringInstant =
-          instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
+          instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, action, instantTime);
       try {
         HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
             .setOperationType(WriteOperationType.CLUSTER.name())

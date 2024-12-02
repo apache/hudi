@@ -18,28 +18,30 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
+import org.apache.hudi.common.util.FileIOUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
-
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, Literal}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
+import java.io.File
 import scala.collection.JavaConverters._
 
 class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
@@ -225,6 +227,114 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Append,
       shouldValidate = false))
     verifyFileIndexAndSQLQueries(commonOpts)
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParamsForMOR"))
+  def testGetPrunedPartitionsAndFileNames(testCase: ColumnStatsTestCase): Unit = {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "20"
+    ) ++ metadataOpts
+    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
+
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/update-input-table-json",
+      expectedColStatsSourcePath = "",
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      shouldValidate = false))
+    verifyFileIndexAndSQLQueries(commonOpts)
+
+    var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = true)
+    val metadataConfig = HoodieMetadataConfig.newBuilder.withMetadataIndexColumnStats(true).enable(true).build
+    val cis = new ColumnStatsIndexSupport(spark, fileIndex.schema, metadataConfig, metaClient)
+    // unpartitioned table - get all file slices
+    val fileSlices = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq())
+    var files = cis.getPrunedPartitionsAndFileNames(fileIndex, fileSlices._2)._2
+    // Number of files obtained if file index has include log files as true is double of number of parquet files
+    val numberOfParquetFiles = 9
+    assertEquals(numberOfParquetFiles * 2, files.size)
+    assertEquals(numberOfParquetFiles, files.count(f => f.endsWith("parquet")))
+
+    fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = false)
+    files = cis.getPrunedPartitionsAndFileNames(fileIndex, fileSlices._2)._2
+    assertEquals(numberOfParquetFiles, files.size)
+    assertEquals(numberOfParquetFiles, files.count(f => f.endsWith("parquet")))
+  }
+
+  @Test
+  def testUpdateAndSkippingWithColumnStatIndex() {
+    val tableName = "testUpdateAndSkippingWithColumnStatIndex"
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    val commonOpts = Map(
+      HoodieWriteConfig.TBL_NAME.key -> tableName,
+      DataSourceWriteOptions.TABLE_TYPE.key -> "mor",
+      RECORDKEY_FIELD.key -> "id",
+      PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "20",
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0"
+    ) ++ metadataOpts
+
+    FileIOUtils.deleteDirectory(new File(basePath))
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  part long
+         |) using hudi
+         | options (
+         |  primaryKey ='id',
+         |  type = 'mor',
+         |  preCombineField = 'name',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.index.column.stats.enable = 'true'
+         | )
+         | partitioned by(part)
+         | location '$basePath'
+       """.stripMargin)
+    spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000), (2, 'a2', 10, 1001), (3, 'a3', 10, 1002)")
+    spark.sql(s"update $tableName set price = 20 where id = 1")
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = true)
+    val dataFilter = EqualTo(attribute("price"), literal("20"))
+    var filteredPartitionDirectories = fileIndex.listFiles(Seq.empty, Seq(dataFilter))
+    var filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
+    assertEquals(2, filteredFilesCount)
+    assertEquals(1, spark.sql(s"select * from $tableName where price = 20").count())
+
+    fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = false)
+    filteredPartitionDirectories = fileIndex.listFiles(Seq.empty, Seq(dataFilter))
+    filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
+    assertEquals(0, filteredFilesCount)
+    val df = spark.read.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      .load(basePath)
+      .filter("price = 20")
+    assertEquals(0, df.count())
   }
 
   private def setupTable(testCase: ColumnStatsTestCase, metadataOpts: Map[String, String], commonOpts: Map[String, String],
