@@ -117,7 +117,7 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
   protected boolean preserveMetadata = false;
 
   protected StoragePath newFilePath;
-  protected StoragePath oldFilePath;
+  protected Option<StoragePath> oldFilePath = Option.empty();
   protected long recordsWritten = 0;
   // TODO(yihua): audit delete stats because file group reader may not return deletes
   protected long recordsDeleted = 0;
@@ -125,7 +125,7 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
   protected long insertRecordsWritten = 0;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
   protected FileSlice fileSlice;
-  private HoodieBaseFile baseFileToMerge;
+  private Option<HoodieBaseFile> baseFileToMergeOpt;
 
   protected Option<String[]> partitionFields = Option.empty();
   protected Object[] partitionValues = new Object[0];
@@ -151,10 +151,8 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
         operation.getBaseInstantTime(),
         baseFileOpt.isPresent() ? baseFileOpt.get() : null,
         logFiles);
-    ValidationUtils.checkArgument(baseFileOpt.isPresent(),
-        "Only supporting compaction with base file using file group reader in HoodieMergeHandleV2");
     this.preserveMetadata = true;
-    init(fileId, this.partitionPath, baseFileOpt.get());
+    init(fileId, this.partitionPath, baseFileOpt);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
@@ -166,18 +164,21 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
-  private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
+  private void init(String fileId, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
-    this.baseFileToMerge = baseFileToMerge;
+    this.baseFileToMergeOpt = baseFileToMerge;
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
-      String latestValidFilePath = baseFileToMerge.getFileName();
-      writeStatus.getStat().setPrevCommit(baseFileToMerge.getCommitTime());
-      // At the moment, we only support SI for overwrite with latest payload. So, we don't need to embed entire file slice here.
-      // HUDI-8518 will be taken up to fix it for any payload during which we might require entire file slice to be set here.
-      // Already AppendHandle adds all logs file from current file slice to HoodieDeltaWriteStat.
-      writeStatus.getStat().setPrevBaseFile(latestValidFilePath);
+      Option<String> latestValidFilePath = Option.empty();
+      if (baseFileToMerge.isPresent()) {
+        latestValidFilePath = Option.of(baseFileToMerge.get().getFileName());
+        writeStatus.getStat().setPrevCommit(baseFileToMerge.get().getCommitTime());
+        // At the moment, we only support SI for overwrite with latest payload. So, we don't need to embed entire file slice here.
+        // HUDI-8518 will be taken up to fix it for any payload during which we might require entire file slice to be set here.
+        // Already AppendHandle adds all logs file from current file slice to HoodieDeltaWriteStat.
+        writeStatus.getStat().setPrevBaseFile(latestValidFilePath.get());
+      }
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
           new StoragePath(config.getBasePath()),
@@ -188,8 +189,8 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
       String newFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
       makeOldAndNewFilePaths(partitionPath, latestValidFilePath, newFileName);
 
-      LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
-          newFilePath.toString()));
+      LOG.info(String.format(
+          "Merging data from file group %s, to a new base file %s", fileId, newFilePath.toString()));
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
@@ -217,8 +218,10 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
     writeStatus.getStat().setPath(new StoragePath(config.getBasePath()), newFilePath);
   }
 
-  protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
-    oldFilePath = makeNewFilePath(partitionPath, oldFileName);
+  protected void makeOldAndNewFilePaths(String partitionPath, Option<String> oldFileName, String newFileName) {
+    if (oldFileName.isPresent()) {
+      oldFilePath = Option.of(makeNewFilePath(partitionPath, oldFileName.get()));
+    }
     newFilePath = makeNewFilePath(partitionPath, newFileName);
   }
 
@@ -351,14 +354,14 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
   }
 
   public void performMergeDataValidationCheck(WriteStatus writeStatus) {
-    if (!config.isMergeDataValidationCheckEnabled()) {
+    if (!config.isMergeDataValidationCheckEnabled() || baseFileToMergeOpt.isEmpty()) {
       return;
     }
 
     long oldNumWrites = 0;
     try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
         .getReaderFactory(this.recordMerger.getRecordType())
-        .getFileReader(config, oldFilePath)) {
+        .getFileReader(config, oldFilePath.get())) {
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);
@@ -369,7 +372,7 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
           String.format("Record write count decreased for file: %s, Partition Path: %s (%s:%d + %d < %s:%d)",
               writeStatus.getFileId(), writeStatus.getPartitionPath(),
               instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
-              baseFileToMerge.getCommitTime(), oldNumWrites));
+              baseFileToMergeOpt.get().getCommitTime(), oldNumWrites));
     }
   }
 
@@ -377,22 +380,14 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
     List<WriteStatus> statuses = getWriteStatuses();
     // TODO(vc): This needs to be revisited
     if (getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null {}, {}", getOldFilePath(), statuses);
+      LOG.info("Upsert Handle has partition path as null {}, {}", getFileId(), statuses);
     }
     return Collections.singletonList(statuses).iterator();
-  }
-
-  public StoragePath getOldFilePath() {
-    return oldFilePath;
   }
 
   @Override
   public IOType getIOType() {
     return IOType.MERGE;
-  }
-
-  public HoodieBaseFile baseFileForMerge() {
-    return baseFileToMerge;
   }
 
   public void setPartitionFields(Option<String[]> partitionFields) {
