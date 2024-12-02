@@ -34,6 +34,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -94,7 +95,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
    * Global lazy-loading index location function. The index location function can be applied to a hoodie record to get its location under the partition.
    * The per-partition index location functions are cached for better performance.
    */
-  class GlobalIndexLocationFunction implements Function<HoodieRecord, Option<HoodieRecordLocation>> {
+  class GlobalIndexLocationFunction implements Function<HoodieRecord, Option<HoodieRecordLocation>>, Serializable {
 
     private final HoodieTable table;
     private final Map<String/*partition path*/, Function<HoodieRecord, Option<HoodieRecordLocation>>/*location func per partition*/> partitionToIndexFunctionMap;
