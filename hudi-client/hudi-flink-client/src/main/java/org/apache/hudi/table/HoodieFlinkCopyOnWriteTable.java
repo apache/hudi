@@ -105,6 +105,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
    * @param records     hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> upsert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
@@ -125,6 +126,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
    * @param records     hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> insert(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
@@ -146,6 +148,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
    * @param keys        {@link List} of {@link HoodieKey}s to be deleted
    * @return HoodieWriteMetadata
    */
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> delete(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
@@ -188,6 +191,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
    * @param preppedRecords Hoodie records to upsert
    * @return HoodieWriteMetadata
    */
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
@@ -209,6 +213,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
    * @param preppedRecords Hoodie records to insert
    * @return HoodieWriteMetadata
    */
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> insertPrepped(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
@@ -230,6 +235,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
    * @param preppedRecords Hoodie records to bulk_insert
    * @return HoodieWriteMetadata
    */
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> bulkInsertPrepped(
       HoodieEngineContext context,
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
@@ -448,5 +454,10 @@ public class HoodieFlinkCopyOnWriteTable<T>
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
+  }
+
+  @Override
+  public boolean supportsFileGroupReader() {
+    return false;
   }
 }

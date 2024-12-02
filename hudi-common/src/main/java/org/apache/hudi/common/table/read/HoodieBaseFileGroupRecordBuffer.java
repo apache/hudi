@@ -87,6 +87,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected final Option<String> payloadClass;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> records;
+  protected final HoodieFileGroupReaderStats readerStats;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
   protected T nextRecord;
@@ -123,6 +124,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT));
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
+    this.readerStats = new HoodieFileGroupReaderStats();
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
@@ -135,6 +137,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   @Override
   public void setBaseFileIterator(ClosableIterator<T> baseFileIterator) {
     this.baseFileIterator = baseFileIterator;
+  }
+
+  @Override
+  public HoodieFileGroupReaderStats getStats() {
+    return readerStats;
   }
 
   /**
@@ -495,14 +502,24 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
         baseRecord, readerSchema);
 
-    Option<T> resultRecord = logRecordInfo != null
-        ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-        : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
-    if (resultRecord.isPresent()) {
-      nextRecord = readerContext.seal(resultRecord.get());
-      return true;
+    if (logRecordInfo != null) {
+      Option<T> resultRecord = merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight());
+      if (resultRecord.isPresent()) {
+        // Updates
+        nextRecord = readerContext.seal(resultRecord.get());
+        readerStats.incrementNumUpdates();
+        return true;
+      } else {
+        // Deletes
+        readerStats.incrementNumDeletes();
+        return false;
+      }
     }
-    return false;
+
+    // Inserts
+    nextRecord = baseRecord;
+    readerStats.incrementNumInserts();
+    return true;
   }
 
   protected boolean hasNextLogRecord() throws IOException {

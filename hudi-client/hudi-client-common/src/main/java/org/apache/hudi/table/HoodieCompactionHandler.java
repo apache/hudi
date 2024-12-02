@@ -42,6 +42,8 @@ public interface HoodieCompactionHandler<T> {
   Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
                                            Map<String, HoodieRecord<?>> recordMap);
 
+  boolean supportsFileGroupReader();
+
   default Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
                                                            Map<String, HoodieRecord<?>> recordMap,
                                                            Map<HoodieLogBlock.HeaderMetadataType, String> header) {

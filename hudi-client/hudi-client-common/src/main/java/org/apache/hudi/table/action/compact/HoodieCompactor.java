@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -161,66 +162,70 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper) throws IOException {
-    HoodieStorage storage = metaClient.getStorage();
-    Schema readerSchema;
-    Option<InternalSchema> internalSchemaOption = Option.empty();
-    if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
-      readerSchema = new Schema.Parser().parse(config.getSchema());
-      internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
-      // its safe to modify config here, since we are running in task side.
-      ((HoodieTable) compactionHandler).getConfig().setDefault(config);
+    if (config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && compactionHandler.supportsFileGroupReader()) {
+      
     } else {
-      readerSchema = HoodieAvroUtils.addMetadataFields(
-          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
-    }
-    LOG.info("Compaction operation started for base file: " + operation.getDataFileName() + " and delta files: " + operation.getDeltaFileNames()
-        + " for commit " + instantTime);
-    // TODO - FIX THIS
-    // Reads the entire avro file. Always only specific blocks should be read from the avro file
-    // (failure recover).
-    // Load all the delta commits since the last compaction commit and get all the blocks to be
-    // loaded and load it using CompositeAvroLogReader
-    // Since a DeltaCommit is not defined yet, reading all the records. revisit this soon.
-
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
-    LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
-
-    List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
-            new StoragePath(FSUtils.constructAbsolutePath(
-                metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
-        .collect(toList());
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(storage)
-        .withBasePath(metaClient.getBasePath())
-        .withLogFilePaths(logFiles)
-        .withReaderSchema(readerSchema)
-        .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
-        .withInstantRange(instantRange)
-        .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
-        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-        .withReverseReader(config.getCompactionReverseLogReadEnabled())
-        .withBufferSize(config.getMaxDFSStreamBufferSize())
-        .withSpillableMapBasePath(config.getSpillableMapBasePath())
-        .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
-        .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .withOperationField(config.allowOperationMetadataField())
-        .withPartition(operation.getPartitionPath())
-        .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
-        .withRecordMerger(config.getRecordMerger())
-        .withTableMetaClient(metaClient)
-        .build();
-
-    Option<HoodieBaseFile> oldDataFileOpt =
-        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
-
-    // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
-    // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
-    if (!scanner.iterator().hasNext()) {
-      if (!oldDataFileOpt.isPresent()) {
-        scanner.close();
-        return new ArrayList<>();
+      HoodieStorage storage = metaClient.getStorage();
+      Schema readerSchema;
+      Option<InternalSchema> internalSchemaOption = Option.empty();
+      if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
+        readerSchema = new Schema.Parser().parse(config.getSchema());
+        internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
+        // its safe to modify config here, since we are running in task side.
+        ((HoodieTable) compactionHandler).getConfig().setDefault(config);
       } else {
-        // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
+        readerSchema = HoodieAvroUtils.addMetadataFields(
+            new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+      }
+      LOG.info("Compaction operation started for base file: " + operation.getDataFileName() + " and delta files: " + operation.getDeltaFileNames()
+          + " for commit " + instantTime);
+      // TODO - FIX THIS
+      // Reads the entire avro file. Always only specific blocks should be read from the avro file
+      // (failure recover).
+      // Load all the delta commits since the last compaction commit and get all the blocks to be
+      // loaded and load it using CompositeAvroLogReader
+      // Since a DeltaCommit is not defined yet, reading all the records. revisit this soon.
+
+      long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
+      LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
+
+      List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
+              new StoragePath(FSUtils.constructAbsolutePath(
+                  metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
+          .collect(toList());
+      HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+          .withStorage(storage)
+          .withBasePath(metaClient.getBasePath())
+          .withLogFilePaths(logFiles)
+          .withReaderSchema(readerSchema)
+          .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
+          .withInstantRange(instantRange)
+          .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
+          .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+          .withReverseReader(config.getCompactionReverseLogReadEnabled())
+          .withBufferSize(config.getMaxDFSStreamBufferSize())
+          .withSpillableMapBasePath(config.getSpillableMapBasePath())
+          .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+          .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+          .withOperationField(config.allowOperationMetadataField())
+          .withPartition(operation.getPartitionPath())
+          .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
+          .withRecordMerger(config.getRecordMerger())
+          .withTableMetaClient(metaClient)
+          .build();
+
+      Option<HoodieBaseFile> oldDataFileOpt =
+          operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
+
+      // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
+      // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
+      if (!scanner.iterator().hasNext()) {
+        if (!oldDataFileOpt.isPresent()) {
+          scanner.close();
+          return new ArrayList<>();
+        } else {
+          // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
         /*
         TaskContextSupplier taskContextSupplier = hoodieCopyOnWriteTable.getTaskContextSupplier();
         String newFileName = FSUtils.makeDataFileName(instantTime,
@@ -230,35 +235,37 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         Path newFilePath = new Path(oldFilePath.getParent(), newFileName);
         FileUtil.copy(fs,oldFilePath, fs, newFilePath, false, fs.getConf());
         */
+        }
       }
-    }
 
-    // Compacting is very similar to applying updates to existing file
-    Iterator<List<WriteStatus>> result;
-    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
-    scanner.close();
-    Iterable<List<WriteStatus>> resultIterable = () -> result;
-    return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
-      final HoodieWriteStat stat = s.getStat();
-      stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
-      stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
-      stat.setTotalLogRecords(scanner.getTotalLogRecords());
-      stat.setPartitionPath(operation.getPartitionPath());
-      stat
-          .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
-      stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
-      stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
-      stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
-      RuntimeStats runtimeStats = new RuntimeStats();
-      // scan time has to be obtained from scanner.
-      runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
-      // create and upsert time are obtained from the create or merge handle.
-      if (stat.getRuntimeStats() != null) {
-        runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
-        runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
-      }
-      stat.setRuntimeStats(runtimeStats);
-    }).collect(toList());
+      // Compacting is very similar to applying updates to existing file
+      Iterator<List<WriteStatus>> result;
+      result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
+      scanner.close();
+
+      Iterable<List<WriteStatus>> resultIterable = () -> result;
+      return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
+        final HoodieWriteStat stat = s.getStat();
+        stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+        stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
+        stat.setTotalLogRecords(scanner.getTotalLogRecords());
+        stat.setPartitionPath(operation.getPartitionPath());
+        stat
+            .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+        stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
+        stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+        stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
+        RuntimeStats runtimeStats = new RuntimeStats();
+        // scan time has to be obtained from scanner.
+        runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
+        // create and upsert time are obtained from the create or merge handle.
+        if (stat.getRuntimeStats() != null) {
+          runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
+          runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
+        }
+        stat.setRuntimeStats(runtimeStats);
+      }).collect(toList());
+    }
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {

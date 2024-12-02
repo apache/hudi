@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
@@ -234,6 +235,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     } else {
       return recordBuffer.hasNext();
     }
+  }
+
+  public HoodieFileGroupReaderStats getStats() {
+    ValidationUtils.checkArgument(recordBuffer != null,
+        "Only support getting reader stats from log merging now");
+    return recordBuffer.getStats();
   }
 
   /**
