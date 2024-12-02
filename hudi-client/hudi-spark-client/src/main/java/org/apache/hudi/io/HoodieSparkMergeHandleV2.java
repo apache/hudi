@@ -266,7 +266,7 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
       while (recordIterator.hasNext()) {
         InternalRow row = recordIterator.next();
         HoodieKey recordKey = new HoodieKey(
-            row.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD),
+            row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
             row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD));
         HoodieSparkRecord record = new HoodieSparkRecord(recordKey, row, sparkSchema, false);
         Option recordMetadata = record.getMetadata();
