@@ -227,6 +227,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalInsertedCnt += 20
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+
+    // test
   }
 
 

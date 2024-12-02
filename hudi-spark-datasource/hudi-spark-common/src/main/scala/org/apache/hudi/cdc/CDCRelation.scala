@@ -202,8 +202,10 @@ object CDCRelation {
     val endCompletionTime = options.getOrElse(DataSourceReadOptions.END_COMMIT.key(),
       getTimestampOfLatestInstant(metaClient)
     )
-    if (startCompletionTime > endCompletionTime) {
-      throw new HoodieException(s"This is not a valid range between $startCompletionTime and $endCompletionTime")
+
+    if (!metaClient.getArchivedTimeline.empty() && metaClient.getActiveTimeline.isBeforeTimelineStarts(startCompletionTime)) {
+      throw new HoodieException(s"Start Completion time $startCompletionTime has to be in active timeline. First entry in active timeline "
+        + metaClient.getActiveTimeline.firstInstant().get())
     }
 
     new CDCRelation(sqlContext, metaClient, startCompletionTime, endCompletionTime, options, rangeType)

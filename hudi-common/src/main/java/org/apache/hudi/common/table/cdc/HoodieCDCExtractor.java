@@ -217,6 +217,11 @@ public class HoodieCDCExtractor {
     try {
       Set<String> requiredActions = new HashSet<>(Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION));
       HoodieActiveTimeline activeTimeLine = metaClient.getActiveTimeline();
+      if (instantRange.getStartInstant().isPresent() && !metaClient.getArchivedTimeline().empty()
+          && activeTimeLine.getWriteTimeline().filterCompletedInstants().isBeforeTimelineStarts(instantRange.getStartInstant().get())) {
+        throw new HoodieIOException("Start instant time " + instantRange.getStartInstant().get()
+            + " for CDC query has to be in the active timeline. Beginning of active timeline " + activeTimeLine.firstInstant().get().requestedTime());
+      }
       this.commits = activeTimeLine.getInstantsAsStream()
           .filter(instant ->
               instant.isCompleted()
