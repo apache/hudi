@@ -106,8 +106,6 @@ public class SparkCompactorBroadcastManager extends CompactorBroadcastManager {
       List<Filter> filters = new ArrayList<>();
       return Option.of(new SparkFileFormatInternalRowReaderContext(
           sparkParquetReader,
-          // Need to verify this logic.
-          metaClient.getTableConfig().getRecordKeyFields().get()[0],
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq()));
     } else {
