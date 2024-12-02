@@ -136,6 +136,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
     boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
+        && !hasBootstrapFile(operations)
         && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && compactionHandler.supportsFileGroupReader();
 
@@ -151,6 +152,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     return context.parallelize(operations).map(
             operation -> {
+
               if (useFileGroupReaderBasedCompaction) {
                 return compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
                     instantRange, taskContextSupplier, executionHelper, finalizedBroadcastManager);
@@ -346,4 +348,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }
   }
 
+  private boolean hasBootstrapFile(List<CompactionOperation> operationList) {
+    return operationList.stream().anyMatch(operation -> operation.getBootstrapFilePath().isPresent());
+  }
 }
