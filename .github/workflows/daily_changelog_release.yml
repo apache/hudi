@@ -1,6 +1,8 @@
 name: Publish Hudi-Internal Daily Changelog Release
 
 on:
+  schedule:
+    - cron: '0 16 * * *' # 4pm PST daily
   workflow_call:
   workflow_dispatch:
     inputs:
@@ -18,6 +20,7 @@ on:
 permissions:
   pull-requests: write
   contents: write
+  actions: read
 
 jobs:
   update-tags:
@@ -26,66 +29,39 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      # Configure AWS credentials
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-region: us-west-2
-          role-to-assume: arn:aws:iam::194159489498:role/GithubActionsInstallHudiForGatewayC-RepositoryRole-182NI133SRXP0
-          role-session-name: HudiInstallSession
-          role-duration-seconds: 900
+          fetch-depth: 0
+          token: ${{ secrets.PAT_DAILY_DATAPLANE_RELEASE }}
 
-      # Set Code Artifact Auth Token
-      - name: Set Code Artifact Auth Token
-        run: |
-          echo "CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
-              --domain onehouse \
-              --domain-owner 194159489498 \
-              --query authorizationToken \
-              --output text)" >> $GITHUB_ENV
+      - name: Install GitHub CLI
+        run: sudo apt-get install -y gh
 
       - name: Determine most recent HUDI release version
         id: determine-hudi-release-version
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_DAILY_DATAPLANE_RELEASE }}
         run: |
-          # Get the 10 most recent Hudi release versions from CodeArtifact
-          MOST_RECENT_HUDI_RELEASE_VERSIONS=$(aws codeartifact list-package-versions \
-            --domain onehouse \
-            --domain-owner 194159489498 \
-            --repository onehouse-internal \
-            --namespace "org.apache.hudi" \
-            --package "hudi" \
-            --format maven \
-            --sort-by PUBLISHED_TIME \
-            --query 'versions[?contains(version, `-INTERNAL`)] | [:10]' \
-            --output json \
-            --region us-west-2)
+          gh auth setup-git
 
-          # Then get the highest Hudi version (exclude versions with "spark" or other text)
-          HUDI_RELEASE_VERSION=$(echo "$MOST_RECENT_HUDI_RELEASE_VERSIONS" | jq -r '
-            map(select(.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+-INTERNAL$")))
-            | sort_by(.version | sub("-INTERNAL$"; "") | split(".") | map(tonumber))
-            | last
-            | .version
-          ')
-          echo "Calculated most recent hudi jar version: $HUDI_RELEASE_VERSION"
+          # Store branches in a variable
+          branches=$(gh run list --repo onehouseinc/hudi-internal \
+          --workflow "release.yml" \
+          --limit 5 --json headBranch -q '.[].headBranch')
 
-          MIDDLE_NUMBER=$(echo "$HUDI_RELEASE_VERSION" | cut -d'.' -f2)
-          CALCULATED_MINOR_VERSION=$((MIDDLE_NUMBER + 1))
-          echo "CALCULATED_MINOR_VERSION=$CALCULATED_MINOR_VERSION" >> $GITHUB_OUTPUT
+          # Extract the matching pattern "1.XXX.X" from the branches
+          highest=$(echo "$branches" | grep -Eo '1\.[0-9]+\.[0-9]+' | sed -E 's/^1\.([0-9]+)\.[0-9]+$/\1/' | sort -nr | head -n 1)
 
-          if [ -z "$HUDI_RELEASE_VERSION" ] || [ -z "$CALCULATED_MINOR_VERSION" ]; then
-            echo "Error: Could not determine the most recent Hudi release version."
-            exit 1
-          fi
+          new_minor_version=$((highest + 1))
+          echo "CALCULATED_MINOR_VERSION=$new_minor_version" >> $GITHUB_OUTPUT
       
       - name: Extract last release version, build release, and push changelog PR
         id: extract-last-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_DAILY_DATAPLANE_RELEASE }}
         run: |
           # Detect the previous X.XXX.0 release version from the CHANGELOG file using grep/sed magic
           # VERY IMPORTANT!! This will skip patch releases (anything with X.XXX.[1-9])
+          FILE="CHANGELOG"
           DETECTED_PREV_RELEASE_VERSION=$(grep -- '--- *\[.*\] *\[.*release-v[0-9]\{1,\}\.[0-9]\{1,\}\.0\{1,\}.*\] *---' "$FILE" \
               | tail -n 1 \
               | sed -E 's/.*release-v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
@@ -130,32 +106,60 @@ jobs:
             # 1. The previous release branch might not be found.
             # 2. The previous release branch might be a hotfix, in which case
             #    the changelog may end up being super long, ex: https://github.com/onehouseinc/hudi-internal/pull/1038/files
-          git fetch origin
+          # Fetch all branches matching release-* and master in one step
+          git fetch origin '+refs/heads/release-*:refs/remotes/origin/release-*' master
+
+          # Ensure you're on the latest master
+          git switch master
+          git pull
           PREVIOUS_RELEASE_BRANCH="release-v${DETECTED_PREV_RELEASE_VERSION}"
           PREVIOUS_RELEASE_SHA=$(git rev-parse "origin/${PREVIOUS_RELEASE_BRANCH}")
 
           # Checkout the release branch locally.
           git checkout -b "$RELEASE_BRANCH_NAME"
 
-          # Copy pasted from ./release.sh
+          # Adapted from ./release.sh
           echo "" >> CHANGELOG
           echo "--- [$(date '+%Y-%m-%d %H:%M:%S')] [$(git branch --show-current)] ---" >> CHANGELOG
-          git log ${PREVIOUS_RELEASE_SHA}..HEAD --pretty=format:"%h %s" >> CHANGELOG
-          echo "" >> CHANGELOG
 
-          # How to avoid when the CHANGELOG is just an AUDIT commit? Theoretically if there is only one commit, it's an audit commit.
-          # But this behavior might not be deterministic, so more verification is necessary. We could probably inspect the commit message
-          # to see if it's an audit commit as well.
+          # Get all commit messages in the range
+          COMMIT_MESSAGES=$(git log ${PREVIOUS_RELEASE_SHA}..HEAD --pretty=format:"%s")
+
+          # If there are no commits, exit 0
+          if [ -z "$COMMIT_MESSAGES" ]; then
+            echo "No commits found. Exiting workflow."
+            exit 0
+          fi
+
+          # Check if all commit messages start with "[AUDIT-]"
+          NON_AUDIT_COMMITS=$(echo "$COMMIT_MESSAGES" | grep -v "^\[AUDIT-")
+
+          # Check if there are any non-audit commits
+          if [ -n "$(echo "$NON_AUDIT_COMMITS" | xargs)" ]; then
+            echo "There are non-audit commits:"
+            echo "$NON_AUDIT_COMMITS"
+          else
+            echo "All commit messages start with [AUDIT-]. Exiting workflow."
+            exit 0
+          fi
+
+          # Append commit log to CHANGELOG if conditions are not met
+          echo "$COMMIT_MESSAGES" >> CHANGELOG
+          echo "" >> CHANGELOG
 
           # Once we push the release branch, we have locked in a release version,
           # this means we have to be sure we want to release this version.
 
-          # Push the release branch to the repository, which will start the release workflow, which publishes jars to code artifact.
-          git push -u origin "$RELEASE_BRANCH_NAME"
-
-          # Commit the changelog to the release branch locally (but don't push).
+          # Push the release branch to the repository using the PAT_DAILY_DATAPLANE_RELEASE token
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_DAILY_DATAPLANE_RELEASE }}@github.com/${{ github.repository }}.git
+
+          # Use for debugging if push access fails
+          # git config --list
+          git push -u origin "$RELEASE_BRANCH_NAME" # --verbose
+
+          # Commit the changelog to the release branch locally (but don't push).
           git add CHANGELOG
           git commit -m "${{ inputs.auditNumber }}: Changelog for $RELEASE_BRANCH_NAME"
           CHANGELOG_COMMIT_ID=$(git log -1 --format=%H)
@@ -180,25 +184,17 @@ jobs:
           # Push changelog branch to the repository.
           git push -u origin "$CHANGELOG_BRANCH_NAME"
 
-          # Set the output variables for the PR title and branch name.
-          echo "changelogReleaseBranch=$CHANGELOG_BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "releaseVersion=$RELEASE_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Create Pull Request
-        id: create_pr
-        uses: peter-evans/create-pull-request@v5
-        with:
-          branch: ${{ steps.extract-last-release.outputs.changelogReleaseBranch }}
-          title: "${{ inputs.auditNumber }} changelog for release ${{ steps.extract-last-release.outputs.releaseVersion }}"
-          body: |
-            Auto-created PR to update the changelog for release ${{ steps.extract-last-release.outputs.releaseVersion }}.
-          base: main
-
-      # Disabling for now, until workflow is fully tested.
-      # - name: Enable Pull Request Automerge
-      #   if: ${{ steps.create_pr.outputs.pull-request-operation }} == 'created'
-      #   uses: peter-evans/enable-pull-request-automerge@v3
-      #   with:
-      #     token: ${{ secrets.GITHUB_TOKEN }}
-      #     pull-request-number: ${{ steps.create_pr.outputs.pull-request-number }}
-      #     merge-method: squash
+          # Create the PR
+          gh pr create \
+            --base master \
+            --head "$CHANGELOG_BRANCH_NAME" \
+            --title "${{ inputs.auditNumber }}: Changelog for $RELEASE_BRANCH_NAME" \
+            --body "Auto-created PR to update the changelog for release $RELEASE_VERSION." \
+          
+          # Set auto-merge only if the release version is auto-detected. If someone is running this manually,
+          # we should not auto-merge the PR.
+          if [ "${{ inputs.releaseVersion }}" == "auto-detect" ]; then
+            PR_NUMBER=$(gh pr view --json number -q ".number")
+            gh pr merge $PR_NUMBER --auto --delete-branch --squash
+          fi
+          

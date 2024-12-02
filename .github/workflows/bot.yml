@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - master
+
 env:
   MVN_ARGS: -ntp -B -V -Pci-log -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
   UTILITIES_MODULE: "hudi-utilities,hudi-examples/hudi-examples-spark"
@@ -26,7 +27,33 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'master' }}
 
 jobs:
+  skip-check:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.determine-skip.outputs.skip }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2 # Fetch commits for diffing
+
+      - name: Determine Changed Files
+        id: determine-skip
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }})
+          echo "CHANGED_FILES=$CHANGED_FILES"
+
+          # Determine if workflow should be skipped
+          if echo "$CHANGED_FILES" | grep -Eq '^(CHANGELOG|README)'; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
   utilities:
+    needs: skip-check
+    if: needs.skip-check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -96,6 +123,8 @@ jobs:
               -Dsonar.branch.name=${{ github.HEAD_REF }}
           fi
   utilities_bundle_misc:
+    needs: skip-check
+    if: needs.skip-check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -159,6 +188,8 @@ jobs:
               -Dsonar.branch.name=${{ github.HEAD_REF }}
           fi
   hudi-client-and-common:
+    needs: skip-check
+    if: needs.skip-check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -222,6 +253,8 @@ jobs:
               -Dsonar.branch.name=${{ github.HEAD_REF }}
           fi
   spark-tests:
+    needs: skip-check
+    if: needs.skip-check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
