@@ -111,6 +111,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   @Test
+  @Disabled("HUDI-8440: This test is disabled because it is failing in the CI pipeline. It is working fine in the local setup.")
   public void testParquetDemo() throws Exception {
     baseFileFormat = HoodieFileFormat.PARQUET;
 

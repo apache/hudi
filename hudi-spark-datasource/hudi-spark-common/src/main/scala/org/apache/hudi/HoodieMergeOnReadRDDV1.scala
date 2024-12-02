@@ -7,23 +7,25 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
-import org.apache.hudi.HoodieMergeOnReadRDD.CONFIG_INSTANTIATION_LOCK
 import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
+import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+import org.apache.hudi.HoodieMergeOnReadRDDV1.CONFIG_INSTANTIATION_LOCK
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
@@ -34,50 +36,32 @@ import org.apache.spark.sql.catalyst.InternalRow
 import java.io.Closeable
 import java.util.function.Predicate
 
-case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
-
-/**
- * Class holding base-file readers for 3 different use-cases:
- *
- * <ol>
- *   <li>Full-schema reader: is used when whole row has to be read to perform merging correctly.
- *   This could occur, when no optimizations could be applied and we have to fallback to read the whole row from
- *   the base file and the corresponding delta-log file to merge them correctly</li>
- *
- *   <li>Required-schema reader: is used when it's fine to only read row's projected columns.
- *   This could occur, when row could be merged with corresponding delta-log record while leveraging only
- *   projected columns</li>
- *
- *   <li>Required-schema reader (skip-merging): is used when when no merging will be performed (skip-merged).
- *   This could occur, when file-group has no delta-log files</li>
- * </ol>
- */
-private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: BaseFileReader,
-                                                          requiredSchemaReader: BaseFileReader,
-                                                          requiredSchemaReaderSkipMerging: BaseFileReader)
-
 /**
  * RDD enabling Hudi's Merge-on-Read (MOR) semantic
  *
- * @param sc                     spark's context
- * @param config                 hadoop configuration
- * @param fileReaders            suite of base file readers
- * @param tableSchema            table's full schema
- * @param requiredSchema         expected (potentially) projected schema
- * @param tableState             table's state
- * @param mergeType              type of merge performed
- * @param fileSplits             target file-splits this RDD will be iterating over
- * @param includedInstantTimeSet instant time set used to filter records
+ * @param sc               spark's context
+ * @param config           hadoop configuration
+ * @param fileReaders      suite of base file readers
+ * @param tableSchema      table's full schema
+ * @param requiredSchema   expected (potentially) projected schema
+ * @param tableState       table's state
+ * @param mergeType        type of merge performed
+ * @param fileSplits       target file-splits this RDD will be iterating over
+ * @param includeStartTime whether to include the commit with the commitTime
+ * @param startTimestamp   start timestamp to filter records
+ * @param endTimestamp     end timestamp to filter records
  */
-class HoodieMergeOnReadRDD(@transient sc: SparkContext,
-                           @transient config: Configuration,
-                           fileReaders: HoodieMergeOnReadBaseFileReaders,
-                           tableSchema: HoodieTableSchema,
-                           requiredSchema: HoodieTableSchema,
-                           tableState: HoodieTableState,
-                           mergeType: String,
-                           @transient fileSplits: Seq[HoodieMergeOnReadFileSplit],
-                           includedInstantTimeSet: Option[Set[String]] = Option.empty)
+class HoodieMergeOnReadRDDV1(@transient sc: SparkContext,
+                             @transient config: Configuration,
+                             fileReaders: HoodieMergeOnReadBaseFileReaders,
+                             tableSchema: HoodieTableSchema,
+                             requiredSchema: HoodieTableSchema,
+                             tableState: HoodieTableState,
+                             mergeType: String,
+                             @transient fileSplits: Seq[HoodieMergeOnReadFileSplit],
+                             includeStartTime: Boolean = false,
+                             startTimestamp: String = null,
+                             endTimestamp: String = null)
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
@@ -122,18 +106,31 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
 
     val commitTimeMetadataFieldIdx = requiredSchema.structTypeSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-    val needsFiltering = commitTimeMetadataFieldIdx >= 0 && includedInstantTimeSet.isDefined
+    val needsFiltering = commitTimeMetadataFieldIdx >= 0 && !StringUtils.isNullOrEmpty(startTimestamp) && !StringUtils.isNullOrEmpty(endTimestamp)
     if (needsFiltering) {
-      val filterT: Predicate[InternalRow] = new Predicate[InternalRow] {
-        override def test(row: InternalRow): Boolean = {
-          val commitTime = row.getString(commitTimeMetadataFieldIdx)
-          includedInstantTimeSet.get.contains(commitTime)
-        }
-      }
+      val filterT: Predicate[InternalRow] = getCommitTimeFilter(includeStartTime, commitTimeMetadataFieldIdx)
       iter.filter(filterT.test)
     }
     else {
       iter
+    }
+  }
+
+  private def getCommitTimeFilter(includeStartTime: Boolean, commitTimeMetadataFieldIdx: Int): Predicate[InternalRow] = {
+    if (includeStartTime) {
+      new Predicate[InternalRow] {
+        override def test(row: InternalRow): Boolean = {
+          val commitTime = row.getString(commitTimeMetadataFieldIdx)
+          commitTime >= startTimestamp && commitTime <= endTimestamp
+        }
+      }
+    } else {
+      new Predicate[InternalRow] {
+        override def test(row: InternalRow): Boolean = {
+          val commitTime = row.getString(commitTimeMetadataFieldIdx)
+          commitTime > startTimestamp && commitTime <= endTimestamp
+        }
+      }
     }
   }
 
@@ -164,7 +161,6 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   }
 }
 
-object HoodieMergeOnReadRDD {
+object HoodieMergeOnReadRDDV1 {
   val CONFIG_INSTANTIATION_LOCK = new Object()
 }
-
