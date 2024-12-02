@@ -185,8 +185,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    Option<CompactorBroadcastManager> broadcastManagerOpt) throws IOException {
     if (useFileGroupReaderBasedCompaction) {
       List<WriteStatus> writeStatusList = compactionHandler.runCompactionUsingFileGroupReader(instantTime,
-          operation.getPartitionPath(), operation.getFileId(), operation,
-          broadcastManagerOpt.get().retrieveFileGroupReaderContext(metaClient.getBasePath()).get());
+          operation, broadcastManagerOpt.get().retrieveFileGroupReaderContext(metaClient.getBasePath()).get(),
+          broadcastManagerOpt.get().retrieveStorageConfig().get());
       writeStatusList
           .forEach(s -> {
             final HoodieWriteStat stat = s.getStat();

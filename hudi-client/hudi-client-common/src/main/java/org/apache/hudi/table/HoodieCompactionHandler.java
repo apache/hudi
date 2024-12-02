@@ -26,6 +26,9 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.storage.StorageConfiguration;
+
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -46,9 +49,10 @@ public interface HoodieCompactionHandler<T> {
 
   boolean supportsFileGroupReader();
 
-  default List<WriteStatus> runCompactionUsingFileGroupReader(String instantTime, String partitionPath, String fileId,
+  default List<WriteStatus> runCompactionUsingFileGroupReader(String instantTime,
                                                               CompactionOperation operation,
-                                                              HoodieReaderContext readerContext) {
+                                                              HoodieReaderContext readerContext,
+                                                              Configuration conf) {
     throw new HoodieNotSupportedException("This engine does not support file group reader based compaction.");
   }
 

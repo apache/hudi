@@ -23,6 +23,8 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.hadoop.conf.Configuration;
+
 import java.io.Serializable;
 
 public class CompactorBroadcastManager implements Serializable {
@@ -34,6 +36,11 @@ public class CompactorBroadcastManager implements Serializable {
 
   // Fetch fg reader context based on broadcast variables.
   public Option<HoodieReaderContext> retrieveFileGroupReaderContext(StoragePath basePath) {
+    return Option.empty();
+  }
+
+  // Fetch broadcast storage config.
+  public Option<Configuration> retrieveStorageConfig() {
     return Option.empty();
   }
 }

@@ -54,9 +54,11 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
@@ -127,16 +129,17 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
 
   protected Option<String[]> partitionFields = Option.empty();
   protected Object[] partitionValues = new Object[0];
+  protected Configuration conf;
 
   /**
    * Called by compactor code path using the file group reader.
    */
   public HoodieSparkMergeHandleV2(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                  String partitionPath, String fileId,
                                   CompactionOperation operation, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
-                                  HoodieReaderContext readerContext) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+                                  HoodieReaderContext readerContext, Configuration conf) {
+    super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.readerContext = readerContext;
+    this.conf = conf;
     Option<HoodieBaseFile> baseFileOpt =
         operation.getBaseFile(config.getBasePath(), operation.getPartitionPath());
     List<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(p ->
@@ -243,8 +246,8 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
     // TODO(yihua): reader schema is good enough for writer?
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
-        storage,
-        config.getBasePath(),
+        storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
+        hoodieTable.getMetaClient().getBasePath().toString(),
         instantTime,
         fileSlice,
         readerSchema,

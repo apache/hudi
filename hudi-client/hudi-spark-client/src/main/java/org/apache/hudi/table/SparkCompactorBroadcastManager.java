@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.execution.datasources.FileFormat;
@@ -113,5 +114,10 @@ public class SparkCompactorBroadcastManager extends CompactorBroadcastManager {
       LOG.warn("ParquetFileReader is null");
       return Option.empty();
     }
+  }
+
+  @Override
+  public Option<Configuration> retrieveStorageConfig() {
+    return Option.of(configurationBroadcast.getValue().value());
   }
 }
