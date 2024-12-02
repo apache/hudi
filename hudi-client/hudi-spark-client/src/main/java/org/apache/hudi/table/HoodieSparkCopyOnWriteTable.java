@@ -33,6 +33,8 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -47,6 +49,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.HoodieSparkMergeHandleV2;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -268,6 +271,18 @@ public class HoodieSparkCopyOnWriteTable<T>
   @Override
   public boolean supportsFileGroupReader() {
     return true;
+  }
+
+  @Override
+  public List<WriteStatus> runCompactionUsingFileGroupReader(String instantTime, String partitionPath, String fileId,
+                                                             CompactionOperation operation,
+                                                             HoodieReaderContext readerContext) {
+    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
+    HoodieSparkMergeHandleV2 mergeHandle = new HoodieSparkMergeHandleV2(config,
+        instantTime, this, partitionPath, fileId, operation, taskContextSupplier, keyGeneratorOpt, readerContext);
+    mergeHandle.write();
+    mergeHandle.close();
+    return mergeHandle.getWriteStatuses();
   }
 
   @Override

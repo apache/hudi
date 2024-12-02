@@ -164,7 +164,34 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    CompactionExecutionHelper executionHelper) throws IOException {
     if (config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && compactionHandler.supportsFileGroupReader()) {
-      
+      List<WriteStatus> writeStatusList = compactionHandler.runCompactionUsingFileGroupReader(instantTime,
+          operation.getPartitionPath(), operation.getFileId(), operation, 2);
+      writeStatusList
+          .forEach(s -> {
+            final HoodieWriteStat stat = s.getStat();
+            /*
+            fill in log reading stats
+            stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+            stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
+            stat.setTotalLogRecords(scanner.getTotalLogRecords());
+            stat.setPartitionPath(operation.getPartitionPath());
+            stat
+                .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+            stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
+            stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+            stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
+            RuntimeStats runtimeStats = new RuntimeStats();
+            // scan time has to be obtained from scanner.
+            runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
+            // create and upsert time are obtained from the create or merge handle.
+            if (stat.getRuntimeStats() != null) {
+              runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
+              runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
+            }
+            stat.setRuntimeStats(runtimeStats);
+             */
+          });
+      return writeStatusList;
     } else {
       HoodieStorage storage = metaClient.getStorage();
       Schema readerSchema;

@@ -20,6 +20,8 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -43,6 +45,12 @@ public interface HoodieCompactionHandler<T> {
                                            Map<String, HoodieRecord<?>> recordMap);
 
   boolean supportsFileGroupReader();
+
+  default List<WriteStatus> runCompactionUsingFileGroupReader(String instantTime, String partitionPath, String fileId,
+                                                              CompactionOperation operation,
+                                                              HoodieReaderContext readerContext) {
+    throw new HoodieNotSupportedException("This engine does not support file group reader based compaction.");
+  }
 
   default Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
                                                            Map<String, HoodieRecord<?>> recordMap,

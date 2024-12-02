@@ -211,18 +211,22 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
       super(flinkRuntimeContext);
     }
 
+    @Override
     public Supplier<Integer> getPartitionIdSupplier() {
       return () -> 0;
     }
 
+    @Override
     public Supplier<Integer> getStageIdSupplier() {
       return () -> 1;
     }
 
+    @Override
     public Supplier<Long> getAttemptIdSupplier() {
       return () -> 0L;
     }
 
+    @Override
     public Option<String> getProperty(EngineProperty prop) {
       return Option.empty();
     }
