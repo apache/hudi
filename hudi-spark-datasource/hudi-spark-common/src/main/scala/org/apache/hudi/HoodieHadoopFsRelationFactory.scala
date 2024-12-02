@@ -462,8 +462,6 @@ object HoodieHadoopFsRelationFactory extends SparkAdapterSupport {
       val schemaUtil = new TableSchemaResolver(metaClient)
       AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
     })
-
-
     val partitionSchema: StructType = SparkHoodieTableFileIndex.getPartitionSchema(metaClient, schema)
     val partitionColumns = partitionSchema.fieldNames
     val dataSchema = StructType(schema.fields.filterNot(f => partitionColumns.contains(f.name)))

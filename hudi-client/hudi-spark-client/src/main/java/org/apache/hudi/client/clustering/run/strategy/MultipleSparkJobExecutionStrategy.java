@@ -282,8 +282,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
           .collect(Collectors.toList());
-      return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, tableSchemaWithMetaFields, inputFileIds, shouldPreserveHoodieMetadata,
-          clusteringGroup.getExtraMetadata());
+      return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams,
+          tableSchemaWithMetaFields, inputFileIds, shouldPreserveHoodieMetadata, clusteringGroup.getExtraMetadata());
     }, clusteringExecutorService);
   }
 
