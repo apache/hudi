@@ -27,7 +27,8 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompac
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
-import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.spark.{Partition, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 
@@ -82,7 +83,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
-  private val hadoopConfBroadcast = sc.broadcast(new SerializableWritable(config))
+  private val storageConfBroadcast = sc.broadcast(HadoopFSUtils.getStorageConf(config))
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
@@ -156,7 +157,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     fileSplits.zipWithIndex.map(file => HoodieMergeOnReadPartition(file._2, file._1)).toArray
 
   private def getHadoopConf: Configuration = {
-    val conf = hadoopConfBroadcast.value.value
+    val conf = storageConfBroadcast.value.unwrap()
     // TODO clean up, this lock is unnecessary
     CONFIG_INSTANTIATION_LOCK.synchronized {
       new Configuration(conf)
