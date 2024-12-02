@@ -70,6 +70,6 @@ public abstract class Checkpoint implements Serializable {
 
   @Override
   public String toString() {
-    return "Checkpoint{checkpointKey='" + checkpointKey + "'}";
+    return getClass().getSimpleName() + "{checkpointKey='" + checkpointKey + "'}";
   }
 }

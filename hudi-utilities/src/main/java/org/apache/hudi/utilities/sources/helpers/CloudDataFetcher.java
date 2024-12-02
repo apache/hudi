@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.CheckpointV1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -109,7 +109,7 @@ public class CloudDataFetcher implements Serializable {
             filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
     if (!checkPointAndDataset.getRight().isPresent()) {
       LOG.info("Empty source, returning endpoint:" + checkPointAndDataset.getLeft());
-      return Pair.of(Option.empty(), new CheckpointV2(checkPointAndDataset.getLeft().toString()));
+      return Pair.of(Option.empty(), new CheckpointV1(checkPointAndDataset.getLeft().toString()));
     }
     LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
 
@@ -129,7 +129,7 @@ public class CloudDataFetcher implements Serializable {
       numSourcePartitions = sourceProfileSupplier.get().getSourceProfile().getSourcePartitions();
     }
     Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition, numSourcePartitions);
-    return Pair.of(datasetOption, new CheckpointV2(checkPointAndDataset.getLeft().toString()));
+    return Pair.of(datasetOption, new CheckpointV1(checkPointAndDataset.getLeft().toString()));
   }
 
   private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata,

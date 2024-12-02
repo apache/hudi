@@ -21,9 +21,10 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.CheckpointV1;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -110,14 +111,23 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
   }
 
   @Override
+  protected Option<Checkpoint> translateCheckpoint(Option<Checkpoint> lastCheckpoint) {
+    if (lastCheckpoint.isPresent()) {
+      ValidationUtils.checkArgument(lastCheckpoint.get() instanceof CheckpointV1,
+          "For S3EventsHoodieIncrSource, only CheckpointV1, i.e., requested time-based "
+              + "checkpoint, is supported. Checkpoint provided is: " + lastCheckpoint.get());
+    }
+    return lastCheckpoint;
+  }
+
+  @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    // TODO(yihua): Make sure for cloud incremental source, it still uses Checkpoint V1 and 0.x incremental read
     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint = CloudObjectIncrCheckpoint.fromString(lastCheckpoint);
     HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     QueryInfo queryInfo =
         IncrSourceHelper.generateQueryInfo(
             sparkContext, srcPath, numInstantsPerFetch,
-            Option.of(new CheckpointV2(cloudObjectIncrCheckpoint.getCommit())),
+            Option.of(new CheckpointV1(cloudObjectIncrCheckpoint.getCommit())),
             missingCheckpointStrategy, handlingMode,
             HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             CloudObjectsSelectorCommon.S3_OBJECT_KEY,
@@ -127,7 +137,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
       LOG.warn("Already caught up. No new data to process");
-      return Pair.of(Option.empty(), new CheckpointV2(queryInfo.getEndInstant()));
+      return Pair.of(Option.empty(), new CheckpointV1(queryInfo.getEndInstant()));
     }
     return cloudDataFetcher.fetchPartitionedSource(S3, cloudObjectIncrCheckpoint, this.sourceProfileSupplier, queryRunner.run(queryInfo, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);
   }
