@@ -27,7 +27,9 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.CompactorBroadcastManager;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;
@@ -42,6 +44,11 @@ import java.util.List;
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieFlinkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+
+  @Override
+  public Option<CompactorBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context) {
+    return Option.empty();
+  }
 
   @Override
   public void preCompact(

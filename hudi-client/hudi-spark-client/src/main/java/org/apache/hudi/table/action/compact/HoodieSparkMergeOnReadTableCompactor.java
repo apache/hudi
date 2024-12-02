@@ -27,8 +27,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.CompactorBroadcastManager;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.SparkCompactorBroadcastManager;
 
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
@@ -40,6 +43,11 @@ import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVE
 @SuppressWarnings("checkstyle:LineLength")
 public class HoodieSparkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
+
+  @Override
+  public Option<CompactorBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context) {
+    return Option.of(new SparkCompactorBroadcastManager(context));
+  }
 
   @Override
   public void preCompact(

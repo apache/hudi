@@ -46,6 +46,7 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.CompactorBroadcastManager;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -70,6 +71,8 @@ import static java.util.stream.Collectors.toList;
 public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
+
+  public abstract Option<CompactorBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context);
 
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.
@@ -131,8 +134,24 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
+
+    boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
+        && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && compactionHandler.supportsFileGroupReader();
+
+    Option<CompactorBroadcastManager> broadcastManagerOpt = Option.empty();
+    // Broadcast necessary information.
+    if (useFileGroupReaderBasedCompaction) {
+      broadcastManagerOpt = getCompactorBroadcastManager(context);
+      if (broadcastManagerOpt.isPresent()) {
+        broadcastManagerOpt.get().prepareAndBroadcast();
+      }
+    }
+    final Option<CompactorBroadcastManager> finalizedBroadcastManager = broadcastManagerOpt;
+
     return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
+            compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
+            instantRange, taskContextSupplier, executionHelper, useFileGroupReaderBasedCompaction, finalizedBroadcastManager))
         .flatMap(List::iterator);
   }
 
@@ -147,7 +166,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
     return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime, Option.empty(),
-        taskContextSupplier, new CompactionExecutionHelper());
+        taskContextSupplier, new CompactionExecutionHelper(), false, Option.empty());
   }
 
   /**
@@ -161,11 +180,13 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    String maxInstantTime,
                                    Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
-                                   CompactionExecutionHelper executionHelper) throws IOException {
-    if (config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-        && compactionHandler.supportsFileGroupReader()) {
+                                   CompactionExecutionHelper executionHelper,
+                                   boolean useFileGroupReaderBasedCompaction,
+                                   Option<CompactorBroadcastManager> broadcastManagerOpt) throws IOException {
+    if (useFileGroupReaderBasedCompaction) {
       List<WriteStatus> writeStatusList = compactionHandler.runCompactionUsingFileGroupReader(instantTime,
-          operation.getPartitionPath(), operation.getFileId(), operation, 2);
+          operation.getPartitionPath(), operation.getFileId(), operation,
+          broadcastManagerOpt.get().retrieveFileGroupReaderContext(metaClient.getBasePath()).get());
       writeStatusList
           .forEach(s -> {
             final HoodieWriteStat stat = s.getStat();
