@@ -102,6 +102,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
+  // In Spark, by default, input records (new records) in commit and delta commit do not include metadata
+  protected boolean isNewRecordWithMetadata = false;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
   protected boolean preserveMetadata = false;
@@ -142,6 +144,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
+    this.isNewRecordWithMetadata = config.populateMetaFields();
     this.preserveMetadata = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -346,7 +349,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
    */
   public void write(HoodieRecord<T> oldRecord) {
     Schema oldSchema = writeSchemaWithMetaFields;
-    Schema newSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
+    Schema newSchema = isNewRecordWithMetadata ? writeSchemaWithMetaFields : writeSchema;
     boolean copyOldRecord = true;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
