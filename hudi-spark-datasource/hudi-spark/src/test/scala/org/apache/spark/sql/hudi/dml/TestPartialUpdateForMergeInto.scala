@@ -239,20 +239,20 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       if (tableType.equals("mor")) {
         validateLogBlock(basePath, 2, Seq(Seq("price", "_ts"), Seq("_ts", "description")), true)
 
-        spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key} = 5")
+        spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key} = 3")
         // Partial updates that trigger compaction
         spark.sql(
           s"""
              |merge into $tableName t0
-             |using ( select 2 as id, '_a2' as name, 18.0 as price, 1025 as ts
+             |using ( select 2 as id, '_a2' as name, 18.0 as price, 1275 as ts
              |union select 3 as id, '_a3' as name, 28.0 as price, 1280 as ts) s0
              |on t0.id = s0.id
              |when matched then update set price = s0.price, _ts = s0.ts
              |""".stripMargin)
-        //validateCompactionExecuted(basePath)
+        validateCompactionExecuted(basePath)
         checkAnswer(s"select id, name, price, _ts, description from $tableName")(
-          Seq(1, "a1", 18.0, 1025, "a1: updated desc1"),
-          Seq(2, "a2", 20.0, 1270, "a2: updated desc2"),
+          Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
+          Seq(2, "a2", 18.0, 1275, "a2: updated desc2"),
           Seq(3, "a3", 28.0, 1280, "a3: desc3")
         )
         spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key}"
