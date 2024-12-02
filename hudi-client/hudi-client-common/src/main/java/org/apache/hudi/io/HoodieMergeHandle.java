@@ -345,12 +345,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
    * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
    */
   public void write(HoodieRecord<T> oldRecord) {
-    // Use schema with metadata files no matter whether 'hoodie.populate.meta.fields' is enabled
-    // to avoid unnecessary rewrite. Even with metadata table(whereas the option 'hoodie.populate.meta.fields' is configured as false),
-    // the record is deserialized with schema including metadata fields,
-    // see HoodieMergeHelper#runMerge for more details.
     Schema oldSchema = writeSchemaWithMetaFields;
-    Schema newSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    Schema newSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
     boolean copyOldRecord = true;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
