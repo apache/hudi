@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMM
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
-import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, CheckpointV1}
+import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV1}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
@@ -205,7 +205,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
   private def translateCheckpoint(commitTime: String): String = {
     if (writeTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       CheckpointUtils.convertToCheckpointV2ForCommitTime(
-        new CheckpointV1(commitTime), metaClient).getCheckpointKey
+        new StreamerCheckpointV1(commitTime), metaClient).getCheckpointKey
     } else {
       commitTime
     }
