@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ConfigUtils, TablePathUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
-import org.apache.hudi.config.HoodieWriteConfig.{WRITE_CONCURRENCY_MODE, WRITE_TABLE_VERSION}
+import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
@@ -245,25 +245,24 @@ class DefaultSource extends RelationProvider
       .setConf(storageConf.newInstance()).setBasePath(tablePath.toString).build()
     val properties: TypedProperties = new TypedProperties()
     properties.putAll(parameters.asJava)
-    val writeTableVersion = HoodieTableVersion.fromVersionCode(
-      ConfigUtils.getIntWithAltKeys(properties, WRITE_TABLE_VERSION))
 
     if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_TABLE_VERSION)) {
-      val sourceTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
-      if (sourceTableVersion >= 8) {
+      val writeTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
+      if (writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
         new HoodieStreamSourceV2(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, writeTableVersion)
+          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))
       } else {
         new HoodieStreamSourceV1(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, writeTableVersion)
+          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))
       }
     } else {
-      if (metaClient.getTableConfig.getTableVersion.versionCode() >= 8) {
+      val writeTableVersion = metaClient.getTableConfig.getTableVersion.versionCode()
+      if (writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
         new HoodieStreamSourceV2(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, writeTableVersion)
+          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))
       } else {
         new HoodieStreamSourceV1(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, writeTableVersion)
+          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))
       }
     }
   }
