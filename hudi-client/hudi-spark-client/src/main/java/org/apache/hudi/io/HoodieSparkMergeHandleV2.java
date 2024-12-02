@@ -178,6 +178,8 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
         // HUDI-8518 will be taken up to fix it for any payload during which we might require entire file slice to be set here.
         // Already AppendHandle adds all logs file from current file slice to HoodieDeltaWriteStat.
         writeStatus.getStat().setPrevBaseFile(latestValidFilePath.get());
+      } else {
+        writeStatus.getStat().setPrevCommit(HoodieWriteStat.NULL_COMMIT);
       }
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
