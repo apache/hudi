@@ -29,6 +29,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Objects;
+
 import static org.apache.hudi.common.table.checkpoint.CheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
 import static org.apache.hudi.common.table.checkpoint.CheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1;
 import static org.apache.hudi.common.table.checkpoint.CheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
@@ -70,6 +72,7 @@ public class CheckpointUtils {
           .getInstantsAsStream()
           .filter(s -> instantTime.equals(s.requestedTime()))
           .map(HoodieInstant::getCompletionTime)
+          .filter(Objects::nonNull)
           .findFirst().orElse(null);
       if (completionTime == null) {
         throw new UnsupportedOperationException("Unable to find completion time for " + instantTime);
@@ -94,6 +97,7 @@ public class CheckpointUtils {
           .getInstantsAsStream()
           .filter(s -> completionTime.equals(s.getCompletionTime()))
           .map(HoodieInstant::requestedTime)
+          .filter(Objects::nonNull)
           .findFirst().orElse(null);
       if (instantTime == null) {
         throw new UnsupportedOperationException("Unable to find requested time for " + completionTime);
