@@ -24,11 +24,9 @@ import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -62,7 +60,7 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     this.context = context;
   }
 
-  // Prepare broadcast variables.
+  // Prepare broadcast variables
   @Override
   public void prepareAndBroadcast() {
     // This needs to be fixed.
@@ -82,7 +80,8 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
 
     // Do broadcast.
     sqlConfBroadcast = jsc.broadcast(sqlConf);
-    configurationBroadcast = jsc.broadcast(new SerializableConfiguration(jsc.hadoopConfiguration()));
+    // new Configuration() is critical so that we don't run into ConcurrentModificatonException
+    configurationBroadcast = jsc.broadcast(new SerializableConfiguration(new Configuration(jsc.hadoopConfiguration())));
     // TODO: Disable vectorization as of now. Assign it based on relevant settings.
     // TODO: Verify if we can construct the reader on the executor side if we has broadcast all necessary variables.
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
@@ -97,10 +96,6 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
       return Option.empty();
     }
 
-    // Reconstruct metaClient, since underlying properties may not be passed from driver to executors.
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(basePath)
-        .setConf(new HadoopStorageConfiguration(configurationBroadcast.getValue().value())).build();
     SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
     if (sparkParquetReader != null) {
       List<Filter> filters = new ArrayList<>();
