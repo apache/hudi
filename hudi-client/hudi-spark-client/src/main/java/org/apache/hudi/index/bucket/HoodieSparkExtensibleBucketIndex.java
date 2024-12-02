@@ -74,7 +74,9 @@ public class HoodieSparkExtensibleBucketIndex extends HoodieExtensibleBucketInde
                   + ", new version: " + clusteringBucketMetadata);
           // Save the metadata
           // TODO: consider fault-tolerance, success to save metadata but instant failed to commit or be rolled back
-          ExtensibleBucketIndexUtils.saveMetadata(hoodieTable, clusteringBucketMetadata, true);
+          if (!ExtensibleBucketIndexUtils.saveMetadata(hoodieTable, clusteringBucketMetadata)) {
+            throw new HoodieIndexException("Failed to save metadata for partition " + partition);
+          }
         });
     return writeStatuses;
   }

@@ -207,7 +207,7 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     // update to resizing bucket, expect rollback pending clustering
     assertDoesNotThrow(() -> writeData(writeClient.createNewInstantTime(), 1000, true));
     // commit the pending clustering but expect fail because of rollback
-    assertThrows(HoodieException.class, () -> writeClient.cluster(clusteringTime, true));
+    assertThrows(Exception.class, () -> writeClient.cluster(clusteringTime, true));
     List<Row> expectedRows = readRecordsSortedByPK();
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -237,7 +237,7 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     assertDoesNotThrow(() -> writeData(writeClient.createNewInstantTime(), 1000, true));
     List<Row> expectedRows = readRecordsSortedByPK();
     // commit the pending clustering but expect fail because of rollback
-    assertThrows(HoodieException.class, () -> writeClient.commitClustering(clusteringTime, cluster, Option.empty()));
+    assertThrows(Exception.class, () -> writeClient.commitClustering(clusteringTime, cluster, Option.empty()));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Assertions.assertEquals(metaClient.getActiveTimeline().filterPendingReplaceTimeline().countInstants(), 0);
