@@ -488,7 +488,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return new PartitionPath(partitionPath, partitionColumnValues);
   }
 
-  private static long fileSliceSize(FileSlice fileSlice) {
+  static long fileSliceSize(FileSlice fileSlice) {
     long logFileSize = fileSlice.getLogFiles().map(HoodieLogFile::getFileSize)
         .filter(s -> s > 0)
         .reduce(0L, Long::sum);

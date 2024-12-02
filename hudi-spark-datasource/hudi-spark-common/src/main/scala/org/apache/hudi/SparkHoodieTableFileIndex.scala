@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, getPartitionSchema, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{TimestampKeyGeneratorConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
@@ -116,46 +116,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   /**
    * Get the partition schema from the hoodie.properties.
    */
-  private lazy val _partitionSchemaFromProperties: StructType = {
-    val tableConfig = metaClient.getTableConfig
-    val partitionColumns = tableConfig.getPartitionFields
-    val nameFieldMap = generateFieldMap(schema)
-
-    if (partitionColumns.isPresent) {
-      // Note that key generator class name could be null
-      val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
-      if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
-        || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
-        val partitionFields: Array[StructField] = partitionColumns.get().map(column => StructField(column, StringType))
-        StructType(partitionFields)
-      } else {
-        val partitionFields: Array[StructField] = partitionColumns.get().filter(column => nameFieldMap.contains(column))
-          .map(column => nameFieldMap.apply(column))
-
-        if (partitionFields.length != partitionColumns.get().length) {
-          val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
-          if (isBootstrapTable) {
-            // For bootstrapped tables its possible the schema does not contain partition field when source table
-            // is hive style partitioned. In this case we would like to treat the table as non-partitioned
-            // as opposed to failing
-            new StructType()
-          } else {
-            throw new IllegalArgumentException(s"Cannot find columns: " +
-              s"'${partitionColumns.get().filter(col => !nameFieldMap.contains(col)).mkString(",")}' " +
-              s"in the schema[${schema.fields.mkString(",")}]")
-          }
-        } else {
-          new StructType(partitionFields)
-        }
-      }
-    } else {
-      // If the partition columns have not stored in hoodie.properties(the table that was
-      // created earlier), we trait it as a non-partitioned table.
-      logWarning("No partition columns available from hoodie.properties." +
-        " Partition pruning will not work")
-      new StructType()
-    }
-  }
+  private lazy val _partitionSchemaFromProperties: StructType = getPartitionSchema(metaClient,schema)
 
   /**
    * Get the data schema of the table.
@@ -532,5 +493,45 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
   private def shouldUsePartitionPathPrefixAnalysis(props: TypedProperties): Boolean = {
     props.getBoolean(DataSourceReadOptions.FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED.key,
       DataSourceReadOptions.FILE_INDEX_LISTING_PARTITION_PATH_PREFIX_ANALYSIS_ENABLED.defaultValue)
+  }
+
+  def getPartitionSchema(metaClient: HoodieTableMetaClient,
+                         tableSchema: StructType): StructType = {
+    val tableConfig = metaClient.getTableConfig
+    val partitionColumns = tableConfig.getPartitionFields
+    val nameFieldMap = generateFieldMap(tableSchema)
+
+    if (partitionColumns.isPresent) {
+      // Note that key generator class name could be null
+      val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
+      if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
+        || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
+        val partitionFields: Array[StructField] = partitionColumns.get().map(column => StructField(column, StringType))
+        StructType(partitionFields)
+      } else {
+        val partitionFields: Array[StructField] = partitionColumns.get().filter(column => nameFieldMap.contains(column))
+          .map(column => nameFieldMap.apply(column))
+
+        if (partitionFields.length != partitionColumns.get().length) {
+          val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
+          if (isBootstrapTable) {
+            // For bootstrapped tables its possible the schema does not contain partition field when source table
+            // is hive style partitioned. In this case we would like to treat the table as non-partitioned
+            // as opposed to failing
+            new StructType()
+          } else {
+            throw new IllegalArgumentException(s"Cannot find columns: " +
+              s"'${partitionColumns.get().filter(col => !nameFieldMap.contains(col)).mkString(",")}' " +
+              s"in the schema[${tableSchema.fields.mkString(",")}]")
+          }
+        } else {
+          new StructType(partitionFields)
+        }
+      }
+    } else {
+      // If the partition columns have not stored in hoodie.properties(the table that was
+      // created earlier), we trait it as a non-partitioned table.
+      new StructType()
+    }
   }
 }

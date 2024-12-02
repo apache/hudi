@@ -28,6 +28,7 @@ import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -43,6 +44,9 @@ import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +54,7 @@ import org.slf4j.LoggerFactory;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -308,6 +313,32 @@ public class ClusteringUtils {
         .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getPath().getName()).collect(Collectors.toList()))
         .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null)).orElse(null))
         .build()).collect(Collectors.toList());
+  }
+
+  public static FileSlice fromSliceInfo(HoodieSliceInfo sliceInfo, HoodieStorage storage) throws IOException {
+    List<HoodieLogFile> logFiles = new ArrayList<>();
+    if (sliceInfo.getDeltaFilePaths() != null) {
+      for (String path : sliceInfo.getDeltaFilePaths()) {
+        if (!StringUtils.isNullOrEmpty(path)) {
+          logFiles.add(new HoodieLogFile(getPathInfo(path, storage)));
+        }
+      }
+    }
+
+    HoodieBaseFile baseFile = null;
+    if (!StringUtils.isNullOrEmpty(sliceInfo.getDataFilePath())) {
+      BaseFile bootstrapBaseFile = null;
+      if (!StringUtils.isNullOrEmpty(sliceInfo.getBootstrapFilePath())) {
+        bootstrapBaseFile = new BaseFile(getPathInfo(sliceInfo.getBootstrapFilePath(), storage));
+      }
+
+      baseFile = new HoodieBaseFile(getPathInfo(sliceInfo.getDataFilePath(), storage), bootstrapBaseFile);
+    }
+    return new FileSlice(new HoodieFileGroupId(sliceInfo.getPartitionPath(), sliceInfo.getFileId()), "", baseFile, logFiles);
+  }
+
+  private static StoragePathInfo getPathInfo(String path, HoodieStorage storage) throws IOException {
+    return storage.getPathInfo(new StoragePath(path));
   }
 
   private static Map<String, Double> buildMetrics(List<FileSlice> fileSlices) {

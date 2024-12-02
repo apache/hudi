@@ -23,7 +23,7 @@ import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.HoodieSchemaNotFoundException
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.model.WriteConcurrencyMode
+import org.apache.hudi.common.model.{FileSlice, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.util.ConfigUtils
@@ -35,6 +35,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.{PathUtils, SparkConfigUtils}
+
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
@@ -139,7 +140,7 @@ class DefaultSource extends RelationProvider
       parameters
     }
 
-    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, options.toMap)
+    DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, Map.empty, options.toMap)
   }
 
   /**
@@ -244,6 +245,7 @@ object DefaultSource {
                      metaClient: HoodieTableMetaClient,
                      schema: StructType,
                      globPaths: Seq[StoragePath],
+                     fileSlices: Map[String, Seq[FileSlice]],
                      parameters: Map[String, String]): BaseRelation = {
     val tableType = metaClient.getTableType
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
@@ -271,9 +273,9 @@ object DefaultSource {
         Option(schema)
       }
 
-      val useNewParquetFileFormat = parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
+      val useNewParquetFileFormat = fileSlices.nonEmpty || (parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
         HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
-        !metaClient.isMetadataTable && (globPaths == null || globPaths.isEmpty)
+        !metaClient.isMetadataTable && (globPaths == null || globPaths.isEmpty))
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
         new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
       } else if (isCdcQuery) {
@@ -296,7 +298,7 @@ object DefaultSource {
                (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
             if (useNewParquetFileFormat) {
               new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+                sqlContext, metaClient, parameters, userSchema, isBootstrap = false, fileSlices).build()
             } else {
               resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
             }
@@ -329,7 +331,7 @@ object DefaultSource {
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
             if (useNewParquetFileFormat) {
               new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+                sqlContext, metaClient, parameters, userSchema, isBootstrap = false, fileSlices).build()
             } else {
               new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
             }
@@ -337,7 +339,7 @@ object DefaultSource {
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
             if (useNewParquetFileFormat) {
               new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+                sqlContext, metaClient, parameters, userSchema, isBootstrap = true, fileSlices).build()
             } else {
               HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
             }
@@ -371,7 +373,7 @@ object DefaultSource {
           case (_, _, true) =>
             if (useNewParquetFileFormat) {
               new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-                sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+                sqlContext, metaClient, parameters, userSchema, isBootstrap = true, fileSlices).build()
             } else {
               resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
             }
