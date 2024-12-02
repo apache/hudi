@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSparkUtils, QuickstartUtils}
-import org.apache.hudi.common.config.HoodieStorageConfig
+import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.TableSchemaResolver
@@ -27,7 +27,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -670,7 +669,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             .mode(SaveMode.Overwrite)
             .save(tablePath)
 
-          val oldView = spark.read.format("hudi").options(readOpt).load(tablePath)
+          val oldView = spark.read.format("hudi").options(readOpt)
+            .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),"false")
+            .load(tablePath)
           oldView.show(5, false)
 
           val records2 = RawTripTestPayload.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).asScala.toList
@@ -685,7 +686,9 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             .option("hoodie.datasource.write.reconcile.schema", "true")
             .mode(SaveMode.Append)
             .save(tablePath)
-          spark.read.format("hudi").options(readOpt).load(tablePath).registerTempTable("newView")
+          spark.read.format("hudi").options(readOpt)
+            .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),"false")
+            .load(tablePath).registerTempTable("newView")
           val checkResult = spark.sql(s"select tip_history.amount,city_to_state,distance_in_meters,fare,height from newView where _row_key='$checkRowKey' ")
             .collect().map(row => (row.isNullAt(0), row.isNullAt(1), row.isNullAt(2), row.isNullAt(3), row.isNullAt(4)))
           assertResult((false, false, false, true, true))(checkResult(0))
