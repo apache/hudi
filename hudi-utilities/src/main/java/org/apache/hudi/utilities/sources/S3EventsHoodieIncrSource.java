@@ -114,7 +114,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
   protected Option<Checkpoint> translateCheckpoint(Option<Checkpoint> lastCheckpoint) {
     if (lastCheckpoint.isPresent()) {
       ValidationUtils.checkArgument(lastCheckpoint.get() instanceof StreamerCheckpointV1,
-          "For S3EventsHoodieIncrSource, only CheckpointV1, i.e., requested time-based "
+          "For S3EventsHoodieIncrSource, only StreamerCheckpointV1, i.e., requested time-based "
               + "checkpoint, is supported. Checkpoint provided is: " + lastCheckpoint.get());
     }
     return lastCheckpoint;

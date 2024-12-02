@@ -541,8 +541,8 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
     Exception exception = assertThrows(IllegalArgumentException.class,
         () -> incrSource.translateCheckpoint(Option.of(new StreamerCheckpointV2("1"))));
-    assertEquals("For S3EventsHoodieIncrSource, only CheckpointV1, i.e., requested time-based "
-            + "checkpoint, is supported. Checkpoint provided is: CheckpointV2{checkpointKey='1'}",
+    assertEquals("For S3EventsHoodieIncrSource, only StreamerCheckpointV1, i.e., requested time-based "
+            + "checkpoint, is supported. Checkpoint provided is: StreamerCheckpointV2{checkpointKey='1'}",
         exception.getMessage());
   }
 

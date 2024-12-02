@@ -112,7 +112,7 @@ public class IncrSourceHelper {
         .setConf(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()))
         .setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
-    // TODO(yihua): handle transition time in CheckpointV1
+    // TODO(yihua): handle transition time in StreamerCheckpointV1
     HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
     final HoodieTimeline activeCommitTimeline = handleHollowCommitIfNeeded(completedCommitTimeline, srcMetaClient, handlingMode);
     Function<HoodieInstant, String> timestampForLastInstant = instant -> handlingMode == HollowCommitHandling.USE_TRANSITION_TIME

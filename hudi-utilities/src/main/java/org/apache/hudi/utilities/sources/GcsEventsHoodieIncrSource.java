@@ -169,7 +169,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
   protected Option<Checkpoint> translateCheckpoint(Option<Checkpoint> lastCheckpoint) {
     if (lastCheckpoint.isPresent()) {
       ValidationUtils.checkArgument(lastCheckpoint.get() instanceof StreamerCheckpointV1,
-          "For GcsEventsHoodieIncrSource, only CheckpointV1, i.e., requested time-based "
+          "For GcsEventsHoodieIncrSource, only StreamerCheckpointV1, i.e., requested time-based "
               + "checkpoint, is supported. Checkpoint provided is: " + lastCheckpoint.get());
     }
     return lastCheckpoint;
