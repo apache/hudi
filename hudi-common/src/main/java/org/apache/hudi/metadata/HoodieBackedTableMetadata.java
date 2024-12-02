@@ -651,7 +651,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     boolean allowFullScan = allowFullScanOverride.orElseGet(() -> isFullScanAllowedForPartition(partitionName));
 
     // Load the schema
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+    Schema schema = metadataTableConfig.populateMetaFields()
+        ? HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema())
+        : HoodieMetadataRecord.getClassSchema();
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(metadataConfig.getProps()).build();
     HoodieMetadataLogRecordReader logRecordScanner = HoodieMetadataLogRecordReader.newBuilder()
         .withStorage(metadataMetaClient.getStorage())

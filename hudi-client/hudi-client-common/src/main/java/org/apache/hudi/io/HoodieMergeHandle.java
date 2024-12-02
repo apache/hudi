@@ -102,6 +102,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
+  // Input records (new records) do not include metadata by default, except during compaction
+  protected boolean isNewRecordWithMetadata = false;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
   protected boolean preserveMetadata = false;
@@ -142,6 +144,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
+    this.isNewRecordWithMetadata = config.populateMetaFields();
     this.preserveMetadata = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -345,12 +348,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
    * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
    */
   public void write(HoodieRecord<T> oldRecord) {
-    // Use schema with metadata files no matter whether 'hoodie.populate.meta.fields' is enabled
-    // to avoid unnecessary rewrite. Even with metadata table(whereas the option 'hoodie.populate.meta.fields' is configured as false),
-    // the record is deserialized with schema including metadata fields,
-    // see HoodieMergeHelper#runMerge for more details.
     Schema oldSchema = writeSchemaWithMetaFields;
-    Schema newSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    Schema newSchema = isNewRecordWithMetadata ? writeSchemaWithMetaFields : writeSchema;
     boolean copyOldRecord = true;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();

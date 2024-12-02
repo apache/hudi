@@ -264,6 +264,7 @@ public class StreamerUtil {
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
+          .setPopulateMetaFields(conf.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
           .setKeyGeneratorClassProp(
               conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(SimpleAvroKeyGenerator.class.getName()))
           .setHiveStylePartitioningEnable(conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING))
