@@ -24,8 +24,8 @@ import org.apache.hudi.common.HoodieSchemaNotFoundException
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.WriteConcurrencyMode
-import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ConfigUtils, TablePathUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
@@ -36,13 +36,13 @@ import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.{PathUtils, SparkConfigUtils}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
-import org.apache.spark.sql.hudi.streaming._
+import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSourceV1, HoodieStreamSourceV2}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -241,11 +241,11 @@ class DefaultSource extends RelationProvider
     }
     val metaClient = HoodieTableMetaClient.builder()
       .setConf(storageConf.newInstance()).setBasePath(tablePath.toString).build()
-    // Check if the incremental table read version is set. If set, use the corresponding source
+    // Check if the streaming table read version is set. If set, use the corresponding source
     // which uses the version corresponding to IncrementalRelation to read the data. And, also
     // does the checkpoint management based on the version.
-    if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_TABLE_VERSION)) {
-      val writeTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
+    if (SparkConfigUtils.containsConfigProperty(parameters, STREAMING_READ_TABLE_VERSION)) {
+      val writeTableVersion = Integer.parseInt(parameters(STREAMING_READ_TABLE_VERSION.key))
       if (writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
         new HoodieStreamSourceV2(
           sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))
