@@ -442,8 +442,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             break;
           case SECONDARY_INDEX:
             Set<String> secondaryIndexPartitionsToInit = getIndexPartitionsToInit(partitionType);
-            if (secondaryIndexPartitionsToInit.size() > 1) {
-              LOG.warn("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
+            if (secondaryIndexPartitionsToInit.size() != 1) {
+              if (secondaryIndexPartitionsToInit.size() > 1) {
+                LOG.warn("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
+              }
               continue;
             }
             partitionName = secondaryIndexPartitionsToInit.iterator().next();
