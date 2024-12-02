@@ -47,9 +47,9 @@ import java.util.List;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
 
-public class SparkCompactorBroadcastManager extends CompactorBroadcastManager {
+public class SparkBroadcastManager extends EngineBroadcastManager {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SparkCompactorBroadcastManager.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkBroadcastManager.class);
 
   private final transient HoodieEngineContext context;
 
@@ -58,7 +58,7 @@ public class SparkCompactorBroadcastManager extends CompactorBroadcastManager {
   protected Broadcast<SparkParquetReader> parquetReaderBroadcast;
   protected Broadcast<SerializableConfiguration> configurationBroadcast;
 
-  public SparkCompactorBroadcastManager(HoodieEngineContext context) {
+  public SparkBroadcastManager(HoodieEngineContext context) {
     this.context = context;
   }
 

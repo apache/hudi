@@ -46,7 +46,7 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.table.CompactorBroadcastManager;
+import org.apache.hudi.table.EngineBroadcastManager;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -72,7 +72,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
 
-  public abstract Option<CompactorBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context);
+  public abstract Option<EngineBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context);
 
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.
@@ -140,7 +140,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && compactionHandler.supportsFileGroupReader();
 
-    Option<CompactorBroadcastManager> broadcastManagerOpt = Option.empty();
+    Option<EngineBroadcastManager> broadcastManagerOpt = Option.empty();
     // Broadcast necessary information.
     if (useFileGroupReaderBasedCompaction) {
       broadcastManagerOpt = getCompactorBroadcastManager(context);
@@ -148,7 +148,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         broadcastManagerOpt.get().prepareAndBroadcast();
       }
     }
-    final Option<CompactorBroadcastManager> finalizedBroadcastManager = broadcastManagerOpt;
+    final Option<EngineBroadcastManager> finalizedBroadcastManager = broadcastManagerOpt;
 
     return context.parallelize(operations).map(
             operation -> {
@@ -299,7 +299,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper,
-                                   Option<CompactorBroadcastManager> broadcastManagerOpt) throws IOException {
+                                   Option<EngineBroadcastManager> broadcastManagerOpt) throws IOException {
     List<WriteStatus> writeStatusList = compactionHandler.runCompactionUsingFileGroupReader(instantTime,
         operation, broadcastManagerOpt.get().retrieveFileGroupReaderContext(metaClient.getBasePath()).get(),
         broadcastManagerOpt.get().retrieveStorageConfig().get());

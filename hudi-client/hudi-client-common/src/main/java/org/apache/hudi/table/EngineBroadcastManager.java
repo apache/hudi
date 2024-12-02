@@ -27,7 +27,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.io.Serializable;
 
-public class CompactorBroadcastManager implements Serializable {
+public class EngineBroadcastManager implements Serializable {
 
   // Prepare and broadcast necessary information needed by compactor.
   public void prepareAndBroadcast() {
