@@ -517,7 +517,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     }
 
     // Inserts
-    nextRecord = baseRecord;
+    nextRecord = readerContext.seal(baseRecord);
     readerStats.incrementNumInserts();
     return true;
   }
