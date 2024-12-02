@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -52,6 +53,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
@@ -269,12 +271,18 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                                      ExecutorService clusteringExecutorService) {
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
-      Dataset<Row> inputRecords = readRecordsForGroupAsRow(jsc, clusteringGroup, getHoodieTable().getStorage());
-      Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
+      Schema tableSchemaWithMetaFields;
+      try {
+        tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(new TableSchemaResolver(getHoodieTable().getMetaClient()).getTableAvroSchema(false),
+            getWriteConfig().allowOperationMetadataField());
+      } catch (Exception e) {
+        throw new HoodieException("Failed to get table schema during clustering", e);
+      }
+      Dataset<Row> inputRecords = readRecordsForGroupAsRow(jsc, clusteringGroup, tableSchemaWithMetaFields, getHoodieTable().getStorage());
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
           .collect(Collectors.toList());
-      return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, shouldPreserveHoodieMetadata,
+      return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, tableSchemaWithMetaFields, inputFileIds, shouldPreserveHoodieMetadata,
           clusteringGroup.getExtraMetadata());
     }, clusteringExecutorService);
   }
@@ -425,6 +433,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
    */
   private Dataset<Row> readRecordsForGroupAsRow(JavaSparkContext jsc,
                                                 HoodieClusteringGroup clusteringGroup,
+                                                Schema tableSchemaWithMetaFields,
                                                 HoodieStorage storage) {
     if (getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)) {
       Map<String, List<FileSlice>> partitionMappings = new HashMap<>();
@@ -445,7 +454,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       // Let Hudi relations to fetch the schema from the table itself
       SQLContext sqlContext = new SQLContext(jsc.sc());
       BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()
-          .createRelation(sqlContext, getHoodieTable().getMetaClient(), null, partitionMappings, params);
+          .createRelation(sqlContext, getHoodieTable().getMetaClient(), tableSchemaWithMetaFields, partitionMappings, params);
       return sqlContext.baseRelationToDataFrame(relation);
     }
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
