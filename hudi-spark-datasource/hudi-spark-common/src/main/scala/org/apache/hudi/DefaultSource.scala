@@ -242,9 +242,9 @@ class DefaultSource extends RelationProvider
     }
     val metaClient = HoodieTableMetaClient.builder()
       .setConf(storageConf.newInstance()).setBasePath(tablePath.toString).build()
-    val properties: TypedProperties = new TypedProperties()
-    properties.putAll(parameters.asJava)
-
+    // Check if the incremental table read version is set. If set, use the corresponding source
+    // which uses the version corresponding to IncrementalRelation to read the data. And, also
+    // does the checkpoint management based on the version.
     if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_TABLE_VERSION)) {
       val writeTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
       if (writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
