@@ -27,10 +27,6 @@ import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpo
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.common.util.TablePathUtils
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelationV1, MergeOnReadIncrementalRelationV1, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -56,15 +52,6 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
                            offsetRangeLimit: HoodieOffsetRangeLimit,
                            writeTableVersion: HoodieTableVersion)
   extends Source with Logging with Serializable with SparkAdapterSupport {
-
-  @transient private val storageConf = HadoopFSUtils.getStorageConf(
-    sqlContext.sparkSession.sessionState.newHadoopConf())
-
-  private lazy val tablePath: StoragePath = {
-    val path = new StoragePath(parameters.getOrElse("path", "Missing 'path' option"))
-    val fs = new HoodieHadoopStorage(path, storageConf)
-    TablePathUtils.getTablePath(fs, path).get()
-  }
 
   private lazy val tableType = metaClient.getTableType
 
