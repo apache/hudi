@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
@@ -106,26 +106,26 @@ public class HiveIncrPullSource extends AvroSource {
 
     if (!latestTargetCommit.isPresent()) {
       // start from the beginning
-      return Option.of(new CheckpointV2(commitTimes.get(0)));
+      return Option.of(new StreamerCheckpointV2(commitTimes.get(0)));
     }
 
     for (String instantTime : commitTimes) {
       // TODO(vc): Add an option to delete consumed commits
       if (instantTime.compareTo(latestTargetCommit.get().getCheckpointKey()) > 0) {
-        return Option.of(new CheckpointV2(instantTime));
+        return Option.of(new StreamerCheckpointV2(instantTime));
       }
     }
     return Option.empty();
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     try {
       // find the source commit to pull
       Option<Checkpoint> commitToPull = findCommitToPull(lastCheckpoint);
 
       if (!commitToPull.isPresent()) {
-        return new InputBatch<>(Option.empty(), lastCheckpoint.isPresent() ? lastCheckpoint.get() : new CheckpointV2(""));
+        return new InputBatch<>(Option.empty(), lastCheckpoint.isPresent() ? lastCheckpoint.get() : new StreamerCheckpointV2(""));
       }
 
       // read the files out.

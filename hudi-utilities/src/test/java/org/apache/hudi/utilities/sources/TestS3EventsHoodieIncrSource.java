@@ -28,8 +28,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV1;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -540,7 +540,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
     Exception exception = assertThrows(IllegalArgumentException.class,
-        () -> incrSource.translateCheckpoint(Option.of(new CheckpointV2("1"))));
+        () -> incrSource.translateCheckpoint(Option.of(new StreamerCheckpointV2("1"))));
     assertEquals("For S3EventsHoodieIncrSource, only CheckpointV1, i.e., requested time-based "
             + "checkpoint, is supported. Checkpoint provided is: CheckpointV2{checkpointKey='1'}",
         exception.getMessage());
@@ -562,13 +562,13 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
     Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = incrSource.fetchNextBatch(
-        checkpointToPull.isPresent() ? Option.of(new CheckpointV1(checkpointToPull.get())) : Option.empty(), sourceLimit);
+        checkpointToPull.isPresent() ? Option.of(new StreamerCheckpointV1(checkpointToPull.get())) : Option.empty(), sourceLimit);
 
     Option<Dataset<Row>> datasetOpt = dataAndCheckpoint.getLeft();
     Checkpoint nextCheckPoint = dataAndCheckpoint.getRight();
 
     Assertions.assertNotNull(nextCheckPoint);
-    Assertions.assertEquals(new CheckpointV1(expectedCheckpoint), nextCheckPoint);
+    Assertions.assertEquals(new StreamerCheckpointV1(expectedCheckpoint), nextCheckPoint);
   }
 
   private void setMockQueryRunner(Dataset<Row> inputDs) {

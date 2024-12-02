@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -153,7 +153,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
     assertEquals(1000L, Long.parseLong(checkpointStr1stRead), "should read up to foo3 (inclusive)");
 
     nextFilePathsAndCheckpoint = selector
-        .getNextFilePathsAndMaxModificationTime(jsc, Option.of(new CheckpointV2(checkpointStr1stRead)), 20);
+        .getNextFilePathsAndMaxModificationTime(jsc, Option.of(new StreamerCheckpointV2(checkpointStr1stRead)), 20);
     List<String> fileNames2ndRead = Arrays
         .stream(nextFilePathsAndCheckpoint.getLeft().get().split(","))
         .map(p -> Paths.get(p).toFile().getName())

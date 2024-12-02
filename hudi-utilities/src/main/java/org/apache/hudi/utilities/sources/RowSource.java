@@ -57,7 +57,7 @@ public abstract class RowSource extends Source<Dataset<Row>> {
   }
 
   @Override
-  protected final InputBatch<Dataset<Row>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+  protected final InputBatch<Dataset<Row>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     Pair<Option<Dataset<Row>>, Checkpoint> res = fetchNextBatch(lastCheckpoint, sourceLimit);
     return res.getKey().map(dsr -> {
       Dataset<Row> sanitizedRows = SanitizationUtils.sanitizeColumnNamesForAvro(dsr, props);

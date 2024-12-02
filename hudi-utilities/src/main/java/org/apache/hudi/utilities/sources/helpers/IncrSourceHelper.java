@@ -23,8 +23,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
-import org.apache.hudi.common.table.checkpoint.CheckpointV1;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.log.InstantRange.RangeType;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -125,11 +125,11 @@ public class IncrSourceHelper {
       if (missingCheckpointStrategy != null) {
         if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
           Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-          return new CheckpointV1(lastInstant.map(
+          return new StreamerCheckpointV1(lastInstant.map(
               hoodieInstant -> instantTimeMinusMillis(timestampForLastInstant.apply(hoodieInstant), 1))
               .orElse(DEFAULT_START_TIMESTAMP));
         } else {
-          return new CheckpointV1(DEFAULT_START_TIMESTAMP);
+          return new StreamerCheckpointV1(DEFAULT_START_TIMESTAMP);
         }
       } else {
         throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
@@ -196,9 +196,9 @@ public class IncrSourceHelper {
 
     if (lastCheckpoint.isPresent() && !lastCheckpoint.get().getCheckpointKey().isEmpty()) {
       // Translate checkpoint
-      CheckpointV2 lastCheckpointV2 = CheckpointUtils.convertToCheckpointV2ForCommitTime(
+      StreamerCheckpointV2 lastStreamerCheckpointV2 = CheckpointUtils.convertToCheckpointV2ForCommitTime(
           lastCheckpoint.get(), metaClient);
-      startCompletionTime = lastCheckpointV2.getCheckpointKey();
+      startCompletionTime = lastStreamerCheckpointV2.getCheckpointKey();
       rangeType = RangeType.OPEN_CLOSED;
     } else if (missingCheckpointStrategy != null) {
       rangeType = RangeType.CLOSED_CLOSED;

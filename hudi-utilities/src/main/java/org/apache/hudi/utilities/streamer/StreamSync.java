@@ -47,7 +47,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -813,7 +813,7 @@ public class StreamSync implements Serializable, Closeable {
               ? inputBatch.getCheckpointForNextBatch() != null
               ? inputBatch.getCheckpointForNextBatch().getCheckpointCommitMetadata(
               cfg.checkpoint, cfg.ignoreCheckpoint)
-              : new CheckpointV2((String) null).getCheckpointCommitMetadata(
+              : new StreamerCheckpointV2((String) null).getCheckpointCommitMetadata(
               cfg.checkpoint, cfg.ignoreCheckpoint)
               : Collections.emptyMap();
 

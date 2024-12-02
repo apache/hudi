@@ -98,12 +98,12 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
       configureSchemaDeserializer();
       offsetGen = new KafkaOffsetGen(props);
     }
-    return super.fetchNewDataFromCheckpoint(lastCheckpoint, sourceLimit);
+    return super.readFromCheckpoint(lastCheckpoint, sourceLimit);
   }
 
   @Override

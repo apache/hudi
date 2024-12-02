@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -151,13 +151,13 @@ public class DFSPathSelector implements Serializable {
 
       // no data to read
       if (filteredFiles.isEmpty()) {
-        return new ImmutablePair<>(Option.empty(), new CheckpointV2(String.valueOf(newCheckpointTime)));
+        return new ImmutablePair<>(Option.empty(), new StreamerCheckpointV2(String.valueOf(newCheckpointTime)));
       }
 
       // read the files out.
       String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
 
-      return new ImmutablePair<>(Option.ofNullable(pathStr), new CheckpointV2(String.valueOf(newCheckpointTime)));
+      return new ImmutablePair<>(Option.ofNullable(pathStr), new StreamerCheckpointV2(String.valueOf(newCheckpointTime)));
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
     }

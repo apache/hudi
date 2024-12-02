@@ -69,7 +69,7 @@ public abstract class KafkaSource<T> extends Source<T> {
   }
 
   @Override
-  protected InputBatch<T> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+  protected InputBatch<T> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     try {
       return toInputBatch(getOffsetRanges(props, sourceProfileSupplier, offsetGen, metrics,
           lastCheckpoint, sourceLimit));

@@ -120,8 +120,8 @@ object DataSourceReadOptions {
       + "completion_time <= END_COMMIT are fetched out. "
       + "Point in time type queries make more sense with begin and end completion times specified.")
 
-  val INCREMENTAL_READ_VERSION: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.read.incremental.version")
+  val INCREMENTAL_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.incr.table.version")
     .noDefaultValue()
     .withDocumentation("The table version assumed for incremental read")
 

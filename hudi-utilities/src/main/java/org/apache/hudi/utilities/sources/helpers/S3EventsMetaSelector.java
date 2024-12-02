@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -159,7 +159,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
             .replace("%7E", "~").replace("%25", "%").replace("%2B", "+"));
       }
       // Return the old checkpoint if no messages to consume from queue.
-      Checkpoint newCheckpoint = newCheckpointTime == 0 ? lastCheckpoint.orElse(null) : new CheckpointV2(String.valueOf(newCheckpointTime));
+      Checkpoint newCheckpoint = newCheckpointTime == 0 ? lastCheckpoint.orElse(null) : new StreamerCheckpointV2(String.valueOf(newCheckpointTime));
       return new ImmutablePair<>(filteredEventRecords, newCheckpoint);
     } catch (JSONException | IOException e) {
       throw new HoodieException("Unable to read from SQS: ", e);

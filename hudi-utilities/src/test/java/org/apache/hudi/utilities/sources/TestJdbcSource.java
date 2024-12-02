@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -273,13 +273,13 @@ public class TestJdbcSource extends UtilitiesTestBase {
       InputBatch<Dataset<Row>> batch = runSource(Option.empty(), 100);
       Dataset<Row> rowDataset = batch.getBatch().get();
       assertEquals(100, rowDataset.count());
-      assertEquals(new CheckpointV2("100"), batch.getCheckpointForNextBatch());
+      assertEquals(new StreamerCheckpointV2("100"), batch.getCheckpointForNextBatch());
 
       // Add 100 records with commit time "001"
       insert("001", 100, connection, DATA_GENERATOR, PROPS);
 
       // Start incremental scan. With checkpoint greater than the number of records, there should not be any dataset to fetch.
-      batch = runSource(Option.of(new CheckpointV2("200")), 50);
+      batch = runSource(Option.of(new StreamerCheckpointV2("200")), 50);
       rowDataset = batch.getBatch().get();
       assertEquals(0, rowDataset.count());
     } catch (Exception e) {
@@ -361,7 +361,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       InputBatch<Dataset<Row>> batch = runSource(Option.empty(), 10);
       Dataset<Row> rowDataset = batch.getBatch().get();
       assertEquals(10, rowDataset.count());
-      assertEquals(new CheckpointV2(""), batch.getCheckpointForNextBatch());
+      assertEquals(new StreamerCheckpointV2(""), batch.getCheckpointForNextBatch());
 
       // Get max of incremental column
       Column incrementalColumn = rowDataset
@@ -373,7 +373,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       insert("001", 10, connection, DATA_GENERATOR, PROPS);
 
       // Start incremental scan
-      rowDataset = runSource(Option.of(new CheckpointV2(max)), 10).getBatch().get();
+      rowDataset = runSource(Option.of(new StreamerCheckpointV2(max)), 10).getBatch().get();
       assertEquals(10, rowDataset.count());
       assertEquals(10, rowDataset.where("commit_time=001").count());
     } catch (Exception e) {
@@ -453,6 +453,6 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   private InputBatch<Dataset<Row>> runSource(Option<Checkpoint> lastCkptStr, long sourceLimit) {
     Source<Dataset<Row>> jdbcSource = new JdbcSource(PROPS, jsc, sparkSession, null);
-    return jdbcSource.fetchNewDataFromCheckpoint(lastCkptStr, sourceLimit);
+    return jdbcSource.readFromCheckpoint(lastCkptStr, sourceLimit);
   }
 }

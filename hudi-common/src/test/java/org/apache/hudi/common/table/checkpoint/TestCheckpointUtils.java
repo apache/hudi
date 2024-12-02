@@ -60,7 +60,7 @@ public class TestCheckpointUtils {
     when(commitMetadata.getMetadata("deltastreamer.checkpoint.key")).thenReturn("v1_key");
 
     Checkpoint checkpoint = CheckpointUtils.getCheckpoint(commitMetadata);
-    assertTrue(checkpoint instanceof CheckpointV1);
+    assertTrue(checkpoint instanceof StreamerCheckpointV1);
     assertEquals("v1_key", checkpoint.getCheckpointKey());
   }
 
@@ -70,7 +70,7 @@ public class TestCheckpointUtils {
     when(commitMetadata.getMetadata("streamer.checkpoint.key.v2")).thenReturn("v2_key");
 
     Checkpoint checkpoint = CheckpointUtils.getCheckpoint(commitMetadata);
-    assertTrue(checkpoint instanceof CheckpointV2);
+    assertTrue(checkpoint instanceof StreamerCheckpointV2);
     assertEquals("v2_key", checkpoint.getCheckpointKey());
   }
 
@@ -93,8 +93,8 @@ public class TestCheckpointUtils {
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     when(activeTimeline.getInstantsAsStream()).thenReturn(Stream.of(instant));
 
-    Checkpoint checkpoint = new CheckpointV1(instantTime);
-    CheckpointV2 translatedCheckpoint = CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient);
+    Checkpoint checkpoint = new StreamerCheckpointV1(instantTime);
+    StreamerCheckpointV2 translatedCheckpoint = CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient);
 
     assertEquals(completionTime, translatedCheckpoint.getCheckpointKey());
   }
@@ -108,8 +108,8 @@ public class TestCheckpointUtils {
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
     when(activeTimeline.getInstantsAsStream()).thenReturn(Stream.of(instant));
 
-    Checkpoint checkpoint = new CheckpointV2(completionTime);
-    CheckpointV1 translatedCheckpoint = CheckpointUtils.convertToCheckpointV1ForCommitTime(checkpoint, metaClient);
+    Checkpoint checkpoint = new StreamerCheckpointV2(completionTime);
+    StreamerCheckpointV1 translatedCheckpoint = CheckpointUtils.convertToCheckpointV1ForCommitTime(checkpoint, metaClient);
 
     assertEquals(instantTime, translatedCheckpoint.getCheckpointKey());
   }
@@ -122,7 +122,7 @@ public class TestCheckpointUtils {
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, "deltacommit", instantTime, null, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     when(activeTimeline.getInstantsAsStream()).thenReturn(Stream.of(instant));
 
-    Checkpoint checkpoint = new CheckpointV1(instantTime);
+    Checkpoint checkpoint = new StreamerCheckpointV1(instantTime);
 
     Exception exception = assertThrows(UnsupportedOperationException.class,
         () -> CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient));
@@ -137,7 +137,7 @@ public class TestCheckpointUtils {
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", null, completionTime, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
     when(activeTimeline.getInstantsAsStream()).thenReturn(Stream.of(instant));
 
-    Checkpoint checkpoint = new CheckpointV2(completionTime);
+    Checkpoint checkpoint = new StreamerCheckpointV2(completionTime);
 
     Exception exception = assertThrows(UnsupportedOperationException.class,
         () -> CheckpointUtils.convertToCheckpointV1ForCommitTime(checkpoint, metaClient));
@@ -152,7 +152,7 @@ public class TestCheckpointUtils {
     // Mock active timeline
     when(activeTimeline.getInstantsAsStream()).thenReturn(Stream.empty());
 
-    Checkpoint checkpoint = new CheckpointV1(instantTime);
+    Checkpoint checkpoint = new StreamerCheckpointV1(instantTime);
     Exception exception = assertThrows(UnsupportedOperationException.class,
         () -> CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient));
     assertTrue(exception.getMessage().contains("Unable to find completion time"));

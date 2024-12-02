@@ -121,6 +121,8 @@ class HoodieStreamSource(
     val startOffset = start.map(HoodieSourceOffset(_))
       .getOrElse(initialOffsets)
     val endOffset = HoodieSourceOffset(end)
+    // User set write version 6
+    // startOffset is requested time
 
     if (startOffset == endOffset) {
       sqlContext.internalCreateDataFrame(

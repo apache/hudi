@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -36,7 +36,7 @@ public class InputBatch<T> {
   private final SchemaProvider schemaProvider;
 
   public InputBatch(Option<T> batch, String checkpointForNextBatch, SchemaProvider schemaProvider) {
-    this(batch, new CheckpointV2(checkpointForNextBatch), schemaProvider);
+    this(batch, new StreamerCheckpointV2(checkpointForNextBatch), schemaProvider);
   }
 
   public InputBatch(Option<T> batch, Checkpoint checkpointForNextBatch, SchemaProvider schemaProvider) {

@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -94,7 +94,7 @@ public class SqlFileBasedSource extends RowSource {
           rows = sparkSession.sql(sqlStr);
         }
       }
-      return Pair.of(Option.of(rows), shouldEmitCheckPoint ? new CheckpointV2(String.valueOf(System.currentTimeMillis())) : null);
+      return Pair.of(Option.of(rows), shouldEmitCheckPoint ? new StreamerCheckpointV2(String.valueOf(System.currentTimeMillis())) : null);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source SQL file.", ioe);
     }

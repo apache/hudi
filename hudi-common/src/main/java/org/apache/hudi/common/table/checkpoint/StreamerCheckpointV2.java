@@ -24,25 +24,25 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
-import static org.apache.hudi.common.table.checkpoint.CheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1;
 
-public class CheckpointV2 extends Checkpoint {
+public class StreamerCheckpointV2 extends Checkpoint {
   // TODO(yihua): decouple the keys for Hudi Streamer
   public static final String STREAMER_CHECKPOINT_KEY_V2 = "streamer.checkpoint.key.v2";
   public static final String STREAMER_CHECKPOINT_RESET_KEY_V2 = "streamer.checkpoint.reset.key.v2";
 
-  public CheckpointV2(String key) {
+  public StreamerCheckpointV2(String key) {
     this.checkpointKey = key;
   }
 
-  public CheckpointV2(Checkpoint checkpoint) {
+  public StreamerCheckpointV2(Checkpoint checkpoint) {
     this.checkpointKey = checkpoint.getCheckpointKey();
     this.checkpointResetKey = checkpoint.getCheckpointResetKey();
     this.checkpointIgnoreKey = checkpoint.getCheckpointIgnoreKey();
   }
 
-  public CheckpointV2(HoodieCommitMetadata commitMetadata) {
+  public StreamerCheckpointV2(HoodieCommitMetadata commitMetadata) {
     this.checkpointKey = commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2);
     this.checkpointResetKey = commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V2);
     this.checkpointIgnoreKey = commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY);

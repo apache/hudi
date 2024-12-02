@@ -50,7 +50,7 @@ public class RandomJsonSource extends JsonSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<String>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCkptStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<String>> readFromCheckpoint(Option<Checkpoint> lastCkptStr, long sourceLimit) {
     String commitTime = TimelineUtils.generateInstantTime(true, timeGenerator);
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
 

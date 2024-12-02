@@ -23,30 +23,27 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Objects;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
-import static org.apache.hudi.common.table.checkpoint.CheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1;
-import static org.apache.hudi.common.table.checkpoint.CheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
-import static org.apache.hudi.common.table.checkpoint.CheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
 
 public class CheckpointUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(CheckpointUtils.class);
 
   public static Checkpoint getCheckpoint(HoodieCommitMetadata commitMetadata) {
     if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))
         || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V2))) {
-      return new CheckpointV2(commitMetadata);
+      return new StreamerCheckpointV2(commitMetadata);
     }
     if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V1))
         || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V1))) {
-      return new CheckpointV1(commitMetadata);
+      return new StreamerCheckpointV1(commitMetadata);
     }
     throw new HoodieException("Checkpoint is not found in the commit metadata: " + commitMetadata.getExtraMetadata());
   }
@@ -57,52 +54,52 @@ public class CheckpointUtils {
 
   // TODO(yihua): for checkpoint translation, handle cases where the checkpoint is not exactly the
   // instant or completion time
-  public static CheckpointV2 convertToCheckpointV2ForCommitTime(
+  public static StreamerCheckpointV2 convertToCheckpointV2ForCommitTime(
       Checkpoint checkpoint, HoodieTableMetaClient metaClient) {
-    if (checkpoint instanceof CheckpointV2) {
-      return (CheckpointV2) checkpoint;
+    if (checkpoint instanceof StreamerCheckpointV2) {
+      return (StreamerCheckpointV2) checkpoint;
     }
-    if (checkpoint instanceof CheckpointV1) {
+    if (checkpoint instanceof StreamerCheckpointV1) {
       // V1 -> V2 translation
       // TODO(yihua): handle USE_TRANSITION_TIME in V1
       // TODO(yihua): handle different ordering between requested and completion time
       // TODO(yihua): handle timeline history / archived timeline
       String instantTime = checkpoint.getCheckpointKey();
-      String completionTime = metaClient.getActiveTimeline()
+      Option<String> completionTime = metaClient.getActiveTimeline()
           .getInstantsAsStream()
           .filter(s -> instantTime.equals(s.requestedTime()))
           .map(HoodieInstant::getCompletionTime)
           .filter(Objects::nonNull)
-          .findFirst().orElse(null);
-      if (completionTime == null) {
+          .findFirst().map(Option::of).orElse(Option.empty());
+      if (completionTime.isEmpty()) {
         throw new UnsupportedOperationException("Unable to find completion time for " + instantTime);
       }
-      return new CheckpointV2(completionTime);
+      return new StreamerCheckpointV2(completionTime.get());
     }
     throw new UnsupportedOperationException("Unsupported checkpoint type: " + checkpoint.getClass());
   }
 
-  public static CheckpointV1 convertToCheckpointV1ForCommitTime(
+  public static StreamerCheckpointV1 convertToCheckpointV1ForCommitTime(
       Checkpoint checkpoint, HoodieTableMetaClient metaClient) {
-    if (checkpoint instanceof CheckpointV1) {
-      return (CheckpointV1) checkpoint;
+    if (checkpoint instanceof StreamerCheckpointV1) {
+      return (StreamerCheckpointV1) checkpoint;
     }
-    if (checkpoint instanceof CheckpointV2) {
+    if (checkpoint instanceof StreamerCheckpointV2) {
       // V2 -> V1 translation
       // TODO(yihua): handle USE_TRANSITION_TIME in V1
       // TODO(yihua): handle different ordering between requested and completion time
       // TODO(yihua): handle timeline history / archived timeline
       String completionTime = checkpoint.getCheckpointKey();
-      String instantTime = metaClient.getActiveTimeline()
+      Option<String> instantTime = metaClient.getActiveTimeline()
           .getInstantsAsStream()
           .filter(s -> completionTime.equals(s.getCompletionTime()))
           .map(HoodieInstant::requestedTime)
           .filter(Objects::nonNull)
-          .findFirst().orElse(null);
-      if (instantTime == null) {
+          .findFirst().map(Option::of).orElse(Option.empty());
+      if (instantTime.isEmpty()) {
         throw new UnsupportedOperationException("Unable to find requested time for " + completionTime);
       }
-      return new CheckpointV1(instantTime);
+      return new StreamerCheckpointV1(instantTime.get());
     }
     throw new UnsupportedOperationException("Unsupported checkpoint type: " + checkpoint.getClass());
 

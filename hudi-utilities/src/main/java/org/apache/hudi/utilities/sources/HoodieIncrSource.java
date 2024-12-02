@@ -25,8 +25,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
-import org.apache.hudi.common.table.checkpoint.CheckpointV1;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
@@ -65,7 +65,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.DataSourceReadOptions.END_COMMIT;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
-import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_VERSION;
+import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.DataSourceReadOptions.START_COMMIT;
@@ -285,7 +285,7 @@ public class HoodieIncrSource extends RowSource {
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(INCREMENTAL_READ_VERSION().key(), HoodieTableVersion.EIGHT.versionCode())
+          .option(INCREMENTAL_READ_TABLE_VERSION().key(), HoodieTableVersion.EIGHT.versionCode())
           .option(START_COMMIT().key(), inclusiveStartCompletionTime)
           .option(END_COMMIT().key(), endCompletionTime)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
@@ -312,7 +312,7 @@ public class HoodieIncrSource extends RowSource {
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
       return coalesceOrRepartition(sourceWithMetaColumnsDropped, sourceProfile.getSourcePartitions());
     }).orElse(sourceWithMetaColumnsDropped);
-    return Pair.of(Option.of(src), new CheckpointV2(endCompletionTime));
+    return Pair.of(Option.of(src), new StreamerCheckpointV2(endCompletionTime));
   }
 
   private Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatchBasedOnRequestedTime(
@@ -351,7 +351,7 @@ public class HoodieIncrSource extends RowSource {
 
     if (queryInfo.areStartAndEndInstantsEqual()) {
       LOG.info("Already caught up. No new data to process");
-      return Pair.of(Option.empty(), new CheckpointV1(queryInfo.getEndInstant()));
+      return Pair.of(Option.empty(), new StreamerCheckpointV1(queryInfo.getEndInstant()));
     }
 
     DataFrameReader reader = sparkSession.read().format("hudi");
@@ -368,7 +368,7 @@ public class HoodieIncrSource extends RowSource {
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(INCREMENTAL_READ_VERSION().key(), HoodieTableVersion.SIX.versionCode())
+          .option(INCREMENTAL_READ_TABLE_VERSION().key(), HoodieTableVersion.SIX.versionCode())
           .option(START_COMMIT().key(), queryInfo.getStartInstant())
           .option(END_COMMIT().key(), queryInfo.getEndInstant())
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
@@ -412,7 +412,7 @@ public class HoodieIncrSource extends RowSource {
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
       return coalesceOrRepartition(sourceWithMetaColumnsDropped, sourceProfile.getSourcePartitions());
     }).orElse(sourceWithMetaColumnsDropped);
-    return Pair.of(Option.of(src), new CheckpointV1(queryInfo.getEndInstant()));
+    return Pair.of(Option.of(src), new StreamerCheckpointV1(queryInfo.getEndInstant()));
   }
 
   // Try to fetch the latestSourceProfile, this ensures the profile is refreshed if it's no longer valid.

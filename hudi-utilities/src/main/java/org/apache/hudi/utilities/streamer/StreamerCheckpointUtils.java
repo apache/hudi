@@ -24,8 +24,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
-import org.apache.hudi.common.table.checkpoint.CheckpointV1;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
@@ -44,8 +44,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.table.checkpoint.CheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
-import static org.apache.hudi.common.table.checkpoint.CheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
@@ -65,7 +65,7 @@ public class StreamerCheckpointUtils {
     if (!checkpoint.isPresent() && streamerConfig.checkpoint != null) {
       int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION);
       checkpoint = Option.of(CheckpointUtils.targetCheckpointV2(writeTableVersion)
-          ? new CheckpointV2(streamerConfig.checkpoint) : new CheckpointV1(streamerConfig.checkpoint));
+          ? new StreamerCheckpointV2(streamerConfig.checkpoint) : new StreamerCheckpointV1(streamerConfig.checkpoint));
     }
     return checkpoint;
   }
@@ -107,7 +107,7 @@ public class StreamerCheckpointUtils {
         } else if (streamerConfig.checkpoint != null && (StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointResetKey())
             || !streamerConfig.checkpoint.equals(checkpointFromCommit.getCheckpointResetKey()))) {
           resumeCheckpoint = Option.of(CheckpointUtils.targetCheckpointV2(writeTableVersion)
-              ? new CheckpointV2(streamerConfig.checkpoint) : new CheckpointV1(streamerConfig.checkpoint));
+              ? new StreamerCheckpointV2(streamerConfig.checkpoint) : new StreamerCheckpointV1(streamerConfig.checkpoint));
         } else if (!StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointKey())) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
           resumeCheckpoint = Option.of(checkpointFromCommit);
@@ -125,7 +125,7 @@ public class StreamerCheckpointUtils {
       } else if (streamerConfig.checkpoint != null) {
         // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
         resumeCheckpoint = Option.of(CheckpointUtils.targetCheckpointV2(writeTableVersion)
-            ? new CheckpointV2(streamerConfig.checkpoint) : new CheckpointV1(streamerConfig.checkpoint));
+            ? new StreamerCheckpointV2(streamerConfig.checkpoint) : new StreamerCheckpointV1(streamerConfig.checkpoint));
       }
     }
     return resumeCheckpoint;

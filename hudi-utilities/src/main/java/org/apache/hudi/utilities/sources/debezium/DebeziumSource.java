@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources.debezium;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
@@ -121,7 +121,7 @@ public abstract class DebeziumSource extends RowSource {
       // If there are no new messages, use empty dataframe with no schema. This is because the schema from schema registry can only be considered
       // up to date if a change event has occurred.
       return Pair.of(Option.of(sparkSession.emptyDataFrame()),
-          new CheckpointV2(overrideCheckpointStr.isEmpty()
+          new StreamerCheckpointV2(overrideCheckpointStr.isEmpty()
               ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
     } else {
       try {
@@ -130,7 +130,7 @@ public abstract class DebeziumSource extends RowSource {
         LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
         LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
         return Pair.of(Option.of(dataset),
-            new CheckpointV2(overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
+            new StreamerCheckpointV2(overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
       } catch (Exception e) {
         LOG.error("Fatal error reading and parsing incoming debezium event", e);
         throw new HoodieReadFromSourceException("Fatal error reading and parsing incoming debezium event", e);

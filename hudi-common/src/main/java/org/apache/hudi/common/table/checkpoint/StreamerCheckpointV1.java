@@ -24,24 +24,24 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import java.util.HashMap;
 import java.util.Map;
 
-public class CheckpointV1 extends Checkpoint {
+public class StreamerCheckpointV1 extends Checkpoint {
   // TODO(yihua): decouple the keys for Hudi Streamer
   public static final String STREAMER_CHECKPOINT_KEY_V1 = "deltastreamer.checkpoint.key";
   public static final String STREAMER_CHECKPOINT_RESET_KEY_V1 = "deltastreamer.checkpoint.reset_key";
 
-  public CheckpointV1(String key) {
+  public StreamerCheckpointV1(String key) {
     this.checkpointKey = key;
     this.checkpointResetKey = null;
     this.checkpointIgnoreKey = null;
   }
 
-  public CheckpointV1(Checkpoint checkpoint) {
+  public StreamerCheckpointV1(Checkpoint checkpoint) {
     this.checkpointKey = checkpoint.getCheckpointKey();
     this.checkpointResetKey = checkpoint.getCheckpointResetKey();
     this.checkpointIgnoreKey = checkpoint.getCheckpointIgnoreKey();
   }
 
-  public CheckpointV1(HoodieCommitMetadata commitMetadata) {
+  public StreamerCheckpointV1(HoodieCommitMetadata commitMetadata) {
     this.checkpointKey = commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V1);
     this.checkpointResetKey = commitMetadata.getMetadata(STREAMER_CHECKPOINT_RESET_KEY_V1);
     this.checkpointIgnoreKey = commitMetadata.getMetadata(CHECKPOINT_IGNORE_KEY);

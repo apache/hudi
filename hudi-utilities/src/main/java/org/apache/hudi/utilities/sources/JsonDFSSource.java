@@ -43,7 +43,7 @@ public class JsonDFSSource extends JsonSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<String>> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCkptStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<String>> readFromCheckpoint(Option<Checkpoint> lastCkptStr, long sourceLimit) {
     Pair<Option<String>, Checkpoint> selPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
     return selPathsWithMaxModificationTime.getLeft()

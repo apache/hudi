@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -60,7 +60,7 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
   protected FilebasedSchemaProvider schemaProvider;
   private TypedProperties props;
 
-  private static final Checkpoint CHECKPOINT_VALUE_ZERO = new CheckpointV2("0");
+  private static final Checkpoint CHECKPOINT_VALUE_ZERO = new StreamerCheckpointV2("0");
 
   @BeforeAll
   public static void beforeAll() throws Exception {
@@ -224,7 +224,7 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
   private Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(GcsEventsSource source,
                                                                 String lastCheckpoint,
                                                                 long sourceLimit) {
-    return source.fetchNextBatch(Option.of(new CheckpointV2(lastCheckpoint)), sourceLimit);
+    return source.fetchNextBatch(Option.of(new StreamerCheckpointV2(lastCheckpoint)), sourceLimit);
   }
 
   private ReceivedMessage fileCreateMessageWithOverwroteGen(String objectId, String payload) {

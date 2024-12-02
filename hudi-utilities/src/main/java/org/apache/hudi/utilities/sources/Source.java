@@ -24,8 +24,8 @@ import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
-import org.apache.hudi.common.table.checkpoint.CheckpointV1;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.callback.SourceCommitCallback;
@@ -88,8 +88,8 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  protected InputBatch<T> fetchNewDataFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    LOG.info("In Hudi 1.0+, the checkpoint based on Hudi timeline is changed. "
+  protected InputBatch<T> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    LOG.warn("In Hudi 1.0+, the checkpoint based on Hudi timeline is changed. "
         + "If your Source implementation relies on request time as the checkpoint, "
         + "you may consider migrating to completion time-based checkpoint by overriding "
         + "Source#translateCheckpoint and Source#fetchNewDataFromCheckpoint");
@@ -106,22 +106,22 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     }
     if (CheckpointUtils.targetCheckpointV2(writeTableVersion)) {
       // V2 -> V2
-      if (lastCheckpoint.get() instanceof CheckpointV2) {
+      if (lastCheckpoint.get() instanceof StreamerCheckpointV2) {
         return lastCheckpoint;
       }
       // V1 -> V2
-      if (lastCheckpoint.get() instanceof CheckpointV1) {
-        CheckpointV2 newCheckpoint = new CheckpointV2(lastCheckpoint.get());
+      if (lastCheckpoint.get() instanceof StreamerCheckpointV1) {
+        StreamerCheckpointV2 newCheckpoint = new StreamerCheckpointV2(lastCheckpoint.get());
         newCheckpoint.addV1Props();
         return Option.of(newCheckpoint);
       }
     } else {
       // V2 -> V1
-      if (lastCheckpoint.get() instanceof CheckpointV2) {
-        return Option.of(new CheckpointV1(lastCheckpoint.get()));
+      if (lastCheckpoint.get() instanceof StreamerCheckpointV2) {
+        return Option.of(new StreamerCheckpointV1(lastCheckpoint.get()));
       }
       // V1 -> V1
-      if (lastCheckpoint.get() instanceof CheckpointV1) {
+      if (lastCheckpoint.get() instanceof StreamerCheckpointV1) {
         return lastCheckpoint;
       }
     }
@@ -136,7 +136,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
    * @return
    */
   public final InputBatch<T> fetchNext(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    InputBatch<T> batch = fetchNewDataFromCheckpoint(translateCheckpoint(lastCheckpoint), sourceLimit);
+    InputBatch<T> batch = readFromCheckpoint(translateCheckpoint(lastCheckpoint), sourceLimit);
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);

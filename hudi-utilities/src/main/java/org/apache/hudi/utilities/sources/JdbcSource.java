@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.CheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -264,12 +264,12 @@ public class JdbcSource extends RowSource {
         final String max = rowDataset.agg(functions.max(incrementalColumn).cast(DataTypes.StringType)).first().getString(0);
         LOG.info(String.format("Checkpointing column %s with value: %s ", incrementalColumn, max));
         if (max != null) {
-          return new CheckpointV2(max);
+          return new StreamerCheckpointV2(max);
         }
         return lastCheckpoint.isPresent() && !StringUtils.isNullOrEmpty(lastCheckpoint.get().getCheckpointKey())
-            ? lastCheckpoint.get() : new CheckpointV2(StringUtils.EMPTY_STRING);
+            ? lastCheckpoint.get() : new StreamerCheckpointV2(StringUtils.EMPTY_STRING);
       } else {
-        return new CheckpointV2(StringUtils.EMPTY_STRING);
+        return new StreamerCheckpointV2(StringUtils.EMPTY_STRING);
       }
     } catch (Exception e) {
       LOG.error("Failed to checkpoint");
