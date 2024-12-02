@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
@@ -74,7 +75,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
       throws HoodieIndexException {
 
     // Get bucket location mapper
-    GlobalLazyIndexLocationMapper mapper = new GlobalLazyIndexLocationMapper(hoodieTable);
+    GlobalIndexLocationFunction locFunc = new GlobalIndexLocationFunction(hoodieTable);
 
     return records.mapPartitions(iterator ->
         new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
@@ -82,7 +83,7 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
           protected HoodieRecord<R> computeNext() {
             // TODO maybe batch the operation to improve performance
             HoodieRecord record = inputItr.next();
-            Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record);
+            Option<HoodieRecordLocation> loc = locFunc.apply(record);
             return tagAsNewRecordIfNeeded(record, loc);
           }
         }, false
@@ -90,33 +91,33 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   }
 
   /**
-   * Global lazy index location mapper. Which means the location mapper is responsible for mapping a record to its location in the whole table.
-   * Lazily load partition level location mapper when needed for better performance.
+   * Global lazy-loading index location function. The index location function can be applied to a hoodie record to get its location under the partition.
+   * The per-partition index location functions are cached for better performance.
    */
-  class GlobalLazyIndexLocationMapper implements BucketIndexLocationMapper {
+  class GlobalIndexLocationFunction implements Function<HoodieRecord, Option<HoodieRecordLocation>> {
 
     private final HoodieTable table;
-    private final Map<String/*partition path*/, BucketIndexLocationMapper/*bucket-level location mapper*/> partitionToBucketLevelLocationMapper;
+    private final Map<String/*partition path*/, Function<HoodieRecord, Option<HoodieRecordLocation>>/*location func per partition*/> partitionToIndexFunctionMap;
 
-    public GlobalLazyIndexLocationMapper(HoodieTable table) {
+    public GlobalIndexLocationFunction(HoodieTable table) {
       this.table = table;
-      this.partitionToBucketLevelLocationMapper = new HashMap<>();
+      this.partitionToIndexFunctionMap = new HashMap<>();
     }
 
     @Override
-    public Option<HoodieRecordLocation> getRecordLocation(HoodieRecord record) {
+    public Option<HoodieRecordLocation> apply(HoodieRecord record) {
       String partitionPath = record.getPartitionPath();
-      if (!partitionToBucketLevelLocationMapper.containsKey(partitionPath)) {
-        partitionToBucketLevelLocationMapper.put(partitionPath, getBucketLevelLocationMapper(table, partitionPath));
+      if (!partitionToIndexFunctionMap.containsKey(partitionPath)) {
+        partitionToIndexFunctionMap.put(partitionPath, getIndexLocationFunctionForPartition(table, partitionPath));
       }
-      return partitionToBucketLevelLocationMapper.get(partitionPath).getRecordLocation(record);
+      return partitionToIndexFunctionMap.get(partitionPath).apply(record);
     }
   }
 
   /**
-   * Get a partition level location mapper. Which means the location mapper is responsible for mapping a record to its location in specific partition.
+   * Returns the index location function for the give partition path {@code partitionPath}.
    */
-  protected abstract BucketIndexLocationMapper getBucketLevelLocationMapper(HoodieTable table, String partitionPath);
+  protected abstract Function<HoodieRecord, Option<HoodieRecordLocation>> getIndexLocationFunctionForPartition(HoodieTable table, String partitionPath);
 
   @Override
   public boolean requiresTagging(WriteOperationType operationType) {

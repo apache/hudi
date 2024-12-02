@@ -36,6 +36,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.function.Function;
+
 /**
  * Consistent hashing bucket index implementation, with auto-adjust bucket number.
  * NOTE: bucket resizing is triggered by clustering.
@@ -68,22 +70,22 @@ public class HoodieConsistentBucketIndex extends HoodieBucketIndex {
   }
 
   @Override
-  protected BucketIndexLocationMapper getBucketLevelLocationMapper(HoodieTable table, String partitionPath) {
-    return new ConsistentBucketIndexLocationMapper(table, partitionPath);
+  protected Function<HoodieRecord, Option<HoodieRecordLocation>> getIndexLocationFunctionForPartition(HoodieTable table, String partitionPath) {
+    return new ConsistentBucketIndexLocationFunction(table, partitionPath);
   }
 
-  private class ConsistentBucketIndexLocationMapper implements BucketIndexLocationMapper {
+  private class ConsistentBucketIndexLocationFunction implements Function<HoodieRecord, Option<HoodieRecordLocation>> {
     private final String partitionPath;
     private final ConsistentBucketIdentifier identifier;
 
-    public ConsistentBucketIndexLocationMapper(HoodieTable table, String partition) {
+    public ConsistentBucketIndexLocationFunction(HoodieTable table, String partition) {
       this.partitionPath = partition;
       HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(table, partition, getNumBuckets());
       this.identifier = new ConsistentBucketIdentifier(metadata);
     }
 
     @Override
-    public Option<HoodieRecordLocation> getRecordLocation(HoodieRecord record) {
+    public Option<HoodieRecordLocation> apply(HoodieRecord record) {
       HoodieKey recordKey = record.getKey();
       ConsistentHashingNode node = identifier.getBucket(recordKey, indexKeyFields);
       if (!StringUtils.isNullOrEmpty(node.getFileIdPrefix())) {

@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -145,26 +146,21 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
   }
 
   @Override
-  protected BucketIndexLocationMapper getBucketLevelLocationMapper(HoodieTable table, String partitionPath) {
-    return new SimpleBucketIndexLocationMapper(table, partitionPath);
+  protected Function<HoodieRecord, Option<HoodieRecordLocation>> getIndexLocationFunctionForPartition(HoodieTable table, String partitionPath) {
+    return new SimpleBucketIndexLocationFunction(table, partitionPath);
   }
 
-  private class SimpleBucketIndexLocationMapper implements BucketIndexLocationMapper {
-    private final HoodieTable table;
-    private final String partitionPath;
+  private class SimpleBucketIndexLocationFunction implements Function<HoodieRecord, Option<HoodieRecordLocation>> {
     private final Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping;
 
-    public SimpleBucketIndexLocationMapper(HoodieTable table, String partitionPath) {
-      this.table = table;
-      this.partitionPath = partitionPath;
+    public SimpleBucketIndexLocationFunction(HoodieTable table, String partitionPath) {
       this.bucketIdToFileIdMapping = loadBucketIdToFileIdMappingForPartition(table, partitionPath);
     }
 
     @Override
-    public Option<HoodieRecordLocation> getRecordLocation(HoodieRecord record) {
+    public Option<HoodieRecordLocation> apply(HoodieRecord record) {
       int bucketId = getBucketID(record.getKey());
       return Option.ofNullable(bucketIdToFileIdMapping.get(bucketId));
     }
   }
-
 }
