@@ -81,7 +81,8 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
 
     // Do broadcast.
     sqlConfBroadcast = jsc.broadcast(sqlConf);
-    configurationBroadcast = jsc.broadcast(new SerializableConfiguration(jsc.hadoopConfiguration()));
+    // new Configuration() is critical so that we don't run into ConcurrentModificatonException
+    configurationBroadcast = jsc.broadcast(new SerializableConfiguration(new Configuration(jsc.hadoopConfiguration())));
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
@@ -27,20 +28,30 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringOperation;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -48,12 +59,15 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -61,9 +75,11 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.SparkBroadcastManager;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
@@ -71,11 +87,16 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.HoodieDataTypeUtils;
+import org.apache.spark.sql.HoodieUnsafeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.sources.BaseRelation;
+import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,6 +104,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -94,6 +116,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.SparkPartitionUtils.getPartitionFieldVals;
+import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 
@@ -263,14 +286,21 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                                      String instantTime,
                                                                                      ExecutorService clusteringExecutorService) {
     return CompletableFuture.supplyAsync(() -> {
-      JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
-      Dataset<Row> inputRecords = readRecordsForGroupAsRow(jsc, clusteringGroup, instantTime);
-      Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
+      JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());      // incase of MIT, config.getSchema may not contain the full table schema
+      Schema tableSchemaWithMetaFields = null;
+      try {
+        tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(new TableSchemaResolver(getHoodieTable().getMetaClient()).getTableAvroSchema(false),
+            getWriteConfig().allowOperationMetadataField());
+      } catch (Exception e) {
+        throw new HoodieException("Failed to get table schema during clustering", e);
+      }
+      Dataset<Row> inputRecords = readRecordsForGroupAsRow(jsc, clusteringGroup, instantTime, tableSchemaWithMetaFields);
+
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
           .collect(Collectors.toList());
-      return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, shouldPreserveHoodieMetadata,
-          clusteringGroup.getExtraMetadata());
+      return performClusteringWithRecordsAsRow(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams,
+          tableSchemaWithMetaFields, inputFileIds, shouldPreserveHoodieMetadata, clusteringGroup.getExtraMetadata());
     }, clusteringExecutorService);
   }
 
@@ -420,64 +450,157 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
    */
   private Dataset<Row> readRecordsForGroupAsRow(JavaSparkContext jsc,
                                                 HoodieClusteringGroup clusteringGroup,
-                                                String instantTime) {
+                                                String instantTime,
+                                                Schema tableSchemaWithMetaFields) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
-    boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
-    SQLContext sqlContext = new SQLContext(jsc.sc());
+    boolean hasBootstrapFile = clusteringOps.stream().anyMatch(slice -> !StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()));
+    boolean canUseFileGroupReaderBasedClustering = !hasBootstrapFile
+        && getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
+        && StringUtils.isNullOrEmpty(getWriteConfig().getInternalSchema())
+        && !containsUnsupportedTypesForFileGroupReader(tableSchemaWithMetaFields.toString());
 
-    StoragePath[] baseFilePaths = clusteringOps
-        .stream()
-        .map(op -> {
-          ArrayList<String> readPaths = new ArrayList<>();
-          // NOTE: for bootstrap tables, only need to handle data file path (which is the skeleton file) because
-          // HoodieBootstrapRelation takes care of stitching if there is bootstrap path for the skeleton file.
-          if (op.getDataFilePath() != null) {
-            readPaths.add(op.getDataFilePath());
-          }
-          return readPaths;
-        })
-        .flatMap(Collection::stream)
-        .filter(path -> !path.isEmpty())
-        .map(StoragePath::new)
-        .toArray(StoragePath[]::new);
-
-    HashMap<String, String> params = new HashMap<>();
-    if (hasLogFiles) {
-      params.put("hoodie.datasource.query.type", "snapshot");
+    if (canUseFileGroupReaderBasedClustering) {
+      return clusterBasedOnFileGroupReader(jsc, instantTime, tableSchemaWithMetaFields, clusteringOps);
     } else {
-      params.put("hoodie.datasource.query.type", "read_optimized");
-    }
+      boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
+      SQLContext sqlContext = new SQLContext(jsc.sc());
 
-    StoragePath[] paths;
-    if (hasLogFiles) {
-      String rawFractionConfig = getWriteConfig().getString(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION);
-      String compactionFractor = rawFractionConfig != null
-          ? rawFractionConfig : HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION;
-      params.put(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), compactionFractor);
-
-      StoragePath[] deltaPaths = clusteringOps
+      StoragePath[] baseFilePaths = clusteringOps
           .stream()
-          .filter(op -> !op.getDeltaFilePaths().isEmpty())
-          .flatMap(op -> op.getDeltaFilePaths().stream())
+          .map(op -> {
+            ArrayList<String> readPaths = new ArrayList<>();
+            // NOTE: for bootstrap tables, only need to handle data file path (which is the skeleton file) because
+            // HoodieBootstrapRelation takes care of stitching if there is bootstrap path for the skeleton file.
+            if (op.getDataFilePath() != null) {
+              readPaths.add(op.getDataFilePath());
+            }
+            return readPaths;
+          })
+          .flatMap(Collection::stream)
+          .filter(path -> !path.isEmpty())
           .map(StoragePath::new)
           .toArray(StoragePath[]::new);
-      paths = CollectionUtils.combine(baseFilePaths, deltaPaths);
-    } else {
-      paths = baseFilePaths;
+
+      HashMap<String, String> params = new HashMap<>();
+      if (hasLogFiles) {
+        params.put("hoodie.datasource.query.type", "snapshot");
+      } else {
+        params.put("hoodie.datasource.query.type", "read_optimized");
+      }
+
+      StoragePath[] paths;
+      if (hasLogFiles) {
+        String rawFractionConfig = getWriteConfig().getString(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION);
+        String compactionFractor = rawFractionConfig != null
+            ? rawFractionConfig : HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION;
+        params.put(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), compactionFractor);
+
+        StoragePath[] deltaPaths = clusteringOps
+            .stream()
+            .filter(op -> !op.getDeltaFilePaths().isEmpty())
+            .flatMap(op -> op.getDeltaFilePaths().stream())
+            .map(StoragePath::new)
+            .toArray(StoragePath[]::new);
+        paths = CollectionUtils.combine(baseFilePaths, deltaPaths);
+      } else {
+        paths = baseFilePaths;
+      }
+
+      String readPathString =
+          String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
+      String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
+      params.put("hoodie.datasource.read.paths", readPathString);
+      // Building HoodieFileIndex needs this param to decide query path
+      params.put("glob.paths", globPathString);
+
+      // Let Hudi relations to fetch the schema from the table itself
+      BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()
+          .createRelation(sqlContext, getHoodieTable().getMetaClient(), null, paths, params);
+      return sqlContext.baseRelationToDataFrame(relation);
     }
+  }
 
-    String readPathString =
-        String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
-    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
-    params.put("hoodie.datasource.read.paths", readPathString);
-    // Building HoodieFileIndex needs this param to decide query path
-    params.put("glob.paths", globPathString);
+  private boolean containsUnsupportedTypesForFileGroupReader(String schemaStr) {
+    return HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(new Schema.Parser().parse(schemaStr));
+  }
 
-    // Let Hudi relations to fetch the schema from the table itself
-    BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()
-        .createRelation(sqlContext, getHoodieTable().getMetaClient(), null, paths, params);
-    return sqlContext.baseRelationToDataFrame(relation);
+  private Dataset<Row> clusterBasedOnFileGroupReader(JavaSparkContext jsc,
+                                                     String instantTime,
+                                                     Schema tableSchemaWithMetaFields,
+                                                     List<ClusteringOperation> clusteringOps) {
+    String basePath = getWriteConfig().getBasePath();
+    // construct supporting cast that executors might need
+    boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
+    String internalSchemaStr = getWriteConfig().getInternalSchema();
+    boolean isInternalSchemaPresent = !StringUtils.isNullOrEmpty(internalSchemaStr);
+    SerializableSchema serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields);
+
+    // broadcast reader context.
+    SparkBroadcastManager broadcastManager = new SparkBroadcastManager(getEngineContext());
+    broadcastManager.prepareAndBroadcast();
+    StructType sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields);
+
+    RDD<InternalRow> internalRowRDD = jsc.parallelize(clusteringOps, clusteringOps.size()).flatMap(new FlatMapFunction<ClusteringOperation, InternalRow>() {
+      @Override
+      public Iterator<InternalRow> call(ClusteringOperation clusteringOperation) throws Exception {
+        // construct FileSlice to pass into FileGroupReader
+        String partitionPath = clusteringOperation.getPartitionPath();
+        boolean baseFileExists = !StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath());
+        HoodieBaseFile baseFile = baseFileExists ? new HoodieBaseFile(new StoragePath(basePath, clusteringOperation.getDataFilePath()).toString()) : null;
+        List<HoodieLogFile> logFiles = clusteringOperation.getDeltaFilePaths().stream().map(p ->
+                new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
+                    basePath, partitionPath), p)))
+            .collect(Collectors.toList());
+
+        if (!baseFileExists) {
+          ValidationUtils.checkArgument(!logFiles.isEmpty(), "Both base file and log files are missing from this clustering operation " + clusteringOperation);
+        }
+        Collections.sort(logFiles, new HoodieLogFile.LogFileComparator());
+        String baseInstantTime = baseFileExists ? baseFile.getCommitTime() : logFiles.get(0).getDeltaCommitTime();
+        FileSlice fileSlice = new FileSlice(partitionPath, baseInstantTime, clusteringOperation.getFileId());
+        if (baseFileExists) {
+          fileSlice.setBaseFile(baseFile);
+        }
+        if (!logFiles.isEmpty()) {
+          logFiles.forEach(logFile -> fileSlice.addLogFile(logFile));
+        }
+
+        // instantiate other supporting cast
+        Schema readerSchema = serializableTableSchemaWithMetaFields.get();
+        Option<InternalSchema> internalSchemaOption = Option.empty();
+        if (isInternalSchemaPresent) {
+          internalSchemaOption = SerDeHelper.fromJson(internalSchemaStr);
+        }
+        Option<HoodieReaderContext> readerContextOpt = broadcastManager.retrieveFileGroupReaderContext(new StoragePath(basePath));
+        Configuration conf = broadcastManager.retrieveStorageConfig().get();
+
+        // instantiate FG reader
+        HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
+            readerContextOpt.get(),
+            getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), new HadoopStorageConfiguration(conf)),
+            basePath,
+            instantTime,
+            fileSlice,
+            readerSchema,
+            readerSchema,
+            internalSchemaOption,
+            getHoodieTable().getMetaClient(),
+            getHoodieTable().getMetaClient().getTableConfig().getProps(),
+            0,
+            Long.MAX_VALUE,
+            usePosition);
+        fileGroupReader.initRecordIterators();
+        // read records from the FG reader
+        HoodieFileGroupReader.HoodieFileGroupReaderIterator<InternalRow> recordIterator
+            = (HoodieFileGroupReader.HoodieFileGroupReaderIterator<InternalRow>) fileGroupReader.getClosableIterator();
+        return recordIterator;
+      }
+    }).rdd();
+
+    return HoodieUnsafeUtils.createDataFrameFromRDD(((HoodieSparkEngineContext) getEngineContext()).getSqlContext().sparkSession(),
+        internalRowRDD, sparkSchemaWithMetaFields);
   }
 
   /**
