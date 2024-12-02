@@ -105,6 +105,7 @@ import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.StreamSync;
+import org.apache.hudi.utilities.streamer.StreamerCheckpointUtils;
 import org.apache.hudi.utilities.testutils.JdbcTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
@@ -120,6 +121,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.AnalysisException;
@@ -851,7 +853,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     HoodieInstant commitInstant = timeline.lastInstant().get();
-    String commitFileName = tableBasePath + "/.hoodie/" + INSTANT_FILE_NAME_GENERATOR.getFileName(commitInstant);
+    String commitFileName = tableBasePath + "/.hoodie/timeline/" + INSTANT_FILE_NAME_GENERATOR.getFileName(commitInstant);
     fs.delete(new Path(commitFileName), false);
 
     // sync again
@@ -2189,7 +2191,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
 
     if (testInitFailure) {
-      FileStatus[] fileStatuses = fs.listStatus(new Path(tableBasePath + "/.hoodie/"));
+      FileStatus[] fileStatuses = fs.listStatus(new Path(tableBasePath + "/.hoodie/timeline/"));
       Arrays.stream(fileStatuses).filter(entry -> entry.getPath().getName().contains("commit") || entry.getPath().getName().contains("inflight")).forEach(entry -> {
         try {
           fs.delete(entry.getPath());
@@ -2493,9 +2495,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
     //No change as this fails with could not read commit details due to path not exists
-    Throwable exp = assertThrows(HoodieIOException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
-    assertTrue(exp.getMessage().contains("Could not read commit details"),
-        "Expected to fail with 'Could not read commit details' but the message was: " + exp.getMessage());
+    Throwable exp = assertThrows(SparkException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
+    assertTrue(exp.getMessage().contains("FileNotFoundException"),
+        "Expected to fail with 'FileNotFoundException' but the message was: " + exp.getMessage());
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
 
     if (downstreamCfg.configs == null) {
@@ -2653,19 +2655,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "abc");
     addCommitToTimeline(metaClient, extraMetadata);
     metaClient.reloadActiveTimeline();
-    assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
+    assertEquals(StreamerCheckpointUtils.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(HoodieDeltaStreamer.CHECKPOINT_KEY), "abc");
 
     extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "def");
     addCommitToTimeline(metaClient, extraMetadata);
     metaClient.reloadActiveTimeline();
-    assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
+    assertEquals(StreamerCheckpointUtils.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(HoodieDeltaStreamer.CHECKPOINT_KEY), "def");
 
     // add a cluster commit which does not have CHECKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
     addClusterCommitToTimeline(metaClient, Collections.emptyMap());
     metaClient.reloadActiveTimeline();
-    assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
+    assertEquals(StreamerCheckpointUtils.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(HoodieDeltaStreamer.CHECKPOINT_KEY), "def");
   }
 
@@ -2990,11 +2992,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                            JavaSparkContext jssc, FileSystem fs, Configuration conf,
                            Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
-    }
-
-    @Override
-    public Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
-      return super.getLatestCommitMetadataWithValidCheckpointInfo(timeline);
     }
   }
 

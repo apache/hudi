@@ -63,6 +63,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              |    primaryKey = 'id',
              |    preCombineField = 'ts',
              |    'hoodie.metadata.index.partition.stats.enable' = 'true',
+             |    'hoodie.metadata.index.column.stats.enable' = 'true',
              |    'hoodie.metadata.index.column.stats.column.list' = 'name'
              | )
              | location '$tablePath'
@@ -147,6 +148,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              |    primaryKey ='uuid',
              |    preCombineField = 'ts',
              |    hoodie.metadata.index.partition.stats.enable = 'true',
+             |    hoodie.metadata.index.column.stats.enable = 'true',
              |    hoodie.metadata.index.column.stats.column.list = 'rider'
              |)
              |PARTITIONED BY (state)
@@ -255,7 +257,8 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              |  type = '$tableType',
              |  primaryKey = 'id',
              |  preCombineField = 'price',
-             |  hoodie.metadata.index.partition.stats.enable = 'true'
+             |  hoodie.metadata.index.partition.stats.enable = 'true',
+             |  hoodie.metadata.index.column.stats.enable = 'true'
              |)
              |location '$tablePath'
              |""".stripMargin

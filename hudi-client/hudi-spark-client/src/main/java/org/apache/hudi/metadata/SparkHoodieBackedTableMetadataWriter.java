@@ -19,7 +19,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.HoodieSparkFunctionalIndex;
+import org.apache.hudi.HoodieSparkExpressionIndex;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -41,7 +41,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.index.functional.HoodieFunctionalIndex;
+import org.apache.hudi.index.functional.HoodieExpressionIndex;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -169,7 +169,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
+  protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
                                                                HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
                                                                Schema readerSchema, StorageConfiguration<?> storageConf,
@@ -185,37 +185,38 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     String columnToIndex = indexDefinition.getSourceFields().get(0);
     SQLContext sqlContext = sparkEngineContext.getSqlContext();
 
-    // Read records and append functional index metadata to every row
+    // Read records and append expression index metadata to every row
     HoodieData<Row> rowData = sparkEngineContext.parallelize(partitionFilePathAndSizeTriplet, parallelism)
         .flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<Row>>) entry -> {
           String partition = entry.getKey();
           Pair<String, Long> filePathSizePair = entry.getValue();
           String filePath = filePathSizePair.getKey();
+          String relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(filePath));
           long fileSize = filePathSizePair.getValue();
           List<Row> rowsForFilePath = readRecordsAsRows(new StoragePath[] {new StoragePath(filePath)}, sqlContext, metaClient, readerSchema, dataWriteConfig,
               FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1))));
-          List<Row> rowsWithIndexMetadata = SparkMetadataWriterUtils.getRowsWithFunctionalIndexMetadata(rowsForFilePath, partition, filePath, fileSize);
+          List<Row> rowsWithIndexMetadata = SparkMetadataWriterUtils.getRowsWithExpressionIndexMetadata(rowsForFilePath, partition, relativeFilePath, fileSize);
           return rowsWithIndexMetadata.iterator();
         });
 
-    // Generate dataset with functional index metadata
+    // Generate dataset with expression index metadata
     StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema)
-        .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION, DataTypes.StringType, false, Metadata.empty()))
-        .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_PATH, DataTypes.StringType, false, Metadata.empty()))
-        .add(StructField.apply(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE, DataTypes.LongType, false, Metadata.empty()));
+        .add(StructField.apply(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION, DataTypes.StringType, false, Metadata.empty()))
+        .add(StructField.apply(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_RELATIVE_FILE_PATH, DataTypes.StringType, false, Metadata.empty()))
+        .add(StructField.apply(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_FILE_SIZE, DataTypes.LongType, false, Metadata.empty()));
     Dataset<Row> rowDataset = sparkEngineContext.getSqlContext().createDataFrame(HoodieJavaRDD.getJavaRDD(rowData).rdd(), structType);
 
-    // Apply functional index and generate the column to index
-    HoodieFunctionalIndex<Column, Column> functionalIndex =
-        new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
-    Column indexedColumn = functionalIndex.apply(Collections.singletonList(rowDataset.col(columnToIndex)));
+    // Apply expression index and generate the column to index
+    HoodieExpressionIndex<Column, Column> expressionIndex =
+        new HoodieSparkExpressionIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
+    Column indexedColumn = expressionIndex.apply(Collections.singletonList(rowDataset.col(columnToIndex)));
     rowDataset = rowDataset.withColumn(columnToIndex, indexedColumn);
 
-    // Generate functional index records
+    // Generate expression index records
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-      return SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingColumnStats(rowDataset, functionalIndex, columnToIndex);
+      return SparkMetadataWriterUtils.getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex);
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-      return SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime);
+      return SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime, indexDefinition.getIndexName());
     } else {
       throw new UnsupportedOperationException(indexDefinition.getIndexType() + " is not yet supported");
     }

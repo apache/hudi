@@ -23,6 +23,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -36,7 +37,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.index.functional.HoodieFunctionalIndex;
+import org.apache.hudi.index.functional.HoodieExpressionIndex;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -75,46 +76,46 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.createColumnStatsRe
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
- * Utility methods for writing metadata for functional index.
+ * Utility methods for writing metadata for expression index.
  */
 public class SparkMetadataWriterUtils {
 
-  public static Column[] getFunctionalIndexColumns() {
+  public static Column[] getExpressionIndexColumns() {
     return new Column[] {
-        functions.col(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION),
-        functions.col(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_PATH),
-        functions.col(HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE)
+        functions.col(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION),
+        functions.col(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_RELATIVE_FILE_PATH),
+        functions.col(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_FILE_SIZE)
     };
   }
 
-  public static String[] getFunctionalIndexColumnNames() {
+  public static String[] getExpressionIndexColumnNames() {
     return new String[] {
-        HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_PARTITION,
-        HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_PATH,
-        HoodieFunctionalIndex.HOODIE_FUNCTIONAL_INDEX_FILE_SIZE
+        HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION,
+        HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_RELATIVE_FILE_PATH,
+        HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_FILE_SIZE
     };
   }
 
   @NotNull
-  public static List<Row> getRowsWithFunctionalIndexMetadata(List<Row> rowsForFilePath, String partition, String filePath, long fileSize) {
+  public static List<Row> getRowsWithExpressionIndexMetadata(List<Row> rowsForFilePath, String partition, String filePath, long fileSize) {
     return rowsForFilePath.stream().map(row -> {
       scala.collection.immutable.Seq<Object> indexMetadata = JavaScalaConverters.convertJavaListToScalaList(Arrays.asList(partition, filePath, fileSize));
-      Row functionalIndexRow = Row.fromSeq(indexMetadata);
+      Row expressionIndexRow = Row.fromSeq(indexMetadata);
       List<Row> rows = new ArrayList<>(2);
       rows.add(row);
-      rows.add(functionalIndexRow);
+      rows.add(expressionIndexRow);
       scala.collection.immutable.Seq<Row> rowSeq = JavaScalaConverters.convertJavaListToScalaList(rows);
       return Row.merge(rowSeq);
     }).collect(Collectors.toList());
   }
 
-  public static HoodieData<HoodieRecord> getFunctionalIndexRecordsUsingColumnStats(Dataset<Row> dataset,
-                                                                                   HoodieFunctionalIndex<Column, Column> functionalIndex,
+  public static HoodieData<HoodieRecord> getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset,
+                                                                                   HoodieExpressionIndex<Column, Column> expressionIndex,
                                                                                    String columnToIndex) {
     // Aggregate col stats related data for the column to index
     Dataset<Row> columnRangeMetadataDataset = dataset
-        .select(columnToIndex, SparkMetadataWriterUtils.getFunctionalIndexColumnNames())
-        .groupBy(SparkMetadataWriterUtils.getFunctionalIndexColumns())
+        .select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
+        .groupBy(SparkMetadataWriterUtils.getExpressionIndexColumns())
         .agg(functions.count(functions.when(functions.col(columnToIndex).isNull(), 1)).alias("nullCount"),
             functions.min(columnToIndex).alias("minValue"),
             functions.max(columnToIndex).alias("maxValue"),
@@ -122,20 +123,20 @@ public class SparkMetadataWriterUtils {
     // Generate column stat records using the aggregated data
     return HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD()).flatMap((SerializableFunction<Row, Iterator<HoodieRecord>>)
         row -> {
-          int baseAggregatePosition = SparkMetadataWriterUtils.getFunctionalIndexColumnNames().length;
+          int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
           long nullCount = row.getLong(baseAggregatePosition);
           Comparable minValue = (Comparable) row.get(baseAggregatePosition + 1);
           Comparable maxValue = (Comparable) row.get(baseAggregatePosition + 2);
           long valueCount = row.getLong(baseAggregatePosition + 3);
 
           String partitionName = row.getString(0);
-          String filePath = row.getString(1);
+          String relativeFilePath = row.getString(1);
           long totalFileSize = row.getLong(2);
           // Total uncompressed size is harder to get directly. This is just an approximation to maintain the order.
           long totalUncompressedSize = totalFileSize * 2;
 
           HoodieColumnRangeMetadata<Comparable> rangeMetadata = HoodieColumnRangeMetadata.create(
-              filePath,
+              relativeFilePath,
               columnToIndex,
               minValue,
               maxValue,
@@ -144,27 +145,28 @@ public class SparkMetadataWriterUtils {
               totalFileSize,
               totalUncompressedSize
           );
-          return createColumnStatsRecords(partitionName, Collections.singletonList(rangeMetadata), false, functionalIndex.getIndexName(),
+          return createColumnStatsRecords(partitionName, Collections.singletonList(rangeMetadata), false, expressionIndex.getIndexName(),
               COLUMN_STATS.getRecordType()).collect(Collectors.toList()).iterator();
         });
   }
 
-  public static HoodieData<HoodieRecord> getFunctionalIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex,
-                                                                                   HoodieWriteConfig metadataWriteConfig, String instantTime) {
-    // Group data using functional index metadata and then create bloom filter on the group
-    Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getFunctionalIndexColumnNames())
-        // row.get(0) refers to partition path value and row.get(1) refers to file name.
-        .groupByKey((MapFunction<Row, Pair>) row -> Pair.of(row.getString(0), row.getString(1)), Encoders.kryo(Pair.class))
+  public static HoodieData<HoodieRecord> getExpressionIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex,
+                                                                                   HoodieWriteConfig metadataWriteConfig, String instantTime, String indexName) {
+    // Group data using expression index metadata and then create bloom filter on the group
+    Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
+        // row.get(1) refers to partition path value and row.get(2) refers to file name.
+        .groupByKey((MapFunction<Row, Pair>) row -> Pair.of(row.getString(1), row.getString(2)), Encoders.kryo(Pair.class))
         .flatMapGroups((FlatMapGroupsFunction<Pair, Row, HoodieRecord>)  ((pair, iterator) -> {
           String partition = pair.getLeft().toString();
-          String fileName = pair.getRight().toString();
+          String relativeFilePath = pair.getRight().toString();
+          String fileName = FSUtils.getFileName(relativeFilePath, partition);
           BloomFilter bloomFilter = HoodieFileWriterFactory.createBloomFilter(metadataWriteConfig);
           iterator.forEachRemaining(row -> {
             byte[] key = row.getAs(columnToIndex).toString().getBytes();
             bloomFilter.add(key);
           });
           ByteBuffer bloomByteBuffer = ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString()));
-          HoodieRecord bloomFilterRecord = createBloomFilterMetadataRecord(partition, fileName, instantTime, metadataWriteConfig.getBloomFilterType(), bloomByteBuffer, false);
+          HoodieRecord bloomFilterRecord = createBloomFilterMetadataRecord(partition, fileName, instantTime, metadataWriteConfig.getBloomFilterType(), bloomByteBuffer, false, indexName);
           return Collections.singletonList(bloomFilterRecord).iterator();
         }), Encoders.kryo(HoodieRecord.class));
     return HoodieJavaRDD.of(bloomFilterRecords.javaRDD());

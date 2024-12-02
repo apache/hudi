@@ -20,12 +20,14 @@
 package org.apache.hudi.table.action.index;
 
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;
 import java.util.Set;
@@ -36,11 +38,13 @@ public class IndexingCatchupTaskFactory {
                                                       HoodieTableMetadataWriter metadataWriter,
                                                       List<HoodieInstant> instantsToIndex,
                                                       Set<String> metadataCompletedInstants,
-                                                      HoodieTableMetaClient metaClient,
+                                                      HoodieTable table,
                                                       HoodieTableMetaClient metadataMetaClient,
                                                       String currentCaughtupInstant,
                                                       TransactionManager transactionManager,
-                                                      HoodieEngineContext engineContext) {
+                                                      HoodieEngineContext engineContext,
+                                                      HoodieHeartbeatClient heartbeatClient) {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
     boolean hasRecordLevelIndexing = indexPartitionInfos.stream()
         .anyMatch(partitionInfo -> partitionInfo.getMetadataPartitionPath().equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
     if (hasRecordLevelIndexing) {
@@ -52,7 +56,9 @@ public class IndexingCatchupTaskFactory {
           metadataMetaClient,
           currentCaughtupInstant,
           transactionManager,
-          engineContext);
+          engineContext,
+          table,
+          heartbeatClient);
     } else {
       return new WriteStatBasedIndexingCatchupTask(
           metadataWriter,
@@ -62,7 +68,9 @@ public class IndexingCatchupTaskFactory {
           metadataMetaClient,
           currentCaughtupInstant,
           transactionManager,
-          engineContext);
+          engineContext,
+          table,
+          heartbeatClient);
     }
   }
 }

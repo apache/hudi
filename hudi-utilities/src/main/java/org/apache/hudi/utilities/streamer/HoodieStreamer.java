@@ -94,6 +94,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static java.lang.String.format;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.utilities.UtilHelpers.buildProperties;
 import static org.apache.hudi.utilities.UtilHelpers.readConfig;
@@ -116,7 +117,7 @@ public class HoodieStreamer implements Serializable {
   private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";
 
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
-  public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
+  public static final String CHECKPOINT_RESET_KEY = STREAMER_CHECKPOINT_RESET_KEY_V1;
 
   protected final transient Config cfg;
 
@@ -270,7 +271,7 @@ public class HoodieStreamer implements Serializable {
     public String sourceOrderingField = "ts";
 
     @Parameter(names = {"--payload-class"}, description = "Deprecated. "
-        + "Use --merge-mode for overwrite with latest or event time merging. "
+        + "Use --merge-mode for commit time or event time merging. "
         + "Subclass of HoodieRecordPayload, that works off a GenericRecord. Implement your own, if you want to do something "
         + "other than overwriting existing value")
     public String payloadClassName = null;

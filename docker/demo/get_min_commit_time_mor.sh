@@ -16,5 +16,5 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-MIN_COMMIT_TIME=`hdfs dfs -ls -t /user/hive/warehouse/stock_ticks_mor/.hoodie/*.deltacommit  | head -1 | awk -F'/' ' { print $7 } ' | awk -F'.' ' { print $1 } '`
+MIN_COMMIT_TIME=`hdfs dfs -ls -t /user/hive/warehouse/stock_ticks_mor/.hoodie/timeline/*.deltacommit  | head -1 | awk -F'/' ' { print $7 } ' | awk -F'.' ' { print $1 } '`
 echo $MIN_COMMIT_TIME;

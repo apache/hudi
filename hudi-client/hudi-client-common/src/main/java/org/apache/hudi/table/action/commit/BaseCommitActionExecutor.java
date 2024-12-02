@@ -211,7 +211,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
   protected abstract void commit(HoodieWriteMetadata<O> result);
 
-  protected void commit(HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<O> result, List<HoodieWriteStat> writeStats) {
+  protected void commit(HoodieWriteMetadata<O> result, List<HoodieWriteStat> writeStats) {
     String actionType = getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType);
     result.setCommitted(true);
@@ -222,7 +222,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
 
-      writeTableMetadata(metadata, writeStatuses, actionType);
+      writeTableMetadata(metadata, actionType);
       // cannot serialize maps with null values
       metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
       activeTimeline.saveAsComplete(false,

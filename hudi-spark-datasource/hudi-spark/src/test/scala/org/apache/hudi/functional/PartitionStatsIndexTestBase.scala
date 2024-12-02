@@ -60,6 +60,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
     HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
+    HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
     HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
   )
   val commonOpts: Map[String, String] = Map(
@@ -134,15 +135,15 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
     val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
-    assertTrue(storage.deleteFile(new StoragePath(metadataTableMetaClient.getMetaPath, INSTANT_FILE_NAME_GENERATOR.getFileName(metadataTableLastInstant))))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
+    assertTrue(storage.deleteFile(new StoragePath(metadataTableMetaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(metadataTableLastInstant))))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
   protected def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 

@@ -84,7 +84,7 @@ public class ExportCommand {
       throws Exception {
 
     final StoragePath basePath = HoodieCLI.getTableMetaClient().getBasePath();
-    final StoragePath archivePath = new StoragePath(HoodieCLI.getTableMetaClient().getArchivePath());
+    final StoragePath archivePath = HoodieCLI.getTableMetaClient().getArchivePath();
     final Set<String> actionSet = new HashSet<String>(Arrays.asList(filter.split(",")));
     int numExports = limit == -1 ? Integer.MAX_VALUE : limit;
     int numCopied = 0;

@@ -27,6 +27,9 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -84,6 +87,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -527,6 +531,22 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
   }
 
   @Test
+  public void testUnsupportedCheckpoint() {
+    TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
+    S3EventsHoodieIncrSource incrSource = new S3EventsHoodieIncrSource(typedProperties, jsc(),
+        spark(), mockQueryRunner,
+        new CloudDataFetcher(
+            new TypedProperties(), jsc(), spark(), metrics, mockCloudObjectsSelectorCommon),
+        new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
+
+    Exception exception = assertThrows(IllegalArgumentException.class,
+        () -> incrSource.translateCheckpoint(Option.of(new StreamerCheckpointV2("1"))));
+    assertEquals("For S3EventsHoodieIncrSource, only StreamerCheckpointV1, i.e., requested time-based "
+            + "checkpoint, is supported. Checkpoint provided is: StreamerCheckpointV2{checkpointKey='1'}",
+        exception.getMessage());
+  }
+
+  @Test
   public void testCreateSource() throws IOException {
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     Source s3Source = UtilHelpers.createSource(S3EventsHoodieIncrSource.class.getName(), typedProperties, jsc(), spark(), metrics,
@@ -541,13 +561,14 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
         spark(), mockQueryRunner, new CloudDataFetcher(typedProperties, jsc(), spark(), metrics, mockCloudObjectsSelectorCommon),
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
-    Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = incrSource.fetchNextBatch(checkpointToPull, sourceLimit);
+    Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = incrSource.fetchNextBatch(
+        checkpointToPull.isPresent() ? Option.of(new StreamerCheckpointV1(checkpointToPull.get())) : Option.empty(), sourceLimit);
 
     Option<Dataset<Row>> datasetOpt = dataAndCheckpoint.getLeft();
-    String nextCheckPoint = dataAndCheckpoint.getRight();
+    Checkpoint nextCheckPoint = dataAndCheckpoint.getRight();
 
     Assertions.assertNotNull(nextCheckPoint);
-    Assertions.assertEquals(expectedCheckpoint, nextCheckPoint);
+    Assertions.assertEquals(new StreamerCheckpointV1(expectedCheckpoint), nextCheckPoint);
   }
 
   private void setMockQueryRunner(Dataset<Row> inputDs) {

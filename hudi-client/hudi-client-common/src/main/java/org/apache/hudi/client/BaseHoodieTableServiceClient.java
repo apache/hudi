@@ -31,7 +31,6 @@ import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -341,7 +340,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      writeTableMetadata(table, compactionCommitTime, metadata, context.emptyHoodieData());
+      writeTableMetadata(table, compactionCommitTime, metadata);
       LOG.info("Committing Compaction {}", compactionCommitTime);
       LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
@@ -404,7 +403,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      writeTableMetadata(table, logCompactionCommitTime, metadata, context.emptyHoodieData());
+      writeTableMetadata(table, logCompactionCommitTime, metadata);
       LOG.info("Committing Log Compaction {}", logCompactionCommitTime);
       LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
@@ -490,7 +489,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     // TODO : Where is shouldComplete used ?
     if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
-      completeClustering((HoodieReplaceCommitMetadata) clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant, Option.ofNullable(convertToWriteStatus(writeMetadata)));
+      completeClustering((HoodieReplaceCommitMetadata) clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant);
     }
     return clusteringMetadata;
   }
@@ -522,12 +521,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected abstract HoodieWriteMetadata<O> convertToOutputMetadata(HoodieWriteMetadata<T> writeMetadata);
 
-  protected abstract HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<T> writeMetadata);
-
   private void completeClustering(HoodieReplaceCommitMetadata metadata,
                                   HoodieTable table,
-                                  String clusteringCommitTime,
-                                  Option<HoodieData<WriteStatus>> writeStatuses) {
+                                  String clusteringCommitTime) {
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
@@ -542,7 +538,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         preCommit(metadata);
       }
       // Update table's metadata (table)
-      writeTableMetadata(table, clusteringInstant.requestedTime(), metadata, writeStatuses.orElseGet(context::emptyHoodieData));
+      writeTableMetadata(table, clusteringInstant.requestedTime(), metadata);
 
       LOG.info("Committing Clustering {}", clusteringCommitTime);
       LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, metadata);
@@ -976,11 +972,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback) {
-    rollbackFailedWrites(instantsToRollback, false);
-  }
-
-  protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback, boolean skipLocking) {
-    rollbackFailedWrites(instantsToRollback, skipLocking, false);
+    rollbackFailedWrites(instantsToRollback, false, false);
   }
 
   protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback, boolean skipLocking, boolean skipVersionCheck) {

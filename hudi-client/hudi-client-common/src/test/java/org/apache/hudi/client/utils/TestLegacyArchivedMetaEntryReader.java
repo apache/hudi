@@ -103,7 +103,7 @@ public class TestLegacyArchivedMetaEntryReader {
   private HoodieLogFormat.Writer openWriter(HoodieTableMetaClient metaClient) {
     try {
       return HoodieLogFormat.newWriterBuilder()
-          .onParentPath(new StoragePath(metaClient.getArchivePath()))
+          .onParentPath(metaClient.getArchivePath())
           .withFileId("commits").withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
           .withStorage(metaClient.getStorage()).withInstantTime("").build();
     } catch (IOException e) {

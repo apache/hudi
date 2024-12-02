@@ -20,6 +20,7 @@ package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
@@ -102,7 +103,7 @@ public class HoodieContinuousTestSuiteWriter extends HoodieTestSuiteWriter {
   }
 
   @Override
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
+  public Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     return null;
   }
 
@@ -111,6 +112,7 @@ public class HoodieContinuousTestSuiteWriter extends HoodieTestSuiteWriter {
     return null;
   }
 
+  @Override
   public JavaRDD<WriteStatus> upsert(Option<String> instantTime) throws Exception {
     return null;
   }

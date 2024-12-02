@@ -82,7 +82,7 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
           final Pattern CLEAN_FILE_PATTERN =
               Pattern.compile(".*\\.clean\\..*");
 
-          String metadataPath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/.hoodie";
+          String metadataPath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/.hoodie/timeline";
           FileStatus[] metaFileStatuses = fs.listStatus(new Path(metadataPath));
           boolean cleanFound = false;
           for (FileStatus fileStatus : metaFileStatuses) {
@@ -93,7 +93,7 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
             }
           }
 
-          String archivalPath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/.hoodie/archived";
+          String archivalPath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/.hoodie/timeline/history";
           metaFileStatuses = fs.listStatus(new Path(archivalPath));
           boolean archFound = false;
           for (FileStatus fileStatus : metaFileStatuses) {

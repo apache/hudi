@@ -106,6 +106,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
@@ -126,7 +127,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   // This is a constant as is should never be changed via config (will invalidate previous commits)
   // It is here so that both the client and Hudi Streamer use the same reference
-  public static final String STREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+  public static final String STREAMER_CHECKPOINT_KEY = STREAMER_CHECKPOINT_KEY_V1;
   @Deprecated
   public static final String DELTASTREAMER_CHECKPOINT_KEY = STREAMER_CHECKPOINT_KEY;
 
@@ -2046,10 +2047,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
   }
 
-  public List<String> getColumnsEnabledForColumnStatsIndex() {
-    return getMetadataConfig().getColumnsEnabledForColumnStatsIndex();
-  }
-
   public boolean isPartitionStatsIndexEnabled() {
     return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
   }
@@ -3409,6 +3406,17 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
+      // for a single writer scenario, with all table services inline, lets set InProcessLockProvider
+      if (writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.SINGLE_WRITER && !writeConfig.areAnyTableServicesAsync()) {
+        if (writeConfig.getLockProviderClass() != null && !writeConfig.getLockProviderClass().equals(InProcessLockProvider.class.getCanonicalName())) {
+          // add logs only when explicitly overridden by the user.
+          LOG.warn(String.format("For a single writer mode, overriding lock provider class (%s) to %s. So, user configured lock provider %s may not take effect",
+              HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName(), writeConfig.getLockProviderClass()));
+          writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
+              InProcessLockProvider.class.getName());
+        }
+      }
+
       if (!isLockProviderPropertySet && writeConfig.isAutoAdjustLockConfigs() && isLockRequiredForSingleWriter()) {
         // auto adjustment is required only for deltastreamer and spark streaming where async table services can be executed in the same JVM.
         // This is targeted at Single writer with async table services

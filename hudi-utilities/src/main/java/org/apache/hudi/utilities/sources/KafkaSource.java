@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
@@ -63,10 +64,15 @@ public abstract class KafkaSource<T> extends Source<T> {
   }
 
   @Override
-  protected InputBatch<T> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+  protected final InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
+    throw new UnsupportedOperationException("KafkaSource#fetchNewData should not be called");
+  }
+
+  @Override
+  protected InputBatch<T> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     try {
       return toInputBatch(getOffsetRanges(props, sourceProfileSupplier, offsetGen, metrics,
-          lastCheckpointStr, sourceLimit));
+          lastCheckpoint, sourceLimit));
     } catch (org.apache.kafka.common.errors.TimeoutException e) {
       throw new HoodieSourceTimeoutException("Kafka Source timed out " + e.getMessage());
     }
@@ -77,12 +83,12 @@ public abstract class KafkaSource<T> extends Source<T> {
                                               Option<SourceProfileSupplier> sourceProfileSupplier,
                                               KafkaOffsetGen offsetGen,
                                               HoodieIngestionMetrics metrics,
-                                              Option<String> lastCheckpointStr,
+                                              Option<Checkpoint> lastCheckpoint,
                                               long sourceLimit) {
     OffsetRange[] offsetRanges;
     if (sourceProfileSupplier.isPresent() && sourceProfileSupplier.get().getSourceProfile() != null) {
       SourceProfile<Long> kafkaSourceProfile = sourceProfileSupplier.get().getSourceProfile();
-      offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, kafkaSourceProfile.getSourceSpecificContext(),
+      offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpoint, kafkaSourceProfile.getSourceSpecificContext(),
           kafkaSourceProfile.getSourcePartitions(), metrics);
       metrics.updateStreamerSourceParallelism(kafkaSourceProfile.getSourcePartitions());
       metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(kafkaSourceProfile.getMaxSourceBytes());
@@ -92,7 +98,7 @@ public abstract class KafkaSource<T> extends Source<T> {
     } else {
       int minPartitions = (int) getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
       metrics.updateStreamerSourceParallelism(minPartitions);
-      offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit, metrics);
+      offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpoint, sourceLimit, metrics);
       LOG.info("About to read sourceLimit {} in {} spark partitions from kafka for topic {} with offset ranges {}",
           sourceLimit, minPartitions, offsetGen.getTopicName(),
           Arrays.toString(offsetRanges));

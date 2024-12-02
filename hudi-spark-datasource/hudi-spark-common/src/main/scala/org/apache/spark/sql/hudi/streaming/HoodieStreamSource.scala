@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -44,6 +44,7 @@ import org.apache.spark.sql.types.StructType
   * @param schemaOption
   * @param parameters
   */
+// TODO(yihua): handle V1/V2 checkpoint
 class HoodieStreamSource(
     sqlContext: SQLContext,
     metadataPath: String,
@@ -120,6 +121,8 @@ class HoodieStreamSource(
     val startOffset = start.map(HoodieSourceOffset(_))
       .getOrElse(initialOffsets)
     val endOffset = HoodieSourceOffset(end)
+    // User set write version 6
+    // startOffset is requested time
 
     if (startOffset == endOffset) {
       sqlContext.internalCreateDataFrame(
@@ -146,12 +149,12 @@ class HoodieStreamSource(
         val rdd = tableType match {
           case HoodieTableType.COPY_ON_WRITE =>
             val serDe = sparkAdapter.createSparkRowSerDe(schema)
-            new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient, rangeType)
+            new IncrementalRelationV2(sqlContext, incParams, Some(schema), metaClient, rangeType)
               .buildScan()
               .map(serDe.serializeRow)
           case HoodieTableType.MERGE_ON_READ =>
             val requiredColumns = schema.fields.map(_.name)
-            new MergeOnReadIncrementalRelation(sqlContext, incParams, metaClient, Some(schema), rangeType = rangeType)
+            new MergeOnReadIncrementalRelationV2(sqlContext, incParams, metaClient, Some(schema), rangeType = rangeType)
               .buildScan(requiredColumns, Array.empty[Filter])
               .asInstanceOf[RDD[InternalRow]]
           case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")

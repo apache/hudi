@@ -113,7 +113,7 @@ public class TestWaitBasedTimeGenerator {
       try {
         MockInProcessLockProvider.needToLockLater(!slowerThreadAcquiredLockLater);
         TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
-        t1Timestamp.set(timeGenerator.currentTimeMillis(false));
+        t1Timestamp.set(timeGenerator.generateTime(false));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -125,7 +125,7 @@ public class TestWaitBasedTimeGenerator {
         MockInProcessLockProvider.needToLockLater(slowerThreadAcquiredLockLater);
         TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
         // Pretend t2 is slower 20ms than t1
-        t2Timestamp.set(timeGenerator.currentTimeMillis(false) - clockSkewTime);
+        t2Timestamp.set(timeGenerator.generateTime(false) - clockSkewTime);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

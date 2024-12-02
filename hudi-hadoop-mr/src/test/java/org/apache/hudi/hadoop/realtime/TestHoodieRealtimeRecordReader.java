@@ -799,7 +799,7 @@ public class TestHoodieRealtimeRecordReader {
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
     replaceMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     writeStats.forEach(stat -> replaceMetadata.addWriteStat(partitionPath, stat));
-    File file = basePath.resolve(".hoodie")
+    File file = basePath.resolve(".hoodie/timeline")
         .resolve(commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".replacecommit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
@@ -842,7 +842,7 @@ public class TestHoodieRealtimeRecordReader {
     if (schemaStr != null) {
       commitMetadata.getExtraMetadata().put(HoodieCommitMetadata.SCHEMA_KEY, schemaStr);
     }
-    File file = basePath.resolve(".hoodie")
+    File file = basePath.resolve(".hoodie/timeline")
         .resolve(commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".deltacommit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
@@ -977,7 +977,7 @@ public class TestHoodieRealtimeRecordReader {
 
   private File createCompactionFile(java.nio.file.Path basePath, String commitTime)
       throws IOException {
-    File file = basePath.resolve(".hoodie")
+    File file = basePath.resolve(".hoodie/timeline")
         .resolve(INSTANT_FILE_NAME_GENERATOR.makeRequestedCompactionFileName(commitTime)).toFile();
     assertTrue(file.createNewFile());
     FileOutputStream os = new FileOutputStream(file);

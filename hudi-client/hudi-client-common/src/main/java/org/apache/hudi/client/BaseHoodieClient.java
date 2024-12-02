@@ -24,7 +24,6 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -189,16 +188,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
         .setMetaserverConfig(config.getProps()).build();
   }
-
-  /**
-   * Returns next instant time in milliseconds. An explicit Lock is enabled in the context.
-   *
-   * @param milliseconds Milliseconds to add to current time while generating the new instant time.
-   */
-  public String createNewInstantTime(long milliseconds) {
-    return TimelineUtils.generateInstantTime(true, timeGenerator, milliseconds);
-  }
-
+  
   /**
    * Returns next instant time in the correct format. An explicit Lock is enabled in the context.
    */
@@ -278,14 +268,13 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * @param table         {@link HoodieTable} of interest.
    * @param instantTime   instant time of the commit.
    * @param metadata      instance of {@link HoodieCommitMetadata}.
-   * @param writeStatuses Write statuses of the commit
    */
-  protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
+  protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        metadataWriter.updateFromWriteStatuses(metadata, writeStatuses, instantTime);
+        metadataWriter.update(metadata, instantTime);
       } catch (Exception e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;

@@ -107,6 +107,37 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Append))
   }
 
+  /**
+   * We don't have support for nested fields. So, even if explicitly set using cols to index config, hudi is expected to ignore indexing
+   * nested fields.
+   */
+    @Test
+  def testMetadataColumnStatsIndexNestedFields(): Unit = {
+    val testCase = ColumnStatsTestCase(HoodieTableType.COPY_ON_WRITE, true)
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "c1,c2,c3,c4,c5,c6,c7,c8,c9.car_brand"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    ) ++ metadataOpts
+
+    // expectation is that, the nested field will be ignored and stats will be generated only for top level fields.
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/input-table-json",
+      expectedColStatsSourcePath = "index/colstats/cow-table-nested.json",
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite), true)
+  }
+
   @ParameterizedTest
   @MethodSource(Array("testTableTypePartitionTypeParams"))
   def testMetadataColumnStatsIndexInitializationWithUpserts(tableType: HoodieTableType, partitionCol : String): Unit = {
@@ -197,8 +228,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
-      latestCompletedCommit,
+      latestCompletedCommit = latestCompletedCommit,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -215,8 +245,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath1,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
-      latestCompletedCommit,
+      latestCompletedCommit = latestCompletedCommit,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -248,7 +277,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      false,
+      shouldValidate = false,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -259,7 +288,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      false,
+      shouldValidate = false,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -289,8 +318,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
-      latestCompletedCommit,
+      latestCompletedCommit = latestCompletedCommit,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -324,7 +352,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     }
 
     val latestCompletedFileName = INSTANT_FILE_NAME_GENERATOR.getFileName(lastCompletedCommit)
-    metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/" + latestCompletedFileName))
+    metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/timeline/" + latestCompletedFileName))
 
     // re-create marker for the deleted file.
     if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -381,7 +409,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -394,7 +422,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -427,7 +454,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -443,7 +470,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -460,7 +487,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -494,7 +520,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -510,7 +536,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      false,
+      shouldValidate = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -527,7 +553,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      true,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))

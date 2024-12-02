@@ -282,8 +282,8 @@ public class HoodieSnapshotExporter {
 
     // Also copy the .commit files
     LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
-    FileStatus[] commitFilesToCopy =
-        Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)))
+    List<FileStatus> commitFilesListToCopy =
+        Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME)))
             .filter(fileStatus -> {
               Path path = fileStatus.getPath();
               if (path.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
@@ -295,10 +295,16 @@ public class HoodieSnapshotExporter {
                 String instantTime = metaClient.getInstantFileNameParser().extractTimestamp(path.getName());
                 return compareTimestamps(instantTime, LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
               }
-            }).toArray(FileStatus[]::new);
+            }).collect(Collectors.toList());
+    commitFilesListToCopy.addAll(Arrays.stream(sourceFs.listStatus(
+        new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE)))
+        .collect(Collectors.toList()));
+    FileStatus[] commitFilesToCopy = commitFilesListToCopy.stream().toArray(FileStatus[]::new);
     context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
-      Path targetFilePath =
-          new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());
+      Path targetFilePath = commitFile.getPath().getName().endsWith(HoodieTableConfig.HOODIE_PROPERTIES_FILE)
+          ? new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+              + commitFile.getPath().getName()) : new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+              + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/" + commitFile.getPath().getName());
       FileSystem executorSourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, storageConf.unwrapCopyAs(Configuration.class));
       FileSystem executorOutputFs = HadoopFSUtils.getFs(cfg.targetOutputPath, storageConf.unwrapCopyAs(Configuration.class));
 
