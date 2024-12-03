@@ -45,7 +45,6 @@ class TestHoodieSparkUtils {
       case "3.3.0" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_3)
-        assertTrue(vsMock.gteqSpark3_3)
 
         assertFalse(vsMock.isSpark3_4)
         assertFalse(vsMock.isSpark3_5)
@@ -56,7 +55,6 @@ class TestHoodieSparkUtils {
       case "3.3.2" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_3)
-        assertTrue(vsMock.gteqSpark3_3)
         assertTrue(vsMock.gteqSpark3_3_2)
 
 
@@ -68,7 +66,6 @@ class TestHoodieSparkUtils {
       case "3.4.0" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_4)
-        assertTrue(vsMock.gteqSpark3_3)
         assertTrue(vsMock.gteqSpark3_3_2)
         assertTrue(vsMock.gteqSpark3_4)
 
@@ -78,7 +75,6 @@ class TestHoodieSparkUtils {
       case "3.5.0" =>
         assertTrue(vsMock.isSpark3)
         assertTrue(vsMock.isSpark3_5)
-        assertTrue(vsMock.gteqSpark3_3)
         assertTrue(vsMock.gteqSpark3_3_2)
         assertTrue(vsMock.gteqSpark3_4)
         assertTrue(vsMock.gteqSpark3_5)
