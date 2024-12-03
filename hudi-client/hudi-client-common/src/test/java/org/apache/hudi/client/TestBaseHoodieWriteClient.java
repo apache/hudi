@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -49,8 +50,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.MockedStatic;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -62,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -134,6 +138,23 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     writeClient.rollbackFailedWrites(mockMetaClient);
     verify(tableServiceClient).rollbackFailedWrites(mockMetaClient);
+  }
+
+  @Test
+  void testPreCommitResolvesConflictsWithProperArgs() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
+    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
+    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
+    HoodieCommitMetadata commitMetadata = mock(HoodieCommitMetadata.class);
+    try (MockedStatic<TransactionUtils> transactionUtilsMockedStatic = mockStatic(TransactionUtils.class)) {
+      writeClient.preCommit(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"), commitMetadata);
+      transactionUtilsMockedStatic.verify(() ->
+          TransactionUtils.resolveWriteConflictIfAny(table, Option.empty(), Option.of(commitMetadata), writeConfig, Option.empty(), true, Collections.emptySet()));
+    }
   }
 
   private HoodieWriteConfig getHoodieWriteConfigForRemoteView(FileSystemViewStorageType viewStorageType) {

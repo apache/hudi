@@ -385,7 +385,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     // make sure c3 has conflict with C1,C11,C12,C4;
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, "file-2");
-    timeline.reload();
+    metaClient.reloadActiveTimeline();
     List<HoodieInstant> completedInstantsDuringCurrentWriteOperation = TransactionUtils
             .getCompletedInstantsDuringCurrentWriteOperation(metaClient, pendingInstant).collect(Collectors.toList());
     // C1,C11,C12,C4 should be included

@@ -68,15 +68,16 @@ public class TransactionUtils {
       final Option<HoodieCommitMetadata> thisCommitMetadata,
       final HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
-      boolean reloadActiveTimeline,
+      boolean timelineRefreshedWithinTransaction,
       Set<String> pendingInstants) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       // deal with pendingInstants
-      Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
-      ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
-      if (reloadActiveTimeline) {
+      if (!timelineRefreshedWithinTransaction) {
         table.getMetaClient().reloadActiveTimeline();
       }
+      Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
+      ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
+
 
       Option<Schema> newTableSchema =
           resolveSchemaConflictIfNeeded(table, config, lastCompletedTxnOwnerInstant, currentTxnOwnerInstant);
@@ -174,12 +175,17 @@ public class TransactionUtils {
         .collect(Collectors.toSet());
   }
 
+  /**
+   * Helper to find the instants that completed during this operation.
+   * @param metaClient client that was created or refreshed within the transaction
+   * @param pendingInstants pending instants to compare
+   * @return instants that completed during this operation
+   */
   public static Stream<HoodieInstant> getCompletedInstantsDuringCurrentWriteOperation(HoodieTableMetaClient metaClient, Set<String> pendingInstants) {
     // deal with pendingInstants
     // some pending instants maybe finished during current write operation,
     // we should check the conflict of those pending operation
     return metaClient
-        .reloadActiveTimeline()
         .getCommitsTimeline()
         .filterCompletedInstants()
         .getInstantsAsStream()

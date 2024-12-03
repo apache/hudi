@@ -200,7 +200,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     Timer.Context conflictResolutionTimer = metrics.getConflictResolutionCtx();
     try {
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
-          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), false, pendingInflightAndRequestedInstants);
+          Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner(), true, pendingInflightAndRequestedInstants);
       metrics.emitConflictResolutionSuccessful();
     } catch (HoodieWriteConflictException e) {
       metrics.emitConflictResolutionFailed();
