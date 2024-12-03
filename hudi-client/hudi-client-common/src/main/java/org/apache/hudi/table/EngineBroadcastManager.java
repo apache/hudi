@@ -27,19 +27,29 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.io.Serializable;
 
+/**
+ * Broadcast variables management for engines.
+ */
 public class EngineBroadcastManager implements Serializable {
 
-  // Prepare and broadcast necessary information needed by compactor.
+  /**
+   * Prepare and broadcast necessary information needed by compactor.
+   */
   public void prepareAndBroadcast() {
     // NO operation.
   }
 
-  // Fetch fg reader context based on broadcast variables.
+  /**
+   * Returns the fg reader context based on broadcast variables.
+   * @param basePath Table base path.
+   */
   public Option<HoodieReaderContext> retrieveFileGroupReaderContext(StoragePath basePath) {
     return Option.empty();
   }
 
-  // Fetch broadcast storage config.
+  /**
+   * Retrieve the broadcast storage config.
+   */
   public Option<Configuration> retrieveStorageConfig() {
     return Option.empty();
   }

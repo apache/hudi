@@ -275,10 +275,10 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public List<WriteStatus> runCompactionUsingFileGroupReader(String instantTime,
-                                                             CompactionOperation operation,
-                                                             HoodieReaderContext readerContext,
-                                                             Configuration conf) {
+  public List<WriteStatus> compactUsingFileGroupReader(String instantTime,
+                                                       CompactionOperation operation,
+                                                       HoodieReaderContext readerContext,
+                                                       Configuration conf) {
     Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
     HoodieSparkMergeHandleV2 mergeHandle = new HoodieSparkMergeHandleV2(config,
         instantTime, this, operation, taskContextSupplier, keyGeneratorOpt, readerContext, conf);

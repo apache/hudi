@@ -50,10 +50,10 @@ public interface HoodieCompactionHandler<T> {
     return false;
   }
 
-  default List<WriteStatus> runCompactionUsingFileGroupReader(String instantTime,
-                                                              CompactionOperation operation,
-                                                              HoodieReaderContext readerContext,
-                                                              Configuration conf) {
+  default List<WriteStatus> compactUsingFileGroupReader(String instantTime,
+                                                        CompactionOperation operation,
+                                                        HoodieReaderContext readerContext,
+                                                        Configuration conf) {
     throw new HoodieNotSupportedException("This engine does not support file group reader based compaction.");
   }
 

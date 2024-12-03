@@ -21,16 +21,29 @@ package org.apache.hudi.common.table.read;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-@NotThreadSafe
-public class HoodieFileGroupReaderStats {
-  private long numInserts = 0L;
-  private long numUpdates = 0L;
-  private long numDeletes = 0L;
+import java.io.Serializable;
 
-  public HoodieFileGroupReaderStats() {
+/**
+ * Statistics about a single Hoodie read operation.
+ */
+@NotThreadSafe
+public class HoodieReadStats implements Serializable {
+  private static final long serialVersionUID = 1L;
+
+  /**
+   * Total number of insert records or converted to updates (for small file handling).
+   */
+  protected long numInserts;
+  private long numUpdates = 0L;
+  /**
+   * Total number of records deleted.
+   */
+  protected long numDeletes;
+
+  public HoodieReadStats() {
   }
 
-  public HoodieFileGroupReaderStats(long numInserts, long numUpdates, long numDeletes) {
+  public HoodieReadStats(long numInserts, long numUpdates, long numDeletes) {
     this.numInserts = numInserts;
     this.numUpdates = numUpdates;
     this.numDeletes = numDeletes;

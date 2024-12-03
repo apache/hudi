@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.storage.StoragePath;
 
@@ -29,7 +30,7 @@ import java.util.Map;
 /**
  * Statistics about a single Hoodie write operation.
  */
-public class HoodieWriteStat implements Serializable {
+public class HoodieWriteStat extends HoodieReadStats {
 
   public static final String NULL_COMMIT = "null";
 
@@ -55,24 +56,14 @@ public class HoodieWriteStat implements Serializable {
 
   /**
    * Total number of records written for this file. - for updates, its the entire number of records in the file - for
-   * inserts, its the actual number of records inserted.
+   * inserts, it's the actual number of records inserted.
    */
   private long numWrites;
-
-  /**
-   * Total number of records deleted.
-   */
-  private long numDeletes;
 
   /**
    * Total number of records actually changed. (0 for inserts)
    */
   private long numUpdateWrites;
-
-  /**
-   * Total number of insert records or converted to updates (for small file handling).
-   */
-  private long numInserts;
 
   /**
    * Total number of bytes written.
@@ -221,16 +212,8 @@ public class HoodieWriteStat implements Serializable {
     return numWrites;
   }
 
-  public long getNumDeletes() {
-    return numDeletes;
-  }
-
   public long getNumUpdateWrites() {
     return numUpdateWrites;
-  }
-
-  public long getNumInserts() {
-    return numInserts;
   }
 
   public String getFileId() {
@@ -418,6 +401,7 @@ public class HoodieWriteStat implements Serializable {
    * The runtime stats for writing operation.
    */
   public static class RuntimeStats implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     /**
      * Total time taken to read and merge logblocks in a log file.

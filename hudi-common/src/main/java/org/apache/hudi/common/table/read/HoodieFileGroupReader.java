@@ -237,7 +237,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  public HoodieFileGroupReaderStats getStats() {
+  public HoodieReadStats getStats() {
     ValidationUtils.checkArgument(recordBuffer != null,
         "Only support getting reader stats from log merging now");
     return recordBuffer.getStats();

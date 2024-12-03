@@ -36,7 +36,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader.HoodieFileGroupReaderIterator;
-import org.apache.hudi.common.table.read.HoodieFileGroupReaderStats;
+import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -248,7 +248,7 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I
 
       }
       // The stats of inserts, updates, and deletes are updated once at the end
-      HoodieFileGroupReaderStats stats = fileGroupReader.getStats();
+      HoodieReadStats stats = fileGroupReader.getStats();
       this.insertRecordsWritten = stats.getNumInserts();
       this.updatedRecordsWritten = stats.getNumUpdates();
       this.recordsDeleted = stats.getNumDeletes();
@@ -270,5 +270,10 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I
     } else {
       fileWriter.writeWithMetadata(key, populatedRecord, writeSchemaWithMetaFields);
     }
+  }
+
+  @Override
+  protected void writeIncomingRecords() {
+    // no operation.
   }
 }

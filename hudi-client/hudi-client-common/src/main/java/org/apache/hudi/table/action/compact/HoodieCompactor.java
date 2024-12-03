@@ -137,24 +137,16 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
         && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-        && compactionHandler.supportsFileGroupReader()
-        && !hasBootstrapFile(operations)
-        && StringUtils.isNullOrEmpty(config.getInternalSchema());
-
-    Option<EngineBroadcastManager> broadcastManagerOpt = Option.empty();
-    // Broadcast necessary information.
-    if (useFileGroupReaderBasedCompaction) {
-      broadcastManagerOpt = getEngineBroadcastManager(context);
-      if (broadcastManagerOpt.isPresent()) {
-        broadcastManagerOpt.get().prepareAndBroadcast();
-      }
-    }
-    final Option<EngineBroadcastManager> finalizedBroadcastManager = broadcastManagerOpt;
+        && compactionHandler.supportsFileGroupReader()            // the engine needs to support fg reader first
+        && !hasBootstrapFile(operations)                          // bootstrap file read for fg reader is not ready
+        && StringUtils.isNullOrEmpty(config.getInternalSchema()); // schema evolution support for fg reader is not ready
 
     if (useFileGroupReaderBasedCompaction) {
+      Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context);
+      // Broadcast required information.
+      broadcastManagerOpt.ifPresent(EngineBroadcastManager::prepareAndBroadcast);
       return context.parallelize(operations).map(
-              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
-                  instantRange, taskContextSupplier, executionHelper, finalizedBroadcastManager))
+              operation -> compact(compactionHandler, metaClient, operation, compactionInstantTime, broadcastManagerOpt))
           .flatMap(List::iterator);
     } else {
       return context.parallelize(operations).map(
@@ -296,43 +288,12 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    */
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
                                    HoodieTableMetaClient metaClient,
-                                   HoodieWriteConfig config,
                                    CompactionOperation operation,
                                    String instantTime,
-                                   String maxInstantTime,
-                                   Option<InstantRange> instantRange,
-                                   TaskContextSupplier taskContextSupplier,
-                                   CompactionExecutionHelper executionHelper,
                                    Option<EngineBroadcastManager> broadcastManagerOpt) throws IOException {
-    List<WriteStatus> writeStatusList = compactionHandler.runCompactionUsingFileGroupReader(instantTime,
+    return compactionHandler.compactUsingFileGroupReader(instantTime,
         operation, broadcastManagerOpt.get().retrieveFileGroupReaderContext(metaClient.getBasePath()).get(),
         broadcastManagerOpt.get().retrieveStorageConfig().get());
-    writeStatusList
-        .forEach(s -> {
-          final HoodieWriteStat stat = s.getStat();
-          /*
-          fill in log reading stats
-          stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
-          stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
-          stat.setTotalLogRecords(scanner.getTotalLogRecords());
-          stat.setPartitionPath(operation.getPartitionPath());
-          stat
-              .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
-          stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
-          stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
-          stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
-          RuntimeStats runtimeStats = new RuntimeStats();
-          // scan time has to be obtained from scanner.
-          runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
-          // create and upsert time are obtained from the create or merge handle.
-          if (stat.getRuntimeStats() != null) {
-            runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
-            runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
-          }
-          stat.setRuntimeStats(runtimeStats);
-           */
-        });
-    return writeStatusList;
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {
