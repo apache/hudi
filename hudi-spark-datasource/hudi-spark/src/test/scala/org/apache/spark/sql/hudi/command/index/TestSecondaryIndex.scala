@@ -544,7 +544,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
       // Ensure secondary keys are correctly present or deleted
       if (hasDeleteKeys) {
-        assertTrue(secondaryKeys.isEmpty)
+        assertTrue(secondaryKeys.isEmpty, s"Secondary index should be deleted for key: $key")
       } else {
         assertTrue(secondaryKeys.nonEmpty, s"Secondary index entry missing for key: $key")
         secondaryKeys.foreach { secKey =>
