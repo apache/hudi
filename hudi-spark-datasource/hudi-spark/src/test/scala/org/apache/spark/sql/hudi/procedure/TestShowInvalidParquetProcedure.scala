@@ -119,4 +119,85 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
       }
     }
   }
+
+  test("Test Call show_invalid_parquet Procedure and Specify Partitions") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  year string,
+           |  month string,
+           |  day string
+           |) using hudi
+           | partitioned by (year, month, day)
+           | location '$basePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1001, '2022', '08', '30'")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1002, '2022', '08', '31'")
+      spark.sql(s"insert into $tableName select 3, 'a3', 10, 1003, '2022', '07', '03'")
+      spark.sql(s"insert into $tableName select 4, 'a4', 20, 1004, '2022', '07', '04'")
+
+      // Check required fields
+      checkExceptionContain(s"""call show_invalid_parquet(limit => 10)""")(
+        s"Argument: path is required")
+
+      val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+      val invalidPath1 = new Path(basePath, "year=2022/month=08/day=30/1.parquet")
+      val out1 = fs.create(invalidPath1)
+      out1.write(1)
+      out1.close()
+
+      val invalidPath2 = new Path(basePath, "year=2022/month=08/day=31/2.parquet")
+      val out2 = fs.create(invalidPath2)
+      out2.write(1)
+      out2.close()
+
+      val invalidPath3 = new Path(basePath, "year=2022/month=07/day=03/3.parquet")
+      val out3 = fs.create(invalidPath3)
+      out3.write(1)
+      out3.close()
+
+      val invalidPath4 = new Path(basePath, "year=2022/month=07/day=04/4.parquet")
+      val out4 = fs.create(invalidPath4)
+      out4.write(1)
+      out4.close()
+
+      // collect result for table
+      var result = spark.sql(
+        s"""call show_invalid_parquet(path => '$basePath')""".stripMargin).collect()
+      assertResult(4) {
+        result.length
+      }
+
+      result = spark.sql(
+        s"""call show_invalid_parquet(path => '$basePath', partitions => 'year=2022')""".stripMargin).collect()
+      assertResult(4) {
+        result.length
+      }
+
+      result = spark.sql(
+        s"""call show_invalid_parquet(path => '$basePath', partitions => 'year=2022/month=07')""".stripMargin).collect()
+      assertResult(2) {
+        result.length
+      }
+
+      result = spark.sql(
+        s"""call show_invalid_parquet(path => '$basePath', partitions => 'year=2022/month=08/day=30,year=2022/month=08/day=31')""".stripMargin).collect()
+      assertResult(2) {
+        result.length
+      }
+    }
+  }
 }
