@@ -190,9 +190,24 @@ TBLPROPERTIES (
 AS SELECT * FROM parquet_table;
 ```
 
-### Create Index (Experimental)
+### Create Index
 
-Hudi supports creating and dropping indexes, including functional indexes, on a table.
+Hudi supports creating and dropping indexes, including functional indexes, on a table. For more information on different
+type of indexes please refer [metadata section](https://hudi.apache.org/docs/metadata/#metadata-table-indices). Secondary 
+index, expression index and record index can be created using SQL create index command.
+
+```bash
+// Create record index on primary keys providing the list of primary keys configured
+create index record_index on $tableName (primaryKey1,primayKey2,...);
+
+// Create secondary index on a non primary key.
+create index idx_name on $tableName (non-primary-key);
+
+// Create expression index by performing transformation on a table column. 
+// The index is created on the transformed column
+create index idx_column_ts on $tableName using column_stats(col) options(expr='from_unixtime', format='yyyy-MM-dd');
+create index idx_bloom_city on $tableName using bloom_filters(city) options(expr='upper');
+```
 
 :::note
 Creating indexes through SQL is in preview in version 1.0.0-beta only. It will be generally available in version 1.0.0.
@@ -582,6 +597,28 @@ SHOW PARTITIONS hudi_table;
 --Drop partition：
 ALTER TABLE hudi_table DROP PARTITION (dt='2021-12-09', hh='10');
 ```
+
+### Show and drop index
+
+**Syntax**
+
+```sql
+-- Show Indexes
+SHOW INDEXES FROM tableIdentifier;
+
+-- Drop partition
+DROP INDEX indexIdentifier on tableIdentifier;
+```
+
+**Examples**
+```sql
+-- Show indexes
+show indexes from $tableName;
+
+-- Drop Index
+drop index record_index on $tableName;
+```
+
 ### Show create table
 
 **Syntax**

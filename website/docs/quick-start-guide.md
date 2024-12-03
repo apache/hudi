@@ -415,6 +415,47 @@ spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 </Tabs
 >
 
+## Index data {#indexing}
+
+<Tabs
+groupId="programming-language"
+defaultValue="scala"
+values={[
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
+<TabItem value="sparksql">
+
+```sql
+// Create bloom filter expression index on city column
+create index idx_bloom_city on hudi_table using bloom_filters(city) options(expr='identity');
+// It would show bloom filter expression index
+show indexes from hudi_table;
+// Query on city column would prune the data using the idx_bloom_city index
+select id, rider from hudi_table where city = 'san_francisco';
+
+// Create column stat expression index on ts column
+create index idx_column_ts on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd');
+// Shows both expression indexes
+show indexes from hudi_table;
+// Query on ts column would prune the data using the idx_column_ts index
+select id, rider from hudi_table where city = 'san_francisco';
+
+// Create secondary index on rider column
+create index idx_rider ON $tableName (rider);
+// Expression index and secondary index should show up
+show indexes from hudi_table;
+// Query on rider column would leverage the secondary index idx_rider
+select * from hudi_table where rider = 'rider-E';
+```
+</TabItem>
+
+</Tabs
+>
+FIXME-vc: show a secondary expression index .. and tease functionality. 
+
+
 ## Update data {#upserts}
 
 Hudi tables can be updated by streaming in a DataFrame or using a standard UPDATE statement.

@@ -10,18 +10,65 @@ The [pluggable indexing subsystem](https://www.onehouse.ai/blog/introducing-mult
 of Hudi depends on the metadata table. Different types of index, from `files` index for locating records efficiently
 to `column_stats` index for data skipping, are part of the metadata table. A fundamental tradeoff in any data system
 that supports indices is to balance the write throughput with index updates. A brute-force way is to lock out the writes
-while indexing. However, very large tables can take hours to index. This is where Hudi's novel asynchronous metadata
-indexing comes into play.
+while indexing. Hudi supports index creation using SQL, Datasource as well as async indexing. However, very large tables 
+can take hours to index. This is where Hudi's novel asynchronous metadata indexing comes into play.
 
-We can now create different metadata indices, including `files`, `bloom_filters`, `column_stats` and `record_index` asynchronously in
-Hudi, which are then used by readers and writers to improve performance. Being able to index without blocking writing
+We can now create different metadata indices, including `files`, `bloom_filters`, `column_stats`, `partition_stats` and `record_index` 
+asynchronously in Hudi, which are then used by readers and writers to improve performance. Being able to index without blocking writing
 has two benefits,
 
 - improved write latency
 - reduced resource wastage due to contention between writing and indexing.
 
-In this document, we will learn how to setup asynchronous metadata indexing. To learn more about the design of this
-feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi).
+In this document, we will learn how to create indexes using SQL, Datasource and how to setup asynchronous metadata indexing. 
+To learn more about the design of asynchronous indexing feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi).
+
+## Index Creation Using SQL
+
+Currently indexes like secondary index, expression index and record index can be created using SQL create index command.
+For more information on these indexes please refer [metadata section](https://hudi.apache.org/docs/metadata/#metadata-table-indices)
+
+```bash
+// Create record index on primary keys providing the list of primary keys configured
+create index record_index on $tableName (primaryKey1,primayKey2,...);
+
+// Create secondary index on a non primary key. Currently secondary index is supported only on a 
+// single key field
+create index idx_name on $tableName (non-primary-key);
+
+// Create expression index by performing transformation on a table column. 
+// The index is created on the transformed column
+create index idx_column_ts on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd');
+create index idx_bloom_city on $tableName using bloom_filters(city) options(expr='upper');
+
+// Drop Index
+drop index record_index on $tableName;
+drop index idx_column_ts on $tableName;
+```
+
+## Index Creation Using Datasource
+
+Indexes like `bloom_filters`, `column_stats`, `partition_stats` and `record_index` can be created using Datasource. 
+Below we list the various configs which are needed to create the indexes mentioned.
+
+```bash
+// [Required Configs] Partition stats
+hoodie.metadata.index.partition.stats.enable=true
+hoodie.metadata.index.column.stats.enable=true
+// [Optional Configs] - list of columns to index on. By default all columns are indexed
+hoodie.metadata.index.column.stats.column.list=col1,col2,...
+
+// [Required Configs] Column stats
+hoodie.metadata.index.column.stats.enable=true
+// [Optional Configs] - list of columns to index on. By default all columns are indexed
+hoodie.metadata.index.column.stats.column.list=col1,col2,...
+
+// [Required Configs] Record Level Index
+hoodie.metadata.record.index.enable=true
+
+// [Required Configs] Bloom filter Index
+hoodie.metadata.index.bloom.filter.enable=true
+```
 
 ## Setup Async Indexing
 
