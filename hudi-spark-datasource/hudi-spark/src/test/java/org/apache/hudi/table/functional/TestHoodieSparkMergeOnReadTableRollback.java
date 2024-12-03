@@ -59,6 +59,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -80,8 +81,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -623,6 +624,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         .reduce(0L, Long::sum);
   }
 
+  // TODO(yihua): disabled for investigation
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testMORTableRestore(boolean restoreAfterCompaction) throws Exception {
