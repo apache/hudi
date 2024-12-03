@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceReadOptions.{INCREMENTAL_READ_TABLE_VERSION, START_OFFSET}
+import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
@@ -267,15 +267,14 @@ class TestStreamingSource extends StreamTest {
       // If the request time is used, i.e., V1, then the second record is included in the output.
       // Otherwise, only third record in the output.
       val startTimestamp = instants.get(1).requestedTime
-
-      for (incrementalReadTableVersion <- List(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.EIGHT.versionCode())) {
+      for (streamingReadTableVersion <- List(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.EIGHT.versionCode())) {
         val df = spark.readStream
           .format("org.apache.hudi")
           .option(START_OFFSET.key, startTimestamp)
-          .option(INCREMENTAL_READ_TABLE_VERSION.key, incrementalReadTableVersion.toString)
+          .option(STREAMING_READ_TABLE_VERSION.key, streamingReadTableVersion.toString)
           .load(tablePath)
           .select("id", "name", "price", "ts")
-        val expectedRows = if (incrementalReadTableVersion == HoodieTableVersion.EIGHT.versionCode()) {
+        val expectedRows = if (streamingReadTableVersion == HoodieTableVersion.EIGHT.versionCode()) {
           Seq(Row("2", "a1", "11", "001"), Row("3", "a1", "12", "002"))
         } else {
           Seq(Row("3", "a1", "12", "002"))

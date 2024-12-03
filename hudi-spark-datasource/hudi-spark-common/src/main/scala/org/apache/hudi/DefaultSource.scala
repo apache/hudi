@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.HoodieSchemaNotFoundException
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
@@ -36,8 +36,7 @@ import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.{PathUtils, SparkConfigUtils}
-
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSourceV1, HoodieStreamSourceV2}
@@ -242,11 +241,11 @@ class DefaultSource extends RelationProvider
     }
     val metaClient = HoodieTableMetaClient.builder()
       .setConf(storageConf.newInstance()).setBasePath(tablePath.toString).build()
-    // Check if the incremental table read version is set. If set, use the corresponding source
+    // Check if the streaming table read version is set. If set, use the corresponding source
     // which uses the version corresponding to IncrementalRelation to read the data. And, also
     // does the checkpoint management based on the version.
-    if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_TABLE_VERSION)) {
-      val writeTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
+    if (SparkConfigUtils.containsConfigProperty(parameters, STREAMING_READ_TABLE_VERSION)) {
+      val writeTableVersion = Integer.parseInt(parameters(STREAMING_READ_TABLE_VERSION.key))
       if (writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
         new HoodieStreamSourceV2(
           sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))

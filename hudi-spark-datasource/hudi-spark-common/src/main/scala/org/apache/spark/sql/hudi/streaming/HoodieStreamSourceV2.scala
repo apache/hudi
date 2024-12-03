@@ -40,7 +40,6 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
   * @param schemaOption
   * @param parameters
   */
-// TODO(yihua): handle V1/V2 checkpoint
 class HoodieStreamSourceV2(sqlContext: SQLContext,
                            metaClient: HoodieTableMetaClient,
                            metadataPath: String,
