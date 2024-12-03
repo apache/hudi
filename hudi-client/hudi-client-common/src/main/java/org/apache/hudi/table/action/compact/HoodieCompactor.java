@@ -135,11 +135,11 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
-    boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
+    boolean useFileGroupReaderBasedCompaction = compactionHandler.supportsFileGroupReader() // the engine needs to support fg reader first
+        && !metaClient.isMetadataTable()
         && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-        && compactionHandler.supportsFileGroupReader()            // the engine needs to support fg reader first
-        && !hasBootstrapFile(operations)                          // bootstrap file read for fg reader is not ready
-        && StringUtils.isNullOrEmpty(config.getInternalSchema()); // schema evolution support for fg reader is not ready
+        && !hasBootstrapFile(operations)                                                    // bootstrap file read for fg reader is not ready
+        && StringUtils.isNullOrEmpty(config.getInternalSchema());                           // schema evolution support for fg reader is not ready
 
     if (useFileGroupReaderBasedCompaction) {
       Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context);
