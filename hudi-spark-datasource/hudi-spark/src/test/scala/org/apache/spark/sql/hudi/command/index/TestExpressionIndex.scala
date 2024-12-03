@@ -19,12 +19,11 @@
 
 package org.apache.spark.sql.hudi.command.index
 
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils
-import org.apache.hudi.{DataSourceReadOptions, ExpressionIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
@@ -33,7 +32,6 @@ import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.hive.HiveSyncConfigHolder._
 import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.index.HoodieIndex
@@ -44,8 +42,10 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.JFunction
+import org.apache.hudi.{DataSourceReadOptions, ExpressionIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{Column, SaveMode}
+import org.apache.spark.sql.Column.unapply
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, FromUnixTime, Literal, Upper}
@@ -53,7 +53,8 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.types.{BinaryType, ByteType, DateType, DecimalType, IntegerType, ShortType, StringType, StructType, TimestampType}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Column, SaveMode, functions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.scalatest.Ignore
@@ -442,6 +443,10 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
                | partitioned by(price)
                | location '$basePath'
        """.stripMargin)
+          if (HoodieSparkUtils.gteqSpark3_4) {
+            spark.sql("set spark.sql.defaultColumn.enabled=false")
+          }
+
           spark.sql(s"insert into $tableName (id, name, ts, price) values(1, 'a1', 1000, 10)")
           spark.sql(s"insert into $tableName (id, name, ts, price) values(2, 'a2', 200000, 100)")
           spark.sql(s"insert into $tableName (id, name, ts, price) values(3, 'a3', 2000000000, 1000)")
@@ -759,6 +764,96 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   }
 
   @Test
+  def testColumnStatsIndexPruning(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName + s"_bloom_pruning_$tableType"
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+          spark.sql(
+            s"""
+           CREATE TABLE $tableName (
+               |    ts LONG,
+               |    id STRING,
+               |    rider STRING,
+               |    driver STRING,
+               |    fare DOUBLE,
+               |    city STRING,
+               |    state STRING
+               |) USING HUDI
+               |options(
+               |    primaryKey ='id',
+               |    type = '$tableType',
+               |    hoodie.metadata.enable = 'true',
+               |    hoodie.datasource.write.recordkey.field = 'id',
+               |    hoodie.enable.data.skipping = 'true'
+               |)
+               |PARTITIONED BY (state)
+               |location '$basePath'
+               |""".stripMargin)
+
+          spark.sql("set hoodie.parquet.small.file.limit=0")
+          if (HoodieSparkUtils.gteqSpark3_4) {
+            spark.sql("set spark.sql.defaultColumn.enabled=false")
+          }
+
+          spark.sql(
+            s"""
+               |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
+               |  (1695414527,'trip1','rider-A','driver-K',19.10,'san_francisco','california'),
+               |  (1695414531,'trip6','rider-C','driver-K',17.14,'san_diego','california'),
+               |  (1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas'),
+               |  (1695516137,'trip4','rider-F','driver-P',34.15,'houston','texas')
+               |""".stripMargin)
+          spark.sql(
+            s"""
+               |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
+               |  (1695414520,'trip2','rider-C','driver-M',27.70,'sunnyvale','california'),
+               |  (1699349649,'trip5','rider-A','driver-Q',3.32,'san_diego','texas')
+               |""".stripMargin)
+
+          spark.sql(s"create index idx_rider on $tableName using column_stats(rider) options(expr='lower')")
+
+
+          // create expression index
+          spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')")
+          // validate index created successfully
+          var metaClient = createMetaClient(spark, basePath)
+          assertTrue(metaClient.getIndexMetadata.isPresent)
+          val expressionIndexMetadata = metaClient.getIndexMetadata.get()
+          assertEquals("expr_index_idx_datestr", expressionIndexMetadata.getIndexDefinitions.get("expr_index_idx_datestr").getIndexName)
+
+          val tableSchema: StructType =
+            StructType(
+              Seq(
+                StructField("ts", LongType),
+                StructField("id", StringType),
+                StructField("rider", StringType),
+                StructField("driver", StringType),
+                StructField("fare", DoubleType),
+                StructField("city", StringType),
+                StructField("state", StringType)
+              )
+            )
+          val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
+          metaClient = createMetaClient(spark, basePath)
+
+          val lowerExpr = resolveExpr(spark, unapply(functions.lower(functions.col("rider"))).get, tableSchema)
+          var literal = Literal.create("rider-c")
+          var dataFilter = EqualTo(lowerExpr, literal)
+          verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+
+          val fromUnixTime = resolveExpr(spark, unapply(functions.from_unixtime(functions.col("ts"), "yyyy-MM-dd")).get, tableSchema)
+          literal = Literal.create("2023-11-07")
+          dataFilter = EqualTo(fromUnixTime, literal)
+          verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        }
+      }
+    }
+  }
+
+  @Test
   def testBloomFiltersIndexPruning(): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
@@ -1054,7 +1149,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val metadataConfig = HoodieMetadataConfig.newBuilder()
           .fromProperties(toProperties(metadataOpts))
           .build()
-        val expressionIndexSupport = new ExpressionIndexSupport(spark, metadataConfig, metaClient)
+        val expressionIndexSupport = new ExpressionIndexSupport(spark, null, metadataConfig, metaClient)
         val prunedPartitions = Set("9")
         var indexDf = expressionIndexSupport.loadExpressionIndexDataFrame("expr_index_idx_datestr", prunedPartitions, shouldReadInMemory = true)
         // check only one record returned corresponding to the pruned partition
@@ -1144,7 +1239,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           .build()
         val fileIndex = new HoodieFileIndex(spark, metaClient, None,
           opts ++ metadataOpts ++ Map("glob.paths" -> s"$basePath/9", DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"), includeLogFiles = true)
-        val expressionIndexSupport = new ExpressionIndexSupport(spark, metadataConfig, metaClient)
+        val expressionIndexSupport = new ExpressionIndexSupport(spark, null, metadataConfig, metaClient)
         val partitionFilter: Expression = EqualTo(AttributeReference("c8", IntegerType)(), Literal(9))
         val (isPruned, prunedPaths) = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq(partitionFilter))
         assertTrue(isPruned)

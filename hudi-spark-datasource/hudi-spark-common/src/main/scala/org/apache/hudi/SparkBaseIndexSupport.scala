@@ -99,9 +99,9 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     (prunedPartitions, prunedFiles)
   }
 
-  protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], prunedFileNames: Set[String]): Set[String] = {
+  protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], prunedFileNames: Set[String], isExpressionIndex: Boolean = false): Set[String] = {
     val indexSchema = indexDf.schema
-    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema)).reduce(And)
+    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema, isExpressionIndex)).reduce(And)
     val prunedCandidateFileNames =
       indexDf.where(new Column(indexFilter))
         .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
