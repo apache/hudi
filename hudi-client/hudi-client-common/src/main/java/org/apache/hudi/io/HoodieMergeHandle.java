@@ -472,7 +472,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   public void performMergeDataValidationCheck(WriteStatus writeStatus) {
-    if (!config.isMergeDataValidationCheckEnabled() || baseFileToMerge != null) {
+    if (!config.isMergeDataValidationCheckEnabled() || baseFileToMerge == null) {
       return;
     }
 
