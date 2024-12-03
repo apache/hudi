@@ -1504,7 +1504,7 @@ public class HoodieAvroUtils {
       case UNION:
         return containsUnsupportedTypesForFileGroupReader(getActualSchemaFromUnion(schema, null));
       default:
-        return schema.getType() == Schema.Type.ENUM || schema.getLogicalType() instanceof LogicalTypes.Decimal;
+        return schema.getType() == Schema.Type.ENUM;
     }
   }
 }
