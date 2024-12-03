@@ -194,12 +194,7 @@ class TestHoodieSparkUtils {
       genRecRDD6.collect()
       fail("createRdd should fail, because records don't have a column which is not nullable in the passed in schema")
     } catch {
-      case e: Exception =>
-        if (HoodieSparkUtils.gteqSpark3_3) {
-          assertTrue(e.getMessage.contains("Field nullableInnerStruct.new_nested_col has no default value and is non-nullable"))
-        } else {
-          assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
-        }
+      case e: Exception => assertTrue(e.getMessage.contains("Field nullableInnerStruct.new_nested_col has no default value and is non-nullable"))
     }
     spark.stop()
   }

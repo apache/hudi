@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceReadOptions, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -129,9 +129,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
    * Refer to: `org.apache.spark.sql.catalyst.parser.AstBuilder#visitMergeIntoTable`
    *
    */
-  test("Test MergeInto with more than once update actions for spark >= 3.3.x") {
+  test("Test MergeInto with more than once update actions") {
 
-    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         val targetTable = generateTableName
         spark.sql(
@@ -182,7 +181,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "lb", 5, "shu", 1646643196L)
         )
       }
-    }
   }
 
 
@@ -191,7 +189,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
    * HUDI-7131
    */
   test("Test Merge Into with Global Index") {
-    if (HoodieSparkUtils.gteqSpark3_3) {
       withRecordType()(withTempDir { tmp =>
         withSQLConf("hoodie.index.type" -> "GLOBAL_BLOOM") {
           val targetTable = generateTableName
@@ -259,7 +256,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         }
       })
       spark.sessionState.conf.unsetConf("hoodie.index.type")
-    }
   }
 
   test("Test MergeInto with ignored record") {
@@ -522,11 +518,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       )
 
       // Delete with condition expression.
-      val errorMessage = if (HoodieSparkUtils.gteqSpark3_3) {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.s_id + 1)`"
-      } else {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`s_id` + 1)`;"
-      }
+      val errorMessage = "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.s_id + 1)`"
 
       checkException(
         s"""
@@ -734,11 +726,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         //
         // 2) set source column name to be different with target column
         //
-        val errorMessage = if (HoodieSparkUtils.gteqSpark3_3) {
-          "Failed to resolve pre-combine field `v` w/in the source-table output"
-        } else {
-          "Failed to resolve pre-combine field `v` w/in the source-table output;"
-        }
+        val errorMessage = "Failed to resolve pre-combine field `v` w/in the source-table output"
 
         checkException(
           s"""
@@ -799,11 +787,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       // Delete data with a condition expression on primaryKey field
       // 1) set source column name to be same as target column
       //
-      val complexConditionsErrorMessage = if (HoodieSparkUtils.gteqSpark3_3) {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.id + 1)`"
-      } else {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`id` + 1)`;"
-      }
+      val complexConditionsErrorMessage = "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.id + 1)`"
 
       checkException(
         s"""merge into $tableName1 t0
@@ -832,11 +816,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       //
       // 2.a) set source column name to be different with target column (should fail unable to match pre-combine field)
       //
-      val failedToResolveErrorMessage = if (HoodieSparkUtils.gteqSpark3_3) {
-        "Failed to resolve pre-combine field `v` w/in the source-table output"
-      } else {
-        "Failed to resolve pre-combine field `v` w/in the source-table output;"
-      }
+      val failedToResolveErrorMessage = "Failed to resolve pre-combine field `v` w/in the source-table output"
 
       checkException(
         s"""merge into $tableName1 t0
@@ -1299,11 +1279,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
 
       // Can't down-cast incoming dataset's primary-key w/o loss of precision (should fail)
-      val errorMsg = if (HoodieSparkUtils.gteqSpark3_3) {
-        "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
-      } else {
-        "Invalid MERGE INTO matching condition: s0.`id`: can't cast s0.`id` (of LongType) to IntegerType"
-      }
+      val errorMsg = "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
 
       checkExceptionContain(
         s"""
