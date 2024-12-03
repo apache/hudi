@@ -301,7 +301,7 @@ public class TestStreamSync {
 
     // setup
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
+    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class), new DefaultStorageStrategy());
     SparkSession sparkSession = mock(SparkSession.class);
     Configuration configuration = mock(Configuration.class);
     SourceFormatAdapter sourceFormatAdapter = mock(SourceFormatAdapter.class);

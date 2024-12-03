@@ -223,7 +223,7 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
   protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
 
   protected lazy val affectedFilesInCommits: java.util.List[StoragePathInfo] = {
-    listAffectedFilesForCommits(conf, metaClient.getBasePath, commitsMetadata)
+    listAffectedFilesForCommits(conf, metaClient.getBasePath, metaClient.getStorageStrategy, commitsMetadata)
   }
 
   protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {

@@ -600,7 +600,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testSetModificationTime() throws IOException {
     StoragePath path = new StoragePath(basePath, "dummy.txt");
     FileSystem fs = HadoopFSUtils.getFs(basePath, new Configuration());
-    HoodieStorage storage = new HoodieHadoopStorage(fs);
+    HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy());
     storage.create(path);
     long modificationTime = System.currentTimeMillis();
     storage.setModificationTime(path, modificationTime);

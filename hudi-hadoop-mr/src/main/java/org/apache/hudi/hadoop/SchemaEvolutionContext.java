@@ -167,7 +167,7 @@ public class SchemaEvolutionContext {
     if (split instanceof FileSplit) {
       Path path = ((FileSplit) split).getPath();
       FileSystem fs = path.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy());
       return TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
     }
     return Option.empty();

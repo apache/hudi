@@ -34,8 +34,10 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.{PathUtils, SparkConfigUtils}
+
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
@@ -43,6 +45,7 @@ import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, Hood
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
+
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -236,7 +239,7 @@ class DefaultSource extends RelationProvider
     val storageConf = HadoopFSUtils.getStorageConf(sqlContext.sparkSession.sessionState.newHadoopConf())
     val tablePath: StoragePath = {
       val path = new StoragePath(parameters.getOrElse("path", "Missing 'path' option"))
-      val fs = new HoodieHadoopStorage(path, storageConf)
+      val fs = new HoodieHadoopStorage(path, storageConf, new DefaultStorageStrategy(path.toString))
       TablePathUtils.getTablePath(fs, path).get()
     }
     val metaClient = HoodieTableMetaClient.builder()

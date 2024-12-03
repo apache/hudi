@@ -78,7 +78,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
 
     HoodieWrapperFileSystem fs =
         new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
-    HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy(metaClient.getBasePathV2().toString()));
+    HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy(metaClient.getBasePath().toString()));
     metaClient.setStorage(storage);
   }
 
