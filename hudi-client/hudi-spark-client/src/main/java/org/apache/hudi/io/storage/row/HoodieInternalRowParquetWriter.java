@@ -53,4 +53,9 @@ public class HoodieInternalRowParquetWriter extends HoodieBaseParquetWriter<Inte
   public void writeRow(InternalRow row) throws IOException {
     super.write(row);
   }
+
+  @Override
+  public void writeFooterMetadata(String key, String value) {
+    writeSupport.addFooterMetadata(key, value);
+  }
 }

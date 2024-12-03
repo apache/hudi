@@ -30,6 +30,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.ExtensibleBucketIdentifier;
 import org.apache.hudi.index.bucket.ExtensibleBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkExtensibleBucketIndex;
+import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.ExtensibleBucketInsertPartitioner;
@@ -91,9 +92,8 @@ public class RDDExtensibleBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
   }
 
   @Override
-  protected boolean isRecordKeySortEnable() {
-    // if executing bucket resizing, then need to sort by record key
-    return (isExecutingBucketResizing && table.getConfig().isBucketResizingSortByRecordKeyEnabled()) || super.isRecordKeySortEnable();
+  protected boolean isRecordKeySorted() {
+    return (isExecutingBucketResizing && table.getConfig().isBucketResizingSortByRecordKeyEnabled()) || super.isRecordKeySorted();
   }
 
   @Override
@@ -150,7 +150,12 @@ public class RDDExtensibleBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
       public HoodieWriteHandle create(HoodieWriteConfig config, String commitTime, HoodieTable hoodieTable, String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
         // Ensure we do not create append handle for extensible bucket bulk_insert, align with `ExtensibleBucketBulkInsertDataInternalWriterHelper`
         ValidationUtils.checkArgument(!doAppend.get(idx), "Extensible Bucket bulk_insert only support write to new file group");
-        return writeHandleFactory.create(config, commitTime, hoodieTable, partitionPath, fileIdPrefix, taskContextSupplier);
+        HoodieWriteHandle writeHandle = writeHandleFactory.create(config, commitTime, hoodieTable, partitionPath, fileIdPrefix, taskContextSupplier);
+        ValidationUtils.checkState(writeHandle instanceof HoodieCreateHandle, "Extensible Bucket bulk_insert only support create handle");
+        if (getSortMarker().isPresent()) {
+          ((HoodieCreateHandle) writeHandle).setSortMarker(getSortMarker().get());
+        }
+        return writeHandle;
       }
     });
   }

@@ -24,10 +24,12 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieExtensibleBucketMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.SortMarker;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -40,6 +42,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.ExtensibleBucketIndexUtils;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -57,7 +61,6 @@ import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -81,6 +84,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_P
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // TODO: support not row writer
 @Tag("functional")
@@ -105,6 +109,11 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     if (initBucketNum == null) {
       pros.setProperty(HoodieTableConfig.INITIAL_BUCKET_NUM_FOR_NEW_PARTITION.key(), "8");
     }
+    String sort = options.get(HoodieClusteringConfig.BUCKET_RESIZING_SORT_BY_RECORD_KEY.key());
+    boolean sortByRecordKey = true;
+    if (sort != null && sort.equals("false")) {
+      sortByRecordKey = false;
+    }
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ, pros);
     config = getConfigBuilder().withProps(pros)
         .withAutoCommit(false)
@@ -118,6 +127,7 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
             .withClusteringUpdatesStrategy(HoodieClusteringConfig.SPARK_EXTENSIBLE_BUCKET_DUPLICATE_UPDATE_STRATEGY)
             .withBucketResizingTargetBucketNum(targetBucketNum)
             .withBucketResizingConcurrentWriteEnabled(true)
+            .withBucketResizingSortByRecordKey(sortByRecordKey)
             .build())
         .build();
 
@@ -291,7 +301,9 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
         Arguments.of("begin_lat", true),
         Arguments.of("_row_key", true),
         Arguments.of("begin_lat", false),
-        Arguments.of("_row_key", false)
+        Arguments.of("_row_key", false),
+        Arguments.of("not_sort", true),
+        Arguments.of("not_sort", false)
     );
   }
 
@@ -306,7 +318,9 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
   public void testClusteringColumnSort(String sortColumn, boolean rowWriterEnable) throws Exception {
     Map<String, String> options = new HashMap<>();
     // Record key is handled specially, for bucket-resizing, we sort by the record key by default
-    if (!sortColumn.equals("_row_key")) {
+    if (sortColumn.equalsIgnoreCase("not_sort")) {
+      options.put(HoodieClusteringConfig.BUCKET_RESIZING_SORT_BY_RECORD_KEY.key(), "false");
+    } else if (!sortColumn.equals("_row_key")) {
       options.put(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), sortColumn);
     }
     options.put("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
@@ -328,27 +342,63 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     Schema.Field field = rawSchema.getField(sortColumn);
     Schema.Field fileNameFiled = rawSchema.getField(FILENAME_METADATA_FIELD);
 
-    Comparator comparator;
-    if (field.schema().getType() == Schema.Type.DOUBLE) {
-      comparator = Comparator.comparingDouble(row -> (double) (((Row) row).get(field.pos())));
-    } else if (field.schema().getType() == Schema.Type.STRING) {
-      comparator = Comparator.comparing(row -> ((Row) row).get(field.pos()).toString());
-    } else {
-      throw new HoodieException("Cannot get comparator: unsupported data type, " + field.schema().getType());
-    }
 
     // Compare the sort column are sorted just with the bucket file
-    Row lastRow = null;
-    String lastFileName = null;
-    for (Row row : rows) {
-      String currentFileName = row.get(fileNameFiled.pos()).toString();
-      if (!(lastFileName == null || !currentFileName.equals(lastFileName) || lastRow == null)) {
-        Assertions.assertTrue(lastRow == null || comparator.compare(lastRow, row) <= 0,
-            "The rows are not sorted based on the column: " + sortColumn);
+    if (!sortColumn.equalsIgnoreCase("not_sort")) {
+      Comparator comparator;
+      if (field.schema().getType() == Schema.Type.DOUBLE) {
+        comparator = Comparator.comparingDouble(row -> (double) (((Row) row).get(field.pos())));
+      } else if (field.schema().getType() == Schema.Type.STRING) {
+        comparator = Comparator.comparing(row -> ((Row) row).get(field.pos()).toString());
+      } else {
+        throw new HoodieException("Cannot get comparator: unsupported data type, " + field.schema().getType());
       }
-      lastRow = row;
-      lastFileName = currentFileName;
+      Row lastRow = null;
+      String lastFileName = null;
+      for (Row row : rows) {
+        String currentFileName = row.get(fileNameFiled.pos()).toString();
+        if (!(lastFileName == null || !currentFileName.equals(lastFileName) || lastRow == null)) {
+          Assertions.assertTrue(lastRow == null || comparator.compare(lastRow, row) <= 0,
+              "The rows are not sorted based on the column: " + sortColumn);
+        }
+        lastRow = row;
+        lastFileName = currentFileName;
+      }
     }
+
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS).forEach(partition -> {
+      table.getSliceView().getLatestFileSlices(partition)
+          .forEach(slice -> {
+            Assertions.assertTrue(slice.getBaseFile().isPresent());
+            Assertions.assertTrue(slice.getLogFiles().count() == 0);
+            HoodieBaseFile baseFile = slice.getBaseFile().get();
+            try {
+              HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(
+                      table.getStorage().newInstance(baseFile.getStoragePath(), table.getStorageConf().newInstance()))
+                  .getReaderFactory(table.getConfig().getRecordMerger().getRecordType())
+                  .getFileReader(table.getConfig(), baseFile.getStoragePath());
+              Option<SortMarker> sortMarkerOpt = baseFileReader.getSortMarker();
+              if (sortColumn.equalsIgnoreCase("not_sort")) {
+                assertTrue(sortMarkerOpt.isEmpty());
+              } else {
+                assertTrue(sortMarkerOpt.isPresent());
+                SortMarker sortMarker = sortMarkerOpt.get();
+                assertEquals(SortMarker.SortOrder.ASC, sortMarker.getSortOrder());
+                assertEquals(SortMarker.SortMode.LINEAR, sortMarker.getSortMode());
+                assertEquals(1, sortMarker.getSortColumns().length);
+                if (sortColumn.equals("_row_key")) {
+                  assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, sortMarker.getSortColumns()[0]);
+                } else {
+                  assertEquals(sortColumn, sortMarker.getSortColumns()[0]);
+                }
+              }
+            } catch (IOException e) {
+              Assertions.fail(e);
+            }
+          });
+    });
+
   }
 
   /**
@@ -384,9 +434,11 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
   /**
    * Only one clustering job is allowed on each partition
    */
-  @Test
-  public void testConcurrentClustering() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testConcurrentClustering(boolean rowWriterEnable) throws IOException {
     setUp(5120, 16);
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     writeData(writeClient.createNewInstantTime(), 2000, true);
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     // Schedule again, it should not be scheduled as the previous one are doing clustering to all partitions
@@ -624,6 +676,23 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
 
     verifyRows(expectedRows, actualRows);
 
+    // concurrent bulk insert to un-resizing bucket
+    String concurrentWriteTime2 = writeClient.createNewInstantTime();
+    List<HoodieRecord> updatedRecords2 = Arrays.asList(generateHoodieRecord("key0", HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, concurrentWriteTime));
+    writeData(updatedRecords2, concurrentWriteTime2, true, true);
+
+    // expect 4 file group
+    table = HoodieSparkTable.create(config, context, metaClient);
+    firstPartitionView = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(2, firstPartitionView.size());
+    secondPartitionView = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, secondPartitionView.size());
+    List<FileSlice> thirdPartitionView = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, thirdPartitionView.size());
+
+    expectedRows = readRecordsSortedByPK();
+    assertEquals(8, expectedRows.size());
+
     // execute clustering
     writeClient.cluster(clusteringTime, true);
 
@@ -633,7 +702,7 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     metaClient = HoodieTableMetaClient.reload(metaClient);
     table = HoodieSparkTable.create(config, context, metaClient);
 
-    // expect 5 file group
+    // expect 6 file group
     /**
      * partition_0
      *       - bucket_0_1
@@ -656,11 +725,17 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
      *          - key2
      *       - bucket_3_1 [not exist]
      *          - empty
+     *
+     * partition_2
+     *       - bucket_0_1
+     *          - key0
      */
     List<FileSlice> firstPartitionViewAfterClustering = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(3, firstPartitionViewAfterClustering.size());
     List<FileSlice> secondPartitionViewAfterClustering = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(2, secondPartitionViewAfterClustering.size());
+    List<FileSlice> thirdPartitionViewAfterClustering = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, thirdPartitionViewAfterClustering.size());
 
     actualRows = readRecordsSortedByPK();
     verifyRows(expectedRows, actualRows);

@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.HoodieExtensibleBucketMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -30,9 +29,9 @@ import org.apache.hudi.index.bucket.ExtensibleBucketIdentifier;
 import org.apache.hudi.index.bucket.ExtensibleBucketIndexUtils;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.ExtensibleBucketInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.SortBulkInsertPartitioner;
 
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
@@ -50,9 +49,7 @@ import scala.Tuple2;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
-public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>>, ExtensibleBucketInsertPartitioner {
-
-  private final HoodieTable table;
+public class ExtensibleBucketIndexBulkInsertPartitionerWithRows extends SortBulkInsertPartitioner<Dataset<Row>> implements ExtensibleBucketInsertPartitioner {
 
   private final String indexKeyFields;
 
@@ -71,14 +68,12 @@ public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkI
 
   private int totalRDDPartitionNum;
 
-  private final String[] sortColumnNames;
-
   public ExtensibleBucketIndexBulkInsertPartitionerWithRows(HoodieTable table,
                                                             Map<String, String> strategyParams,
                                                             boolean populateMetaFields) {
+    super(table, strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), ""));
     ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
         "ExtensibleBucketIndexBulkInsertPartitionerWithRows is only supported for MergeOnRead tables");
-    this.table = table;
     this.indexKeyFields = table.getConfig().getBucketIndexHashField();
     this.populateMetaFields = populateMetaFields;
     if (!populateMetaFields) {
@@ -87,12 +82,6 @@ public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkI
       this.keyGeneratorOpt = Option.empty();
     }
     this.extractor = RowRecordKeyExtractor.getRowRecordKeyExtractor(populateMetaFields, keyGeneratorOpt);
-    String sortString = strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), "");
-    if (!StringUtils.isNullOrEmpty(sortString)) {
-      this.sortColumnNames = sortString.split(",");
-    } else {
-      this.sortColumnNames = null;
-    }
   }
 
   /**
@@ -140,10 +129,10 @@ public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkI
             })
             .values(), records.schema());
 
-    if (sortColumnNames != null && sortColumnNames.length > 0) {
+    if (isCustomSorted()) {
       partitionedRows = partitionedRows
           .sortWithinPartitions(Arrays.stream(sortColumnNames).map(Column::new).toArray(Column[]::new));
-    } else if (table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE || isSortByRecordKeyForBucketResizing()) {
+    } else if (isRecordKeySorted()) {
       // For bucket resizing, we need to sort by record key by default
       if (populateMetaFields) {
         partitionedRows = partitionedRows.sortWithinPartitions(HoodieRecord.RECORD_KEY_METADATA_FIELD);
@@ -155,14 +144,9 @@ public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkI
     return partitionedRows;
   }
 
-  private boolean isSortByRecordKeyForBucketResizing() {
-    return isExecutingBucketResizing && table.getConfig().isBucketResizingSortByRecordKeyEnabled();
-  }
-
   @Override
-  public boolean arePartitionRecordsSorted() {
-    return (sortColumnNames != null && sortColumnNames.length > 0)
-        || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE || isSortByRecordKeyForBucketResizing();
+  protected boolean isRecordKeySorted() {
+    return (isExecutingBucketResizing && table.getConfig().isBucketResizingSortByRecordKeyEnabled()) || super.isRecordKeySorted();
   }
 
   private void prepareRepartition(JavaRDD<Row> rows) {

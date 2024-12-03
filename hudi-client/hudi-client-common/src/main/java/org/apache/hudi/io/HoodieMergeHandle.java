@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.model.SortMarker;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -97,7 +98,7 @@ import java.util.Set;
  * </p>
  */
 @NotThreadSafe
-public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> implements SortMarkerSupport {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 
@@ -114,6 +115,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected long insertRecordsWritten = 0;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
   private HoodieBaseFile baseFileToMerge;
+
+  protected Option<SortMarker> sortMarkerOption = Option.empty();
 
   protected Option<String[]> partitionFields = Option.empty();
   protected Object[] partitionValues = new Object[0];
@@ -438,8 +441,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       keyToNewRecords = null;
       writtenRecordKeys = null;
 
-      fileWriter.close();
-      fileWriter = null;
+      if (fileWriter != null) {
+        if (sortMarkerOption.isPresent()) {
+          fileWriter.writeFooterMetadata(SortMarker.SORT_MARKER_METADATA_KEY, sortMarkerOption.get().toJsonString());
+        }
+        fileWriter.close();
+        fileWriter = null;
+      }
+
 
       long fileSizeInBytes = storage.getPathInfo(newFilePath).getLength();
       HoodieWriteStat stat = writeStatus.getStat();
@@ -525,5 +534,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   public Object[] getPartitionValues() {
     return this.partitionValues;
+  }
+
+  @Override
+  public void setSortMarker(SortMarker sortMarker) {
+    this.sortMarkerOption = Option.of(sortMarker);
   }
 }

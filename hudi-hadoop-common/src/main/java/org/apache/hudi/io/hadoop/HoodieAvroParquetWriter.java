@@ -84,6 +84,11 @@ public class HoodieAvroParquetWriter
   }
 
   @Override
+  public void writeFooterMetadata(String key, String value) {
+    writeSupport.addFooterMetadata(key, value);
+  }
+
+  @Override
   public void close() throws IOException {
     super.close();
   }

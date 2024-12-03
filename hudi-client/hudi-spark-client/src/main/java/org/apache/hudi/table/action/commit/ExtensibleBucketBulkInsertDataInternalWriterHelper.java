@@ -19,6 +19,8 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.SortMarker;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.BucketIdentifier;
@@ -43,14 +45,22 @@ public class ExtensibleBucketBulkInsertDataInternalWriterHelper extends BucketBu
 
   private static final Logger LOG = LoggerFactory.getLogger(ExtensibleBucketBulkInsertDataInternalWriterHelper.class);
 
+  // Only present when `arePartitionRecordsSorted` is true
+  protected Option<SortMarker> sortMarkerOption = Option.empty();
+
   public ExtensibleBucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig, String instantTime, int taskPartitionId, long taskId, long taskEpochId,
                                                             StructType structType, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
-    this(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted, false);
+    this(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted, false, null);
   }
 
   public ExtensibleBucketBulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig, String instantTime, int taskPartitionId, long taskId, long taskEpochId,
-                                                            StructType structType, boolean populateMetaFields, boolean arePartitionRecordsSorted, boolean shouldPreserveHoodieMetadata) {
+                                                            StructType structType, boolean populateMetaFields, boolean arePartitionRecordsSorted, boolean shouldPreserveHoodieMetadata,
+                                                            SortMarker sortMarker) {
     super(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted, shouldPreserveHoodieMetadata);
+    if (sortMarker != null) {
+      ValidationUtils.checkArgument(arePartitionRecordsSorted, "Sort marker is only valid when records are sorted");
+      this.sortMarkerOption = Option.of(sortMarker);
+    }
   }
 
   @Override
@@ -79,8 +89,12 @@ public class ExtensibleBucketBulkInsertDataInternalWriterHelper extends BucketBu
     ValidationUtils.checkArgument(bucketIdentifier.isPending() || !bucketIdentifier.isPartitionExist(),
         "Extensible Bucket bulk_insert only support write to new file group");
 
-    return new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
+    HoodieRowCreateHandle createHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
         instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
+    if (sortMarkerOption.isPresent()) {
+      createHandle.setSortMarker(sortMarkerOption.get());
+    }
+    return createHandle;
   }
 
   private ExtensibleBucketIdentifier getBucketIdentifier(String partition) {

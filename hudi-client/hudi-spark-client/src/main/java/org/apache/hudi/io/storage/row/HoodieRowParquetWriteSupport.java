@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 
@@ -32,6 +33,7 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED;
@@ -43,6 +45,7 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
 
   private final Configuration hadoopConf;
   private final Option<HoodieBloomFilterWriteSupport<UTF8String>> bloomFilterWriteSupportOpt;
+  private final Map<String, String> footerMetadata = new HashMap<>();
 
   public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     Configuration hadoopConf = new Configuration(conf);
@@ -62,8 +65,8 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   @Override
   public WriteSupport.FinalizedWriteContext finalizeWrite() {
     Map<String, String> extraMetadata =
-        bloomFilterWriteSupportOpt.map(HoodieBloomFilterWriteSupport::finalizeMetadata)
-            .orElse(Collections.emptyMap());
+        CollectionUtils.combine(footerMetadata, bloomFilterWriteSupportOpt.map(HoodieBloomFilterWriteSupport::finalizeMetadata)
+            .orElse(Collections.emptyMap()));
 
     return new WriteSupport.FinalizedWriteContext(extraMetadata);
   }
@@ -71,6 +74,10 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   public void add(UTF8String recordKey) {
     this.bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
         bloomFilterWriteSupport.addKey(recordKey));
+  }
+
+  public void addFooterMetadata(String key, String value) {
+    footerMetadata.put(key, value);
   }
 
   private static class HoodieBloomFilterRowWriteSupport extends HoodieBloomFilterWriteSupport<UTF8String> {

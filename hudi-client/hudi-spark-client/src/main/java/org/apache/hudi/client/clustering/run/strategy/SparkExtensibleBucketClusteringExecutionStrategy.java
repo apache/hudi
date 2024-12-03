@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieExtensibleBucketMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.SortMarker;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.ExtensibleBucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.RDDExtensibleBucketBulkInsertPartitioner;
@@ -70,6 +72,11 @@ public class SparkExtensibleBucketClusteringExecutionStrategy<T extends HoodieRe
     partitioner.addPendingExtensibleBucketMetadata(pendingMetadata);
 
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
+    Option<SortMarker> sortMarker = partitioner.getSortMarker();
+    if (sortMarker.isPresent()) {
+      return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
+          partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata, sortMarker.get());
+    }
     return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
         partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
   }

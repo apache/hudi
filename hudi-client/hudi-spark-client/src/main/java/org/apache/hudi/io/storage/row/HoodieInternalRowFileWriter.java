@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.io.storage.HoodieFileFooterMetadataWriteSupport;
+
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
@@ -26,7 +28,7 @@ import java.io.IOException;
 /**
  * Abstraction to assist in writing {@link InternalRow}s to be used in datasource implementation.
  */
-public interface HoodieInternalRowFileWriter {
+public interface HoodieInternalRowFileWriter extends HoodieFileFooterMetadataWriteSupport {
 
   /**
    * @return {@code true} if this RowFileWriter can take in more writes. else {@code false}.
