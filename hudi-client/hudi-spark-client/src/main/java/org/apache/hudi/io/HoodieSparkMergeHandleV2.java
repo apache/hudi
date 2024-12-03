@@ -193,15 +193,6 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I
     }
   }
 
-  // TODO(yihua): is this still needed
-  /*
-  if (needsUpdateLocation()) {
-        record.unseal();
-        record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
-        record.seal();
-      }
-   */
-
   public void write() {
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Schema readerSchema;
