@@ -72,7 +72,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
 
-  public abstract Option<EngineBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context);
+  public abstract Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context);
 
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.
@@ -144,7 +144,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     Option<EngineBroadcastManager> broadcastManagerOpt = Option.empty();
     // Broadcast necessary information.
     if (useFileGroupReaderBasedCompaction) {
-      broadcastManagerOpt = getCompactorBroadcastManager(context);
+      broadcastManagerOpt = getEngineBroadcastManager(context);
       if (broadcastManagerOpt.isPresent()) {
         broadcastManagerOpt.get().prepareAndBroadcast();
       }

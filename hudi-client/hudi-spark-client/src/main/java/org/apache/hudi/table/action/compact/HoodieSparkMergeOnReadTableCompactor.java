@@ -45,7 +45,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
   @Override
-  public Option<EngineBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context) {
+  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context) {
     return Option.of(new SparkBroadcastManager(context));
   }
 

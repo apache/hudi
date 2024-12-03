@@ -43,7 +43,7 @@ public class HoodieJavaMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   @Override
-  public Option<EngineBroadcastManager> getCompactorBroadcastManager(HoodieEngineContext context) {
+  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context) {
     return Option.empty();
   }
 
