@@ -151,16 +151,17 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }
     final Option<EngineBroadcastManager> finalizedBroadcastManager = broadcastManagerOpt;
 
-    return context.parallelize(operations).map(
-            operation -> {
-              if (useFileGroupReaderBasedCompaction) {
-                return compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
-                    instantRange, taskContextSupplier, executionHelper, finalizedBroadcastManager);
-              }
-              return compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
-                  instantRange, taskContextSupplier, executionHelper);
-            })
-        .flatMap(List::iterator);
+    if (useFileGroupReaderBasedCompaction) {
+      return context.parallelize(operations).map(
+              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
+                  instantRange, taskContextSupplier, executionHelper, finalizedBroadcastManager))
+          .flatMap(List::iterator);
+    } else {
+      return context.parallelize(operations).map(
+              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
+                  instantRange, taskContextSupplier, executionHelper))
+          .flatMap(List::iterator);
+    }
   }
 
   /**
@@ -177,6 +178,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         taskContextSupplier, new CompactionExecutionHelper());
   }
 
+  /**
+   * Execute a single compaction operation and report back status.
+   */
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
                                    HoodieTableMetaClient metaClient,
                                    HoodieWriteConfig config,

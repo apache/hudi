@@ -46,7 +46,9 @@ public interface HoodieCompactionHandler<T> {
   Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
                                            Map<String, HoodieRecord<?>> recordMap);
 
-  boolean supportsFileGroupReader();
+  default boolean supportsFileGroupReader() {
+    return false;
+  }
 
   default List<WriteStatus> runCompactionUsingFileGroupReader(String instantTime,
                                                               CompactionOperation operation,

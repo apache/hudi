@@ -317,9 +317,4 @@ public class HoodieJavaCopyOnWriteTable<T>
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }
-
-  @Override
-  public boolean supportsFileGroupReader() {
-    return false;
-  }
 }

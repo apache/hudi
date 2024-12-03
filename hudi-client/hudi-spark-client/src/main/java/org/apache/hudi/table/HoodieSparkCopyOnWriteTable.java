@@ -283,8 +283,7 @@ public class HoodieSparkCopyOnWriteTable<T>
     HoodieSparkMergeHandleV2 mergeHandle = new HoodieSparkMergeHandleV2(config,
         instantTime, this, operation, taskContextSupplier, keyGeneratorOpt, readerContext, conf);
     mergeHandle.write();
-    mergeHandle.close();
-    return mergeHandle.getWriteStatuses();
+    return mergeHandle.close();
   }
 
   @Override

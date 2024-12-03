@@ -455,9 +455,4 @@ public class HoodieFlinkCopyOnWriteTable<T>
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }
-
-  @Override
-  public boolean supportsFileGroupReader() {
-    return false;
-  }
 }
