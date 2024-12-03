@@ -442,3 +442,10 @@ de426e0fd6 [ENG-17701][INTERNAL] Update refresh command for RemoteFSView (#1047)
 39b54e32cf [AUDIT-1052]: Changelog for release-v1.43.1 (#1030)
 7f8f0b3bb1 [ENG-11991][MINOR] Move field ordering lookup outside of loop for proto conversion (#1040)
 c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
+
+--- [2024-12-03 00:08:19] [release-v1.51.0] ---
+[AUDIT-1071][ENG-17447] Allow for bot.yml test bypass to speed up builds. (#1064)
+[AUDIT-1071][ENG-17447] Workflow changelog PR automation improvements (#1061)
+[ENG-17990][INTERNAL] Set REMOTE_INIT_TIMELINE_ENABLE correctly in updateWriteConfigWithTimelineServer (#1055)
+[AUDIT-1074] Change log for release-v1.46.0 (#1051)
+
