@@ -17,25 +17,21 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
+import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
-import org.apache.hudi.common.util.TablePathUtils
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{DataFrame, SQLContext}
 
 /**
   * The Struct Stream Source for Hudi to consume the data by streaming job.
@@ -44,25 +40,14 @@ import org.apache.spark.sql.types.StructType
   * @param schemaOption
   * @param parameters
   */
-class HoodieStreamSource(
-    sqlContext: SQLContext,
-    metadataPath: String,
-    schemaOption: Option[StructType],
-    parameters: Map[String, String],
-    offsetRangeLimit: HoodieOffsetRangeLimit)
+class HoodieStreamSourceV2(sqlContext: SQLContext,
+                           metaClient: HoodieTableMetaClient,
+                           metadataPath: String,
+                           schemaOption: Option[StructType],
+                           parameters: Map[String, String],
+                           offsetRangeLimit: HoodieOffsetRangeLimit,
+                           writeTableVersion: HoodieTableVersion)
   extends Source with Logging with Serializable with SparkAdapterSupport {
-
-  @transient private val storageConf = HadoopFSUtils.getStorageConf(
-    sqlContext.sparkSession.sessionState.newHadoopConf())
-
-  private lazy val tablePath: StoragePath = {
-    val path = new StoragePath(parameters.getOrElse("path", "Missing 'path' option"))
-    val fs = new HoodieHadoopStorage(path, storageConf)
-    TablePathUtils.getTablePath(fs, path).get()
-  }
-
-  private lazy val metaClient = HoodieTableMetaClient.builder()
-    .setConf(storageConf.newInstance()).setBasePath(tablePath.toString).build()
 
   private lazy val tableType = metaClient.getTableType
 
@@ -117,9 +102,15 @@ class HoodieStreamSource(
   }
 
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
-    val startOffset = start.map(HoodieSourceOffset(_))
+    var startOffset = start.map(HoodieSourceOffset(_))
       .getOrElse(initialOffsets)
-    val endOffset = HoodieSourceOffset(end)
+    var endOffset = HoodieSourceOffset(end)
+
+    // We update the offsets here since until this point the latest offsets have been
+    // calculated no matter if it is in the expected version.
+    // We translate them here, then the rest logic should be intact.
+    startOffset = HoodieSourceOffset(translateCheckpoint(startOffset.offsetCommitTime))
+    endOffset = HoodieSourceOffset(translateCheckpoint(endOffset.offsetCommitTime))
 
     if (startOffset == endOffset) {
       sqlContext.internalCreateDataFrame(
@@ -129,7 +120,7 @@ class HoodieStreamSource(
       if (isCDCQuery) {
         val cdcOptions = Map(
           DataSourceReadOptions.START_COMMIT.key() -> startCompletionTime,
-          DataSourceReadOptions.END_COMMIT.key() -> endOffset.completionTime
+          DataSourceReadOptions.END_COMMIT.key() -> endOffset.offsetCommitTime
         )
         val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions, rangeType)
           .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
@@ -140,18 +131,18 @@ class HoodieStreamSource(
         val incParams = parameters ++ Map(
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
           DataSourceReadOptions.START_COMMIT.key -> startCompletionTime,
-          DataSourceReadOptions.END_COMMIT.key -> endOffset.completionTime
+          DataSourceReadOptions.END_COMMIT.key -> endOffset.offsetCommitTime
         )
 
         val rdd = tableType match {
           case HoodieTableType.COPY_ON_WRITE =>
             val serDe = sparkAdapter.createSparkRowSerDe(schema)
-            new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient, rangeType)
+            new IncrementalRelationV2(sqlContext, incParams, Some(schema), metaClient, rangeType)
               .buildScan()
               .map(serDe.serializeRow)
           case HoodieTableType.MERGE_ON_READ =>
             val requiredColumns = schema.fields.map(_.name)
-            new MergeOnReadIncrementalRelation(sqlContext, incParams, metaClient, Some(schema), rangeType = rangeType)
+            new MergeOnReadIncrementalRelationV2(sqlContext, incParams, metaClient, Some(schema), rangeType = rangeType)
               .buildScan(requiredColumns, Array.empty[Filter])
               .asInstanceOf[RDD[InternalRow]]
           case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
@@ -163,9 +154,20 @@ class HoodieStreamSource(
 
   private def getStartCompletionTimeAndRangeType(startOffset: HoodieSourceOffset): (String, RangeType) = {
     startOffset match {
-      case INIT_OFFSET => (startOffset.completionTime, RangeType.CLOSED_CLOSED)
-      case HoodieSourceOffset(completionTime) => (completionTime, RangeType.OPEN_CLOSED)
+      case INIT_OFFSET => (
+        startOffset.offsetCommitTime, RangeType.CLOSED_CLOSED)
+      case HoodieSourceOffset(completionTime) => (
+        completionTime, RangeType.OPEN_CLOSED)
       case _=> throw new IllegalStateException("UnKnow offset type.")
+    }
+  }
+
+  private def translateCheckpoint(commitTime: String): String = {
+    if (writeTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      commitTime
+    } else {
+      CheckpointUtils.convertToCheckpointV1ForCommitTime(
+        new StreamerCheckpointV2(commitTime), metaClient).getCheckpointKey
     }
   }
 
