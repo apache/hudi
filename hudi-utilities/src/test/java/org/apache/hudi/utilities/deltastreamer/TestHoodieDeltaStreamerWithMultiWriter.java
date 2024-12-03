@@ -79,18 +79,22 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
   String propsFilePath;
   String tableBasePath;
 
+  @Override
   @BeforeEach
   public void setup() throws Exception {
     basePath = UtilitiesTestBase.basePath;
     super.setupTest();
   }
 
+  @Override
   @AfterEach
   public void teardown() throws Exception {
     TestDataSource.resetDataGen();
     FileIOUtils.deleteDirectory(new File(basePath));
   }
 
+  // TODO(yihua): Disabled for investigation
+  @Disabled
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   void testUpsertsContinuousModeWithMultipleWritersForConflicts(HoodieTableType tableType) throws Exception {

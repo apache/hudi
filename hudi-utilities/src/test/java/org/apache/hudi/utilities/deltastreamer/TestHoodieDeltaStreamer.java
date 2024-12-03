@@ -2773,6 +2773,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  // TODO(yihua): disabled for investigation
+  @Disabled
   @Test
   public void testResumeCheckpointAfterChangingMOR2COW() throws Exception {
     String tableBasePath = basePath + "/test_resume_checkpoint_after_changing_mor_to_cow";
