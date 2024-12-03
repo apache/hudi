@@ -104,7 +104,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -454,85 +453,87 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                 Schema tableSchemaWithMetaFields) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
-    boolean hasBootstrapFile = clusteringOps.stream().anyMatch(slice -> !StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()));
-    boolean canUseFileGroupReaderBasedClustering = !hasBootstrapFile
-        && getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+    boolean canUseFileGroupReaderBasedClustering = getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
+        && clusteringOps.stream().allMatch(slice -> StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()))
         && StringUtils.isNullOrEmpty(getWriteConfig().getInternalSchema())
-        && !containsUnsupportedTypesForFileGroupReader(tableSchemaWithMetaFields.toString());
+        && !HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(tableSchemaWithMetaFields);
 
     if (canUseFileGroupReaderBasedClustering) {
-      return clusterBasedOnFileGroupReader(jsc, instantTime, tableSchemaWithMetaFields, clusteringOps);
+      return readRecordsForGroupAsRowWithFileGroupReader(jsc, instantTime, tableSchemaWithMetaFields, clusteringOps);
     } else {
-      boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
-      SQLContext sqlContext = new SQLContext(jsc.sc());
-
-      StoragePath[] baseFilePaths = clusteringOps
-          .stream()
-          .map(op -> {
-            ArrayList<String> readPaths = new ArrayList<>();
-            // NOTE: for bootstrap tables, only need to handle data file path (which is the skeleton file) because
-            // HoodieBootstrapRelation takes care of stitching if there is bootstrap path for the skeleton file.
-            if (op.getDataFilePath() != null) {
-              readPaths.add(op.getDataFilePath());
-            }
-            return readPaths;
-          })
-          .flatMap(Collection::stream)
-          .filter(path -> !path.isEmpty())
-          .map(StoragePath::new)
-          .toArray(StoragePath[]::new);
-
-      HashMap<String, String> params = new HashMap<>();
-      if (hasLogFiles) {
-        params.put("hoodie.datasource.query.type", "snapshot");
-      } else {
-        params.put("hoodie.datasource.query.type", "read_optimized");
-      }
-
-      StoragePath[] paths;
-      if (hasLogFiles) {
-        String rawFractionConfig = getWriteConfig().getString(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION);
-        String compactionFractor = rawFractionConfig != null
-            ? rawFractionConfig : HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION;
-        params.put(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), compactionFractor);
-
-        StoragePath[] deltaPaths = clusteringOps
-            .stream()
-            .filter(op -> !op.getDeltaFilePaths().isEmpty())
-            .flatMap(op -> op.getDeltaFilePaths().stream())
-            .map(StoragePath::new)
-            .toArray(StoragePath[]::new);
-        paths = CollectionUtils.combine(baseFilePaths, deltaPaths);
-      } else {
-        paths = baseFilePaths;
-      }
-
-      String readPathString =
-          String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
-      String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
-      params.put("hoodie.datasource.read.paths", readPathString);
-      // Building HoodieFileIndex needs this param to decide query path
-      params.put("glob.paths", globPathString);
-
-      // Let Hudi relations to fetch the schema from the table itself
-      BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()
-          .createRelation(sqlContext, getHoodieTable().getMetaClient(), null, paths, params);
-      return sqlContext.baseRelationToDataFrame(relation);
+      return readRecordsForGroupAsRow(jsc, clusteringOps);
     }
   }
 
-  private boolean containsUnsupportedTypesForFileGroupReader(String schemaStr) {
-    return HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(new Schema.Parser().parse(schemaStr));
+  /**
+   * Get dataset of all records for the group. This includes all records from file slice (Apply updates from log files, if any).
+   */
+  private Dataset<Row> readRecordsForGroupAsRow(JavaSparkContext jsc, List<ClusteringOperation> clusteringOps) {
+    boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> !op.getDeltaFilePaths().isEmpty());
+    SQLContext sqlContext = new SQLContext(jsc.sc());
+
+    StoragePath[] baseFilePaths = clusteringOps
+        .stream()
+        .map(op -> {
+          ArrayList<String> readPaths = new ArrayList<>();
+          // NOTE: for bootstrap tables, only need to handle data file path (which is the skeleton file) because
+          // HoodieBootstrapRelation takes care of stitching if there is bootstrap path for the skeleton file.
+          if (op.getDataFilePath() != null) {
+            readPaths.add(op.getDataFilePath());
+          }
+          return readPaths;
+        })
+        .flatMap(Collection::stream)
+        .filter(path -> !path.isEmpty())
+        .map(StoragePath::new)
+        .toArray(StoragePath[]::new);
+
+    HashMap<String, String> params = new HashMap<>();
+    if (hasLogFiles) {
+      params.put("hoodie.datasource.query.type", "snapshot");
+    } else {
+      params.put("hoodie.datasource.query.type", "read_optimized");
+    }
+
+    StoragePath[] paths;
+    if (hasLogFiles) {
+      String rawFractionConfig = getWriteConfig().getString(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION);
+      String compactionFractor = rawFractionConfig != null
+          ? rawFractionConfig : HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION;
+      params.put(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), compactionFractor);
+
+      StoragePath[] deltaPaths = clusteringOps
+          .stream()
+          .filter(op -> !op.getDeltaFilePaths().isEmpty())
+          .flatMap(op -> op.getDeltaFilePaths().stream())
+          .map(StoragePath::new)
+          .toArray(StoragePath[]::new);
+      paths = CollectionUtils.combine(baseFilePaths, deltaPaths);
+    } else {
+      paths = baseFilePaths;
+    }
+
+    String readPathString =
+        String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
+    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
+    params.put("hoodie.datasource.read.paths", readPathString);
+    // Building HoodieFileIndex needs this param to decide query path
+    params.put("glob.paths", globPathString);
+
+    // Let Hudi relations to fetch the schema from the table itself
+    BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()
+        .createRelation(sqlContext, getHoodieTable().getMetaClient(), null, paths, params);
+    return sqlContext.baseRelationToDataFrame(relation);
   }
 
-  private Dataset<Row> clusterBasedOnFileGroupReader(JavaSparkContext jsc,
-                                                     String instantTime,
-                                                     Schema tableSchemaWithMetaFields,
-                                                     List<ClusteringOperation> clusteringOps) {
+  private Dataset<Row> readRecordsForGroupAsRowWithFileGroupReader(JavaSparkContext jsc,
+                                                                   String instantTime,
+                                                                   Schema tableSchemaWithMetaFields,
+                                                                   List<ClusteringOperation> clusteringOps) {
     String basePath = getWriteConfig().getBasePath();
     // construct supporting cast that executors might need
-    boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
+    final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     String internalSchemaStr = getWriteConfig().getInternalSchema();
     boolean isInternalSchemaPresent = !StringUtils.isNullOrEmpty(internalSchemaStr);
     SerializableSchema serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields);
@@ -545,28 +546,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     RDD<InternalRow> internalRowRDD = jsc.parallelize(clusteringOps, clusteringOps.size()).flatMap(new FlatMapFunction<ClusteringOperation, InternalRow>() {
       @Override
       public Iterator<InternalRow> call(ClusteringOperation clusteringOperation) throws Exception {
-        // construct FileSlice to pass into FileGroupReader
-        String partitionPath = clusteringOperation.getPartitionPath();
-        boolean baseFileExists = !StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath());
-        HoodieBaseFile baseFile = baseFileExists ? new HoodieBaseFile(new StoragePath(basePath, clusteringOperation.getDataFilePath()).toString()) : null;
-        List<HoodieLogFile> logFiles = clusteringOperation.getDeltaFilePaths().stream().map(p ->
-                new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
-                    basePath, partitionPath), p)))
-            .collect(Collectors.toList());
-
-        if (!baseFileExists) {
-          ValidationUtils.checkArgument(!logFiles.isEmpty(), "Both base file and log files are missing from this clustering operation " + clusteringOperation);
-        }
-        Collections.sort(logFiles, new HoodieLogFile.LogFileComparator());
-        String baseInstantTime = baseFileExists ? baseFile.getCommitTime() : logFiles.get(0).getDeltaCommitTime();
-        FileSlice fileSlice = new FileSlice(partitionPath, baseInstantTime, clusteringOperation.getFileId());
-        if (baseFileExists) {
-          fileSlice.setBaseFile(baseFile);
-        }
-        if (!logFiles.isEmpty()) {
-          logFiles.forEach(logFile -> fileSlice.addLogFile(logFile));
-        }
-
+        FileSlice fileSlice = clusteringOperation2FileSlice(basePath, clusteringOperation);
         // instantiate other supporting cast
         Schema readerSchema = serializableTableSchemaWithMetaFields.get();
         Option<InternalSchema> internalSchemaOption = Option.empty();
@@ -601,6 +581,27 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     return HoodieUnsafeUtils.createDataFrameFromRDD(((HoodieSparkEngineContext) getEngineContext()).getSqlContext().sparkSession(),
         internalRowRDD, sparkSchemaWithMetaFields);
+  }
+
+  /**
+   * Construct FileSlice from a given clustering operation {@code clusteringOperation}.
+   */
+  private FileSlice clusteringOperation2FileSlice(String basePath, ClusteringOperation clusteringOperation) {
+    String partitionPath = clusteringOperation.getPartitionPath();
+    boolean baseFileExists = !StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath());
+    HoodieBaseFile baseFile = baseFileExists ? new HoodieBaseFile(new StoragePath(basePath, clusteringOperation.getDataFilePath()).toString()) : null;
+    List<HoodieLogFile> logFiles = clusteringOperation.getDeltaFilePaths().stream().map(p ->
+            new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
+                basePath, partitionPath), p)))
+        .sorted(new HoodieLogFile.LogFileComparator())
+        .collect(Collectors.toList());
+
+    ValidationUtils.checkState(baseFileExists || !logFiles.isEmpty(), "Both base file and log files are missing from this clustering operation " + clusteringOperation);
+    String baseInstantTime = baseFileExists ? baseFile.getCommitTime() : logFiles.get(0).getDeltaCommitTime();
+    FileSlice fileSlice = new FileSlice(partitionPath, baseInstantTime, clusteringOperation.getFileId());
+    fileSlice.setBaseFile(baseFile);
+    logFiles.forEach(fileSlice::addLogFile);
+    return fileSlice;
   }
 
   /**
