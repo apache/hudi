@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{ConfigUtils, TablePathUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
-import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
+import org.apache.hudi.config.HoodieWriteConfig.{WRITE_CONCURRENCY_MODE, WRITE_TABLE_VERSION}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
@@ -244,23 +244,24 @@ class DefaultSource extends RelationProvider
     // Check if the streaming table read version is set. If set, use the corresponding source
     // which uses the version corresponding to IncrementalRelation to read the data. And, also
     // does the checkpoint management based on the version.
+    val targetTableVersion = Integer.parseInt(parameters(WRITE_TABLE_VERSION.key))
     if (SparkConfigUtils.containsConfigProperty(parameters, STREAMING_READ_TABLE_VERSION)) {
-      val writeTableVersion = Integer.parseInt(parameters(STREAMING_READ_TABLE_VERSION.key))
-      if (writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
+      val sourceTableVersion = Integer.parseInt(parameters(STREAMING_READ_TABLE_VERSION.key))
+      if (sourceTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
         new HoodieStreamSourceV2(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))
+          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
       } else {
         new HoodieStreamSourceV1(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))
+          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
       }
     } else {
-      val writeTableVersion = metaClient.getTableConfig.getTableVersion.versionCode()
-      if (writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
+      val sourceTableVersion = metaClient.getTableConfig.getTableVersion.versionCode()
+      if (sourceTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
         new HoodieStreamSourceV2(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))
+          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
       } else {
         new HoodieStreamSourceV1(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(writeTableVersion))
+          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
       }
     }
   }

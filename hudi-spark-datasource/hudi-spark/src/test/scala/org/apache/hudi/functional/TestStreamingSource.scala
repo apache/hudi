@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.HoodieCompactionConfig
-import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
+import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE, WRITE_TABLE_VERSION}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql.streaming.StreamTest
@@ -271,6 +271,7 @@ class TestStreamingSource extends StreamTest {
         val df = spark.readStream
           .format("org.apache.hudi")
           .option(START_OFFSET.key, startTimestamp)
+          .option(WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode())
           .option(STREAMING_READ_TABLE_VERSION.key, streamingReadTableVersion.toString)
           .load(tablePath)
           .select("id", "name", "price", "ts")
