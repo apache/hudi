@@ -1896,6 +1896,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return targetNum;
   }
 
+  public boolean isBucketResizingSortByRecordKeyEnabled() {
+    return getBoolean(HoodieClusteringConfig.BUCKET_RESIZING_SORT_BY_RECORD_KEY);
+  }
+
   /**
    * index properties.
    */

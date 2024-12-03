@@ -93,6 +93,13 @@ public class ExtensibleBucketIdentifier extends BucketIdentifier {
         });
   }
 
+  /**
+   * Check if there has any bucket data file exist in this partition
+   */
+  public boolean isPartitionExist() {
+    return bucketLocations.size() > 0;
+  }
+
   public int getBucketId(HoodieKey key, List<String> indexKeyFields) {
     return getBucketId(key.getRecordKey(), indexKeyFields);
   }
@@ -137,5 +144,13 @@ public class ExtensibleBucketIdentifier extends BucketIdentifier {
 
   public boolean isPending() {
     return this.pending;
+  }
+
+  @Override
+  public String toString() {
+    return "ExtensibleBucketIdentifier{"
+        + "metadata=" + metadata
+        + ", pending=" + pending
+        + '}';
   }
 }

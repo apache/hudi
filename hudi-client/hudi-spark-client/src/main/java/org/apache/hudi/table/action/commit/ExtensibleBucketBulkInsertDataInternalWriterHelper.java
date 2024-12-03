@@ -76,12 +76,7 @@ public class ExtensibleBucketBulkInsertDataInternalWriterHelper extends BucketBu
     String fileIdPrefix = BucketIdentifier.newExtensibleBucketFileIdFixedSuffix(bucketId, bucketVersion);
     String fileId = FSUtils.createNewFileId(fileIdPrefix, 0);
 
-    // only support these two cases:
-    // 1. common
-    ValidationUtils.checkArgument(bucketIdentifier.isPending() || hoodieTable.getFileSystemView()
-        .getAllFileGroups(partitionPath)
-        .filter(fg -> fg.getAllFileSlices().findFirst().isPresent())
-        .noneMatch(fg -> fg.getFileGroupId().getFileId().equals(fileId)),
+    ValidationUtils.checkArgument(bucketIdentifier.isPending() || !bucketIdentifier.isPartitionExist(),
         "Extensible Bucket bulk_insert only support write to new file group");
 
     return new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
@@ -89,7 +84,7 @@ public class ExtensibleBucketBulkInsertDataInternalWriterHelper extends BucketBu
   }
 
   private ExtensibleBucketIdentifier getBucketIdentifier(String partition) {
-    return ExtensibleBucketIndexUtils.fetchLatestUncommittedExtensibleBucketIdentifier(hoodieTable, Collections.singleton(partition)).get(partition);
+    return ExtensibleBucketIndexUtils.fetchLatestUncommittedExtensibleBucketIdentifier(hoodieTable, Collections.singleton(partition), true).get(partition);
   }
 
   @Override

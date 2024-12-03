@@ -42,8 +42,9 @@ import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
@@ -64,6 +65,9 @@ public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkI
   private Map<String/*partition path*/, Pair<ExtensibleBucketIdentifier, Integer/*RDD partition start offset*/>> partitionToIdentifier = new HashMap<>();
 
   private Map<String/*partition path*/, HoodieExtensibleBucketMetadata/*pending bucket-resizing related metadata*/> pendingMetadata = new HashMap<>();
+
+  // mark if this partitioner is used for writing to uncommitted buckets. Only for case that clustering service executes bucket resizing.
+  private boolean isExecutingBucketResizing;
 
   private int totalRDDPartitionNum;
 
@@ -110,6 +114,7 @@ public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkI
   @Override
   public void addPendingExtensibleBucketMetadata(HoodieExtensibleBucketMetadata metadata) {
     pendingMetadata.put(metadata.getPartitionPath(), metadata);
+    this.isExecutingBucketResizing = true;
   }
 
   // TODO: resolve unused partitions, for example:
@@ -119,7 +124,6 @@ public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkI
   public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputPartitions) {
     JavaRDD<Row> rowJavaRDD = records.toJavaRDD();
     prepareRepartition(rowJavaRDD);
-
     Dataset<Row> partitionedRows = records.sparkSession().createDataFrame(
         rowJavaRDD.mapToPair(row -> new Tuple2<>(getRDDPartitionId(row), row))
             .partitionBy(new Partitioner() {
@@ -139,7 +143,8 @@ public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkI
     if (sortColumnNames != null && sortColumnNames.length > 0) {
       partitionedRows = partitionedRows
           .sortWithinPartitions(Arrays.stream(sortColumnNames).map(Column::new).toArray(Column[]::new));
-    } else if (table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE) {
+    } else if (table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE || isSortByRecordKeyForBucketResizing()) {
+      // For bucket resizing, we need to sort by record key by default
       if (populateMetaFields) {
         partitionedRows = partitionedRows.sortWithinPartitions(HoodieRecord.RECORD_KEY_METADATA_FIELD);
       } else {
@@ -150,28 +155,47 @@ public class ExtensibleBucketIndexBulkInsertPartitionerWithRows implements BulkI
     return partitionedRows;
   }
 
+  private boolean isSortByRecordKeyForBucketResizing() {
+    return isExecutingBucketResizing && table.getConfig().isBucketResizingSortByRecordKeyEnabled();
+  }
+
   @Override
   public boolean arePartitionRecordsSorted() {
     return (sortColumnNames != null && sortColumnNames.length > 0)
-        || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE;
+        || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE || isSortByRecordKeyForBucketResizing();
   }
 
   private void prepareRepartition(JavaRDD<Row> rows) {
-    List<String> partitions = rows.map(this.extractor::getPartitionPath).distinct().collect();
+    if (isExecutingBucketResizing) {
+      // for bucket resizing, we need to only load metadata for partitions that are being resized
+      prepareRepartitionForBucketResizing();
+      return;
+    }
+    prepareRepartitionForNormalBulkInsert(rows);
+  }
+
+  private void prepareRepartitionForBucketResizing() {
     int startOffset = 0;
-    for (String partition : partitions) {
-      ExtensibleBucketIdentifier identifier = getBucketIdentifier(partition);
+    for (Map.Entry<String, HoodieExtensibleBucketMetadata> entry : pendingMetadata.entrySet()) {
+      ExtensibleBucketIdentifier identifier = new ExtensibleBucketIdentifier(entry.getValue(), true);
+      partitionToIdentifier.put(entry.getKey(), Pair.of(identifier, startOffset));
+      startOffset += identifier.getBucketNum();
+    }
+    totalRDDPartitionNum = startOffset;
+  }
+
+  private void prepareRepartitionForNormalBulkInsert(JavaRDD<Row> rows) {
+    Set<String> partitions = rows.map(this.extractor::getPartitionPath).distinct().collect().stream().collect(Collectors.toSet());
+    int startOffset = 0;
+    for (Map.Entry<String, ExtensibleBucketIdentifier> entry : ExtensibleBucketIndexUtils.fetchLatestUncommittedExtensibleBucketIdentifier(table, partitions)
+        .entrySet()) {
+      String partition = entry.getKey();
+      ExtensibleBucketIdentifier identifier = entry.getValue();
+      ValidationUtils.checkState(!identifier.isPending(), "Disallow bulk_insert write to the pending resizing bucket: " + identifier);
       partitionToIdentifier.put(partition, Pair.of(identifier, startOffset));
       startOffset += identifier.getBucketNum();
     }
     totalRDDPartitionNum = startOffset;
   }
 
-  private ExtensibleBucketIdentifier getBucketIdentifier(String partition) {
-    if (pendingMetadata.containsKey(partition)) {
-      return new ExtensibleBucketIdentifier(pendingMetadata.get(partition), true);
-    }
-    HoodieExtensibleBucketMetadata metadata = ExtensibleBucketIndexUtils.loadOrCreateMetadata(this.table, partition);
-    return new ExtensibleBucketIdentifier(metadata);
-  }
 }

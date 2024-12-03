@@ -75,7 +75,7 @@ public class ExtensibleBucketIndexUtils {
 
   private static final String TEMP_DIR = ".tmp";
 
-  public static ExtensibleBucketIdentifier loadExtensibleBucketIdentifierWithExistLocation(final HoodieTable table, final String partition) {
+  public static ExtensibleBucketIdentifier loadCommittedExtensibleBucketIdentifierWithExistLocation(final HoodieTable table, final String partition) {
     HoodieExtensibleBucketMetadata metadata = loadOrCreateMetadata(table, partition);
 
     Map<Integer/*bucket id*/, HoodieRecordLocation> bucketIdToFileIdMapping = new HashMap<>();
@@ -98,6 +98,11 @@ public class ExtensibleBucketIndexUtils {
     });
 
     return new ExtensibleBucketIdentifier(metadata, false, bucketIdToFileIdMapping);
+  }
+
+  public static ExtensibleBucketIdentifier loadCommittedExtensibleBucketIdentifier(final HoodieTable table, final String partition) {
+    HoodieExtensibleBucketMetadata metadata = loadOrCreateMetadata(table, partition);
+    return new ExtensibleBucketIdentifier(metadata);
   }
 
   /**
@@ -371,6 +376,11 @@ public class ExtensibleBucketIndexUtils {
   }
 
   public static Map<String/*partition*/, ExtensibleBucketIdentifier/*bucket layout, maybe uncommitted*/> fetchLatestUncommittedExtensibleBucketIdentifier(HoodieTable table, Set<String> partitions) {
+    return fetchLatestUncommittedExtensibleBucketIdentifier(table, partitions, false);
+  }
+
+  public static Map<String/*partition*/, ExtensibleBucketIdentifier/*bucket layout, maybe uncommitted*/>
+      fetchLatestUncommittedExtensibleBucketIdentifier(HoodieTable table, Set<String> partitions, boolean loadExistLocations) {
     // fetch from timeline
     Map<String, ExtensibleBucketIdentifier> pendingIdentifier = table.getActiveTimeline().reload().filterPendingReplaceOrClusteringTimeline().getInstantsAsStream()
         .map(instant -> ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant))
@@ -393,8 +403,11 @@ public class ExtensibleBucketIndexUtils {
 
     // fetch from extensible-bucket metadata path
     partitions.stream().filter(partition -> !pendingIdentifier.containsKey(partition)).forEach(partition -> {
-      HoodieExtensibleBucketMetadata metadata = loadOrCreateMetadata(table, partition);
-      pendingIdentifier.put(partition, new ExtensibleBucketIdentifier(metadata));
+      if (loadExistLocations) {
+        pendingIdentifier.put(partition, loadCommittedExtensibleBucketIdentifierWithExistLocation(table, partition));
+      } else {
+        pendingIdentifier.put(partition, loadCommittedExtensibleBucketIdentifier(table, partition));
+      }
     });
     return pendingIdentifier;
   }

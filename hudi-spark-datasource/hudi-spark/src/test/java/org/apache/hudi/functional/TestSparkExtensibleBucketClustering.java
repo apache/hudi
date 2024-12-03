@@ -38,7 +38,6 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.ExtensibleBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -306,10 +305,8 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
   @MethodSource("configParamsForSorting")
   public void testClusteringColumnSort(String sortColumn, boolean rowWriterEnable) throws Exception {
     Map<String, String> options = new HashMap<>();
-    // Record key is handled specially
-    if (sortColumn.equals("_row_key")) {
-      options.put(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), BulkInsertSortMode.PARTITION_SORT.toString());
-    } else {
+    // Record key is handled specially, for bucket-resizing, we sort by the record key by default
+    if (!sortColumn.equals("_row_key")) {
       options.put(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), sortColumn);
     }
     options.put("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
@@ -441,10 +438,12 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
         generateHoodieRecord("key4", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime));
   }
 
-  @Test
-  public void testCornerCase() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCornerCase(boolean rowWriterEnable) throws IOException {
     // initial bucket num with 2
     setUp(5120, 4, Collections.singletonMap(HoodieTableConfig.INITIAL_BUCKET_NUM_FOR_NEW_PARTITION.key(), "2"));
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     String commitTime = writeClient.createNewInstantTime();
     List<HoodieRecord> records = generateCornerCaseInitialRecords(commitTime);
 
@@ -499,10 +498,12 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     verifyRows(expectedRows, actualRows);
   }
 
-  @Test
-  public void testCornerCaseWithConcurrentWrite() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCornerCaseWithConcurrentWrite(boolean rowWriterEnable) throws IOException {
     // initial bucket num with 2
     setUp(5120, 4, Collections.singletonMap(HoodieTableConfig.INITIAL_BUCKET_NUM_FOR_NEW_PARTITION.key(), "2"));
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     String commitTime = writeClient.createNewInstantTime();
     List<HoodieRecord> records = generateCornerCaseInitialRecords(commitTime);
 
@@ -583,6 +584,88 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     verifyRows(expectedRows, actualRows);
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCornerCaseWithConcurrentBulkInsert(boolean rowWriterEnable) throws IOException {
+    // initial bucket num with 2
+    setUp(5120, 4, Collections.singletonMap(HoodieTableConfig.INITIAL_BUCKET_NUM_FOR_NEW_PARTITION.key(), "2"));
+    config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
+    String commitTime = writeClient.createNewInstantTime();
+    List<HoodieRecord> records = generateCornerCaseInitialRecords(commitTime);
+
+    writeData(records, commitTime, true);
+
+    // expect 3 file group
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    List<FileSlice> firstPartitionView = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(2, firstPartitionView.size());
+    List<FileSlice> secondPartitionView = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, secondPartitionView.size());
+
+    List<Row> expectedRows = readRecordsSortedByPK();
+
+    // schedule clustering
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+
+    String concurrentWriteTime = writeClient.createNewInstantTime();
+
+    // concurrent bulk insert to resizing bucket which not exist, i.e. partition_1: bucket_1_0
+    List<HoodieRecord> updatedRecords = Arrays.asList(
+        generateHoodieRecord("key1", HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, concurrentWriteTime));
+
+    assertThrows(Exception.class, () -> writeData(updatedRecords, concurrentWriteTime, true, true));
+    // expect 3 file group still
+    table = HoodieSparkTable.create(config, context, metaClient);
+    firstPartitionView = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(2, firstPartitionView.size());
+    secondPartitionView = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, secondPartitionView.size());
+    List<Row> actualRows = readRecordsSortedByPK();
+
+    verifyRows(expectedRows, actualRows);
+
+    // execute clustering
+    writeClient.cluster(clusteringTime, true);
+
+    actualRows = readRecordsSortedByPK();
+    verifyRows(expectedRows, actualRows);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    table = HoodieSparkTable.create(config, context, metaClient);
+
+    // expect 5 file group
+    /**
+     * partition_0
+     *       - bucket_0_1
+     *          - key0
+     *          - key4
+     *       - bucket_1_1
+     *          - key1
+     *       - bucket_2_1
+     *          - key2
+     *       - bucket_3_1 [not exist]
+     *          - empty
+     *
+     * partition_1
+     *       - bucket_0_1
+     *          - key0
+     *          - key4
+     *       - bucket_1_1 [not exist]
+     *          - empty
+     *       - bucket_2_1
+     *          - key2
+     *       - bucket_3_1 [not exist]
+     *          - empty
+     */
+    List<FileSlice> firstPartitionViewAfterClustering = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(3, firstPartitionViewAfterClustering.size());
+    List<FileSlice> secondPartitionViewAfterClustering = table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(2, secondPartitionViewAfterClustering.size());
+
+    actualRows = readRecordsSortedByPK();
+    verifyRows(expectedRows, actualRows);
+  }
+
   private void verifyRows(List<Row> expectedRows, List<Row> actualRows) {
     assertEquals(expectedRows.size(), actualRows.size());
     for (int i = 0; i < expectedRows.size(); i++) {
@@ -601,12 +684,26 @@ public class TestSparkExtensibleBucketClustering extends HoodieSparkClientTestHa
     return writeData(records, commitTime, doCommit);
   }
 
+  private List<WriteStatus> writeData(String commitTime, int totalRecords, boolean doCommit, boolean bulkInsert) {
+    List<HoodieRecord> records = dataGen.generateInserts(commitTime, totalRecords);
+    return writeData(records, commitTime, doCommit, bulkInsert);
+  }
+
   private List<WriteStatus> writeData(List<HoodieRecord> records, String commitTime, boolean doCommit) {
+    return writeData(records, commitTime, doCommit, false);
+  }
+
+  private List<WriteStatus> writeData(List<HoodieRecord> records, String commitTime, boolean doCommit, boolean bulkInsert) {
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     writeClient.startCommitWithTime(commitTime);
-    List<WriteStatus> writeStatues = writeClient.upsert(writeRecords, commitTime).collect();
+    List<WriteStatus> writeStatues;
+    if (bulkInsert) {
+      writeStatues = writeClient.bulkInsert(writeRecords, commitTime).collect();
+    } else {
+      writeStatues = writeClient.upsert(writeRecords, commitTime).collect();
+    }
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
       Assertions.assertTrue(writeClient.commitStats(commitTime, context.parallelize(writeStatues, 1), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),

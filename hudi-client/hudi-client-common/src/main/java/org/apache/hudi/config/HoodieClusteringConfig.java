@@ -361,6 +361,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "bucket resizing plan mode is FORCE."
           + "Value must be power of 2");
 
+  public static final ConfigProperty<Boolean> BUCKET_RESIZING_SORT_BY_RECORD_KEY = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "bucket.resizing.sort.by.record.key")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Sort records by record key during bucket resizing, only effective when bucket index engine is EXTENSIBLE_BUCKET.");
+
   /**
    * @deprecated this setting has no effect
    */
@@ -678,6 +685,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withBucketResizingConcurrentWriteEnabled(Boolean enabled) {
       clusteringConfig.setValue(BUCKET_RESIZING_CONCURRENT_WRITE_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withBucketResizingSortByRecordKey(Boolean enabled) {
+      clusteringConfig.setValue(BUCKET_RESIZING_SORT_BY_RECORD_KEY, String.valueOf(enabled));
       return this;
     }
 

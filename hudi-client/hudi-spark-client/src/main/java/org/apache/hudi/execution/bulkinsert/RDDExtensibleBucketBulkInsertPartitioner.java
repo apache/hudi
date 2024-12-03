@@ -40,8 +40,8 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
@@ -49,6 +49,9 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 public class RDDExtensibleBucketBulkInsertPartitioner<T> extends RDDBucketIndexPartitioner<T> implements ExtensibleBucketInsertPartitioner {
 
   private Map<String/*partition path*/, HoodieExtensibleBucketMetadata/*pending bucket-resizing related metadata*/> pendingMetadata = new HashMap<>();
+
+  // mark if this partitioner is used for writing to uncommitted buckets. Only for case that clustering service executes bucket resizing.
+  private boolean isExecutingBucketResizing;
 
   public RDDExtensibleBucketBulkInsertPartitioner(HoodieTable table,
                                                   Map<String, String> strategyParams,
@@ -88,35 +91,56 @@ public class RDDExtensibleBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
   }
 
   @Override
+  protected boolean isRecordKeySortEnable() {
+    // if executing bucket resizing, then need to sort by record key
+    return (isExecutingBucketResizing && table.getConfig().isBucketResizingSortByRecordKeyEnabled()) || super.isRecordKeySortEnable();
+  }
+
+  @Override
   public void addPendingExtensibleBucketMetadata(HoodieExtensibleBucketMetadata metadata) {
     pendingMetadata.put(metadata.getPartitionPath(), metadata);
+    this.isExecutingBucketResizing = true;
   }
 
   private Pair<Map<String/*partition path*/, Pair<ExtensibleBucketIdentifier, Integer>>, Integer/*total RDD partition num*/> initializeBucketIdentifier(JavaRDD<HoodieRecord<T>> records) {
-    List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collect();
+    if (isExecutingBucketResizing) {
+      return initializeBucketIdentifierForBucketResizing();
+    }
+    return initializeBucketIdentifierForNormalBulkInsert(records);
+  }
+
+  private Pair<Map<String/*partition path*/, Pair<ExtensibleBucketIdentifier, Integer>>, Integer/*total RDD partition num*/> initializeBucketIdentifierForBucketResizing() {
     int startOffset = 0;
     Map<String/*partition path*/, Pair<ExtensibleBucketIdentifier, Integer/*RDD partition start offset*/>> partitionToIdentifier = new HashMap<>();
-    for (String partition : partitions) {
-      ExtensibleBucketIdentifier identifier = getBucketIdentifier(partition);
+    for (Map.Entry<String, HoodieExtensibleBucketMetadata> entry : pendingMetadata.entrySet()) {
+      String partition = entry.getKey();
+      HoodieExtensibleBucketMetadata metadata = entry.getValue();
+      ExtensibleBucketIdentifier identifier = new ExtensibleBucketIdentifier(metadata, true);
       partitionToIdentifier.put(partition, Pair.of(identifier, startOffset));
       fileIdPfxList.addAll(identifier.generateFileIdPrefixForAllBuckets().collect(Collectors.toList()));
-      if (identifier.isPending()) {
-        // for pending bucket-resizing related partition, all buckets in this partition is not exist now, so can't be appended
-        doAppend.addAll(Collections.nCopies(identifier.getBucketNum(), false));
-      } else {
-        // for commited bucket layout, only bucket with absent location in fs can be appended
-        doAppend.addAll(identifier.generateRecordLocationForAllBucketsWithLogical().map(location -> !location.isLogicalLocation()).collect(Collectors.toList()));
-      }
+      // for pending bucket-resizing related partition, all buckets in this partition is not exist now, so can't be appended
+      doAppend.addAll(Collections.nCopies(identifier.getBucketNum(), false));
       startOffset += identifier.getBucketNum();
     }
     return Pair.of(partitionToIdentifier, startOffset);
   }
 
-  private ExtensibleBucketIdentifier getBucketIdentifier(String partition) {
-    if (pendingMetadata.containsKey(partition)) {
-      return new ExtensibleBucketIdentifier(pendingMetadata.get(partition), true);
+  private Pair<Map<String/*partition path*/, Pair<ExtensibleBucketIdentifier, Integer>>, Integer/*total RDD partition num*/> initializeBucketIdentifierForNormalBulkInsert(
+      JavaRDD<HoodieRecord<T>> records) {
+    Set<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collect().stream().collect(Collectors.toSet());
+    int startOffset = 0;
+    Map<String/*partition path*/, Pair<ExtensibleBucketIdentifier, Integer/*RDD partition start offset*/>> partitionToIdentifier = new HashMap<>();
+    for (Map.Entry<String, ExtensibleBucketIdentifier> entry : ExtensibleBucketIndexUtils.fetchLatestUncommittedExtensibleBucketIdentifier(table, partitions, true)
+        .entrySet()) {
+      String partition = entry.getKey();
+      ExtensibleBucketIdentifier identifier = entry.getValue();
+      ValidationUtils.checkState(!identifier.isPending(), "Disallow bulk_insert write to the pending resizing bucket: " + identifier);
+      partitionToIdentifier.put(partition, Pair.of(identifier, startOffset));
+      fileIdPfxList.addAll(identifier.generateFileIdPrefixForAllBuckets().collect(Collectors.toList()));
+      doAppend.addAll(identifier.generateRecordLocationForAllBucketsWithLogical().map(location -> !location.isLogicalLocation()).collect(Collectors.toList()));
+      startOffset += identifier.getBucketNum();
     }
-    return ExtensibleBucketIndexUtils.loadExtensibleBucketIdentifierWithExistLocation(this.table, partition);
+    return Pair.of(partitionToIdentifier, startOffset);
   }
 
   @Override

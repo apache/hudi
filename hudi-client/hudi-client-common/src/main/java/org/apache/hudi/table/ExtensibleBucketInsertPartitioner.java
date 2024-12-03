@@ -22,6 +22,13 @@ import org.apache.hudi.common.model.HoodieExtensibleBucketMetadata;
 
 public interface ExtensibleBucketInsertPartitioner {
 
+  /**
+   * Add pending extensible bucket metadata.
+   * When call this method, the bulk insert will directly use the pending metadata as the bucket metadata for writing data to after-resizing buckets.
+   * Used in the case of executing bulk insert.
+   * NOTE: This method should be called before the bulk insert operation, and will skip building identifiers from records, just use the pending metadata.
+   * For which not calling this method, the bulk insert will use the committed metadata as the bucket metadata and disallow writing data to the pending-resizing buckets.
+   * @param metadata pending bucket-resizing metadata
+   */
   void addPendingExtensibleBucketMetadata(HoodieExtensibleBucketMetadata metadata);
-
 }
