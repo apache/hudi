@@ -206,7 +206,7 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I
           new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     }
     // TODO(yihua): reader schema is good enough for writer?
-    HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
+    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
         hoodieTable.getMetaClient().getBasePath().toString(),
@@ -219,40 +219,41 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I
         hoodieTable.getMetaClient().getTableConfig().getProps(),
         0,
         Long.MAX_VALUE,
-        usePosition);
-    try {
+        usePosition)) {
       fileGroupReader.initRecordIterators();
-      HoodieFileGroupReaderIterator<InternalRow> recordIterator
-          = (HoodieFileGroupReaderIterator<InternalRow>) fileGroupReader.getClosableIterator();
-      StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema);
-      while (recordIterator.hasNext()) {
-        InternalRow row = recordIterator.next();
-        HoodieKey recordKey = new HoodieKey(
-            row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
-            row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD));
-        HoodieSparkRecord record = new HoodieSparkRecord(recordKey, row, sparkSchema, false);
-        Option recordMetadata = record.getMetadata();
-        if (!partitionPath.equals(record.getPartitionPath())) {
-          HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
-              + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
-          writeStatus.markFailure(record, failureEx, recordMetadata);
-          continue;
-        }
-        try {
-          writeToFile(recordKey, record, readerSchema, config.getPayloadConfig().getProps(), preserveMetadata);
-          writeStatus.markSuccess(record, recordMetadata);
-        } catch (Exception e) {
-          LOG.error("Error writing record  " + record, e);
-          writeStatus.markFailure(record, e, recordMetadata);
+      try (HoodieFileGroupReaderIterator<InternalRow> recordIterator
+               = (HoodieFileGroupReaderIterator<InternalRow>) fileGroupReader.getClosableIterator()) {
+        StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema);
+        while (recordIterator.hasNext()) {
+          InternalRow row = recordIterator.next();
+          HoodieKey recordKey = new HoodieKey(
+              row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
+              row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD));
+          HoodieSparkRecord record = new HoodieSparkRecord(recordKey, row, sparkSchema, false);
+          Option recordMetadata = record.getMetadata();
+          if (!partitionPath.equals(record.getPartitionPath())) {
+            HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
+                + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
+            writeStatus.markFailure(record, failureEx, recordMetadata);
+            continue;
+          }
+          try {
+            writeToFile(recordKey, record, readerSchema, config.getPayloadConfig().getProps(), preserveMetadata);
+            writeStatus.markSuccess(record, recordMetadata);
+          } catch (Exception e) {
+            LOG.error("Error writing record  " + record, e);
+            writeStatus.markFailure(record, e, recordMetadata);
+          }
+
         }
 
+        // The stats of inserts, updates, and deletes are updated once at the end
+        HoodieReadStats stats = fileGroupReader.getStats();
+        this.insertRecordsWritten = stats.getNumInserts();
+        this.updatedRecordsWritten = stats.getNumUpdates();
+        this.recordsDeleted = stats.getNumDeletes();
+        this.recordsWritten = stats.getNumInserts() + stats.getNumUpdates();
       }
-      // The stats of inserts, updates, and deletes are updated once at the end
-      HoodieReadStats stats = fileGroupReader.getStats();
-      this.insertRecordsWritten = stats.getNumInserts();
-      this.updatedRecordsWritten = stats.getNumUpdates();
-      this.recordsDeleted = stats.getNumDeletes();
-      this.recordsWritten = stats.getNumInserts() + stats.getNumUpdates();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
     }
