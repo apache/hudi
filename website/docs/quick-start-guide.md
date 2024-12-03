@@ -428,26 +428,53 @@ values={[
 <TabItem value="sparksql">
 
 ```sql
-// Create bloom filter expression index on city column
-create index idx_bloom_city on hudi_table using bloom_filters(city) options(expr='identity');
-// It would show bloom filter expression index
-show indexes from hudi_table;
-// Query on city column would prune the data using the idx_bloom_city index
-select id, rider from hudi_table where city = 'san_francisco';
+-- Create a table with primary key
+CREATE TABLE hudi_indexed_table (
+    ts BIGINT,
+    uuid STRING,
+    rider STRING,
+    driver STRING,
+    fare DOUBLE,
+    city STRING
+) USING HUDI
+options(
+    primaryKey ='uuid',
+    hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+)
+PARTITIONED BY (city);
 
-// Create column stat expression index on ts column
-create index idx_column_ts on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd');
-// Shows both expression indexes
-show indexes from hudi_table;
-// Query on ts column would prune the data using the idx_column_ts index
-select id, rider from hudi_table where city = 'san_francisco';
+INSERT INTO hudi_indexed_table
+VALUES
+(1695159649,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco'),
+(1695091554,'e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70 ,'san_francisco'),
+(1695046462,'9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90 ,'san_francisco'),
+(1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco'),
+(1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo'    ),
+(1695376420,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40 ,'sao_paulo'    ),
+(1695173887,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai'      ),
+(1695115999,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
 
-// Create secondary index on rider column
-create index idx_rider ON $tableName (rider);
-// Expression index and secondary index should show up
-show indexes from hudi_table;
-// Query on rider column would leverage the secondary index idx_rider
-select * from hudi_table where rider = 'rider-E';
+-- Create bloom filter expression index on city column
+CREATE INDEX idx_bloom_city ON hudi_indexed_table USING bloom_filters(city) OPTIONS(expr='identity');
+-- It would show bloom filter expression index
+SHOW INDEXES FROM hudi_indexed_table;
+-- Query on city column would prune the data using the idx_bloom_city index
+SELECT uuid, rider FROM hudi_indexed_table WHERE city = 'san_francisco';
+
+-- Create column stat expression index on ts column
+CREATE INDEX idx_column_driver ON hudi_indexed_table USING column_stats(rider) OPTIONS(expr='upper');
+-- Shows both expression indexes
+SHOW INDEXES FROM hudi_indexed_table;
+-- Query on ts column would prune the data using the idx_column_ts index
+SELECT * FROM hudi_indexed_table WHERE upper(driver) = 'DRIVER-S';
+
+-- Create secondary index on rider column
+CREATE INDEX record_index ON hudi_indexed_table (uuid);
+CREATE INDEX idx_rider ON hudi_indexed_table (rider);
+-- Expression index and secondary index should show up
+SHOW INDEXES FROM hudi_indexed_table;
+-- Query on rider column would leverage the secondary index idx_rider
+SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E';
 ```
 </TabItem>
 

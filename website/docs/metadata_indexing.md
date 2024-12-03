@@ -33,45 +33,44 @@ To learn more about the design of asynchronous indexing feature, please check ou
 Currently indexes like secondary index, expression index and record index can be created using SQL create index command.
 For more information on these indexes please refer [metadata section](https://hudi.apache.org/docs/metadata/#metadata-table-indices)
 
-```bash
-// Create record index on primary keys providing the list of primary keys configured
-create index record_index on $tableName (primaryKey1,primayKey2,...);
+**Examples**
+```sql
+-- Create record index on primary key - uuid
+CREATE INDEX record_index ON hudi_indexed_table (uuid);
 
-// Create secondary index on a non primary key. Currently secondary index is supported only on a 
-// single key field
-create index idx_name on $tableName (non-primary-key);
+-- Create secondary index on rider column.
+CREATE INDEX idx_rider ON hudi_indexed_table (rider);
 
-// Create expression index by performing transformation on a table column. 
-// The index is created on the transformed column
-create index idx_column_ts on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd');
-create index idx_bloom_city on $tableName using bloom_filters(city) options(expr='upper');
-
-// Drop Index
-drop index record_index on $tableName;
-drop index idx_column_ts on $tableName;
+-- Create expression index by performing transformation on driver and city column 
+-- The index is created on the transformed column. Here column stats index is created on ts column
+-- and bloom filters index is created on city column.
+CREATE INDEX idx_column_driver ON hudi_indexed_table USING column_stats(rider) OPTIONS(expr='upper');
+CREATE INDEX idx_bloom_city ON hudi_indexed_table USING bloom_filters(city) OPTIONS(expr='identity');
 ```
+
+For more information on index creation using SQL refer [SQL DDL](https://hudi.apache.org/docs/next/sql_ddl#create-index) 
 
 ## Index Creation Using Datasource
 
 Indexes like `bloom_filters`, `column_stats`, `partition_stats` and `record_index` can be created using Datasource. 
 Below we list the various configs which are needed to create the indexes mentioned.
 
-```bash
-// [Required Configs] Partition stats
+```sql
+-- [Required Configs] Partition stats
 hoodie.metadata.index.partition.stats.enable=true
 hoodie.metadata.index.column.stats.enable=true
-// [Optional Configs] - list of columns to index on. By default all columns are indexed
+-- [Optional Configs] - list of columns to index on. By default all columns are indexed
 hoodie.metadata.index.column.stats.column.list=col1,col2,...
 
-// [Required Configs] Column stats
+-- [Required Configs] Column stats
 hoodie.metadata.index.column.stats.enable=true
-// [Optional Configs] - list of columns to index on. By default all columns are indexed
+-- [Optional Configs] - list of columns to index on. By default all columns are indexed
 hoodie.metadata.index.column.stats.column.list=col1,col2,...
 
-// [Required Configs] Record Level Index
+-- [Required Configs] Record Level Index
 hoodie.metadata.record.index.enable=true
 
-// [Required Configs] Bloom filter Index
+-- [Required Configs] Bloom filter Index
 hoodie.metadata.index.bloom.filter.enable=true
 ```
 
