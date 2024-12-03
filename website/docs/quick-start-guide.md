@@ -453,8 +453,6 @@ select * from hudi_table where rider = 'rider-E';
 
 </Tabs
 >
-FIXME-vc: show a secondary expression index .. and tease functionality. 
-
 
 ## Update data {#upserts}
 

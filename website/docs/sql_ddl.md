@@ -607,16 +607,16 @@ ALTER TABLE hudi_table DROP PARTITION (dt='2021-12-09', hh='10');
 SHOW INDEXES FROM tableIdentifier;
 
 -- Drop partition
-DROP INDEX indexIdentifier on tableIdentifier;
+DROP INDEX indexIdentifier ON tableIdentifier;
 ```
 
 **Examples**
 ```sql
 -- Show indexes
-show indexes from $tableName;
+SHOW INDEXES FROM hudi_table;
 
 -- Drop Index
-drop index record_index on $tableName;
+DROP INDEX record_index ON hudi_table;
 ```
 
 ### Show create table
