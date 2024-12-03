@@ -3002,8 +3002,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     withSQLConf("hoodie.sql.bulk.insert.enable" -> "true", "hoodie.sql.insert.mode" -> "non-strict") {
       withRecordType()(withTempDir { tmp =>
         val tableName = generateTableName
-        // Create a partitioned table
-        // Specify wrong keygenarator by setting hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator'
+        // Create a multi-level partitioned table
+        // Specify wrong keygenarator by setting hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator'
         spark.sql(
           s"""
              |create table $tableName (
