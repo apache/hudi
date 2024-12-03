@@ -30,14 +30,11 @@ import java.io.Serializable;
 public class HoodieReadStats implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  /**
-   * Total number of insert records or converted to updates (for small file handling).
-   */
+  // Total number of insert records or converted to updates (for small file handling)
   protected long numInserts;
+  // Total number of updates
   private long numUpdates = 0L;
-  /**
-   * Total number of records deleted.
-   */
+  // Total number of records deleted
   protected long numDeletes;
 
   public HoodieReadStats() {

@@ -49,6 +49,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -128,7 +129,7 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I
         baseFileOpt.isPresent() ? baseFileOpt.get() : null,
         logFiles);
     this.preserveMetadata = true;
-    init(fileId, this.partitionPath, baseFileOpt);
+    init(operation, this.partitionPath, baseFileOpt);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
@@ -140,11 +141,13 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
-  private void init(String fileId, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
+  private void init(CompactionOperation operation, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.baseFileToMerge = baseFileToMerge.orElse(null);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
+    writeStatus.getStat().setTotalLogSizeCompacted(
+        operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
     try {
       Option<String> latestValidFilePath = Option.empty();
       if (baseFileToMerge.isPresent()) {
@@ -248,11 +251,19 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I
         }
 
         // The stats of inserts, updates, and deletes are updated once at the end
+        // These will be set in the write stat when closing the merge handle
         HoodieReadStats stats = fileGroupReader.getStats();
         this.insertRecordsWritten = stats.getNumInserts();
         this.updatedRecordsWritten = stats.getNumUpdates();
         this.recordsDeleted = stats.getNumDeletes();
         this.recordsWritten = stats.getNumInserts() + stats.getNumUpdates();
+        // Set log merging stats
+        // writeStatus.getStat().setTotalUpdatedRecordsCompacted(0);
+        // writeStatus.getStat().setTotalLogFilesCompacted(0);
+        // writeStatus.getStat().setTotalLogRecords(0);
+        // writeStatus.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());
+        // writeStatus.getStat().setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+        // writeStatus.getStat().setTotalRollbackBlocks(scanner.getTotalRollbacks());
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
