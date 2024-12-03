@@ -5,48 +5,109 @@ toc_min_heading_level: 2
 toc_max_heading_level: 4
 ---
 
-## Indexing
+In databases, indexes are auxiliary data structures maintained to quickly locate records needed, without reading unnecessary data
+from storage. Given that Hudi’s design has been heavily optimized for handling mutable change streams, with different
+write patterns, Hudi considers [indexing](#indexing) as an integral part of its design and has uniquely supported
+[indexing capabilities](https://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/) from its inception, to speed
+up writes on the [data lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/), while still providing 
+columnar query performance.
 
-Hudi provides efficient upserts, by mapping a given hoodie key (record key + partition path) consistently to a file id, via an indexing mechanism.
-This mapping between record key and file group/file id, never changes once the first version of a record has been written to a file. In short, the
-mapped file group contains all versions of a group of records.
+## Mapping keys to file groups
+The most foundational index mechanism in Hudi tracks a mapping from a given key (record key + optionally partition path) consistently to a file id. Other types of indexes like secondary indexes,
+build on this foundation. This mapping between record key and file group/file id rarely changes once the first version of a record has been written to a file group. 
+Only clustering or cross-partition updates that are implemented as deletes + inserts remap the record key to a different file group. Even then, a given record key is associated with exactly one 
+file group at any completed instant on the timeline. 
 
-For [Copy-On-Write tables](/docs/next/table_types#copy-on-write-table), this enables fast upsert/delete operations, by 
-avoiding the need to join against the entire dataset to determine which files to rewrite.
-For [Merge-On-Read tables](/docs/next/table_types#merge-on-read-table), this design allows Hudi to bound the amount of 
-records any given base file needs to be merged against.
-Specifically, a given base file needs to merged only against updates for records that are part of that base file. In contrast,
-designs without an indexing component (e.g: [Apache Hive ACID](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions)),
-could end up having to merge all the base files against all incoming updates/delete records:
+## Need for indexing
+For [Copy-On-Write tables](/docs/next/table_types#copy-on-write-table), indexing enables fast upsert/delete operations, by avoiding the need to join against the entire dataset to determine which files to rewrite.
+For [Merge-On-Read tables](/docs/next/table_types#merge-on-read-table), indexing allows Hudi to bound the amount of change records any given base file needs to be merged against. Specifically, a given base file needs to merged 
+only against updates for records that are part of that base file. 
 
 ![Fact table](/assets/images/blog/hudi-indexes/with_without_index.png)
 <p align = "center">Figure: Comparison of merge cost for updates (dark blue blocks) against base files (light blue blocks)</p>
 
-## Multi-modal Indexing
-Hudi supoprts a multi-modal index by augmenting the metadata table with the capability to incorporate new types of indexes, complemented by an asynchronous mechanism for index construction. This enhancement supports a range of indexes within the metadata table, significantly improving the efficiency of both writing to and reading from the table. For additional information on Hudi's metadata table, check out Hudi's [metadata table](https://hudi.apache.org/docs/next/metadata) documentation.
+In contrast,
+- Designs without an indexing component (e.g: [Apache Hive/Apache Iceberg](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions)) end up having to merge all the base files against all incoming updates/delete records
+  (10-100x more [read amplification](/docs/next/table_types#comparison)).
+- Designs that implement heavily write-optimized OLTP data structures like LSM trees do not require an indexing component. But they perform poorly scan heavy workloads
+  against cloud storage making them unsuitable for serving analytical queries.
 
-## Index Types in Hudi
+Hudi shines by achieving both great write performance and read performance, at the extra storage costs of an index, which can however unlock a lot more, as we explore below.
+
+## Multi-modal Indexing
+[Multi-modal indexing](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi),
+introduced in [0.11.0 Hudi release](https://hudi.apache.org/releases/release-0.11.0/#multi-modal-index),
+is a re-imagination of what a general purpose indexing subsystem should look like for the lake. Multi-modal indexing is
+implemented by enhancing the metadata table with the flexibility to extend to new index types as new partitions,
+along with an [asynchronous index](https://hudi.apache.org/docs/metadata_indexing/#setup-async-indexing) building
+
+Hudi supports a multi-modal index by augmenting the metadata table with the capability to incorporate new types of indexes, complemented by an 
+asynchronous mechanism for [index construction](/docs/next/metadata_indexing). This enhancement supports a range of indexes within 
+the [metadata table](/docs/next/metadata#metadata-table), significantly improving the efficiency of both writing to and reading from the table.
+
+![Indexes](/assets/images/hudi-stack-indexes.png)
+<p align = "center">Figure: Indexes in Hudi</p>
+
+### Bloom Filters
+
+  [Bloom filter](https://github.com/apache/hudi/blob/46f41d186c6c84a6af2c54a907ff2736b6013e15/rfc/rfc-37/rfc-37.md) indexes as *bloom_filter* partition in the metadata table. 
+  This index employs range-based pruning on the minimum and maximum values of the record keys and bloom-filter-based lookups to tag incoming records. For large tables, this
+  involves reading the footers of all matching data files for bloom filters, which can be expensive in the case of random
+  updates across the entire dataset. This index stores bloom filters of all data files centrally to avoid scanning the
+  footers directly from all data files.
+
+### Record Indexes
+
+  [Record indexes](https://cwiki.apache.org/confluence/display/HUDI/RFC-08++Record+level+indexing+mechanisms+for+Hudi+datasets) as *record_index* partition in the metadata table. 
+  Contains the mapping of the record key to location. Record index is a global index, enforcing key uniqueness across all partitions in the table. This index aids in locating records faster than 
+  other existing indexes and can provide a speedup orders of magnitude faster in large deployments where index lookup dominates write latencies. To accommodate very high scales, it utilizes hash-based 
+  sharding of the key space. Additionally, when it comes to reading data, the index allows for point lookups significantly speeding up index mapping retrieval process.
+
+
+### Expression Index
+  An [expression index](https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md)
+  is an index on a function of a column. If a query has a predicate on a function of a column, the functional index can
+  be used to speed up the query. Functional index is stored in *func_index_* prefixed partitions (one for each
+  function) under metadata table. Functional index can be created using SQL syntax. Please checkout SQL DDL
+  docs [here](/docs/next/sql_ddl#create-functional-index-experimental) for more details.
+
+### Secondary Index
+
+  Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for
+  record key fields, Hudi supports [Record-level Index](/blog/2023/11/01/record-level-index). Secondary indexes
+  can be used to speed up queries with predicate on columns other than record key columns.
+
+
+## Additional writer-side indexes
+
+All the indexes discussed above are available both readers/writers using integration with metadata table. There are also indexing mechanisms 
+implemented by the storage engine, by efficiently reading/joining/processing incoming input records against information stored in base/log 
+files themselves (e.g. bloom filters stored in parquet file footers) or intelligent data layout (e.g. bucket index).
 
 Currently, Hudi supports the following index types. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java 
-engines.
+engines. Writers can pick one of these options using `hoodie.index.type` config option.
 
-- **BLOOM:** Uses bloom filters generated from record keys, with the option to further narrow down candidate files based on the ranges of the record keys. It requires keys to be partition-level unique so it can function correctly.
-- **GLOBAL_BLOOM:** Utilizes bloom filters created from record keys, and may also refine the selection of candidate files by using the ranges of record keys. It requires keys to be table/global-level unique so it can function correctly.
-- **SIMPLE (default for Spark engines):** This is the standard index type for the Spark engine. It executes an efficient join of incoming records with keys retrieved from the table stored on disk. It requires keys to be partition-level unique so it can function correctly. 
-- **GLOBAL_SIMPLE:** Performs a lean join of the incoming records against keys extracted from the table on storage. It requires keys to be table/global-level unique so it can function correctly.
-- **HBASE:** Mangages the index mapping through an external table in Apache HBase.
-- **INMEMORY (default for Flink and Java):** Uses in-memory hashmap in Spark and Java engine and Flink in-memory state in Flink for indexing.
-- **BUCKET:** Utilizes bucket hashing to identify the file group that houses the records, which proves to be particularly advantageous on a large scale. To select the type of bucket engine—that is, the method by which buckets are created—use the `hoodie.index.bucket.engine` configuration option.
-  - `SIMPLE(default)`: This index employs a fixed number of buckets for file groups within each partition, which do not have the capacity to decrease or increase in size. It is applicable to both COW and MOR tables. Due to the unchangeable number of buckets and the design principle of mapping each bucket to a single file group, this indexing method may not be ideal for partitions with significant data skew.
-  - `CONSISTENT_HASHING`: This index accommodates a dynamic number of buckets, with the capability for bucket resizing to ensure each bucket is sized appropriately. This addresses the issue of data skew in partitions with a high volume of data by allowing these partitions to be dynamically resized. As a result, partitions can have multiple reasonably sized buckets, unlike the fixed bucket count per partition seen in the SIMPLE bucket engine type. This feature is exclusively compatible with MOR tables.
+- **SIMPLE (default for Spark engines)**: This is the standard index type for the Spark engine. It executes an efficient join of incoming records with keys retrieved from the table stored on disk. It requires keys to be partition-level unique so it can function correctly.
+
+- **RECORD_INDEX** : Use the record index from section above as the writer side index.
+
+- **BLOOM**: Uses bloom filters generated from record keys, with the option to further narrow down candidate files based on the ranges of the record keys. It requires keys to be partition-level unique so it can function correctly.
+
+- **GLOBAL_BLOOM**: Utilizes bloom filters created from record keys, and may also refine the selection of candidate files by using the ranges of record keys. It requires keys to be table/global-level unique so it can function correctly.
+
+- **GLOBAL_SIMPLE**: Performs a lean join of the incoming records against keys extracted from the table on storage. It requires keys to be table/global-level unique so it can function correctly.
+
+- **HBASE**: Mangages the index mapping through an external table in Apache HBase.
+
+- **INMEMORY (default for Flink and Java)**: Uses in-memory hashmap in Spark and Java engine and Flink in-memory state in Flink for indexing.
+
+- **BUCKET**: Utilizes bucket hashing to identify the file group that houses the records, which proves to be particularly advantageous on a large scale. To select the type of bucket engine—that is, the method by which buckets are created—use the `hoodie.index.bucket.engine` configuration option.
+  - **SIMPLE(default)**: This index employs a fixed number of buckets for file groups within each partition, which do not have the capacity to decrease or increase in size. It is applicable to both COW and MOR tables. Due to the unchangeable number of buckets and the design principle of mapping each bucket to a single file group, this indexing method may not be ideal for partitions with significant data skew.
   
-- **RECORD_INDEX:** This index saves the record key to location mappings in the HUDI Metadata Table. It functions as a global index, requiring keys to be unique across all partitions within the table. To accommodate very high scales, it utilizes sharding. The record index is specifically optimized to enable fast upserts. Additionally, when it comes to reading data, the index is crafted to allow for rapid point lookups, significantly speeding up data retrieval processes.
+  - **CONSISTENT_HASHING**: This index accommodates a dynamic number of buckets, with the capability for bucket resizing to ensure each bucket is sized appropriately. This addresses the issue of data skew in partitions with a high volume of data by allowing these partitions to be dynamically resized. As a result, partitions can have multiple reasonably sized buckets, unlike the fixed bucket count per partition seen in the SIMPLE bucket engine type. This feature is exclusively compatible with MOR tables.
 
 - **Bring your own implementation:** You can extend this [public API](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/HoodieIndex.java) 
-to implement custom indexing.
-
-Writers can pick one of these options using `hoodie.index.type` config option. Additionally, a custom index implementation can also be employed
-using `hoodie.index.class` and supplying a subclass of `SparkHoodieIndex` (for Apache Spark writers)
+ and supply a subclass of `SparkHoodieIndex` (for Apache Spark writers) using `hoodie.index.class` to implement custom indexing.
 
 ### Global and Non-Global Indexes
 
@@ -60,7 +121,7 @@ HBase index are by nature a global index.
   In case of non-global index, lookup involves file groups only for the matching partitions from the incoming records and 
   so its not impacted by the total size of the table. These global indexes(GLOBAL_SIMPLE or GLOBAL_BLOOM), might be 
   acceptable for decent sized tables, but for large tables, a newly added index (0.14.0) called Record Level Index (RLI),
-  can offer pretty good index lookup performance compared to other global indices(GLOBAL_SIMPLE or GLOBAL_BLOOM) or 
+  can offer pretty good index lookup performance compared to other global indexes(GLOBAL_SIMPLE or GLOBAL_BLOOM) or 
   Hbase and also avoids the operational overhead of maintaining external systems.
 - **Non Global index:** On the other hand, the default index implementations enforce this constraint only within a specific partition.
   As one might imagine, non global indexes depends on the writer to provide the same consistent partition path for a given record key during update/delete,
@@ -99,13 +160,13 @@ for advanced configs.
 
 
 
-## Indexing Strategies
+### Picking Indexing Strategies
 
-Since data comes in at different volumes, velocity and has different access patterns, different indices could be used for different workload types.
+Since data comes in at different volumes, velocity and has different access patterns, different indexes could be used for different workload types.
 Let’s walk through some typical workload types and see how to leverage the right Hudi index for such use-cases.
 This is based on our experience and you should diligently decide if the same strategies are best for your workloads.
 
-### Workload 1: Late arriving updates to fact tables
+#### Workload 1: Late arriving updates to fact tables
 Many companies store large volumes of transactional data in NoSQL data stores. For eg, trip tables in case of ride-sharing, buying and selling of shares,
 orders in an e-commerce site. These tables are usually ever growing with random updates on most recent data with long tail updates going to older data, either
 due to transactions settling at a later date/data corrections. In other words, most updates go into the latest partitions with few updates going to older ones.
@@ -123,7 +184,7 @@ false positive ratio is high, it could increase the amount of data shuffled to p
 (enabled using `hoodie.bloom.index.filter.type=DYNAMIC_V0`), which adjusts its size based on the number of records stored in a given file to deliver the
 configured false positive ratio.
 
-### Workload 2: De-Duplication in event tables
+#### Workload 2: De-Duplication in event tables
 Event Streaming is everywhere. Events coming from Apache Kafka or similar message bus are typically 10-100x the size of fact tables and often treat "time" (event's arrival time/processing
 time) as a first class citizen. For eg, IoT event stream, click stream data, ad impressions etc. Inserts and updates only span the last few partitions as these are mostly append only data.
 Given duplicate events can be introduced anywhere in the end-end pipeline, de-duplication before storing on the data lake is a common requirement.
@@ -136,7 +197,7 @@ costs would grow linear with number of events and thus can be prohibitively expe
 that time is often a first class citizen and construct a key such as `event_ts + event_id` such that the inserted records have monotonically increasing keys. This yields great returns
 by pruning large amounts of files even within the latest table partitions.
 
-### Workload 3: Random updates/deletes to a dimension table
+#### Workload 3: Random updates/deletes to a dimension table
 These types of tables usually contain high dimensional data and hold reference data e.g user profile, merchant information. These are high fidelity tables where the updates are often small but also spread
 across a lot of partitions and data files ranging across the dataset from old to new. Often times, these tables are also un-partitioned, since there is also not a good way to partition these tables.
 
@@ -156,3 +217,5 @@ partition path value could change due to an update e.g users table partitioned b
 <h3>Videos</h3>
 
 * [Global Bloom Index: Remove duplicates & guarantee uniquness - Hudi Labs](https://youtu.be/XlRvMFJ7g9c)
+* [Multi-Modal Index for the Lakehouse in Apache Hudi](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi)
+

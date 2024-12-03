@@ -30,7 +30,7 @@ module.exports = {
                 'write_operations',
                 'table_types',
                 'key_generation',
-                'record_payload',
+                'record_merger',
                 'metadata',
                 'indexes',
                 'concurrency_control',
