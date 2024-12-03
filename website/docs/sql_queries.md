@@ -16,14 +16,13 @@ The Spark [quickstart](/docs/quick-start-guide) provides a good overview of how 
 
 ### Snapshot Query
 Snapshot queries are the most common query type for Hudi tables. Spark SQL supports snapshot queries on both COPY_ON_WRITE and MERGE_ON_READ tables.
-Using session properties, you can specify various options around data skipping and indexing to optimize query performance, as shown below.
+Using session properties, you can specify options around indexing to optimize query performance, as shown below.
 
 ```sql
--- You can turn on any relevant options for data skipping and indexing. 
--- for e.g. the following turns on data skipping based on column stats
-SET hoodie.enable.data.skipping=true;
+-- You can turn on relevant options for indexing. 
+
+-- Turn on use of column stat index, to perform range queries.
 SET hoodie.metadata.column.stats.enable=true;
-SET hoodie.metadata.enable=true;
 SELECT * FROM hudi_table
 WHERE price > 1.0 and price < 10.0
 
