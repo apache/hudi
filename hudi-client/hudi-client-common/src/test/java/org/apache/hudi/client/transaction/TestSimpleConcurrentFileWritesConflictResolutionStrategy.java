@@ -411,11 +411,11 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     // make sure c3 has conflict with C1,C11,C12,C4;
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, "file-2");
-    timeline.reload();
+    metaClient.reloadActiveTimeline();
     List<HoodieInstant> completedInstantsDuringCurrentWriteOperation = TransactionUtils
             .getCompletedInstantsDuringCurrentWriteOperation(metaClient, pendingInstant).collect(Collectors.toList());
     // C1,C11,C12,C4 should be included
-    Assertions.assertTrue(completedInstantsDuringCurrentWriteOperation.size() == 4);
+    Assertions.assertEquals(4, completedInstantsDuringCurrentWriteOperation.size());
 
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     // check C3 has conflict with C1,C11,C12,C4
