@@ -68,8 +68,8 @@ jobs:
           
           echo "Detected previous release version: $DETECTED_PREV_RELEASE_VERSION"
 
-          # If the next release version is not provided, auto-detect it:
-          if [ "${{ inputs.releaseVersion }}" == "auto-detect" ]; then
+          # If the next release version is not provided or it is null/empty, auto-detect it:
+          if [ -z "${{ inputs.releaseVersion }}" ] || [ "${{ inputs.releaseVersion }}" == "auto-detect" ]; then
               # Use this to bump the major version.
               RELEASE_MAJOR_VERSION="1"
               RELEASE_MINOR_VERSION="${{ steps.determine-hudi-release-version.outputs.CALCULATED_MINOR_VERSION }}"
@@ -164,9 +164,15 @@ jobs:
           # git config --list
           git push -u origin "$RELEASE_BRANCH_NAME" # --verbose
 
+          # If audit number is empty, default to [AUDIT-1071]
+          AUDIT_NUMBER="${{ inputs.auditNumber }}"
+          if [ -z "$AUDIT_NUMBER" ]; then
+            echo "Audit number is empty. Defaulting to [AUDIT-1071]."
+            AUDIT_NUMBER="[AUDIT-1071]"
+          fi
           # Commit the changelog to the release branch locally (but don't push).
           git add CHANGELOG
-          git commit -m "${{ inputs.auditNumber }}: Changelog for $RELEASE_BRANCH_NAME"
+          git commit -m "$AUDIT_NUMBER: Changelog for $RELEASE_BRANCH_NAME"
           CHANGELOG_COMMIT_ID=$(git log -1 --format=%H)
 
           # Now checkout the master branch (this behavior is a bit wonky,
