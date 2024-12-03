@@ -103,6 +103,10 @@ TBLPROPERTIES (
 );
 ```
 
+### Create table with record merge mode
+
+FIXME-vc: focus on event_time_ordering and custom... 
+
 ### Create table from an external location
 Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/hoodie_streaming_ingestion#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
@@ -191,6 +195,9 @@ AS SELECT * FROM parquet_table;
 ```
 
 ### Create Index (Experimental)
+
+FIXME-VC: make this more complete, show all kinds of index types, functional vs non-functional.. and add limitations to
+`caveats` below,
 
 Hudi supports creating and dropping indexes, including functional indexes, on a table.
 
@@ -582,6 +589,10 @@ SHOW PARTITIONS hudi_table;
 --Drop partition：
 ALTER TABLE hudi_table DROP PARTITION (dt='2021-12-09', hh='10');
 ```
+
+### Show and drop index
+FIXME-VC: fix this. 
+
 ### Show create table
 
 **Syntax**
@@ -701,6 +712,11 @@ WITH (
 'precombine.field' = 'ts'
 );
 ```
+
+### Create Table in Non-Blocking Concurrency Control
+
+FIXME-VC: show `  'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',` can be used to create a table.. 
+and how it can operate.
 
 ### Alter Table
 ```sql

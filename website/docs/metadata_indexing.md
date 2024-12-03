@@ -23,6 +23,9 @@ has two benefits,
 In this document, we will learn how to setup asynchronous metadata indexing. To learn more about the design of this
 feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi).
 
+FIXME-vc: fix this page, to get users to use Spark SQL for creating and dropping indexes.. and how it can work with
+tables created by Streamer or SQL , with concurrent writers.. and so on.
+
 ## Setup Async Indexing
 
 First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) which will continuously write data
