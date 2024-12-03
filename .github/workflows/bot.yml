@@ -40,6 +40,11 @@ jobs:
       - name: Determine Changed Files
         id: determine-skip
         run: |
+          # If there is no base ref, skip the check
+          if [ -z "${{ github.base_ref }}" ]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           git fetch origin ${{ github.base_ref }}
           CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }})
           echo "CHANGED_FILES=$CHANGED_FILES"
@@ -53,7 +58,6 @@ jobs:
 
   utilities:
     needs: skip-check
-    if: needs.skip-check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -80,18 +84,21 @@ jobs:
         run:
           mvn -am -pl $UTILITIES_MODULE clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
+        if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
           mvn test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
       - name: Hudi Utilties Unit Test
+        if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
           mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl $UTILITIES_MODULE $MVN_ARGS
       - name: Hudi Utilties Functional Test
+        if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -124,7 +131,6 @@ jobs:
           fi
   utilities_bundle_misc:
     needs: skip-check
-    if: needs.skip-check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -151,12 +157,14 @@ jobs:
         run:
           mvn -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE" clean install -T 4 -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS
       - name: Hudi Utilties Bundle Unit Test
+        if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
           mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE,!$UTILITIES_MODULE,!$SPARK_COMMON_MODULE,!$SPARK3_COMMON_MODULE,!$SPARK3PLUS_COMMON_MODULE,!$SPARK_MODULE,!$SPARK3_MODULE,!$HUDI_COMMON_MODULE,!$CLIENT_COMMON_MODULE,!$SPARK_CLIENT_MODULE,!$JAVA_CLIENT_MODULE" $MVN_ARGS
       - name: Hudi Utilties Bundle Functional Test
+        if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -189,7 +197,6 @@ jobs:
           fi
   hudi-client-and-common:
     needs: skip-check
-    if: needs.skip-check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -216,12 +223,14 @@ jobs:
         run:
           mvn clean install -T 2 -DskipTests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
       - name: Hudi Client Unit Tests
+        if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
       - name: Hudi Client Functional Tests
+        if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -254,7 +263,6 @@ jobs:
           fi
   spark-tests:
     needs: skip-check
-    if: needs.skip-check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -286,6 +294,7 @@ jobs:
           fi
           mvn clean install -T 2 -DskipTests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
       - name: Spark Datasource Unit Tests
+        if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -297,6 +306,7 @@ jobs:
           fi
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
       - name: Spark Datasource Functional Tests
+        if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
