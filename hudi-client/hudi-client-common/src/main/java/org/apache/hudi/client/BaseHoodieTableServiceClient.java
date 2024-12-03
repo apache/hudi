@@ -521,7 +521,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected abstract HoodieWriteMetadata<O> convertToOutputMetadata(HoodieWriteMetadata<T> writeMetadata);
 
-  private void completeClustering(HoodieReplaceCommitMetadata metadata,
+  protected void completeClustering(HoodieReplaceCommitMetadata metadata,
                                   HoodieTable table,
                                   String clusteringCommitTime) {
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();

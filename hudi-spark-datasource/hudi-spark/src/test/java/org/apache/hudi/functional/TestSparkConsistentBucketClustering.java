@@ -331,7 +331,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     List<WriteStatus> writeStatues = writeData(writeTime, 2000, false);
     // Cannot schedule clustering if there is in-flight writer
     Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
-    Assertions.assertTrue(writeClient.commitStats(writeTime, context.parallelize(writeStatues, 1), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    Assertions.assertTrue(writeClient.commitStats(writeTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(), metaClient.getCommitActionType()));
     metaClient = HoodieTableMetaClient.reload(metaClient);
 

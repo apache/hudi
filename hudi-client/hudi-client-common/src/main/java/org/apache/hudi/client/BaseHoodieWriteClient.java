@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
@@ -1232,14 +1233,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void commitClustering(String clusteringInstantTime, HoodieWriteMetadata metadata, Option<Map<String, String>> extraMetadata) {
     HoodieTable table = createTable(config);
     extraMetadata.ifPresent(m -> m.forEach((k, v) -> ((Option<HoodieCommitMetadata>) metadata.getCommitMetadata()).ifPresent(cm -> cm.addMetadata(k, v))));
-    completeClustering(metadata, table, clusteringInstantTime);
-  }
-
-  /**
-   * Commit Compaction and track metrics.
-   */
-  protected void completeClustering(HoodieWriteMetadata metadata, HoodieTable table, String clusteringCommitTime) {
-    tableServiceClient.completeClustering(metadata, table, clusteringCommitTime);
+    tableServiceClient.completeClustering((HoodieReplaceCommitMetadata) metadata.getCommitMetadata().get(), table, clusteringInstantTime);
   }
 
   /**

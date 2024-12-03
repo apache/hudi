@@ -232,7 +232,7 @@ public class TestExtensibleBucketIndex extends HoodieSparkClientTestHarness {
         Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
 
     // Upsert Data
-    writeData(writeRecords, "002", WriteOperationType.UPSERT,true);
+    writeData(writeRecords, "002", WriteOperationType.UPSERT, true);
     // The total number of file group should be the same, but each file group will have a log file.
     Assertions.assertEquals(numFilesCreated,
         Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
@@ -264,7 +264,7 @@ public class TestExtensibleBucketIndex extends HoodieSparkClientTestHarness {
         Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
 
     // Bulk-Insert Data, should be failed
-    Assertions.assertThrows(Exception.class, () -> writeData(writeRecords, "002", WriteOperationType.BULK_INSERT,true));
+    Assertions.assertThrows(Exception.class, () -> writeData(writeRecords, "002", WriteOperationType.BULK_INSERT, true));
   }
 
   private int readRecordsNum(String[] partitions, boolean populateMetaFields) {
@@ -301,7 +301,7 @@ public class TestExtensibleBucketIndex extends HoodieSparkClientTestHarness {
     }
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
-      boolean success = writeClient.commitStats(commitTime, context.parallelize(writeStatues, 1), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+      boolean success = writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
           Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(success);
     }
