@@ -419,7 +419,7 @@ spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 <Tabs
 groupId="programming-language"
-defaultValue="scala"
+defaultValue="sparksql"
 values={[
 { label: 'Spark SQL', value: 'sparksql', },
 ]}
