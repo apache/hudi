@@ -1488,4 +1488,23 @@ public class HoodieAvroUtils {
     }
   }
 
+  public static boolean containsUnsupportedTypesForFileGroupReader(Schema schema) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (Field field : schema.getFields()) {
+          if (containsUnsupportedTypesForFileGroupReader(field.schema())) {
+            return true;
+          }
+        }
+        return false;
+      case ARRAY:
+        return containsUnsupportedTypesForFileGroupReader(schema.getElementType());
+      case MAP:
+        return containsUnsupportedTypesForFileGroupReader(schema.getValueType());
+      case UNION:
+        return containsUnsupportedTypesForFileGroupReader(getActualSchemaFromUnion(schema, null));
+      default:
+        return schema.getType() == Schema.Type.ENUM;
+    }
+  }
 }

@@ -139,7 +139,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         && !metaClient.isMetadataTable()
         && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && !hasBootstrapFile(operations)                                                    // bootstrap file read for fg reader is not ready
-        && StringUtils.isNullOrEmpty(config.getInternalSchema());                           // schema evolution support for fg reader is not ready
+        && StringUtils.isNullOrEmpty(config.getInternalSchema())                            // schema evolution support for fg reader is not ready
+        && !containsUnsupportedTypesForFileGroupReader(config.getSchema());
 
     if (useFileGroupReaderBasedCompaction) {
       Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context);
@@ -315,5 +316,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
   private boolean hasBootstrapFile(List<CompactionOperation> operationList) {
     return operationList.stream().anyMatch(operation -> operation.getBootstrapFilePath().isPresent());
+  }
+
+  private boolean containsUnsupportedTypesForFileGroupReader(String schemaStr) {
+    return HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(new Schema.Parser().parse(schemaStr));
   }
 }
