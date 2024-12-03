@@ -92,9 +92,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     TestDataSource.resetDataGen();
     FileIOUtils.deleteDirectory(new File(basePath));
   }
-
-  // TODO(yihua): Disabled for investigation
-  @Disabled
+  
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   void testUpsertsContinuousModeWithMultipleWritersForConflicts(HoodieTableType tableType) throws Exception {

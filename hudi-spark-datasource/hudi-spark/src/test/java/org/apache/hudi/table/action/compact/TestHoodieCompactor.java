@@ -53,7 +53,6 @@ import com.codahale.metrics.Counter;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -220,8 +219,6 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     }
   }
 
-  // TODO(yihua): disabled for investigation
-  @Disabled
   @Test
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
@@ -253,8 +250,6 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     }
   }
 
-  // TODO(yihua): disabled for investigation
-  @Disabled
   @Test
   public void testSpillingWhenCompaction() throws Exception {
     // insert 100 records

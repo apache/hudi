@@ -59,7 +59,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -623,9 +622,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         .map(stat -> stat.getNumWrites() + stat.getNumUpdateWrites())
         .reduce(0L, Long::sum);
   }
-
-  // TODO(yihua): disabled for investigation
-  @Disabled
+  
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testMORTableRestore(boolean restoreAfterCompaction) throws Exception {
