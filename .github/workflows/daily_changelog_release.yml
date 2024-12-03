@@ -65,6 +65,8 @@ jobs:
           DETECTED_PREV_RELEASE_VERSION=$(grep -- '--- *\[.*\] *\[.*release-v[0-9]\{1,\}\.[0-9]\{1,\}\.0\{1,\}.*\] *---' "$FILE" \
               | tail -n 1 \
               | sed -E 's/.*release-v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          
+          echo "Detected previous release version: $DETECTED_PREV_RELEASE_VERSION"
 
           # If the next release version is not provided, auto-detect it:
           if [ "${{ inputs.releaseVersion }}" == "auto-detect" ]; then
@@ -115,6 +117,9 @@ jobs:
           PREVIOUS_RELEASE_BRANCH="release-v${DETECTED_PREV_RELEASE_VERSION}"
           PREVIOUS_RELEASE_SHA=$(git rev-parse "origin/${PREVIOUS_RELEASE_BRANCH}")
 
+          echo "Previous release branch: $PREVIOUS_RELEASE_BRANCH"
+          echo "Previous release SHA: $PREVIOUS_RELEASE_SHA"
+
           # Checkout the release branch locally.
           git checkout -b "$RELEASE_BRANCH_NAME"
 
@@ -125,19 +130,20 @@ jobs:
           # Get all commit messages in the range
           COMMIT_MESSAGES=$(git log ${PREVIOUS_RELEASE_SHA}..HEAD --pretty=format:"%s")
 
+          echo "Commit messages: $COMMIT_MESSAGES"
+
           # If there are no commits, exit 0
           if [ -z "$COMMIT_MESSAGES" ]; then
             echo "No commits found. Exiting workflow."
             exit 0
           fi
 
-          # Check if all commit messages start with "[AUDIT-]"
-          NON_AUDIT_COMMITS=$(echo "$COMMIT_MESSAGES" | grep -v "^\[AUDIT-")
+          # Check if all commit messages start with "[AUDIT-]" (for some reason grep did not work in ubuntu/gh actions)
+          NON_AUDIT_COMMITS=$(echo "$COMMIT_MESSAGES" | awk '!/^\[AUDIT-/')
 
           # Check if there are any non-audit commits
           if [ -n "$(echo "$NON_AUDIT_COMMITS" | xargs)" ]; then
-            echo "There are non-audit commits:"
-            echo "$NON_AUDIT_COMMITS"
+            echo "There are non-audit commits: $NON_AUDIT_COMMITS"
           else
             echo "All commit messages start with [AUDIT-]. Exiting workflow."
             exit 0
@@ -145,7 +151,6 @@ jobs:
 
           # Append commit log to CHANGELOG if conditions are not met
           echo "$COMMIT_MESSAGES" >> CHANGELOG
-          echo "" >> CHANGELOG
 
           # Once we push the release branch, we have locked in a release version,
           # this means we have to be sure we want to release this version.

@@ -42,18 +42,25 @@ jobs:
         run: |
           # If there is no base ref, skip the check
           if [ -z "${{ github.base_ref }}" ]; then
-            echo "skip=false" >> $GITHUB_OUTPUT
+            # Check if the commit starts with "[AUDIT"
+            if echo "${{ github.event.head_commit.message }}" | grep -Eq '^\[AUDIT'; then
+              echo "skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "skip=false" >> $GITHUB_OUTPUT
+            fi
             exit 0
           fi
           git fetch origin ${{ github.base_ref }}
           CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }})
           echo "CHANGED_FILES=$CHANGED_FILES"
 
-          # Determine if workflow should be skipped
-          if echo "$CHANGED_FILES" | grep -Eq '^(CHANGELOG|README)'; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
+          # Check if all changed files are limited to CHANGELOG or README.md
+          if echo "$CHANGED_FILES" | grep -vE '^(CHANGELOG|README\.md)$' >/dev/null; then
+            # There are files other than CHANGELOG or README.md
             echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            # All changes are limited to CHANGELOG and README.md
+            echo "skip=true" >> $GITHUB_OUTPUT
           fi
 
   utilities:
