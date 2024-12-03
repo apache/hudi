@@ -244,7 +244,8 @@ class DefaultSource extends RelationProvider
     // Check if the streaming table read version is set. If set, use the corresponding source
     // which uses the version corresponding to IncrementalRelation to read the data. And, also
     // does the checkpoint management based on the version.
-    val targetTableVersion = Integer.parseInt(parameters(WRITE_TABLE_VERSION.key))
+    val targetTableVersion: Integer = Integer.parseInt(
+      parameters.getOrElse(WRITE_TABLE_VERSION.key, WRITE_TABLE_VERSION.defaultValue.toString))
     if (SparkConfigUtils.containsConfigProperty(parameters, STREAMING_READ_TABLE_VERSION)) {
       val sourceTableVersion = Integer.parseInt(parameters(STREAMING_READ_TABLE_VERSION.key))
       if (sourceTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {

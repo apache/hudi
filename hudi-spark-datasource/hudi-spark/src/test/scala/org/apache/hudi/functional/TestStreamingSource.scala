@@ -271,7 +271,7 @@ class TestStreamingSource extends StreamTest {
         val df = spark.readStream
           .format("org.apache.hudi")
           .option(START_OFFSET.key, startTimestamp)
-          .option(WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode())
+          .option(WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString)
           .option(STREAMING_READ_TABLE_VERSION.key, streamingReadTableVersion.toString)
           .load(tablePath)
           .select("id", "name", "price", "ts")
