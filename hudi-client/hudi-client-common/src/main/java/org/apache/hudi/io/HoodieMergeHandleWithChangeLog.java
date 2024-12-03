@@ -84,6 +84,7 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
+  @Override
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combinedRecordOpt, Schema writerSchema)
       throws IOException {
     // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
@@ -98,6 +99,7 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
     return result;
   }
 
+  @Override
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
     Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     // TODO Remove these unnecessary newInstance invocations

@@ -53,6 +53,7 @@ public class HoodieSortedMergeHandleWithChangeLog<T, I, K, O> extends HoodieMerg
     super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
   }
 
+  @Override
   protected boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> insertRecord, Schema schema, Properties props)
       throws IOException {
     final boolean result = super.writeRecord(newRecord, insertRecord, schema, props);

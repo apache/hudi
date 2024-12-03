@@ -68,6 +68,7 @@ public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
+  @Override
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema)
       throws IOException {
     // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
@@ -82,6 +83,7 @@ public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
     return result;
   }
 
+  @Override
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
     Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     // TODO Remove these unnecessary newInstance invocations

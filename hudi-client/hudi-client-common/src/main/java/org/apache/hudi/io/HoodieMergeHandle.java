@@ -113,7 +113,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected long updatedRecordsWritten = 0;
   protected long insertRecordsWritten = 0;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
-  private HoodieBaseFile baseFileToMerge;
+  protected HoodieBaseFile baseFileToMerge;
 
   protected Option<String[]> partitionFields = Option.empty();
   protected Object[] partitionValues = new Object[0];
@@ -145,6 +145,11 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     this.preserveMetadata = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+  }
+
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
+                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
   }
 
   private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
@@ -467,7 +472,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   public void performMergeDataValidationCheck(WriteStatus writeStatus) {
-    if (!config.isMergeDataValidationCheckEnabled()) {
+    if (!config.isMergeDataValidationCheckEnabled() || baseFileToMerge != null) {
       return;
     }
 

@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -34,8 +33,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
-import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader.HoodieFileGroupReaderIterator;
@@ -44,14 +41,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -69,10 +62,8 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
@@ -107,28 +98,12 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_
  * </p>
  */
 @NotThreadSafe
-public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkMergeHandleV2.class);
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
-
-  protected Set<String> writtenRecordKeys;
   protected HoodieReaderContext readerContext;
-  protected HoodieFileWriter fileWriter;
-  protected boolean preserveMetadata = false;
-
-  protected StoragePath newFilePath;
-  protected Option<StoragePath> oldFilePath = Option.empty();
-  protected long recordsWritten = 0;
   // TODO(yihua): audit delete stats because file group reader may not return deletes
-  protected long recordsDeleted = 0;
-  protected long updatedRecordsWritten = 0;
-  protected long insertRecordsWritten = 0;
-  protected Option<BaseKeyGenerator> keyGeneratorOpt;
   protected FileSlice fileSlice;
-  private Option<HoodieBaseFile> baseFileToMergeOpt;
-
-  protected Option<String[]> partitionFields = Option.empty();
-  protected Object[] partitionValues = new Object[0];
   protected Configuration conf;
 
   /**
@@ -138,6 +113,7 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
                                   CompactionOperation operation, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
                                   HoodieReaderContext readerContext, Configuration conf) {
     super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
+    this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
     this.conf = conf;
     Option<HoodieBaseFile> baseFileOpt =
@@ -166,7 +142,7 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
    */
   private void init(String fileId, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
-    this.baseFileToMergeOpt = baseFileToMerge;
+    this.baseFileToMerge = baseFileToMerge.orElse(null);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
@@ -189,7 +165,8 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
       partitionMetadata.trySave();
 
       String newFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
-      makeOldAndNewFilePaths(partitionPath, latestValidFilePath, newFileName);
+      makeOldAndNewFilePaths(partitionPath,
+          latestValidFilePath.isPresent() ? latestValidFilePath.get() : null, newFileName);
 
       LOG.info(String.format(
           "Merging data from file group %s, to a new base file %s", fileId, newFilePath.toString()));
@@ -214,17 +191,6 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
           + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
     }
-  }
-
-  protected void setWriteStatusPath() {
-    writeStatus.getStat().setPath(new StoragePath(config.getBasePath()), newFilePath);
-  }
-
-  protected void makeOldAndNewFilePaths(String partitionPath, Option<String> oldFileName, String newFileName) {
-    if (oldFileName.isPresent()) {
-      oldFilePath = Option.of(makeNewFilePath(partitionPath, oldFileName.get()));
-    }
-    newFilePath = makeNewFilePath(partitionPath, newFileName);
   }
 
   // TODO(yihua): is this still needed
@@ -313,98 +279,5 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieWriteHandle<T, I
     } else {
       fileWriter.writeWithMetadata(key, populatedRecord, writeSchemaWithMetaFields);
     }
-  }
-
-  @Override
-  public List<WriteStatus> close() {
-    try {
-      if (isClosed()) {
-        // Handle has already been closed
-        return Collections.emptyList();
-      }
-
-      markClosed();
-
-      writtenRecordKeys = null;
-
-      fileWriter.close();
-      fileWriter = null;
-
-      long fileSizeInBytes = storage.getPathInfo(newFilePath).getLength();
-      HoodieWriteStat stat = writeStatus.getStat();
-
-      stat.setTotalWriteBytes(fileSizeInBytes);
-      stat.setFileSizeInBytes(fileSizeInBytes);
-      stat.setNumWrites(recordsWritten);
-      stat.setNumDeletes(recordsDeleted);
-      stat.setNumUpdateWrites(updatedRecordsWritten);
-      stat.setNumInserts(insertRecordsWritten);
-      stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
-      RuntimeStats runtimeStats = new RuntimeStats();
-      runtimeStats.setTotalUpsertTime(timer.endTimer());
-      stat.setRuntimeStats(runtimeStats);
-
-      performMergeDataValidationCheck(writeStatus);
-
-      LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
-          stat.getFileId(), runtimeStats.getTotalUpsertTime()));
-
-      return Collections.singletonList(writeStatus);
-    } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to close UpdateHandle", e);
-    }
-  }
-
-  public void performMergeDataValidationCheck(WriteStatus writeStatus) {
-    if (!config.isMergeDataValidationCheckEnabled() || baseFileToMergeOpt.isEmpty()) {
-      return;
-    }
-
-    long oldNumWrites = 0;
-    try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
-        .getReaderFactory(this.recordMerger.getRecordType())
-        .getFileReader(config, oldFilePath.get())) {
-      oldNumWrites = reader.getTotalRecords();
-    } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to check for merge data validation", e);
-    }
-
-    if ((writeStatus.getStat().getNumWrites() + writeStatus.getStat().getNumDeletes()) < oldNumWrites) {
-      throw new HoodieCorruptedDataException(
-          String.format("Record write count decreased for file: %s, Partition Path: %s (%s:%d + %d < %s:%d)",
-              writeStatus.getFileId(), writeStatus.getPartitionPath(),
-              instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
-              baseFileToMergeOpt.get().getCommitTime(), oldNumWrites));
-    }
-  }
-
-  public Iterator<List<WriteStatus>> getWriteStatusesAsIterator() {
-    List<WriteStatus> statuses = getWriteStatuses();
-    // TODO(vc): This needs to be revisited
-    if (getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null {}, {}", getFileId(), statuses);
-    }
-    return Collections.singletonList(statuses).iterator();
-  }
-
-  @Override
-  public IOType getIOType() {
-    return IOType.MERGE;
-  }
-
-  public void setPartitionFields(Option<String[]> partitionFields) {
-    this.partitionFields = partitionFields;
-  }
-
-  public Option<String[]> getPartitionFields() {
-    return this.partitionFields;
-  }
-
-  public void setPartitionValues(Object[] partitionValues) {
-    this.partitionValues = partitionValues;
-  }
-
-  public Object[] getPartitionValues() {
-    return this.partitionValues;
   }
 }
