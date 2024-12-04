@@ -234,7 +234,7 @@ AS SELECT * FROM parquet_table;
 ### Create Index
 
 Hudi supports creating and dropping indexes, including functional indexes, on a table. For more information on different
-type of indexes please refer [metadata section](https://hudi.apache.org/docs/metadata/#metadata-table-indices). Secondary 
+type of indexes please refer [metadata section](/docs/next/metadata/#types-of-table-metadata). Secondary 
 index, expression index and record index can be created using SQL create index command.
 
 **Syntax**
@@ -295,13 +295,13 @@ SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-0
 -- Create secondary index on rider column
 CREATE INDEX record_index ON hudi_indexed_table (uuid);
 CREATE INDEX idx_rider ON hudi_indexed_table (rider);
-set hoodie.metadata.record.index.enable=true;
+SET hoodie.metadata.record.index.enable=true;
 -- Expression index and secondary index should show up
 SHOW INDEXES FROM hudi_indexed_table;
 -- Query on rider column would leverage the secondary index idx_rider
 SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E';
 
-set hoodie.metadata.record.index.enable=false;
+SET hoodie.metadata.record.index.enable=false;
 ```
 
 ```sql

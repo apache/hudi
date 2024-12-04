@@ -34,7 +34,7 @@ asynchronous indexing. To learn more about the design of asynchronous indexing f
 ## Index Creation Using SQL
 
 Currently indexes like secondary index, expression index and record index can be created using SQL create index command.
-For more information on these indexes please refer [metadata section](https://hudi.apache.org/docs/metadata/#metadata-table-indices)
+For more information on these indexes please refer [metadata section](/docs/next/metadata/#types-of-table-metadata)
 
 **Examples**
 ```sql
@@ -51,7 +51,7 @@ CREATE INDEX idx_column_ts ON hudi_indexed_table USING column_stats(ts) OPTIONS(
 CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
 ```
 
-For more information on index creation using SQL refer [SQL DDL](https://hudi.apache.org/docs/next/sql_ddl#create-index) 
+For more information on index creation using SQL refer [SQL DDL](/docs/next/sql_ddl#create-index) 
 
 ## Index Creation Using Datasource
 
@@ -136,7 +136,7 @@ us schedule the indexing for COLUMN_STATS index. First we need to define a prope
 
 As mentioned before, metadata indices are pluggable. One can add any index at any point in time depending on changing
 business requirements. Some configurations to enable particular indices are listed below. Currently, available indices under
-metadata table can be explored [here](/docs/next/metadata#metadata-table-indices) along with [configs](/docs/next/metadata#enable-hudi-metadata-table-and-multi-modal-index-in-write-side) 
+metadata table can be explored [here](/docs/next/metadata/#types-of-table-metadata) along with [configs](/docs/next/metadata#enable-hudi-metadata-table-and-multi-modal-index-in-write-side) 
 to enable them. The full set of metadata configurations can be explored [here](/docs/next/configurations/#Metadata-Configs).
 
 :::note

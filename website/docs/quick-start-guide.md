@@ -471,7 +471,7 @@ SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-0
 -- Create secondary index on rider column
 CREATE INDEX record_index ON hudi_indexed_table (uuid);
 CREATE INDEX idx_rider ON hudi_indexed_table (rider);
-set hoodie.metadata.record.index.enable=true;
+SET hoodie.metadata.record.index.enable=true;
 -- Expression index and secondary index should show up
 SHOW INDEXES FROM hudi_indexed_table;
 -- Query on rider column would leverage the secondary index idx_rider
@@ -494,7 +494,7 @@ DROP INDEX expr_index_idx_column_ts on hudi_indexed_table;
 -- No indexes should show up for the table
 SHOW INDEXES FROM hudi_indexed_table;
 
-set hoodie.metadata.record.index.enable=false;
+SET hoodie.metadata.record.index.enable=false;
 ```
 </TabItem>
 
