@@ -107,6 +107,9 @@ public interface HoodieFileGroupRecordBuffer<T> {
    */
   void setBaseFileIterator(ClosableIterator<T> baseFileIterator);
 
+  /**
+   * @return statistics of log merging.
+   */
   HoodieReadStats getStats();
 
   /**
