@@ -11,9 +11,9 @@ of Hudi depends on the metadata table. Different types of index, from `files` in
 to `column_stats` index for data skipping, are part of the metadata table. A fundamental tradeoff in any data system
 that supports indices is to balance the write throughput with index updates. A brute-force way is to lock out the writes
 while indexing. Hudi supports index creation using SQL, Datasource as well as async indexing. However, very large tables 
-can take hours to index. This is where Hudi's novel asynchronous metadata indexing comes into play. 
+can take hours to index. This is where Hudi's novel concurrent indexing comes into play. 
 
-## Asynchronous Metadata Indexing
+## Concurrent Indexing
 
 Indexes in Hudi are created in two phases and uses a mix of optimistic concurrency control and log-based concurrency control models. The two
 phase approach ensures that the other writers are unblocked.
