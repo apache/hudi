@@ -1175,10 +1175,16 @@ multiple records with the same key. See section below.
 
 ## Ordering Field
 Hudi also allows users to specify a _precombine_ field, which will be used to order and resolve conflicts between multiple versions of the same record. This is very important for 
-use-cases like applying database CDC logs to a Hudi table, where a given record may be appear multiple times in the source data due to repeated upstream updates. 
+use-cases like applying database CDC logs to a Hudi table, where a given record may appear multiple times in the source data due to repeated upstream updates. 
 Hudi also uses this mechanism to support out-of-order data arrival into a table, where records may need to be resolved in a different order than their commit time. 
-For e.g using a _created_at_ timestamp field as the precombine field will prevent older versions of a record from overwriting newer ones or being exposed to queries, even 
+For e.g. using a _created_at_ timestamp field as the precombine field will prevent older versions of a record from overwriting newer ones or being exposed to queries, even 
 if they are written at a later commit time to the table. This is one of the key features, that makes Hudi, best suited for dealing with streaming data.
+
+To enable different merge semantics, Hudi supports merge modes, which define how the base and log files are ordered in a
+file slice and further how different records with the same record key within that file slice are merged consistently to
+produce the same deterministic results for snapshot queries, writers and table services. For more details on the merge
+modes, see [here](/docs/next/record_merger). Commit time and event time based merge modes are supported out of the box.
+Users can also define their own custom merge strategies, see [here](/docs/next/sql_ddl#create-table-with-record-merge-mode).
 
 <Tabs
 groupId="programming-language"

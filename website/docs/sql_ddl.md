@@ -103,6 +103,47 @@ TBLPROPERTIES (
 );
 ```
 
+### Create table with record merge mode {#create-table-with-record-merge-mode}
+
+Hudi supports different [record merge modes](/docs/next/record_merger) to handle merge of incoming records with existing
+records. To create a table with specific record merge mode, you can set `recordMergeMode` option.
+
+```sql
+CREATE TABLE IF NOT EXISTS hudi_table_merge_mode (
+  id INT,
+  name STRING,
+  ts LONG,
+  price DOUBLE
+) USING hudi
+TBLPROPERTIES (
+  type = 'mor',
+  precombineField = 'ts',
+  recordMergeMode = 'EVENT_TIME_ORDERING'
+)
+LOCATION 'file:///tmp/hudi_table_merge_mode/';
+```
+
+With `EVENT_TIME_ORDERING`, the record with the larger event time (`precombineField`) overwrites the record with the
+smaller event time on the same key, regardless of transaction time. Users can set `CUSTOM` mode to provide their own
+merge logic. With `CUSTOM` merge mode, you also need to provide your payload class that implements the merge logic. For 
+example, you can use `PartialUpdateAvroPayload` to merge the records as below.
+
+```sql
+CREATE TABLE IF NOT EXISTS hudi_table_merge_mode (
+  id INT,
+  name STRING,
+  ts LONG,
+  price DOUBLE
+) USING hudi
+TBLPROPERTIES (
+  type = 'mor',
+  precombineField = 'ts',
+  recordMergeMode = 'CUSTOM',
+  'hoodie.datasource.write.payload.class' = 'org.apache.hudi.common.model.PartialUpdateAvroPayload'
+)
+LOCATION 'file:///tmp/hudi_table_merge_mode/';
+```
+
 ### Create table from an external location
 Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/hoodie_streaming_ingestion#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
