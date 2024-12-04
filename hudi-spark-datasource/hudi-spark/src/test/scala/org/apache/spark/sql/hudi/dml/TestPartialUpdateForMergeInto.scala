@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.dml
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.function.SerializableFunctionUnchecked
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
@@ -29,13 +28,12 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 
 import org.apache.avro.Schema
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
-import java.util.function.Predicate
 import java.util.{Collections, List, Optional}
 
 import scala.collection.JavaConverters._
@@ -64,6 +62,17 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test partial update and insert with MOR and Parquet log format") {
     testPartialUpdateWithInserts("mor", "parquet")
+  }
+
+  test("Test partial update with schema on read enabled") {
+    withSQLConf(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key() -> "true") {
+      try {
+        testPartialUpdate("mor", "parquet")
+        fail("Expected exception to be thrown")
+      } catch {
+        case t: Throwable => assertTrue(t.isInstanceOf[UnsupportedOperationException])
+      }
+    }
   }
 
   test("Test fallback to full update with MOR even if partial updates are enabled") {
