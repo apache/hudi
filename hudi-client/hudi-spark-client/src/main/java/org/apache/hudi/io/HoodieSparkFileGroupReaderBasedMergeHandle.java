@@ -20,7 +20,6 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -175,8 +174,6 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
    */
   public void write() {
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(
-        new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     Option<InternalSchema> internalSchemaOption = Option.empty();
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
@@ -188,8 +185,8 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
         hoodieTable.getMetaClient().getBasePath().toString(),
         instantTime,
         fileSlice,
-        readerSchema,
-        readerSchema,
+        writeSchemaWithMetaFields,
+        writeSchemaWithMetaFields,
         internalSchemaOption,
         hoodieTable.getMetaClient(),
         hoodieTable.getMetaClient().getTableConfig().getProps(),
@@ -200,7 +197,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
       // Reads the records from the file slice
       try (HoodieFileGroupReaderIterator<InternalRow> recordIterator
                = (HoodieFileGroupReaderIterator<InternalRow>) fileGroupReader.getClosableIterator()) {
-        StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema);
+        StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(writeSchemaWithMetaFields);
         while (recordIterator.hasNext()) {
           // Constructs Spark record for the Spark Parquet file writer
           InternalRow row = recordIterator.next();
@@ -217,7 +214,8 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
           }
           // Writes the record
           try {
-            writeToFile(recordKey, record, readerSchema, config.getPayloadConfig().getProps(), preserveMetadata);
+            writeToFile(recordKey, record, writeSchemaWithMetaFields,
+                config.getPayloadConfig().getProps(), preserveMetadata);
             writeStatus.markSuccess(record, recordMetadata);
           } catch (Exception e) {
             LOG.error("Error writing record  " + record, e);
