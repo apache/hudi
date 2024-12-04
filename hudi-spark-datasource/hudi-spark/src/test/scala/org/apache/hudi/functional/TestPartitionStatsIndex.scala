@@ -475,9 +475,11 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   }
 
   def verifyQueryPredicate(hudiOpts: Map[String, String]): Unit = {
-    val reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs("_row_key").toString)
-    val dataFilter = EqualTo(attribute("_row_key"), Literal(reckey(0)))
-    assertEquals(2, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
+    val candidateRow = mergedDfList.last.groupBy("_row_key").count().limit(1).collect().head
+    val rowKey = candidateRow.getAs[String]("_row_key")
+    val count = candidateRow.getLong(1)
+    val dataFilter = EqualTo(attribute("_row_key"), Literal(rowKey))
+    assertEquals(count, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     verifyFilePruning(hudiOpts, dataFilter)
   }
 
