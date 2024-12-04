@@ -151,6 +151,31 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Fetches tables schema in Avro format as of the given instant without appending partition cols if
+   * they are not in the file schema
+   *
+   * @param timestamp as of which table's schema will be fetched
+   */
+  public Schema getTableAvroSchemaWithoutPartitionCols(String timestamp) throws Exception {
+    Option<HoodieInstant> instant = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsBeforeOrEquals(timestamp)
+        .lastInstant();
+    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant, false)
+        .orElseThrow(schemaNotFoundError());
+  }
+
+  public Schema getTableAvroSchemaWithoutPartitionCols() throws Exception {
+    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), Option.empty(), false)
+        .orElseThrow(schemaNotFoundError());
+  }
+
+  public Schema getTableAvroSchemaWithoutAddedColumns() throws Exception {
+    return getTableAvroSchemaInternal(false, Option.empty(), false)
+        .orElseThrow(schemaNotFoundError());
+  }
+
+  /**
    * Fetches tables schema in Avro format as of the given instant
    *
    * @param instant as of which table's schema will be fetched
@@ -177,6 +202,10 @@ public class TableSchemaResolver {
   }
 
   private Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
+    return getTableAvroSchemaInternal(includeMetadataFields, instantOpt, metaClient.getTableConfig().shouldDropPartitionColumns());
+  }
+
+  private Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt, boolean tryAddPartitionCols) {
     Option<Schema> schema =
         (instantOpt.isPresent()
             ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
@@ -196,7 +225,7 @@ public class TableSchemaResolver {
             });
 
     // TODO partition columns have to be appended in all read-paths
-    if (metaClient.getTableConfig().shouldDropPartitionColumns() && schema.isPresent()) {
+    if (tryAddPartitionCols && schema.isPresent()) {
       return metaClient.getTableConfig().getPartitionFields()
           .map(partitionFields -> appendPartitionColumns(schema.get(), Option.ofNullable(partitionFields)))
           .or(() -> schema);
