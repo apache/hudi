@@ -647,12 +647,27 @@ WHEN NOT MATCHED THEN INSERT *
 
 :::info Key requirements
 1. For a Hudi table with user defined primary record [keys](#keys), the join condition is expected to contain the primary keys of the table.
-For a Hudi table with Hudi generated primary keys, the join condition can be on any arbitrary data columns.
-2. For Merge-On-Read tables, partial column updates are not yet supported, i.e. **all columns** need to be SET from a 
-MERGE statement either using `SET *` or using `SET column1 = expression1 [, column2 = expression2 ...]`. 
+For a Hudi table with Hudi generated primary keys, the join condition can be on any arbitrary data columns. 
 :::
 </TabItem>
 </Tabs>
+
+### Merging Data with Partial Updates {#merge-partial-update}
+
+Partial updates only write updated columns instead of full update record. This is useful when you have hundreds of
+columns and only a few columns are updated. It reduces the write amplification as well as helps in lowering the query
+latency. `MERGE INTO` statement above can be modified to use partial updates as shown below.
+
+```sql
+MERGE INTO hudi_table AS target
+USING fare_adjustment AS source
+ON target.uuid = source.uuid
+WHEN MATCHED THEN UPDATE SET fare = source.fare
+WHEN NOT MATCHED THEN INSERT *
+;
+```
+
+Notice, instead of `UPDATE SET *`, we are updating only the `fare` column.
 
 ## Delete data {#deletes}
 
