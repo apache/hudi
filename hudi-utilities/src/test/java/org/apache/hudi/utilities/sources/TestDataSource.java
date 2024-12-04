@@ -66,7 +66,7 @@ public class TestDataSource extends AbstractBaseTestSource {
     counter++;
 
     List<GenericRecord> records =
-        fetchNextBatch(props, (int) sourceLimit, instantTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
+        fetchNextBatch(props, (int) 30, instantTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
     return new InputBatch<>(Option.of(avroRDD), instantTime);
   }
