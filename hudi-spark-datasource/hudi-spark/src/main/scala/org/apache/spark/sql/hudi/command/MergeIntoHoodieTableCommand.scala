@@ -24,6 +24,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, RECORD_MERGE_MODE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
@@ -442,7 +443,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         throw new HoodieNotSupportedException("Partial updates are not supported for virtual key tables.")
       }
 
-      if (HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(fullSchema)) {
+      val tableSchemaResolver = new TableSchemaResolver(hoodieCatalogTable.metaClient)
+      if (HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(tableSchemaResolver.getTableAvroSchema)) {
         throw new HoodieNotSupportedException("Partial updates are not supported for tables with enum columns")
       }
 
