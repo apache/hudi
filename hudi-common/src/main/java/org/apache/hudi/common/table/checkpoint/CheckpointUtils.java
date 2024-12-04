@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -56,6 +57,9 @@ public class CheckpointUtils {
   // instant or completion time
   public static StreamerCheckpointV2 convertToCheckpointV2ForCommitTime(
       Checkpoint checkpoint, HoodieTableMetaClient metaClient) {
+    if (checkpoint.checkpointKey.equals(HoodieTimeline.INIT_INSTANT_TS)) {
+      return new StreamerCheckpointV2(HoodieTimeline.INIT_INSTANT_TS);
+    }
     if (checkpoint instanceof StreamerCheckpointV2) {
       return (StreamerCheckpointV2) checkpoint;
     }
@@ -81,6 +85,9 @@ public class CheckpointUtils {
 
   public static StreamerCheckpointV1 convertToCheckpointV1ForCommitTime(
       Checkpoint checkpoint, HoodieTableMetaClient metaClient) {
+    if (checkpoint.checkpointKey.equals(HoodieTimeline.INIT_INSTANT_TS)) {
+      return new StreamerCheckpointV1(HoodieTimeline.INIT_INSTANT_TS);
+    }
     if (checkpoint instanceof StreamerCheckpointV1) {
       return (StreamerCheckpointV1) checkpoint;
     }

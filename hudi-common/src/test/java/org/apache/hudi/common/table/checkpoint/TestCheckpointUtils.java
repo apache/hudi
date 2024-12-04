@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.exception.HoodieException;
@@ -156,5 +157,18 @@ public class TestCheckpointUtils {
     Exception exception = assertThrows(UnsupportedOperationException.class,
         () -> CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient));
     assertTrue(exception.getMessage().contains("Unable to find completion time"));
+  }
+
+  @Test
+  public void testConvertCheckpointWithInitTimestamp() {
+    String instantTime = HoodieTimeline.INIT_INSTANT_TS;
+
+    Checkpoint checkpoint = new StreamerCheckpointV1(instantTime);
+    Checkpoint translated = CheckpointUtils.convertToCheckpointV1ForCommitTime(checkpoint, metaClient);
+    assertEquals(HoodieTimeline.INIT_INSTANT_TS, translated.getCheckpointKey());
+
+    checkpoint = new StreamerCheckpointV2(instantTime);
+    translated = CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient);
+    assertEquals(HoodieTimeline.INIT_INSTANT_TS, translated.getCheckpointKey());
   }
 }
