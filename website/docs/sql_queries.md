@@ -188,6 +188,75 @@ DROP INDEX partition_stats on hudi_indexed_table;
 ![Partition Stats Index With Pruning Image](/assets/images/partition-stat-index-with-pruning.png)
 <p align = "left">Figure: Query pruning with partition stats index</p>
 
+### Snapshot Query with Event Time Ordering
+
+Hudi supports different [record merge modes](/docs/next/record_merger) for merging the records from the same key. Event
+time ordering is one of the merge modes where the records are merged based on the event time. Let's create a table with
+event time ordering merge mode.
+
+```sql
+CREATE TABLE IF NOT EXISTS hudi_table_merge_mode (
+  id INT,
+  name STRING,
+  ts LONG,
+  price DOUBLE
+) USING hudi
+TBLPROPERTIES (
+  type = 'mor',
+  primaryKey = 'id',
+  precombineField = 'ts',
+  recordMergeMode = 'EVENT_TIME_ORDERING'
+)
+LOCATION 'file:///tmp/hudi_table_merge_mode/';
+
+-- insert a record
+INSERT INTO hudi_table_merge_mode VALUES (1, 'a1', 1000, 10.0);
+
+-- another record with the same key but lower ts
+INSERT INTO hudi_table_merge_mode VALUES (1, 'a1', 900, 20.0);
+
+-- query the table, result should be id=1, name=a1, ts=1000, price=10.0
+SELECT id, name, ts, price FROM hudi_table_merge_mode;
+```
+
+With `EVENT_TIME_ORDERING`, the record with the larger event time (`precombineField`) overwrites the record with the
+smaller event time on the same key, regardless of transaction time. 
+
+### Snapshot Query with Custom merge mode
+
+Users can set `CUSTOM` mode to provide their own merge logic. With `CUSTOM` merge mode, you also need to provide your
+payload class that implements the merge logic. For example, you can use `PartialUpdateAvroPayload` to merge the records
+as below.
+
+```sql
+CREATE TABLE IF NOT EXISTS hudi_table_merge_mode_custom (
+  id INT,
+  name STRING,
+  ts LONG,
+  price DOUBLE
+) USING hudi
+TBLPROPERTIES (
+  type = 'mor',
+  primaryKey = 'id',
+  precombineField = 'ts',
+  recordMergeMode = 'CUSTOM',
+  'hoodie.datasource.write.payload.class' = 'org.apache.hudi.common.model.PartialUpdateAvroPayload'
+)
+LOCATION 'file:///tmp/hudi_table_merge_mode_custom/';
+
+-- insert a record
+INSERT INTO hudi_table_merge_mode_custom VALUES (1, 'a1', 1000, 10.0);
+
+-- another record with the same key but set higher ts and name as null to show partial update
+INSERT INTO hudi_table_merge_mode_custom VALUES (1, null, 2000, 20.0);
+
+-- query the table, result should be id=1, name=a1, ts=2000, price=20.0
+SELECT id, name, ts, price FROM hudi_table_merge_mode_custom;
+```
+
+As you can see, not only the record with higher ordering field overwrites the record with lower ordering value, but also
+the name field is partially updated.
+
 ### Time Travel Query
 
 You can also query the table at a specific commit time using the `AS OF` syntax. This is useful for debugging and auditing purposes, as well as for

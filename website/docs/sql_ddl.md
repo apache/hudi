@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS hudi_table_merge_mode (
 ) USING hudi
 TBLPROPERTIES (
   type = 'mor',
+  primaryKey = 'id',
   precombineField = 'ts',
   recordMergeMode = 'EVENT_TIME_ORDERING'
 )
@@ -129,7 +130,7 @@ merge logic. With `CUSTOM` merge mode, you also need to provide your payload cla
 example, you can use `PartialUpdateAvroPayload` to merge the records as below.
 
 ```sql
-CREATE TABLE IF NOT EXISTS hudi_table_merge_mode (
+CREATE TABLE IF NOT EXISTS hudi_table_merge_mode_custom (
   id INT,
   name STRING,
   ts LONG,
@@ -137,11 +138,12 @@ CREATE TABLE IF NOT EXISTS hudi_table_merge_mode (
 ) USING hudi
 TBLPROPERTIES (
   type = 'mor',
+  primaryKey = 'id',
   precombineField = 'ts',
   recordMergeMode = 'CUSTOM',
   'hoodie.datasource.write.payload.class' = 'org.apache.hudi.common.model.PartialUpdateAvroPayload'
 )
-LOCATION 'file:///tmp/hudi_table_merge_mode/';
+LOCATION 'file:///tmp/hudi_table_merge_mode_custom/';
 ```
 
 ### Create table from an external location
@@ -838,9 +840,9 @@ CREATE TABLE sourceT (
   ts TIMESTAMP(3),
   `partition` AS 'par1'
 ) WITH (
-    'connector' = 'datagen',
-    'rows-per-second' = '200'
-    );
+  'connector' = 'datagen',
+  'rows-per-second' = '200'
+);
 
 -- pipeline1: by default, enable the compaction and cleaning services
 CREATE TABLE t1 (
