@@ -825,6 +825,68 @@ WITH (
 );
 ```
 
+### Create Table in Non-Blocking Concurrency Control Mode
+
+The following is an example of creating a Flink table in [Non-Blocking Concurrency Control mode](/docs/next/concurrency_control#non-blocking-concurrency-control).
+
+```sql
+-- This is a datagen source that can generate records continuously
+CREATE TABLE sourceT (
+  uuid VARCHAR(20),
+  name VARCHAR(10),
+  age INT,
+  ts TIMESTAMP(3),
+  `partition` AS 'par1'
+) WITH (
+    'connector' = 'datagen',
+    'rows-per-second' = '200'
+    );
+
+-- pipeline1: by default, enable the compaction and cleaning services
+CREATE TABLE t1 (
+  uuid VARCHAR(20),
+  name VARCHAR(10),
+  age INT,
+  ts TIMESTAMP(3),
+  `partition` VARCHAR(20)
+) WITH (
+  'connector' = 'hudi',
+  'path' = '/tmp/hudi-demo/t1',
+  'table.type' = 'MERGE_ON_READ',
+  'index.type' = 'BUCKET',
+  'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
+  'write.tasks' = '2'
+);
+
+-- pipeline2: disable the compaction and cleaning services manually
+CREATE TABLE t1_2 (
+  uuid VARCHAR(20),
+  name VARCHAR(10),
+  age INT,
+  ts TIMESTAMP(3),
+  `partition` VARCHAR(20)
+) WITH (
+  'connector' = 'hudi',
+  'path' = '/tmp/hudi-demo/t1',
+  'table.type' = 'MERGE_ON_READ',
+  'index.type' = 'BUCKET',
+  'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
+  'write.tasks' = '2',
+  'compaction.schedule.enabled' = 'false',
+  'compaction.async.enabled' = 'false',
+  'clean.async.enabled' = 'false'
+);
+
+-- Submit the pipelines
+INSERT INTO t1
+SELECT * FROM sourceT;
+
+INSERT INTO t1_2
+SELECT * FROM sourceT;
+
+SELECT * FROM t1 LIMIT 20;
+```
+
 ### Alter Table
 ```sql
 ALTER TABLE tableA RENAME TO tableB;
