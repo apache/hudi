@@ -251,13 +251,6 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
         this.updatedRecordsWritten = stats.getNumUpdates();
         this.recordsDeleted = stats.getNumDeletes();
         this.recordsWritten = stats.getNumInserts() + stats.getNumUpdates();
-        // Set log merging stats
-        // writeStatus.getStat().setTotalUpdatedRecordsCompacted(0);
-        // writeStatus.getStat().setTotalLogFilesCompacted(0);
-        // writeStatus.getStat().setTotalLogRecords(0);
-        // writeStatus.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());
-        // writeStatus.getStat().setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
-        // writeStatus.getStat().setTotalRollbackBlocks(scanner.getTotalRollbacks());
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
