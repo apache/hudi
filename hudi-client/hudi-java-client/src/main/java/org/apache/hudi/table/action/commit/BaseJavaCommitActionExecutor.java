@@ -87,7 +87,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
-
+    disableWriteRecordPositionsWithPendingCompaction();
+    
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
     LOG.info("Input workload profile :" + workloadProfile);

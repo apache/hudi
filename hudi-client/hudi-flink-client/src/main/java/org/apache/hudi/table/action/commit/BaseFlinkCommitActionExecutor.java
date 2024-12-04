@@ -89,7 +89,8 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
-
+    disableWriteRecordPositionsWithPendingCompaction();
+    
     List<WriteStatus> writeStatuses = new LinkedList<>();
     final HoodieRecord<?> record = inputRecords.get(0);
     final String partitionPath = record.getPartitionPath();
