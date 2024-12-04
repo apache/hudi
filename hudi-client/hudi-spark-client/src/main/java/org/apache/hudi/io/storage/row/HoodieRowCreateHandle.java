@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.SortMarker;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,6 +35,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.io.SortMarkerSupport;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -53,7 +55,7 @@ import java.util.function.Function;
 /**
  * Create handle with InternalRow for datasource implementation of bulk insert.
  */
-public class HoodieRowCreateHandle implements Serializable {
+public class HoodieRowCreateHandle implements Serializable, SortMarkerSupport {
 
   private static final long serialVersionUID = 1L;
 
@@ -80,6 +82,8 @@ public class HoodieRowCreateHandle implements Serializable {
   protected final HoodieInternalRowFileWriter fileWriter;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
+
+  protected Option<SortMarker> sortMarkerOption = Option.empty();
 
   public HoodieRowCreateHandle(HoodieTable table,
                                HoodieWriteConfig writeConfig,
@@ -229,6 +233,9 @@ public class HoodieRowCreateHandle implements Serializable {
    * @return the {@link WriteStatus} containing the stats and status of the writes to this handle.
    */
   public WriteStatus close() throws IOException {
+    if (sortMarkerOption.isPresent()) {
+      fileWriter.writeFooterMetadata(SortMarker.SORT_MARKER_METADATA_KEY, sortMarkerOption.get().toJsonString());
+    }
     fileWriter.close();
     HoodieWriteStat stat = writeStatus.getStat();
     stat.setPartitionPath(partitionPath);
@@ -286,4 +293,8 @@ public class HoodieRowCreateHandle implements Serializable {
     return taskPartitionId + "-" + taskId + "-" + taskEpochId;
   }
 
+  @Override
+  public void setSortMarker(SortMarker sortMarker) {
+    this.sortMarkerOption = Option.of(sortMarker);
+  }
 }

@@ -367,6 +367,9 @@ public class Pipelines {
                   BucketStreamWriteOperator.getFactory(conf))
               .uid(opUID("consistent_bucket_write", conf))
               .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+        case EXTENSIBLE_BUCKET:
+          // TODO: support extensible bucket index for streaming write
+          throw new HoodieNotSupportedException("Extensible bucket index is not supported yet.");
         default:
           throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
       }

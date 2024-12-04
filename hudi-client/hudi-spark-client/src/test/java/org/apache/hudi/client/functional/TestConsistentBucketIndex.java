@@ -241,6 +241,28 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     Assertions.assertEquals(totalRecords * 2, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
   }
 
+  @ParameterizedTest
+  @MethodSource("configParams")
+  public void testBulkInsertDataFail(boolean populateMetaFields, boolean partitioned) throws Exception {
+    setUp(populateMetaFields, partitioned);
+    String newCommitTime = "001";
+    int totalRecords = 20 + random.nextInt(20);
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
+
+    // Upsert totalRecords records
+    List<WriteStatus> writeStatues = writeData(writeRecords, newCommitTime, WriteOperationType.UPSERT, true);
+    // The number of distinct fileId should be the same as total file group numbers
+    long numFilesCreated = writeStatues.stream().map(WriteStatus::getFileId).distinct().count();
+    Assertions.assertEquals(numFilesCreated,
+        Arrays.stream(dataGen.getPartitionPaths()).mapToInt(p -> Objects.requireNonNull(listStatus(p, true)).length).sum());
+
+    // Bulk-Insert Data, expect failure
+    Assertions.assertThrows(Exception.class, () -> {
+      writeData(writeRecords, "002", WriteOperationType.BULK_INSERT,true);
+    });
+  }
+
   private int readRecordsNum(String[] partitions, boolean populateMetaFields) {
     return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf,
         Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()), basePath,

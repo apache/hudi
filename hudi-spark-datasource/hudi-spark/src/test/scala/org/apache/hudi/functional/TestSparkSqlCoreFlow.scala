@@ -63,7 +63,15 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
     "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
     "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE"
+    "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE_BUCKET",
+    "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE_BUCKET",
+    "MERGE_ON_READ|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE_BUCKET",
+    "MERGE_ON_READ|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE_BUCKET",
+    "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|EXTENSIBLE_BUCKET",
+    "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|EXTENSIBLE_BUCKET",
+    "MERGE_ON_READ|false|org.apache.hudi.keygen.SimpleKeyGenerator|EXTENSIBLE_BUCKET",
+    "MERGE_ON_READ|true|org.apache.hudi.keygen.SimpleKeyGenerator|EXTENSIBLE_BUCKET"
   )
 
   //extracts the params and runs each core flow test
@@ -214,6 +222,16 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       tableType
     }
 
+    val (realIndexType, bucketOptions) = if (indexType.equals("SIMPLE_BUCKET")) {
+      ("BUCKET", ", hoodie.index.bucket.engine='SIMPLE', hoodie.bucket.index.num.buckets=16")
+    } else if (indexType.equals("EXTENSIBLE_BUCKET")) {
+      ("BUCKET", ", hoodie.index.bucket.engine='EXTENSIBLE_BUCKET', hoodie.table.initial.bucket.number=16")
+    }
+
+    else {
+      (indexType, "")
+    }
+
     s"""
        |tblproperties (
        |  type = '$typeString',
@@ -223,10 +241,10 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
        |  hoodie.database.name = "databaseName",
        |  hoodie.table.keygenerator.class = '$keyGenClass',
        |  hoodie.delete.shuffle.parallelism = 2,
-       |  hoodie.index.type = "$indexType",
+       |  hoodie.index.type = "$realIndexType",
        |  hoodie.insert.shuffle.parallelism = 4,
        |  hoodie.table.name = "$tableName",
-       |  hoodie.upsert.shuffle.parallelism = 4
+       |  hoodie.upsert.shuffle.parallelism = 4$bucketOptions
        | )""".stripMargin
   }
 

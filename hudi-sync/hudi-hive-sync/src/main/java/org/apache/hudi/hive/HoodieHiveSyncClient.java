@@ -19,14 +19,17 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.MapUtils;
+import org.apache.hudi.common.util.MathUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.ddl.DDLExecutor;
@@ -80,6 +83,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   private final String databaseName;
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
+
+  private static final String HOODIE_INDEX_TYPE = "hoodie.index.type";
+  private static final String HOODIE_BUCKET_INDEX_NAME = "BUCKET";
+  private static final String HOODIE_INDEX_ENGINE_TYPE = "hoodie.index.bucket.engine";
+  private static final String HOODIE_EXTENSIBLE_BUCKET_ENGINE_TYPE = "EXTENSIBLE_BUCKET";
 
   public HoodieHiveSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
     super(config, metaClient);
@@ -499,5 +507,15 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get the basepath of the table " + tableId(databaseName, tableName), e);
     }
+  }
+
+  @Override
+  public void updateExtensibleBucketMetadata(String tableName, int initialBucketNum) {
+    ValidationUtils.checkArgument(MathUtils.isPowerOf2(initialBucketNum), "Initial bucket num must be power of 2");
+    Map<String, String> tableProperties = new HashMap<>();
+    tableProperties.put(HOODIE_INDEX_TYPE, HOODIE_BUCKET_INDEX_NAME);
+    tableProperties.put(HOODIE_INDEX_ENGINE_TYPE, HOODIE_EXTENSIBLE_BUCKET_ENGINE_TYPE);
+    tableProperties.put(HoodieTableConfig.INITIAL_BUCKET_NUM_FOR_NEW_PARTITION.key(), String.valueOf(initialBucketNum));
+    this.updateTableProperties(tableName, tableProperties);
   }
 }

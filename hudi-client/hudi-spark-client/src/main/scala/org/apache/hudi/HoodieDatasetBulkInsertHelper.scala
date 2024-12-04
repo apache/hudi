@@ -23,7 +23,7 @@ import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, SortMarker}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
@@ -31,10 +31,9 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
 import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
-import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
+import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ExtensibleBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
-
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -149,6 +148,20 @@ object HoodieDatasetBulkInsertHelper
                  writeConfig: HoodieWriteConfig,
                  arePartitionRecordsSorted: Boolean,
                  shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
+    bulkInsert(dataset, instantTime, table, writeConfig, arePartitionRecordsSorted, shouldPreserveHoodieMetadata, null)
+  }
+
+  /**
+   * Perform bulk insert for [[Dataset<Row>]], will not change timeline/index, return
+   * information about write files.
+   */
+  def bulkInsert(dataset: Dataset[Row],
+                 instantTime: String,
+                 table: HoodieTable[_, _, _, _],
+                 writeConfig: HoodieWriteConfig,
+                 arePartitionRecordsSorted: Boolean,
+                 shouldPreserveHoodieMetadata: Boolean,
+                 sortMarker: SortMarker): HoodieData[WriteStatus] = {
     val schema = dataset.schema
     HoodieJavaRDD.of(
       injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
@@ -171,6 +184,20 @@ object HoodieDatasetBulkInsertHelper
               writeConfig.populateMetaFields,
               arePartitionRecordsSorted,
               shouldPreserveHoodieMetadata)
+          case HoodieIndex.IndexType.BUCKET if writeConfig.getBucketIndexEngineType
+            == BucketIndexEngineType.EXTENSIBLE_BUCKET =>
+            new ExtensibleBucketBulkInsertDataInternalWriterHelper(
+              table,
+              writeConfig,
+              instantTime,
+              taskPartitionId,
+              taskId,
+              taskEpochId,
+              schema,
+              writeConfig.populateMetaFields,
+              arePartitionRecordsSorted,
+              shouldPreserveHoodieMetadata,
+              sortMarker)
           case _ =>
             new BulkInsertDataInternalWriterHelper(
               table,

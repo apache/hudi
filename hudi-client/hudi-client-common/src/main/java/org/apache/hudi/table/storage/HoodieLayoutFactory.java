@@ -35,6 +35,8 @@ public final class HoodieLayoutFactory {
             return new HoodieSimpleBucketLayout(config);
           case CONSISTENT_HASHING:
             return new HoodieConsistentBucketLayout(config);
+          case EXTENSIBLE_BUCKET:
+            return new HoodieExtensibleBucketLayout(config);
           default:
             throw new HoodieNotSupportedException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
         }

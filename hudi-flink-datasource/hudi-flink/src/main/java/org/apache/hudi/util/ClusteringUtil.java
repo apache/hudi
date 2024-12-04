@@ -57,6 +57,9 @@ public class ClusteringUtil {
                 "CLUSTERING_PLAN_STRATEGY_CLASS should be set to " + FlinkConsistentBucketClusteringPlanStrategy.class.getName() + " in order to work with Consistent Hashing Bucket Index.");
           }
           break;
+        case EXTENSIBLE_BUCKET:
+          // TODO: support extensible bucket index for clustering
+          throw new HoodieNotSupportedException("Clustering is not supported for extensible bucket index.");
         default:
           throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
       }

@@ -26,6 +26,7 @@ import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
+import org.apache.hudi.index.bucket.HoodieSparkExtensibleBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
@@ -65,6 +66,8 @@ public final class SparkHoodieIndexFactory {
             return new HoodieSimpleBucketIndex(config);
           case CONSISTENT_HASHING:
             return new HoodieSparkConsistentBucketIndex(config);
+          case EXTENSIBLE_BUCKET:
+            return new HoodieSparkExtensibleBucketIndex(config);
           default:
             throw new HoodieIndexException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
         }

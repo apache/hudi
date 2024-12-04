@@ -26,7 +26,7 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.util.Properties;
 
-public interface HoodieFileWriter extends AutoCloseable {
+public interface HoodieFileWriter extends AutoCloseable, HoodieFileFooterMetadataWriteSupport {
   boolean canWrite();
 
   void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException;

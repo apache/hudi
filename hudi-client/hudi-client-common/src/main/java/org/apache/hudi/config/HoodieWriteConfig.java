@@ -57,6 +57,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.MathUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -81,6 +82,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
+import org.apache.hudi.table.action.cluster.strategy.BaseExtensibleBucketClusteringPlanStrategy;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompositeCompactionStrategy;
@@ -1353,6 +1355,14 @@ public class HoodieWriteConfig extends HoodieConfig {
         && HoodieIndex.BucketIndexEngineType.SIMPLE.equals(getBucketIndexEngineType());
   }
 
+  public boolean isExtensibleBucketEnable() {
+    return HoodieIndex.IndexType.BUCKET.equals(getIndexType()) && HoodieIndex.BucketIndexEngineType.EXTENSIBLE_BUCKET.equals(getBucketIndexEngineType());
+  }
+
+  public boolean isBucketResizingConcurrentWriteEnable() {
+    return getBoolean(HoodieClusteringConfig.BUCKET_RESIZING_CONCURRENT_WRITE_ENABLED);
+  }
+
   /**
    * Returns whether the table writer would generate pure log files at the very first place.
    */
@@ -1873,6 +1883,21 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getClusteringGroupReadParallelism() {
     return getInt(HoodieClusteringConfig.CLUSTERING_GROUP_READ_PARALLELISM);
+  }
+
+  public BaseExtensibleBucketClusteringPlanStrategy.ExtensibleBucketResizingPlanMode getBucketResizingPlanMode() {
+    return BaseExtensibleBucketClusteringPlanStrategy.ExtensibleBucketResizingPlanMode.valueOf(getString(HoodieClusteringConfig.BUCKET_RESIZING_PLAN_MODE));
+  }
+
+  public int getBucketResizingTargetNum() {
+    Integer targetNum = getInt(HoodieClusteringConfig.BUCKET_RESIZING_TARGET_NUM);
+    // check target-num if match power of 2
+    checkArgument(targetNum != null && MathUtils.isPowerOf2(targetNum), "bucket-resizing target-num should be power of 2 but got " + targetNum);
+    return targetNum;
+  }
+
+  public boolean isBucketResizingSortByRecordKeyEnabled() {
+    return getBoolean(HoodieClusteringConfig.BUCKET_RESIZING_SORT_BY_RECORD_KEY);
   }
 
   /**

@@ -348,6 +348,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Relative path to table base path where the index definitions are stored");
 
+  public static final ConfigProperty<Integer> INITIAL_BUCKET_NUM_FOR_NEW_PARTITION = ConfigProperty
+      .key("hoodie.table.initial.bucket.number")
+      .defaultValue(256)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Initial bucket number for new partition");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   static List<ConfigProperty<?>> definedTableConfigs() {
@@ -1018,6 +1024,10 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public Option<String> getRelativeIndexDefinitionPath() {
     return Option.ofNullable(getString(RELATIVE_INDEX_DEFINITION_PATH));
+  }
+
+  public int getInitialBucketNumberForNewPartition() {
+    return getInt(INITIAL_BUCKET_NUM_FOR_NEW_PARTITION);
   }
 
   /**

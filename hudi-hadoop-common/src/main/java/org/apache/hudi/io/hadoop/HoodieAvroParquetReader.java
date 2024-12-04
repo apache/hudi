@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.SortMarker;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
@@ -212,5 +213,10 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
         recordKeyIterator.close();
       }
     };
+  }
+
+  @Override
+  public Option<SortMarker> getSortMarker() {
+    return parquetUtils.readSortMaker(storage, path);
   }
 }

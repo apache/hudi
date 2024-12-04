@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.SortMarker;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -127,6 +128,19 @@ public abstract class FileFormatUtils {
     }
     return new String[] {minMaxKeys.get(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER),
         minMaxKeys.get(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER)};
+  }
+
+  public Option<SortMarker> readSortMaker(HoodieStorage storage, StoragePath filePath) {
+    Map<String, String> isSortedMap = readFooter(storage, false, filePath, SortMarker.SORT_MARKER_METADATA_KEY);
+    String value = isSortedMap.get(SortMarker.SORT_MARKER_METADATA_KEY);
+    if (StringUtils.isNullOrEmpty(value)) {
+      return Option.empty();
+    }
+    try {
+      return Option.of(SortMarker.fromJsonString(value));
+    } catch (Exception e) {
+      throw new HoodieException("Failed to read valid sort marker from file " + filePath + "but got " + value, e);
+    }
   }
 
   /**

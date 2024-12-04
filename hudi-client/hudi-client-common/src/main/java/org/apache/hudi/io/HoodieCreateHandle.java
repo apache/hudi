@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.model.SortMarker;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -50,7 +51,7 @@ import java.util.List;
 import java.util.Map;
 
 @NotThreadSafe
-public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> implements SortMarkerSupport {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCreateHandle.class);
 
@@ -62,6 +63,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
   private final boolean preserveMetadata;
+
+  protected Option<SortMarker> sortMarkerOption = Option.empty();
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -211,6 +214,9 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       markClosed();
 
       if (fileWriter != null) {
+        if (sortMarkerOption.isPresent()) {
+          fileWriter.writeFooterMetadata(SortMarker.SORT_MARKER_METADATA_KEY, sortMarkerOption.get().toJsonString());
+        }
         fileWriter.close();
         fileWriter = null;
       }
@@ -250,5 +256,10 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
+  }
+
+  @Override
+  public void setSortMarker(SortMarker sortMarker) {
+    this.sortMarkerOption = Option.of(sortMarker);
   }
 }

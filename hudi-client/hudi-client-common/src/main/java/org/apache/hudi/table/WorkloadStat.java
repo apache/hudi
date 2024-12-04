@@ -33,9 +33,9 @@ public class WorkloadStat implements Serializable {
 
   private long numUpdates = 0L;
 
-  private HashMap<String, Pair<String, Long>> insertLocationToCount;
+  private HashMap<String/*file id*/, Pair<String/*slice base instant time*/, Long/*insert count*/>> insertLocationToCount;
 
-  private HashMap<String, Pair<String, Long>> updateLocationToCount;
+  private  HashMap<String/*file id*/, Pair<String/*slice base instant time*/, Long/*update count*/>> updateLocationToCount;
 
   public WorkloadStat() {
     insertLocationToCount = new HashMap<>();

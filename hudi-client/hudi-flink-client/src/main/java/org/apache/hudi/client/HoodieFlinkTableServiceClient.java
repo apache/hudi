@@ -22,7 +22,6 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -110,7 +109,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   protected void completeClustering(
       HoodieReplaceCommitMetadata metadata,
-      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+      HoodieTable table,
       String clusteringCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect clustering write status and commit clustering");
     HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime, table.getActiveTimeline(), table.getInstantGenerator()).get();

@@ -62,9 +62,9 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
    */
 
   public JavaRDD<HoodieRecord<T>> doPartition(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
-    if (sortColumnNames != null && sortColumnNames.length > 0) {
+    if (isCustomSorted()) {
       return doPartitionAndCustomColumnSort(records, partitioner);
-    } else if (table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE) {
+    } else if (isRecordKeySorted()) {
       return doPartitionAndSortByRecordKey(records, partitioner);
     } else {
       // By default, do partition only

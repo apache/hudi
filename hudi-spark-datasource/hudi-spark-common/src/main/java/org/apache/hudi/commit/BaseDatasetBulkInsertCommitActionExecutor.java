@@ -32,9 +32,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.execution.bulkinsert.BucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
 import org.apache.hudi.execution.bulkinsert.ConsistentBucketIndexBulkInsertPartitionerWithRows;
+import org.apache.hudi.execution.bulkinsert.ExtensibleBucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -118,11 +120,18 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
   protected BulkInsertPartitioner<Dataset<Row>> getPartitioner(boolean populateMetaFields, boolean isTablePartitioned) {
     if (populateMetaFields) {
       if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET) {
-        if (writeConfig.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.SIMPLE) {
-          return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(),
-              writeConfig.getBucketIndexNumBuckets());
-        } else {
-          return new ConsistentBucketIndexBulkInsertPartitionerWithRows(table, Collections.emptyMap(), true);
+        switch (writeConfig.getBucketIndexEngineType()) {
+          case SIMPLE: {
+            return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(),
+                writeConfig.getBucketIndexNumBuckets());
+          }
+          case CONSISTENT_HASHING: {
+            return new ConsistentBucketIndexBulkInsertPartitionerWithRows(table, Collections.emptyMap(), true);
+          }
+          case EXTENSIBLE_BUCKET:
+            return new ExtensibleBucketIndexBulkInsertPartitionerWithRows(table, Collections.emptyMap(), true);
+          default:
+            throw new HoodieIndexException("Unsupported bucket index engine type " + writeConfig.getBucketIndexEngineType());
         }
       } else {
         return DataSourceUtils
