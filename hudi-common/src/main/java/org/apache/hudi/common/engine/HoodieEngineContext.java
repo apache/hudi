@@ -67,6 +67,10 @@ public abstract class HoodieEngineContext {
 
   public abstract <T> HoodieData<T> emptyHoodieData();
 
+  public boolean supportsFileGroupReader() {
+    return false;
+  }
+
   public <T> HoodieData<T> parallelize(List<T> data) {
     if (data.isEmpty()) {
       return emptyHoodieData();

@@ -72,8 +72,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
 
-  public abstract Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context);
-
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.
    *
@@ -90,6 +88,10 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    * @param writeStatus {@link HoodieData} of {@link WriteStatus}.
    */
   public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime);
+
+  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context) {
+    return Option.empty();
+  }
 
   /**
    * Execute compaction operations and report back status.
@@ -135,7 +137,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
-    boolean useFileGroupReaderBasedCompaction = compactionHandler.supportsFileGroupReader() // the engine needs to support fg reader first
+    boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader() // the engine needs to support fg reader first
         && !metaClient.isMetadataTable()
         && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && !hasBootstrapFile(operations)                                                    // bootstrap file read for fg reader is not ready

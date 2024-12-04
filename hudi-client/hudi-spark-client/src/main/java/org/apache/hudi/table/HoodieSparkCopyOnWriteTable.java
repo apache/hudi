@@ -270,11 +270,6 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public boolean supportsFileGroupReader() {
-    return true;
-  }
-
-  @Override
   public List<WriteStatus> compactUsingFileGroupReader(String instantTime,
                                                        CompactionOperation operation,
                                                        HoodieReaderContext readerContext,

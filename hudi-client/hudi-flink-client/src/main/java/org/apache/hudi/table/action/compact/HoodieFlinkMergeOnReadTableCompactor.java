@@ -46,11 +46,6 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   @Override
-  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context) {
-    return Option.empty();
-  }
-
-  @Override
   public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
     InstantGenerator instantGenerator = table.getInstantGenerator();
