@@ -454,27 +454,47 @@ VALUES
 (1695173887,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai'      ),
 (1695115999,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
 
--- Create bloom filter expression index on city column
-CREATE INDEX idx_bloom_city ON hudi_indexed_table USING bloom_filters(city) OPTIONS(expr='identity');
+-- Create bloom filter expression index on driver column
+CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
 -- It would show bloom filter expression index
 SHOW INDEXES FROM hudi_indexed_table;
--- Query on city column would prune the data using the idx_bloom_city index
-SELECT uuid, rider FROM hudi_indexed_table WHERE city = 'san_francisco';
+-- Query on driver column would prune the data using the idx_bloom_driver index
+SELECT uuid, rider FROM hudi_indexed_table WHERE driver = 'driver-S';
 
 -- Create column stat expression index on ts column
-CREATE INDEX idx_column_driver ON hudi_indexed_table USING column_stats(rider) OPTIONS(expr='upper');
+CREATE INDEX idx_column_ts ON hudi_indexed_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format = 'yyyy-MM-dd');
 -- Shows both expression indexes
 SHOW INDEXES FROM hudi_indexed_table;
 -- Query on ts column would prune the data using the idx_column_ts index
-SELECT * FROM hudi_indexed_table WHERE upper(driver) = 'DRIVER-S';
+SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-24';
 
 -- Create secondary index on rider column
 CREATE INDEX record_index ON hudi_indexed_table (uuid);
 CREATE INDEX idx_rider ON hudi_indexed_table (rider);
+set hoodie.metadata.record.index.enable=true;
 -- Expression index and secondary index should show up
 SHOW INDEXES FROM hudi_indexed_table;
 -- Query on rider column would leverage the secondary index idx_rider
 SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E';
+
+-- Update a record and query the table based on indexed columns
+UPDATE hudi_indexed_table SET rider = 'rider-B', driver = 'driver-N', ts = '1697516137' WHERE rider = 'rider-A';
+-- Data skipping would be performed using column stat expression index
+SELECT uuid, rider FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-10-17';
+-- Data skipping would be performed using bloom filter expression index
+SELECT * FROM hudi_indexed_table WHERE driver = 'driver-N';
+-- Data skipping would be performed using secondary index
+SELECT * FROM hudi_indexed_table WHERE rider = 'rider-B';
+
+-- Drop all the indexes
+DROP INDEX record_index on hudi_indexed_table;
+DROP INDEX secondary_index_idx_rider on hudi_indexed_table;
+DROP INDEX expr_index_idx_bloom_driver on hudi_indexed_table;
+DROP INDEX expr_index_idx_column_ts on hudi_indexed_table;
+-- No indexes should show up for the table
+SHOW INDEXES FROM hudi_indexed_table;
+
+set hoodie.metadata.record.index.enable=false;
 ```
 </TabItem>
 

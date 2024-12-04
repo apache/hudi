@@ -237,33 +237,31 @@ VALUES
 (1695173887,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai'      ),
 (1695115999,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
 
--- Create bloom filter expression index on city column
-CREATE INDEX idx_bloom_city ON hudi_indexed_table USING bloom_filters(city) OPTIONS(expr='identity');
+-- Create bloom filter expression index on driver column
+CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
 -- It would show bloom filter expression index
 SHOW INDEXES FROM hudi_indexed_table;
--- Query on city column would prune the data using the idx_bloom_city index
-SELECT uuid, rider FROM hudi_indexed_table WHERE city = 'san_francisco';
+-- Query on driver column would prune the data using the idx_bloom_driver index
+SELECT uuid, rider FROM hudi_indexed_table WHERE driver = 'driver-S';
 
 -- Create column stat expression index on ts column
-CREATE INDEX idx_column_driver ON hudi_indexed_table USING column_stats(rider) OPTIONS(expr='upper');
+CREATE INDEX idx_column_ts ON hudi_indexed_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format = 'yyyy-MM-dd');
 -- Shows both expression indexes
 SHOW INDEXES FROM hudi_indexed_table;
 -- Query on ts column would prune the data using the idx_column_ts index
-SELECT * FROM hudi_indexed_table WHERE upper(driver) = 'DRIVER-S';
+SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-24';
 
 -- Create secondary index on rider column
 CREATE INDEX record_index ON hudi_indexed_table (uuid);
 CREATE INDEX idx_rider ON hudi_indexed_table (rider);
+set hoodie.metadata.record.index.enable=true;
 -- Expression index and secondary index should show up
 SHOW INDEXES FROM hudi_indexed_table;
 -- Query on rider column would leverage the secondary index idx_rider
 SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E';
-```
 
-:::note
-Creating indexes through SQL is in preview in version 1.0.0-beta only. It will be generally available in version 1.0.0.
-Please report any issues you find either via [GitHub issues](https://github.com/apache/hudi/issues) or creating a [JIRA](https://issues.apache.org/jira/projects/HUDI/issues).
-:::
+set hoodie.metadata.record.index.enable=false;
+```
 
 ```sql
 -- Create Index
@@ -283,13 +281,7 @@ DROP INDEX [IF EXISTS] index_name ON [TABLE] table_name
 - Both index and column on which the index is created can be qualified with some options in the form of key-value pairs.
   We will see this with an example of functional index below. 
 
-:::note
-Except for the `files`, `column_stats`, `bloom_filters` and `record_index`, all other indexes are experimental. We
-encourage users to try out these features on new tables and provide feedback. Below, we have also listed current
-limitations of these indexes.
-:::
-
-#### Create Functional Index (Experimental)
+#### Create Functional Index
 
 A [functional index](https://github.com/apache/hudi/blob/00ece7bce0a4a8d0019721a28049723821e01842/rfc/rfc-63/rfc-63.md) 
 is an index on a function of a column. It is a new addition to Hudi's [multi-modal indexing](https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi) 
@@ -400,7 +392,7 @@ Project [city#2970, fare#2969, rider#2967, driver#2968], Statistics(sizeInBytes=
 ```
 </details>
 
-#### Create Partition Stats and Secondary Index (Experimental)
+#### Create Partition Stats and Secondary Index
 
 Hudi supports various [indexes](/docs/next/metadata#metadata-table-indices). Let us see how we can use them in the following example.
 
@@ -473,8 +465,10 @@ Time taken: 0.83 seconds, Fetched 2 row(s)
 - Predicate on internal meta fields such as `_hoodie_record_key` or `_hoodie_partition_path` cannot be used for data
   skipping. Queries with such predicates cannot leverage the indexes.
 - Secondary index is not supported for nested fields.
+- Secondary index can be created only if record index is available in the table
+- Secondary index can only be used for tables using OverwriteWithLatestAvroPayload payload or COMMIT_TIME_ORDERING merge mode 
+- Column stats Expression Index can not be created using `identity` expression with SQL. Users can leverage column stat index using Datasource instead.
 - Index update can fail with schema evolution.
-- If there are multiple indexes present, then secondary index and functional index update can fail.
 - Only one index can be created at a time using [async indexer](/docs/next/metadata_indexing).
 - Ensure native HFile reader is disabled (`_hoodie.hfile.use.native.reader`) to leverage the secondary index. Default value for this config is `false`.
 

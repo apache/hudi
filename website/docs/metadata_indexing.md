@@ -11,22 +11,25 @@ of Hudi depends on the metadata table. Different types of index, from `files` in
 to `column_stats` index for data skipping, are part of the metadata table. A fundamental tradeoff in any data system
 that supports indices is to balance the write throughput with index updates. A brute-force way is to lock out the writes
 while indexing. Hudi supports index creation using SQL, Datasource as well as async indexing. However, very large tables 
-can take hours to index. This is where Hudi's novel asynchronous metadata indexing comes into play. Indexes in Hudi are
-created in two phases and uses a mix of optimistic concurrency control and log-based concurrency control models. The two
+can take hours to index. This is where Hudi's novel asynchronous metadata indexing comes into play. 
+
+## Asynchronous Metadata Indexing
+
+Indexes in Hudi are created in two phases and uses a mix of optimistic concurrency control and log-based concurrency control models. The two
 phase approach ensures that the other writers are unblocked.
 
 - Scheduling - This is the first phase which schedules an indexing plan and is protected by a lock. Indexing plan considers all the completed commits upto indexing instant.
 - Execution - This phase creates the index files as mentioned in the index plan. At the end of the phase Hudi ensures the completed commits after indexing instant used already created index plan to add corresponding index metadata. This check is protected by a metadata table lock and in case of failures indexing is aborted.
 
-We can now create different metadata indices, including `files`, `bloom_filters`, `column_stats`, `partition_stats` and `record_index` 
-asynchronously in Hudi, which are then used by readers and writers to improve performance. Being able to index without blocking writing
-has two benefits,
+We can now create different metadata indices, including `files`, `bloom_filters`, `column_stats`, `partition_stats`, `record_index`, `secondary_index`
+and `expression_index` asynchronously in Hudi, which are then used by readers and writers to improve performance. Being able to index without blocking 
+writing has two benefits,
 
 - improved write latency
 - reduced resource wastage due to contention between writing and indexing.
 
-In this document, we will learn how to create indexes using SQL, Datasource and how to setup asynchronous metadata indexing. 
-To learn more about the design of asynchronous indexing feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi).
+Please refer section [Setup Async Indexing](https://hudi.apache.org/docs/metadata_indexing/#setup-async-indexing) to get more details on how to setup
+asynchronous indexing. To learn more about the design of asynchronous indexing feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi).
 
 ## Index Creation Using SQL
 
@@ -41,11 +44,11 @@ CREATE INDEX record_index ON hudi_indexed_table (uuid);
 -- Create secondary index on rider column.
 CREATE INDEX idx_rider ON hudi_indexed_table (rider);
 
--- Create expression index by performing transformation on driver and city column 
+-- Create expression index by performing transformation on ts and driver column 
 -- The index is created on the transformed column. Here column stats index is created on ts column
--- and bloom filters index is created on city column.
-CREATE INDEX idx_column_driver ON hudi_indexed_table USING column_stats(rider) OPTIONS(expr='upper');
-CREATE INDEX idx_bloom_city ON hudi_indexed_table USING bloom_filters(city) OPTIONS(expr='identity');
+-- and bloom filters index is created on driver column.
+CREATE INDEX idx_column_ts ON hudi_indexed_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format = 'yyyy-MM-dd');
+CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
 ```
 
 For more information on index creation using SQL refer [SQL DDL](https://hudi.apache.org/docs/next/sql_ddl#create-index) 
@@ -75,6 +78,10 @@ hoodie.metadata.index.bloom.filter.enable=true
 ```
 
 ## Setup Async Indexing
+
+In the example we will have a continuous workload using Hudi Streamer and also create index in parallel. The index creation
+in example is done using HoodieIndexer so that schedule and execute phases are clearly visible for indexing. The asynchronous
+configurations can be used with Datasource and SQL based configs to create index as well.
 
 First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) which will continuously write data
 from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](https://registry.opendata.aws/nyc-tlc-trip-records-pds/), whose setup details are as below:

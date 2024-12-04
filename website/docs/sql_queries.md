@@ -38,6 +38,12 @@ using path filters. We expect that native integration with Spark's optimized tab
 management will yield great performance benefits in those versions.
 :::
 
+### Snapshot Query with Index Acceleration
+
+```sql
+
+```
+
 ### Time Travel Query
 
 You can also query the table at a specific commit time using the `AS OF` syntax. This is useful for debugging and auditing purposes, as well as for
