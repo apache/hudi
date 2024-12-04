@@ -102,15 +102,11 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       throw new HoodieException("Partial update is not supported for unmerged record read");
     }
 
-    // generate schema map
-    Schema dataBlockSchema = recordsIteratorSchemaPair.getRight();
-    Short dataBlockSchemaId = generateOrFetchSchemaId(dataBlockSchema);
-
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            nextRecord, dataBlockSchema, dataBlockSchemaId);
+            nextRecord, recordsIteratorSchemaPair.getRight());
         processNextDataRecord(nextRecord, metadata, putIndex++);
       }
     }

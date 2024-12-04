@@ -112,10 +112,6 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
 
-    // generate schema id
-    Schema dataBlockSchema = schemaTransformerWithEvolvedSchema.getRight();
-    Short dataBlockSchemaId = generateOrFetchSchemaId(dataBlockSchema);
-
     // TODO: Return an iterator that can generate sequence number with the record.
     //       Then we can hide this logic into data block.
     try (ClosableIterator<T> recordIterator = dataBlock.getEngineRecordIterator(readerContext)) {
@@ -134,7 +130,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         processNextDataRecord(
             evolvedNextRecord,
-            readerContext.generateMetadataForRecord(evolvedNextRecord, dataBlockSchema, dataBlockSchemaId),
+            readerContext.generateMetadataForRecord(evolvedNextRecord, schemaTransformerWithEvolvedSchema.getRight()),
             recordPosition
         );
       }
@@ -225,7 +221,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-        baseRecord, readerSchema, schemaToSchemaIdMap.get(readerSchema));
+        baseRecord, readerSchema);
 
     Option<T> resultRecord = logRecordInfo != null
         ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
