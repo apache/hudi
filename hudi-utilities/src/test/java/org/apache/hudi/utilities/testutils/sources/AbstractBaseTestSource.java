@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -131,34 +130,28 @@ public abstract class AbstractBaseTestSource extends AvroSource {
       numUpdates = Math.min(numExistingKeys, sourceLimit - numInserts);
     }
 
-    List<GenericRecord> deleteStream = Collections.emptyList();
-    List<GenericRecord> updateStream;
+    Stream<GenericRecord> deleteStream = Stream.empty();
+    Stream<GenericRecord> updateStream;
     long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
     LOG.info("Before DataGen. Memory Usage={}, Total Memory={}, Free Memory={}", memoryUsage1, Runtime.getRuntime().totalMemory(),
         Runtime.getRuntime().freeMemory());
-    if (!reachedMax && numUpdates >= 10) {
-      LOG.info("After adjustments => NumInserts={}, NumUpdates={}, NumDeletes=10, maxUniqueRecords={}", numInserts, (numUpdates - 10), maxUniqueKeys);
+    if (!reachedMax && numUpdates >= 50) {
+      LOG.info("After adjustments => NumInserts={}, NumUpdates={}, NumDeletes=50, maxUniqueRecords={}", numInserts, (numUpdates - 50), maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
-      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 10).map(AbstractBaseTestSource::toGenericRecord)
-          .collect(Collectors.toList());
-      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 10, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-          .map(AbstractBaseTestSource::toGenericRecord).collect(Collectors.toList());
+      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50).map(AbstractBaseTestSource::toGenericRecord);
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+          .map(AbstractBaseTestSource::toGenericRecord);
     } else {
       LOG.info("After adjustments => NumInserts={}, NumUpdates={}, maxUniqueRecords={}", numInserts, numUpdates, maxUniqueKeys);
       updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-          .map(AbstractBaseTestSource::toGenericRecord).collect(Collectors.toList());
+          .map(AbstractBaseTestSource::toGenericRecord);
     }
-    List<GenericRecord> insertStream =
-        dataGenerator.generateInsertsStream(instantTime, numInserts, false, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-            .map(AbstractBaseTestSource::toGenericRecord).collect(Collectors.toList());
-    LOG.info("NumInserts={}, NumUpdates={}, maxUniqueRecords={}", numInserts, numUpdates, maxUniqueKeys);
-    LOG.warn("Insert keys: " + insertStream.stream().map(e -> e.get("_row_key")).collect(Collectors.toList()));
-    LOG.warn("Update keys: " + updateStream.stream().map(e -> e.get("_row_key")).collect(Collectors.toList()));
-    LOG.warn("Delete keys: " + deleteStream.stream().map(e -> e.get("_row_key")).collect(Collectors.toList()));
+    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .map(AbstractBaseTestSource::toGenericRecord);
     if (Boolean.valueOf(props.getOrDefault("hoodie.test.source.generate.inserts", "false").toString())) {
-      return insertStream.stream();
+      return insertStream;
     }
-    return Stream.concat(deleteStream.stream(), Stream.concat(updateStream.stream(), insertStream.stream()));
+    return Stream.concat(deleteStream, Stream.concat(updateStream, insertStream));
   }
 
   private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
