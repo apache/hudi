@@ -448,3 +448,10 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [AUDIT-1071][ENG-17447] Workflow changelog PR automation improvements (#1061)
 [ENG-17990][INTERNAL] Set REMOTE_INIT_TIMELINE_ENABLE correctly in updateWriteConfigWithTimelineServer (#1055)
 [AUDIT-1074] Change log for release-v1.46.0 (#1051)
+
+--- [2024-12-04 16:04:17] [release-v1.52.0] ---
+[ENG-9224][MINOR] Pass in engine context from StreamSync to dedupe (#1067)
+[AUDIT-1071][ENG-17447] Fix default trigger variables (#1068)
+[ENG-17390][MINOR] Remove extra timeline reload during conflict resolution (#996)
+[AUDIT-1071][ENG-17447] Final set of workflow automation follow ups (#1066)
+[AUDIT-1071]: Changelog for release-v1.51.0 (#1065)
