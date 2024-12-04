@@ -147,14 +147,12 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
     writeStatus.getStat().setPath(new StoragePath(config.getBasePath()), oldFilePath);
   }
 
-  @Override
   boolean needsUpdateLocation() {
     // No need to update location for Flink hoodie records because all the records are pre-tagged
     // with the desired locations.
     return false;
   }
 
-  @Override
   public void finalizeWrite() {
     // Behaves like the normal merge handle if the write instant time changes.
     if (!shouldReplace) {

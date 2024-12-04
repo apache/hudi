@@ -178,14 +178,12 @@ public class FlinkMergeHandle<T, I, K, O>
     }
   }
 
-  @Override
   boolean needsUpdateLocation() {
     // No need to update location for Flink hoodie records because all the records are pre-tagged
     // with the desired locations.
     return false;
   }
 
-  @Override
   public void finalizeWrite() {
     // The file visibility should be kept by the configured ConsistencyGuard instance.
     if (rolloverPaths.size() == 0) {
