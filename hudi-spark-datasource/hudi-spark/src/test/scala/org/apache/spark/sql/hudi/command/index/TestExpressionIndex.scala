@@ -763,12 +763,15 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     }
   }
 
+  /**
+   * Test expression index with data skipping for unary expression and binary expression.
+   */
   @Test
-  def testColumnStatsIndexPruning(): Unit = {
+  def testColumnStatsPruningWithUnaryBinaryExpr(): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
-          val tableName = generateTableName + s"_bloom_pruning_$tableType"
+          val tableName = generateTableName + s"_stats_pruning_binary_$tableType"
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
           spark.sql(
@@ -813,10 +816,9 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
                |  (1699349649,'trip5','rider-A','driver-Q',3.32,'san_diego','texas')
                |""".stripMargin)
 
+          // With unary expression
           spark.sql(s"create index idx_rider on $tableName using column_stats(rider) options(expr='lower')")
-
-
-          // create expression index
+          // With binary expression
           spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')")
           // validate index created successfully
           var metaClient = createMetaClient(spark, basePath)
@@ -839,6 +841,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
           metaClient = createMetaClient(spark, basePath)
 
+          // validate skipping with both types of expression
           val lowerExpr = resolveExpr(spark, unapply(functions.lower(functions.col("rider"))).get, tableSchema)
           var literal = Literal.create("rider-c")
           var dataFilter = EqualTo(lowerExpr, literal)
