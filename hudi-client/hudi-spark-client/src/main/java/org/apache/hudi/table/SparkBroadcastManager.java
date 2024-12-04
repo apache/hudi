@@ -65,7 +65,6 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
   // Prepare broadcast variables.
   @Override
   public void prepareAndBroadcast() {
-    // This needs to be fixed.
     if (!(context instanceof HoodieSparkEngineContext)) {
       throw new HoodieIOException("Expected to be called using Engine's context and not local context");
     }
@@ -74,7 +73,6 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     SQLConf sqlConf = hoodieSparkEngineContext.getSqlContext().sessionState().conf();
     JavaSparkContext jsc = hoodieSparkEngineContext.jsc();
 
-    // TODO: Confirm what is the correct way to set this config.
     boolean returningBatch = sqlConf.parquetVectorizedReaderEnabled();
     scala.collection.immutable.Map<String, String> options =
         scala.collection.immutable.Map$.MODULE$.<String, String>empty()
@@ -83,8 +81,6 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     // Do broadcast.
     sqlConfBroadcast = jsc.broadcast(sqlConf);
     configurationBroadcast = jsc.broadcast(new SerializableConfiguration(jsc.hadoopConfiguration()));
-    // TODO: Disable vectorization as of now. Assign it based on relevant settings.
-    // TODO: Verify if we can construct the reader on the executor side if we has broadcast all necessary variables.
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
     parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());

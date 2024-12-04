@@ -49,7 +49,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
-import org.apache.hudi.io.HoodieSparkMergeHandleV2;
+import org.apache.hudi.io.HoodieSparkFileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -280,7 +280,7 @@ public class HoodieSparkCopyOnWriteTable<T>
                                                        HoodieReaderContext readerContext,
                                                        Configuration conf) {
     Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
-    HoodieSparkMergeHandleV2 mergeHandle = new HoodieSparkMergeHandleV2(config,
+    HoodieSparkFileGroupReaderBasedMergeHandle mergeHandle = new HoodieSparkFileGroupReaderBasedMergeHandle(config,
         instantTime, this, operation, taskContextSupplier, keyGeneratorOpt, readerContext, conf);
     mergeHandle.write();
     return mergeHandle.close();

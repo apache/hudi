@@ -99,20 +99,20 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_
  * </p>
  */
 @NotThreadSafe
-public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkMergeHandleV2.class);
+public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkFileGroupReaderBasedMergeHandle.class);
 
   protected HoodieReaderContext readerContext;
-  // TODO(yihua): audit delete stats because file group reader may not return deletes
   protected FileSlice fileSlice;
   protected Configuration conf;
 
   /**
    * Called by compactor code path using the file group reader.
    */
-  public HoodieSparkMergeHandleV2(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                  CompactionOperation operation, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
-                                  HoodieReaderContext readerContext, Configuration conf) {
+  public HoodieSparkFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                                    CompactionOperation operation, TaskContextSupplier taskContextSupplier,
+                                                    Option<BaseKeyGenerator> keyGeneratorOpt,
+                                                    HoodieReaderContext readerContext, Configuration conf) {
     super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
@@ -208,7 +208,6 @@ public class HoodieSparkMergeHandleV2<T, I, K, O> extends HoodieMergeHandle<T, I
       readerSchema = HoodieAvroUtils.addMetadataFields(
           new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     }
-    // TODO(yihua): reader schema is good enough for writer?
     try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
