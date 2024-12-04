@@ -2772,7 +2772,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // clean up
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
-  
+
   @Test
   public void testResumeCheckpointAfterChangingMOR2COW() throws Exception {
     String tableBasePath = basePath + "/test_resume_checkpoint_after_changing_mor_to_cow";

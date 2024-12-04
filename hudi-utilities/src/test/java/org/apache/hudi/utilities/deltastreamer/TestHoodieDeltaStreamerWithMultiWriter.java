@@ -79,14 +79,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
   String propsFilePath;
   String tableBasePath;
 
-  @Override
   @BeforeEach
   public void setup() throws Exception {
     basePath = UtilitiesTestBase.basePath;
     super.setupTest();
   }
 
-  @Override
   @AfterEach
   public void teardown() throws Exception {
     TestDataSource.resetDataGen();

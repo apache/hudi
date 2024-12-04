@@ -232,7 +232,6 @@ public class HoodieSparkCopyOnWriteTable<T>
    * @param instantTime Instant Time for the action
    * @return HoodieWriteMetadata
    */
-  @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> managePartitionTTL(HoodieEngineContext context, String instantTime) {
     return new SparkPartitionTTLActionExecutor<>(context, config, this, instantTime).execute();
   }
