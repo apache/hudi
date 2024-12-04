@@ -33,16 +33,18 @@ import org.apache.spark.unsafe.types.UTF8String
 object DataSkippingUtils extends Logging {
 
   /**
-   * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index index table
-   * to filter out candidate files that would hold records matching the original filter
+   * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index table
+   * to filter out candidate files that would hold records matching the original filter.
+   * In case the column stats were creating using expression index, the index filter must also account for the expression.
    *
    * @param dataTableFilterExpr source table's query's filter expression
    * @param indexSchema index table schema
+   * @param isExpressionIndex whether the index is an expression index
    * @return filter for column-stats index's table
    */
-  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, indexSchema: StructType): Expression = {
+  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, indexSchema: StructType, isExpressionIndex: Boolean = false): Expression = {
     try {
-      createColumnStatsIndexFilterExprInternal(dataTableFilterExpr, indexSchema)
+      createColumnStatsIndexFilterExprInternal(dataTableFilterExpr, indexSchema, isExpressionIndex)
     } catch {
       case e: AnalysisException =>
         logDebug(s"Failed to translated provided data table filter expr into column stats one ($dataTableFilterExpr)", e)
@@ -50,10 +52,10 @@ object DataSkippingUtils extends Logging {
     }
   }
 
-  private def createColumnStatsIndexFilterExprInternal(dataTableFilterExpr: Expression, indexSchema: StructType): Expression = {
+  private def createColumnStatsIndexFilterExprInternal(dataTableFilterExpr: Expression, indexSchema: StructType, isExpressionIndex: Boolean = false): Expression = {
     // Try to transform original Source Table's filter expression into
     // Column-Stats Index filter expression
-    tryComposeIndexFilterExpr(dataTableFilterExpr, indexSchema) match {
+    tryComposeIndexFilterExpr(dataTableFilterExpr, indexSchema, isExpressionIndex) match {
       case Some(e) => e
       // NOTE: In case we can't transform source filter expression, we fallback
       // to {@code TrueLiteral}, to essentially avoid pruning any indexed files from scanning
@@ -61,7 +63,7 @@ object DataSkippingUtils extends Logging {
     }
   }
 
-  private def tryComposeIndexFilterExpr(sourceFilterExpr: Expression, indexSchema: StructType): Option[Expression] = {
+  private def tryComposeIndexFilterExpr(sourceFilterExpr: Expression, indexSchema: StructType, isExpressionIndex: Boolean = false): Option[Expression] = {
     //
     // For translation of the Filter Expression for the Data Table into Filter Expression for Column Stats Index, we're
     // assuming that
@@ -93,7 +95,7 @@ object DataSkippingUtils extends Logging {
     //
     sourceFilterExpr match {
       // If Expression is not resolved, we can't perform the analysis accurately, bailing
-      case expr if !expr.resolved => None
+      case expr if !expr.resolved && !isExpressionIndex => None
 
       // Filter "expr(colA) = B" and "B = expr(colA)"
       // Translates to "(expr(colA_minValue) <= B) AND (B <= expr(colA_maxValue))" condition for index lookup
