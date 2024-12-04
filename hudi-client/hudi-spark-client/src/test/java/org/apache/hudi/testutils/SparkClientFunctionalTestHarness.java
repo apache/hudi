@@ -178,7 +178,6 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(tableType)
-        .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
         .initTable(storageConf.newInstance(), basePath);
   }
@@ -283,7 +282,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Option<HoodieInstant> deltaCommit =
         reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getTimestamp(),
+    assertEquals(commitTime, deltaCommit.get().requestedTime(),
         "Delta commit should be specified value");
 
     Option<HoodieInstant> commit =
@@ -331,7 +330,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Option<HoodieInstant> deltaCommit =
         reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getTimestamp(),
+    assertEquals(commitTime, deltaCommit.get().requestedTime(),
         "Latest Delta commit should match specified time");
 
     Option<HoodieInstant> commit =

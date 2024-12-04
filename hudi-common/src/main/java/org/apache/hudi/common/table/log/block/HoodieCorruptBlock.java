@@ -34,7 +34,7 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
 
   public HoodieCorruptBlock(Option<byte[]> corruptedBytes, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                             Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-                            Map<HeaderMetadataType, String> footer) {
+                            Map<FooterMetadataType, String> footer) {
     super(header, footer, blockContentLocation, corruptedBytes, inputStreamSupplier, readBlockLazily);
   }
 

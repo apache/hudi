@@ -22,15 +22,23 @@ package org.apache.hudi.hadoop.utils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.hadoop.HiveHoodieReaderContext;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.Arrays;
 import java.util.List;
@@ -84,5 +92,19 @@ public class TestHoodieArrayWritableAvroUtils {
 
   private static ArrayWritable convertArrayWritable(GenericRecord record) {
     return  (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, record.getSchema(), false);
+  }
+
+  @Test
+  public void testCastOrderingField() {
+    HiveHoodieReaderContext readerContext = Mockito.mock(HiveHoodieReaderContext.class, Mockito.CALLS_REAL_METHODS);
+    assertEquals(new Text("ASDF"), readerContext.castValue("ASDF", Schema.Type.STRING));
+    assertEquals(new IntWritable(0),readerContext.castValue(0, Schema.Type.INT));
+    assertEquals(new LongWritable(1000000000),readerContext.castValue(1000000000, Schema.Type.LONG));
+    assertEquals(new FloatWritable(20.24f),readerContext.castValue(20.24, Schema.Type.FLOAT));
+    assertEquals(new DoubleWritable(21.12d),readerContext.castValue(21.12, Schema.Type.DOUBLE));
+
+    // make sure that if input is a writeable, then it still works
+    WritableComparable reflexive = new IntWritable(8675309);
+    assertEquals(reflexive, readerContext.castValue(reflexive, Schema.Type.INT));
   }
 }

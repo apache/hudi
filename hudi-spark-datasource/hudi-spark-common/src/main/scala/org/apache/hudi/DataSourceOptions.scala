@@ -23,16 +23,15 @@ import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
 import org.apache.hudi.common.util.ConfigUtils.{DELTA_STREAMER_CONFIG_PREFIX, IS_QUERY_AS_RO_TABLE, STREAMER_CONFIG_PREFIX}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
+import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
-import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.{JFunction, SparkConfigUtils}
 
@@ -104,26 +103,32 @@ object DataSourceReadOptions {
     .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
       "specified start instant time")
 
-  val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
+  val START_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()
-    .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. Represents the instant time to start incrementally pulling data from. The instanttime here need not necessarily "
-      + "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. "
-      + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
-      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
-      + HollowCommitHandling.USE_TRANSITION_TIME + ", will use instant's "
-      + "`stateTransitionTime` to perform comparison.")
+    .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. "
+      + "Represents the completion time to start incrementally pulling data from. The completion time here need not necessarily "
+      + "correspond to an instant on the timeline. New data written with completion_time >= START_COMMIT are fetched out. "
+      + "For e.g: ‘20170901080000’ will get all new data written on or after Sep 1, 2017 08:00AM.")
 
-  val END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
+  val END_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
-    .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL +
-      "`. Represents the instant time to limit incrementally fetched data to. When not specified latest commit time from " +
-      "timeline is assumed by default. When specified, new data written with an instant_time <= END_INSTANTTIME are fetched out. " +
-      "Point in time type queries make more sense with begin and end instant times specified. Note that if `"
-      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to `"
-      + HollowCommitHandling.USE_TRANSITION_TIME + "`, will use instant's "
-      + "`stateTransitionTime` to perform comparison.")
+    .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL
+      + "`. Represents the completion time to limit incrementally fetched data to. When not specified latest commit "
+      + "completion time from timeline is assumed by default. When specified, new data written with "
+      + "completion_time <= END_COMMIT are fetched out. "
+      + "Point in time type queries make more sense with begin and end completion times specified.")
+
+  val STREAMING_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.streaming.table.version")
+    .noDefaultValue()
+    .withDocumentation("The table version assumed for streaming read")
+
+  val INCREMENTAL_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.incr.table.version")
+    .noDefaultValue()
+    .withDocumentation("The table version assumed for incremental read")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.schema.use.end.instanttime")
@@ -261,12 +266,6 @@ object DataSourceReadOptions {
   val VIEW_TYPE_REALTIME_OPT_VAL = "realtime"
   @Deprecated
   val DEFAULT_VIEW_TYPE_OPT_VAL = VIEW_TYPE_READ_OPTIMIZED_OPT_VAL
-  /** @deprecated Use {@link BEGIN_INSTANTTIME} and its methods instead */
-  @Deprecated
-  val BEGIN_INSTANTTIME_OPT_KEY = BEGIN_INSTANTTIME.key()
-  /** @deprecated Use {@link END_INSTANTTIME} and its methods instead */
-  @Deprecated
-  val END_INSTANTTIME_OPT_KEY = END_INSTANTTIME.key()
   /** @deprecated Use {@link INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME} and its methods instead */
   @Deprecated
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY = INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key()
@@ -400,18 +399,18 @@ object DataSourceWriteOptions {
    */
   val PAYLOAD_CLASS_NAME = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
 
-  val PAYLOAD_TYPE = HoodieWriteConfig.WRITE_PAYLOAD_TYPE
-
   /**
    * HoodieMerger will replace the payload to process the merge of data
    * and provide the same capabilities as the payload
    */
-  val RECORD_MERGER_IMPLS = HoodieWriteConfig.RECORD_MERGER_IMPLS
+  val RECORD_MERGE_IMPL_CLASSES = HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES
 
   /**
    * Id of merger strategy
    */
-  val RECORD_MERGER_STRATEGY = HoodieWriteConfig.RECORD_MERGER_STRATEGY
+  val RECORD_MERGE_STRATEGY_ID = HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID
+
+  val RECORD_MERGE_MODE = HoodieWriteConfig.RECORD_MERGE_MODE
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
@@ -851,9 +850,6 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated
   val PAYLOAD_CLASS_OPT_KEY = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()
-  /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME} and its methods instead */
-  @Deprecated
-  val DEFAULT_PAYLOAD_OPT_VAL = PAYLOAD_CLASS_NAME.defaultValue()
 
   /** @deprecated Use {@link TABLE_TYPE} and its methods instead */
   @Deprecated
@@ -1022,6 +1018,12 @@ object DataSourceOptionsHelper {
     }
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
+    }
+    if (!params.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key()) && tableConfig.getRecordMergeMode != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_MODE.key() -> tableConfig.getRecordMergeMode.name())
+    }
+    if (!params.contains(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key()) && tableConfig.getRecordMergeStrategyId != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key() -> tableConfig.getRecordMergeStrategyId)
     }
     if (!params.contains(DataSourceWriteOptions.TABLE_TYPE.key())) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableConfig.getTableType.name())

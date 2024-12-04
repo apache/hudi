@@ -97,10 +97,10 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
     } catch (Exception e) {
       HoodieTableMetaClient metaClient = table.getMetaClient();
-      HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
+      HoodieInstant inflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
       try {
         if (!metaClient.getStorage().exists(
-            new StoragePath(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
+            new StoragePath(metaClient.getTimelinePath(), instantFileNameGenerator.getFileName(inflightInstant)))) {
           throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", e);
         }
       } catch (IOException ex) {
@@ -189,8 +189,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   @Override
   protected void commit(HoodieWriteMetadata<List<WriteStatus>> result) {
-    commit(HoodieListData.eager(result.getWriteStatuses()), result,
-        result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+    commit(result, result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
   }
 
   protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {

@@ -17,38 +17,40 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{TimestampKeyGeneratorConfig, TypedProperties}
-import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
-import org.apache.hudi.keygen.StringPartitionPathFormatter
+import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.util.Collections
 import javax.annotation.concurrent.NotThreadSafe
+import java.util.Collections
+
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
@@ -56,12 +58,15 @@ import scala.util.{Success, Try}
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
  *
- * @param spark                 spark session
- * @param metaClient            Hudi table's meta-client
- * @param schemaSpec            optional table's schema
- * @param configProperties      unifying configuration (in the form of generic properties)
- * @param specifiedQueryInstant instant as of which table is being queried
- * @param fileStatusCache       transient cache of fetched [[FileStatus]]es
+ * @param spark                                           spark session
+ * @param metaClient                                      Hudi table's meta-client
+ * @param schemaSpec                                      optional table's schema
+ * @param configProperties                                unifying configuration (in the form of generic properties)
+ * @param specifiedQueryInstant                           instant as of which table is being queried
+ * @param fileStatusCache                                 transient cache of fetched [[FileStatus]]es
+ * @param startCompletionTime                             start completion time for incremental and CDC queries
+ * @param endCompletionTime                               end completion time for incremental and CDC queries
+ * @param shouldUseStringTypeForTimestampPartitionKeyType should use String type for timestamp partition key type
  */
 @NotThreadSafe
 class SparkHoodieTableFileIndex(spark: SparkSession,
@@ -71,9 +76,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
                                 queryPaths: Seq[StoragePath],
                                 specifiedQueryInstant: Option[String] = None,
                                 @transient fileStatusCache: FileStatusCache = NoopCache,
-                                beginInstantTime: Option[String] = None,
-                                endInstantTime: Option[String] = None,
-                                shouldUseStringTypeForTimestampPartitionKeyType: Boolean = false)
+                                startCompletionTime: Option[String] = None,
+                                endCompletionTime: Option[String] = None)
   extends BaseHoodieTableFileIndex(
     new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
     metaClient,
@@ -85,8 +89,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     false,
     SparkHoodieTableFileIndex.adapt(fileStatusCache),
     shouldListLazily(configProperties),
-    toJavaOption(beginInstantTime),
-    toJavaOption(endInstantTime)
+    toJavaOption(startCompletionTime),
+    toJavaOption(endCompletionTime)
   )
     with SparkAdapterSupport
     with Logging {
@@ -112,12 +116,45 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   /**
    * Get the partition schema from the hoodie.properties.
    */
-  lazy val _partitionSchemaFromProperties: StructType = {
-    getPartitionSchema()
-  }
+  private lazy val _partitionSchemaFromProperties: StructType = {
+    val tableConfig = metaClient.getTableConfig
+    val partitionColumns = tableConfig.getPartitionFields
+    val nameFieldMap = generateFieldMap(schema)
 
-  def getPartitionSchema(): StructType = {
-    sparkParsePartitionUtil.getPartitionSchema(metaClient.getTableConfig, schema, shouldUseStringTypeForTimestampPartitionKeyType)
+    if (partitionColumns.isPresent) {
+      // Note that key generator class name could be null
+      val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
+      if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
+        || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
+        val partitionFields: Array[StructField] = partitionColumns.get().map(column => StructField(column, StringType))
+        StructType(partitionFields)
+      } else {
+        val partitionFields: Array[StructField] = partitionColumns.get().filter(column => nameFieldMap.contains(column))
+          .map(column => nameFieldMap.apply(column))
+
+        if (partitionFields.length != partitionColumns.get().length) {
+          val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
+          if (isBootstrapTable) {
+            // For bootstrapped tables its possible the schema does not contain partition field when source table
+            // is hive style partitioned. In this case we would like to treat the table as non-partitioned
+            // as opposed to failing
+            new StructType()
+          } else {
+            throw new IllegalArgumentException(s"Cannot find columns: " +
+              s"'${partitionColumns.get().filter(col => !nameFieldMap.contains(col)).mkString(",")}' " +
+              s"in the schema[${schema.fields.mkString(",")}]")
+          }
+        } else {
+          new StructType(partitionFields)
+        }
+      }
+    } else {
+      // If the partition columns have not stored in hoodie.properties(the table that was
+      // created earlier), we trait it as a non-partitioned table.
+      logWarning("No partition columns available from hoodie.properties." +
+        " Partition pruning will not work")
+      new StructType()
+    }
   }
 
   /**
@@ -367,22 +404,19 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       staticPartitionColumnValues.map(_._1): _*)
   }
 
-  protected def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
-    val tableConfig = metaClient.getTableConfig
-    if (null != tableConfig.getKeyGeneratorClassName
-      && tableConfig.getKeyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
-      && tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
-      .matches("SCALAR|UNIX_TIMESTAMP|EPOCHMILLISECONDS|EPOCHMICROSECONDS")) {
-      // For TIMESTAMP key generator when TYPE is SCALAR, UNIX_TIMESTAMP,
-      // EPOCHMILLISECONDS, or EPOCHMICROSECONDS,
-      // we couldn't reconstruct initial partition column values from partition paths due to lost data after formatting in most cases.
-      // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
-      Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
-    } else {
-      HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
-        configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-        sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
-    }
+  /**
+   * @VisibleForTesting
+   */
+  def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
+    HoodieSparkUtils.parsePartitionColumnValues(
+      partitionColumns,
+      partitionPath,
+      getBasePath,
+      schema,
+      metaClient.getTableConfig.propsMap,
+      configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
+      sparkParsePartitionUtil,
+      shouldValidatePartitionColumns(spark))
   }
 
   private def arePartitionPathsUrlEncoded: Boolean =

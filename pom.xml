@@ -137,19 +137,21 @@
     <spark.version>${spark3.version}</spark.version>
     <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
+    <flink1.20.version>1.20.0</flink1.20.version>
     <flink1.19.version>1.19.1</flink1.19.version>
     <flink1.18.version>1.18.1</flink1.18.version>
     <flink1.17.version>1.17.1</flink1.17.version>
     <flink1.16.version>1.16.2</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
     <flink1.14.version>1.14.5</flink1.14.version>
-    <flink.version>${flink1.19.version}</flink.version>
-    <hudi.flink.module>hudi-flink1.19.x</hudi.flink.module>
-    <flink.bundle.version>1.19</flink.bundle.version>
+    <flink.version>${flink1.20.version}</flink.version>
+    <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
+    <flink.bundle.version>1.20</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
-    <flink.avro.version>1.11.1</flink.avro.version>
+    <flink.avro.version>1.11.3</flink.avro.version>
     <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
-    <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
+    <!-- check kafka version -->
+    <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version> 
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
@@ -163,7 +165,7 @@
     <rocksdbjni.version>7.5.3</rocksdbjni.version>
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
-    <spark35.version>3.5.1</spark35.version>
+    <spark35.version>3.5.3</spark35.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.8.2</avro.version>
@@ -210,8 +212,8 @@
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
     <aws.sdk.version>2.25.69</aws.sdk.version>
-    <proto.version>3.21.7</proto.version>
-    <protoc.version>3.21.5</protoc.version>
+    <proto.version>3.25.5</proto.version>
+    <protoc.version>3.25.5</protoc.version>
     <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
     <zookeeper.version>3.5.7</zookeeper.version>
     <openjdk.jol.version>0.16</openjdk.jol.version>
@@ -2492,11 +2494,28 @@
     </profile>
 
     <profile>
+      <id>flink1.20</id>
+      <properties>
+        <orc.flink.version>1.5.6</orc.flink.version>
+        <flink.avro.version>1.11.3</flink.avro.version>
+        <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+      </properties>
+      <activation>
+        <property>
+          <name>flink1.20</name>
+        </property>
+      </activation>
+    </profile>
+    <profile>
       <id>flink1.19</id>
       <properties>
+        <flink.version>${flink1.19.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.19.x</hudi.flink.module>
+        <flink.bundle.version>1.19</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.1</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
       </properties>
       <activation>
         <property>

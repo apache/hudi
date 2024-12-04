@@ -21,13 +21,15 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
@@ -61,6 +63,7 @@ import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerat
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getPayloadProps;
 import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerator.getUpdates;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
@@ -168,12 +171,12 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       // 1st batch: inserts
-      String commitTimeAtEpoch0 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      String commitTimeAtEpoch0 = TimelineUtils.generateInstantTime(false, timeGenerator);
       client.startCommitWithTime(commitTimeAtEpoch0);
       assertNoWriteErrors(client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect());
 
       // 2nd batch: update 4 records from p1 to p2
-      String commitTimeAtEpoch5 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      String commitTimeAtEpoch5 = TimelineUtils.generateInstantTime(false, timeGenerator);
       client.startCommitWithTime(commitTimeAtEpoch5);
       if (isUpsert) {
         assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5).collect());
@@ -185,13 +188,13 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
         readTableAndValidate(metaClient, new int[] {}, p2, 0);
       }
       // simuate crash. delete latest completed dc.
-      String latestCompletedDeltaCommit = metaClient.reloadActiveTimeline().getCommitsAndCompactionTimeline().lastInstant().get().getFileName();
-      metaClient.getStorage().deleteFile(new StoragePath(metaClient.getBasePath() + "/.hoodie/" + latestCompletedDeltaCommit));
+      String latestCompletedDeltaCommit = INSTANT_FILE_NAME_GENERATOR.getFileName(metaClient.reloadActiveTimeline().getCommitsAndCompactionTimeline().lastInstant().get());
+      metaClient.getStorage().deleteFile(new StoragePath(metaClient.getBasePath() + "/.hoodie/timeline/" + latestCompletedDeltaCommit));
     }
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       // re-ingest same batch
-      String commitTimeAtEpoch10 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      String commitTimeAtEpoch10 = TimelineUtils.generateInstantTime(false, timeGenerator);
       client.startCommitWithTime(commitTimeAtEpoch10);
       if (isUpsert) {
         assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch10).collect());
@@ -208,7 +211,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       // update 4 of them from p2 to p3.
       // delete test:
       // update 4 of them to p3. these are treated as new inserts since they are deleted. no changes should be seen wrt p2.
-      String commitTimeAtEpoch15 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      String commitTimeAtEpoch15 = TimelineUtils.generateInstantTime(false, timeGenerator);
       List<HoodieRecord> updatesAtEpoch15 = getUpdates(updatesAtEpoch5, p3, 15, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch15);
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch15, 2), commitTimeAtEpoch15).collect());
@@ -217,7 +220,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p3, 15);
 
       // lets move 2 of them back to p1
-      String commitTimeAtEpoch20 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      String commitTimeAtEpoch20 = TimelineUtils.generateInstantTime(false, timeGenerator);
       List<HoodieRecord> updatesAtEpoch20 = getUpdates(updatesAtEpoch5.subList(0, 2), p1, 20, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch20);
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch20, 1), commitTimeAtEpoch20).collect());
@@ -386,6 +389,8 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(4).build())
         .withSchema(SCHEMA_STR)
+        .withRecordMergeMode(RecordMergeMode.CUSTOM)
+        .withRecordMergeStrategyId(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .fromProperties(getPayloadProps(payloadClass)).build())
         .build();

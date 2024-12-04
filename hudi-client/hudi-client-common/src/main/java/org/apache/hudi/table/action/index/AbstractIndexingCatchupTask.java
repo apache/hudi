@@ -22,6 +22,7 @@ package org.apache.hudi.table.action.index;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,8 +31,10 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +64,8 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
   protected final HoodieTableMetaClient metadataMetaClient;
   protected final TransactionManager transactionManager;
   protected final HoodieEngineContext engineContext;
+  protected final HoodieTable table;
+  protected final HoodieHeartbeatClient heartbeatClient;
   protected String currentCaughtupInstant;
 
   public AbstractIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
@@ -70,7 +75,9 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
                                      HoodieTableMetaClient metadataMetaClient,
                                      TransactionManager transactionManager,
                                      String currentCaughtupInstant,
-                                     HoodieEngineContext engineContext) {
+                                     HoodieEngineContext engineContext,
+                                     HoodieTable table,
+                                     HoodieHeartbeatClient heartbeatClient) {
     this.metadataWriter = metadataWriter;
     this.instantsToIndex = instantsToIndex;
     this.metadataCompletedInstants = metadataCompletedInstants;
@@ -79,21 +86,22 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
     this.transactionManager = transactionManager;
     this.currentCaughtupInstant = currentCaughtupInstant;
     this.engineContext = engineContext;
+    this.table = table;
+    this.heartbeatClient = heartbeatClient;
   }
 
   @Override
   public void run() {
     for (HoodieInstant instant : instantsToIndex) {
-      // metadata index already updated for this instant
-      instant = awaitInstantCaughtUp(instant);
-      if (instant == null) {
+      // Already caught up to this instant, or no heartbeat, or heartbeat expired for this instant
+      if (awaitInstantCaughtUp(instant)) {
         continue;
       }
       // if instant completed, ensure that there was metadata commit, else update metadata for this completed instant
       if (COMPLETED.equals(instant.getState())) {
-        String instantTime = instant.getTimestamp();
+        String instantTime = instant.requestedTime();
         Option<HoodieInstant> metadataInstant = metadataMetaClient.reloadActiveTimeline()
-            .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
+            .filterCompletedInstants().filter(i -> i.requestedTime().equals(instantTime)).firstInstant();
         if (metadataInstant.isPresent()) {
           currentCaughtupInstant = instantTime;
           continue;
@@ -110,17 +118,17 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
               break;
             case CLEAN_ACTION:
               HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, instant);
-              metadataWriter.update(cleanMetadata, instant.getTimestamp());
+              metadataWriter.update(cleanMetadata, instant.requestedTime());
               break;
             case RESTORE_ACTION:
               HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
                   metaClient.getActiveTimeline().getInstantDetails(instant).get());
-              metadataWriter.update(restoreMetadata, instant.getTimestamp());
+              metadataWriter.update(restoreMetadata, instant.requestedTime());
               break;
             case ROLLBACK_ACTION:
               HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
                   metaClient.getActiveTimeline().getInstantDetails(instant).get());
-              metadataWriter.update(rollbackMetadata, instant.getTimestamp());
+              metadataWriter.update(rollbackMetadata, instant.requestedTime());
               break;
             default:
               throw new IllegalStateException("Unexpected value: " + instant.getAction());
@@ -145,16 +153,45 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
   /**
    * For the given instant, this method checks if it is already caught up or not.
    * If not, it waits until the instant is completed.
+   * <p>
+   * 1. single writer.
+   * a. pending ingestion commit: If no heartbeat, then we are good to ignore.
+   * b. pending table service commit: There won't be any heartbeat. If no heartbeat, then we are good to ignore (strictly assuming single writer and inline table service).
+   * <p>
+   * 2. streamer + async table service.
+   * a. pending ingestion commit: If no heartbeat, then we are good to ignore.
+   * b. pending table service commit: There won't be any heartbeat. If no heartbeat, then we are good to ignore because we assume that user stops the main writer to create the index.
+   * <p>
+   * 3. Multi-writer scenarios:
+   * a. Spark datasource ingestion (OR streamer all inline) going on. User is trying to build index via spark-sql concurrently (w/o stopping the main writer)
+   * b. deltastreamer + async table services ongoing. User concurrently builds the index via spark-sql.
+   * c. multi-writer spark-ds writers. User is trying to build index via spark-sql concurrently (w/o stopping the all other writer)
+   * For new indexes added in 1.0.0, these flows are experimental. TODO: HUDI-8607.
    *
    * @param instant HoodieInstant to check
-   * @return null if instant is already caught up, else the instant after it is completed.
+   * @return True if instant is already caught up, or no heartbeat, or expired heartbeat. If heartbeat exists and not expired, then return false.
    */
-  HoodieInstant awaitInstantCaughtUp(HoodieInstant instant) {
-    if (!metadataCompletedInstants.isEmpty() && metadataCompletedInstants.contains(instant.getTimestamp())) {
-      currentCaughtupInstant = instant.getTimestamp();
-      return null;
+  boolean awaitInstantCaughtUp(HoodieInstant instant) {
+    if (!metadataCompletedInstants.isEmpty() && metadataCompletedInstants.contains(instant.requestedTime())) {
+      currentCaughtupInstant = instant.requestedTime();
+      return true;
     }
     if (!instant.isCompleted()) {
+      // check heartbeat
+      try {
+        // if no heartbeat, then ignore this instant
+        if (!HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), metaClient.getBasePath().toString(), instant.requestedTime())) {
+          LOG.info("Ignoring instant " + instant + " as no heartbeat found");
+          return true;
+        }
+        // if heartbeat exists, but expired, then ignore this instant
+        if (table.getConfig().getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instant.requestedTime())) {
+          LOG.info("Ignoring instant " + instant + " as heartbeat expired");
+          return true;
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Unable to check if heartbeat expired for instant " + instant, e);
+      }
       try {
         LOG.warn("instant not completed, reloading timeline " + instant);
         reloadTimelineWithWait(instant);
@@ -162,16 +199,16 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
         throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);
       }
     }
-    return instant;
+    return false;
   }
 
   private void reloadTimelineWithWait(HoodieInstant instant) throws InterruptedException {
-    String instantTime = instant.getTimestamp();
+    String instantTime = instant.requestedTime();
     Option<HoodieInstant> currentInstant;
 
     do {
       currentInstant = metaClient.reloadActiveTimeline()
-          .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
+          .filterCompletedInstants().filter(i -> i.requestedTime().equals(instantTime)).firstInstant();
       if (!currentInstant.isPresent() || !currentInstant.get().isCompleted()) {
         Thread.sleep(TIMELINE_RELOAD_INTERVAL_MILLIS);
       }

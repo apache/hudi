@@ -81,7 +81,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     // TODO : check if maxMemory is not greater than JVM or executor memory
     // TODO - rollback any compactions in flight
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    CompletionTimeQueryView completionTimeQueryView = new CompletionTimeQueryView(metaClient);
+    CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(
         engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
 
@@ -119,7 +119,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     String lastCompletedInstantTime = hoodieTable.getMetaClient()
         .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+        .filterCompletedInstants().lastInstant().get().requestedTime();
     LOG.info("Last completed instant time " + lastCompletedInstantTime);
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
@@ -153,9 +153,9 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         }), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
-    LOG.info("Total of " + operations.size() + " compaction operations are retrieved");
-    LOG.info("Total number of log files " + totalLogFiles.value());
-    LOG.info("Total number of file slices " + totalFileSlices.value());
+    LOG.info("Total of {} compaction operations are retrieved", operations.size());
+    LOG.info("Total number of log files {}", totalLogFiles.value());
+    LOG.info("Total number of file slices {}", totalFileSlices.value());
 
     if (operations.isEmpty()) {
       LOG.warn("No operations are retrieved for {}", metaClient.getBasePath());

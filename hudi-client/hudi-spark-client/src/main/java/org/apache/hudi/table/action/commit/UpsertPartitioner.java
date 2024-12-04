@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
@@ -176,9 +177,10 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
      * created by clustering, which has smaller average record size, which affects assigning inserts and
      * may result in OOM by making spark underestimate the actual input record sizes.
      */
+    TimelineLayout layout = TimelineLayout.fromVersion(table.getActiveTimeline().getTimelineLayoutVersion());
     long averageRecordSize = AverageRecordSizeUtils.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION))
-        .filterCompletedInstants(), config);
+        .filterCompletedInstants(), config,  layout.getCommitMetadataSerDe());
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
@@ -311,7 +313,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
       List<HoodieBaseFile> allFiles = table.getBaseFileOnlyView()
-          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
+          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.requestedTime()).collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {

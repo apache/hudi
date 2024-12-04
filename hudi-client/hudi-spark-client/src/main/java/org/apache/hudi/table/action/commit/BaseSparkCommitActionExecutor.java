@@ -289,7 +289,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   @Override
   protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
-    commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
+    commit(result, result.getWriteStats().isPresent()
         ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
   }
 

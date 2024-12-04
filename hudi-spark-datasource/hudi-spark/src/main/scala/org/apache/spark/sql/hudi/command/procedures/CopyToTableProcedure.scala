@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.DataSourceReadOptions
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 
@@ -53,7 +53,7 @@ class CopyToTableProcedure extends BaseProcedure with ProcedureBuilder with Logg
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val queryType = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
     val newTableName = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
-    val beginInstance = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+    val startInstance = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
     val endInstance = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
     val asOfInstant = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
     val saveModeStr = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
@@ -84,12 +84,12 @@ class CopyToTableProcedure extends BaseProcedure with ProcedureBuilder with Logg
           .load(tablePath)
       }
       case DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL =>
-        assert(beginInstance.nonEmpty && endInstance.nonEmpty, "when the query_type is incremental, begin_instance_time and end_instance_time can not be null.")
+        assert(startInstance.nonEmpty && endInstance.nonEmpty, "when the query_type is incremental, begin_instance_time and end_instance_time can not be null.")
         sparkSession.read
           .format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beginInstance)
-          .option(DataSourceReadOptions.END_INSTANTTIME.key, endInstance)
+          .option(DataSourceReadOptions.START_COMMIT.key, startInstance)
+          .option(DataSourceReadOptions.END_COMMIT.key, endInstance)
           .load(tablePath)
       case DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL =>
         sparkSession.read

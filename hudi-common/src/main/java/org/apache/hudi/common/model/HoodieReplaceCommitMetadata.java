@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -116,10 +117,13 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
       if (bytes.length == 0) {
         return clazz.newInstance();
       }
-      return fromJsonString(
-          fromUTF8Bytes(
-              convertCommitMetadataToJsonBytes(deserializeReplaceCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class)),
-          clazz);
+      try {
+        return fromJsonString(fromUTF8Bytes(convertCommitMetadataToJsonBytes(deserializeReplaceCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class)), clazz);
+      } catch (Exception e) {
+        // fall back to the alternative method (0.x)
+        LOG.warn("Primary method failed; trying alternative deserialization method.", e);
+        return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
+      }
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);
     }

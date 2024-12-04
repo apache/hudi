@@ -44,6 +44,6 @@ public class OverwriteWithLatestMerger implements HoodieRecordMerger {
 
   @Override
   public String getMergingStrategy() {
-    return OVERWRITE_MERGER_STRATEGY_UUID;
+    return COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
   }
 }

@@ -25,6 +25,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -88,6 +89,12 @@ public class StringUtils {
       return null;
     }
     return String.join(separator, list.toArray(new String[0]));
+  }
+
+  public static <K, V> String join(final Map<K, V> map) {
+    return map.entrySet().stream()
+        .map(e -> e.getKey() + "=" + e.getValue())
+        .collect(Collectors.joining(", ", "{", "}"));
   }
 
   public static String toHexString(byte[] bytes) {

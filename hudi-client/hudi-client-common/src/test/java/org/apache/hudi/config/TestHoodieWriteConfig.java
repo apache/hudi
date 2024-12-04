@@ -316,6 +316,44 @@ public class TestHoodieWriteConfig {
 
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
+  public void testAutoAdjustLockConfigsSingleWriter(HoodieTableType tableType) {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withAutoAdjustLockConfigs(true)
+        .withClusteringConfig(new HoodieClusteringConfig.Builder().withInlineClustering(true).build())
+        .withProperties(properties)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).build())
+        .build();
+
+    verifyConcurrencyControlRelatedConfigs(writeConfig,
+        true, false, true,
+        WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
+        HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+
+    // even if user explicitly sets a LP, we override it to InProcess LockProvider.
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withAutoAdjustLockConfigs(true)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(FileSystemBasedLockProviderTestClass.class)
+            .build())
+        .withClusteringConfig(new HoodieClusteringConfig.Builder().withInlineClustering(true).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).build())
+        .withProperties(properties)
+        .build();
+
+    verifyConcurrencyControlRelatedConfigs(writeConfig,
+        true, false, true,
+        WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
+        HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
+        InProcessLockProvider.class.getName());
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
   public void testAutoAdjustLockConfigs(HoodieTableType tableType) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
@@ -357,15 +395,16 @@ public class TestHoodieWriteConfig {
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).build())
         .withAutoAdjustLockConfigs(true)
         .withProperties(properties)
         .build();
 
     verifyConcurrencyControlRelatedConfigs(writeConfig,
-        true, tableType == HoodieTableType.MERGE_ON_READ, true,
+        true, false, true,
         WriteConcurrencyMode.valueOf(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()),
         HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
-        FileSystemBasedLockProviderTestClass.class.getName());
+        InProcessLockProvider.class.getName());
 
     // 2. User can set the lock provider via properties
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {

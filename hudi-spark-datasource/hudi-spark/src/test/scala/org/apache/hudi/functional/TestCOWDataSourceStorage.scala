@@ -31,8 +31,8 @@ import org.apache.hudi.config.{HoodiePreCommitValidatorConfig, HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.testutils.{DataSourceTestUtils, SparkClientFunctionalTestHarness}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
 import org.apache.spark.SparkConf
@@ -103,6 +103,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
+    val completionTime1 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
     // Snapshot query
@@ -132,7 +133,6 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
 
     val snapshotDF2 = spark.read.format("hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
@@ -145,7 +145,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     var inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
     if (isTimestampBasedKeyGen) {
-      // incase of Timestamp based key gen, current_ts should not be updated. but dataGen.generateUpdates() would have updated
+      // in case of Timestamp based key gen, current_ts should not be updated. but dataGen.generateUpdates() would have updated
       // the value of current_ts. So, we need to revert it back to original value.
       // here is what we are going to do. Copy values to temp columns, join with original df and update the current_ts
       // and drop the temp columns.
@@ -169,6 +169,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .save(basePath)
 
     val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val completionTime3 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
 
     // Snapshot Query
@@ -184,8 +185,8 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     spark.sparkContext.hadoopConfiguration.set("mapreduce.input.pathFilter.class", "org.apache.hudi.hadoop.HoodieROTablePathFilter")
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
+      .option(DataSourceReadOptions.START_COMMIT.key, completionTime1)
+      .option(DataSourceReadOptions.END_COMMIT.key, completionTime1)
       .load(basePath)
     assertEquals(100, hoodieIncViewDF1.count()) // 100 initial inserts must be pulled
     spark.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
@@ -196,8 +197,8 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // Test incremental query has no instant in range
     val emptyIncDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, "002")
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
+      .option(DataSourceReadOptions.END_COMMIT.key, "002")
       .load(basePath)
     assertEquals(0, emptyIncDF.count())
 
@@ -212,7 +213,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // pull the latest commit
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime2)
+      .option(DataSourceReadOptions.START_COMMIT.key, completionTime3)
       .load(basePath)
 
     assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled
@@ -223,7 +224,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // pull the latest commit within certain partitions
     val hoodieIncViewDF3 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime2)
+      .option(DataSourceReadOptions.START_COMMIT.key, completionTime3)
       .option(DataSourceReadOptions.INCR_PATH_GLOB.key, if (isTimestampBasedKeyGen) "/2016*/*" else "/2016/*/*/*")
       .load(basePath)
     assertEquals(hoodieIncViewDF2
@@ -231,8 +232,8 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     val timeTravelDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
+      .option(DataSourceReadOptions.START_COMMIT.key, completionTime1)
+      .option(DataSourceReadOptions.END_COMMIT.key, completionTime1)
       .load(basePath)
     assertEquals(100, timeTravelDF.count()) // 100 initial inserts must be pulled
   }
@@ -398,8 +399,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
   }
 
   def assertRecordCount(basePath: String, expectedRecordCount: Long): Unit = {
-    val snapshotDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*/*/*")
+    val snapshotDF = spark.read.format("org.apache.hudi").load(basePath)
     assertEquals(expectedRecordCount, snapshotDF.count())
   }
 }

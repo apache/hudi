@@ -148,15 +148,15 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       new HoodieSnapshotExporter().export(jsc(), cfg);
 
       StoragePath completeInstantPath = HoodieTestUtils
-          .getCompleteInstantPath(storage, new StoragePath(targetPath, ".hoodie"), COMMIT_TIME,
+          .getCompleteInstantPath(storage, new StoragePath(new StoragePath(targetPath, ".hoodie"), "timeline"), COMMIT_TIME,
               "commit");
       // Check results
       assertTrue(storage.exists(completeInstantPath));
       assertTrue(
           storage.exists(
-              new StoragePath(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit.requested")));
+              new StoragePath(targetPath + "/.hoodie/timeline/" + COMMIT_TIME + ".commit.requested")));
       assertTrue(
-          storage.exists(new StoragePath(targetPath + "/.hoodie/" + COMMIT_TIME + ".inflight")));
+          storage.exists(new StoragePath(targetPath + "/.hoodie/timeline/" + COMMIT_TIME + ".inflight")));
       assertTrue(storage.exists(new StoragePath(targetPath + "/.hoodie/hoodie.properties")));
       String partition = targetPath + "/" + PARTITION_PATH;
       long numParquetFiles = storage.listDirectEntries(new StoragePath(partition)).stream()
@@ -198,7 +198,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     public void testExportDatasetWithNoCommit() throws IOException {
       // delete commit files
       List<StoragePath> commitFiles =
-          storage.listDirectEntries(new StoragePath(sourcePath + "/.hoodie")).stream()
+          storage.listDirectEntries(new StoragePath(sourcePath + "/.hoodie/timeline/")).stream()
               .map(StoragePathInfo::getPath)
               .filter(filePath -> filePath.getName().endsWith(".commit"))
               .collect(Collectors.toList());

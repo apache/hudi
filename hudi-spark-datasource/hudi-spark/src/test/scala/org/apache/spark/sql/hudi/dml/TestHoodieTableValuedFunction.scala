@@ -18,9 +18,12 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.metadata.MetadataPartitionType
+import org.apache.hudi.testutils.DataSourceTestUtils
+
 import org.apache.spark.sql.functions.{col, from_json}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -127,7 +130,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | """.stripMargin
           )
 
-          val firstInstant = spark.sql(s"select min(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
+          val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
 
           checkAnswer(
             s"""select id,
@@ -148,6 +151,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | values (1, 'a1_1', 10, 1100), (2, 'a2_2', 20, 1100), (3, 'a3_3', 30, 1100)
                | """.stripMargin
           )
+          val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
           val secondInstant = spark.sql(s"select max(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
 
           checkAnswer(
@@ -158,7 +162,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |from hudi_table_changes(
                |'$identifier',
                |'latest_state',
-               |'$firstInstant')
+               |'$secondCompletionTime')
                |""".stripMargin
           )(
             Seq(1, "a1_1", 10.0, 1100),
@@ -182,8 +186,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | from hudi_table_changes(
                | '$identifier',
                | 'latest_state',
-               | '$firstInstant',
-               | '$secondInstant')
+               | '$secondCompletionTime',
+               | '$secondCompletionTime')
                | """.stripMargin
           )(
             Seq(1, "a1_1", 10.0, 1100),
@@ -241,7 +245,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | """.stripMargin
           )
           val result1DF = spark.sql(s"select * from hudi_filesystem_view('$identifier', 'price*')")
-          result1DF.show(false)
           val result1Array = result1DF.select(
             col("Partition_Path")
           ).orderBy("Partition_Path").take(10)
@@ -480,7 +483,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val result2DF = spark.sql(s"select * from hudi_query_timeline('$identifier', 'false')")
-          result2DF.show(false)
           val result2Array = result2DF.select(
             col("action"),
             col("state"),
@@ -503,7 +505,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val result3DF = spark.sql(s"select * from hudi_query_timeline('$identifier', 'true')")
-          result3DF.show(false)
           val result3Array = result3DF.select(
             col("action"),
             col("state"),
@@ -531,7 +532,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           val result5DF = spark.sql(
             s"select * from hudi_query_timeline('$identifier', 'false')  where action = '$action'"
           )
-          result5DF.show(false)
           val result5Array = result5DF.select(
             col("action"),
             col("state"),
@@ -551,7 +551,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           val result6DF = spark.sql(
             s"select action, state from hudi_query_timeline('$identifier', 'false')  where timestamp > '202312190000000'"
           )
-          result6DF.show(false)
           val result6Array = result6DF.take(10)
           checkAnswer(result6Array)(
             Seq(action, "COMPLETED"),
@@ -612,7 +611,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           val result4DF = spark.sql(
             s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.COLUMN_STATS.getRecordType}"
           )
-          assert(result4DF.count() == 3)
+          // 3 meta columns are always indexed so 3 stats per column * (3 meta cols + 1 data col) = 12
+          assert(result4DF.count() == 12)
 
           val result5DF = spark.sql(
             s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.RECORD_INDEX.getRecordType}"
@@ -657,7 +657,9 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |  preCombineField = 'ts',
                |  hoodie.datasource.write.recordkey.field = 'id',
                |  hoodie.metadata.index.partition.stats.enable = 'true',
-               |  hoodie.metadata.index.column.stats.column.list = 'price'
+               |  hoodie.metadata.index.column.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.column.list = 'price',
+               |  hoodie.populate.meta.fields = 'false'
                |)
                |location '${tmp.getCanonicalPath}/$tableName'
                |""".stripMargin

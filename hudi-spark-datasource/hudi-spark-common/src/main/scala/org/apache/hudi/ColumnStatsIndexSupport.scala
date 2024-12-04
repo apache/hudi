@@ -29,10 +29,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
-import org.apache.hudi.common.util.hash.ColumnIndexID
+import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
+import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.generic.GenericData
@@ -65,17 +66,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   //       on to the executor
   protected val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
 
-  private lazy val indexedColumns: Set[String] = {
-    val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
-    // Column Stats Index could index either
-    //    - The whole table
-    //    - Only configured columns
-    if (customIndexedColumns.isEmpty) {
-      tableSchema.fieldNames.toSet
-    } else {
-      customIndexedColumns.asScala.toSet
-    }
-  }
+  private lazy val indexedColumns: Set[String] = HoodieTableMetadataUtil
+    .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, convertScalaListToJavaList(tableSchema.fieldNames)).asScala.toSet
+
 
   override def getIndexName: String = ColumnStatsIndexSupport.INDEX_NAME
 
@@ -87,12 +80,12 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                                         ): Option[Set[String]] = {
     if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
       val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
-      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
+      val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(fileIndex, prunedPartitionsAndFileSlices)
       // NOTE: If partition pruning doesn't prune any files, then there's no need to apply file filters
       //       when loading the Column Statistics Index
       val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
 
-      loadTransposed(queryReferencedColumns, readInMemory, prunedFileNamesOpt) { transposedColStatsDF =>
+      loadTransposed(queryReferencedColumns, readInMemory, Some(prunedPartitions), prunedFileNamesOpt) { transposedColStatsDF =>
         Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
       }
     } else {
@@ -122,6 +115,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    */
   def loadTransposed[T](targetColumns: Seq[String],
                         shouldReadInMemory: Boolean,
+                        prunedPartitions: Option[Set[String]] = None,
                         prunedFileNamesOpt: Option[Set[String]] = None)(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
@@ -134,9 +128,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                 prunedFileNames.contains(r.getFileName)
               }
             }
-            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
+            loadColumnStatsIndexRecords(targetColumns, prunedPartitions, shouldReadInMemory).filter(filterFunction)
           case None =>
-            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+            loadColumnStatsIndexRecords(targetColumns, prunedPartitions, shouldReadInMemory)
         }
 
         withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
@@ -311,7 +305,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
   private def loadColumnStatsIndexForColumnsInternal(targetColumns: Seq[String], shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
-      val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+      val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, Option.empty, shouldReadInMemory)
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(JFunction.toJavaSerializableFunction(it => {
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
@@ -332,7 +326,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     colStatsDF.select(targetColumnStatsIndexColumns.map(col): _*)
   }
 
-  def loadColumnStatsIndexRecords(targetColumns: Seq[String], shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
+  def loadColumnStatsIndexRecords(targetColumns: Seq[String], prunedPartitions: Option[Set[String]] = None, shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
     // Read Metadata Table's Column Stats Index records into [[HoodieData]] container by
     //    - Fetching the records from CSI by key-prefixes (encoded column names)
     //    - Extracting [[HoodieMetadataColumnStats]] records
@@ -341,9 +335,19 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
     // TODO encoding should be done internally w/in HoodieBackedTableMetadata
     val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
+    // encode column name and parition name if partition list is available
+    val keyPrefixes = if (prunedPartitions.isDefined) {
+      prunedPartitions.get.map(partitionPath =>
+        new PartitionIndexID(HoodieTableMetadataUtil.getPartitionIdentifier(partitionPath)).asBase64EncodedString()
+      ).flatMap(encodedPartition => {
+        encodedTargetColumnNames.map(encodedTargetColumn => encodedTargetColumn.concat(encodedPartition))
+      })
+    } else {
+      encodedTargetColumnNames
+    }
 
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
-      metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
+      metadataTable.getRecordsByKeyPrefixes(keyPrefixes.toSeq.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
 
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
@@ -431,10 +435,10 @@ object ColumnStatsIndexSupport {
     String.format("%s_%s", col, statName)
   }
 
-  @inline private def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
+  @inline def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
     StructField(formatColName(col, statName), dataType, nullable = true, Metadata.empty)
 
-  private def tryUnpackValueWrapper(valueWrapper: AnyRef): Any = {
+  def tryUnpackValueWrapper(valueWrapper: AnyRef): Any = {
     valueWrapper match {
       case w: BooleanWrapper => w.getValue
       case w: IntWrapper => w.getValue
@@ -457,7 +461,7 @@ object ColumnStatsIndexSupport {
 
   val decConv = new DecimalConversion()
 
-  private def deserialize(value: Any, dataType: DataType): Any = {
+  def deserialize(value: Any, dataType: DataType): Any = {
     dataType match {
       // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
       //       manually encoding corresponding values as int and long w/in the Column Stats Index and

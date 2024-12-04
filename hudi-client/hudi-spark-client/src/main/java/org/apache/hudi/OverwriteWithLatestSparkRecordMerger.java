@@ -35,17 +35,11 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
 
   @Override
   public String getMergingStrategy() {
-    return OVERWRITE_MERGER_STRATEGY_UUID;
+    return COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
   }
 
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     return Option.of(Pair.of(newer, newSchema));
   }
-
-  @Override
-  public HoodieRecord.HoodieRecordType getRecordType() {
-    return null;
-  }
-
 }

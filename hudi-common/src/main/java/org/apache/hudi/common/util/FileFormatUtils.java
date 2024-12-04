@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -277,4 +278,55 @@ public abstract class FileFormatUtils {
                                                     Schema writerSchema,
                                                     Schema readerSchema, String keyFieldName,
                                                     Map<String, String> paramsMap) throws IOException;
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
+
+  /**
+   * An iterator that can apply the given function {@code func} to transform records
+   * from the underneath record iterator to hoodie keys.
+   */
+  public static class HoodieKeyIterator implements ClosableIterator<HoodieKey> {
+    private final ClosableIterator<GenericRecord> nestedItr;
+    private final Function<GenericRecord, HoodieKey> func;
+
+    public static HoodieKeyIterator getInstance(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+      return new HoodieKeyIterator(nestedItr, keyGenerator);
+    }
+
+    private HoodieKeyIterator(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+      this.nestedItr = nestedItr;
+      if (keyGenerator.isPresent()) {
+        this.func = retVal -> {
+          String recordKey = keyGenerator.get().getRecordKey(retVal);
+          String partitionPath = keyGenerator.get().getPartitionPath(retVal);
+          return new HoodieKey(recordKey, partitionPath);
+        };
+      } else {
+        this.func = retVal -> {
+          String recordKey = retVal.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String partitionPath = retVal.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          return new HoodieKey(recordKey, partitionPath);
+        };
+      }
+    }
+
+    @Override
+    public void close() {
+      if (this.nestedItr != null) {
+        this.nestedItr.close();
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return this.nestedItr.hasNext();
+    }
+
+    @Override
+    public HoodieKey next() {
+      return this.func.apply(this.nestedItr.next());
+    }
+  }
 }

@@ -506,18 +506,27 @@ public class ParquetRowDataWriter {
     private void doWrite(ArrayData arrayData) {
       recordConsumer.startGroup();
       if (arrayData.size() > 0) {
-        final String repeatedGroup = "list";
-        final String elementField = "element";
+        final String repeatedGroup = "array";
         recordConsumer.startField(repeatedGroup, 0);
-        for (int i = 0; i < arrayData.size(); i++) {
-          recordConsumer.startGroup();
-          if (!arrayData.isNullAt(i)) {
-            // Only creates the element field if the current array element is not null.
-            recordConsumer.startField(elementField, 0);
-            elementWriter.write(arrayData, i);
-            recordConsumer.endField(elementField, 0);
+        if (elementWriter instanceof RowWriter) {
+          for (int i = 0; i < arrayData.size(); i++) {
+            if (!arrayData.isNullAt(i)) {
+              // Only creates the element field if the current array element is not null.
+              elementWriter.write(arrayData, i);
+            }
           }
-          recordConsumer.endGroup();
+        } else {
+          final String elementField = "element";
+          for (int i = 0; i < arrayData.size(); i++) {
+            recordConsumer.startGroup();
+            if (!arrayData.isNullAt(i)) {
+              // Only creates the element field if the current array element is not null.
+              recordConsumer.startField(elementField, 0);
+              elementWriter.write(arrayData, i);
+              recordConsumer.endField(elementField, 0);
+            }
+            recordConsumer.endGroup();
+          }
         }
         recordConsumer.endField(repeatedGroup, 0);
       }

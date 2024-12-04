@@ -86,6 +86,8 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -150,8 +152,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       HoodieTimeline timeline = metaClient.getCommitTimeline().filterCompletedInstants();
       assertEquals(1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(),
           "Expecting a single commit.");
-      String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
-      assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
+      String latestCompactionCommitTime = timeline.lastInstant().get().requestedTime();
+      assertTrue(compareTimestamps("000", LESSER_THAN, latestCompactionCommitTime));
 
       if (cfg.populateMetaFields()) {
         assertEquals(200, HoodieClientTestUtils.countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline, Option.of("000")),
@@ -248,7 +250,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
       String basePathStr = metaClient.getBasePath().toString();
       FileCreateUtils.deleteRollbackCommit(basePathStr.substring(basePathStr.indexOf(":") + 1),
-          rollbackInstant.getTimestamp());
+          rollbackInstant.requestedTime());
       metaClient.reloadActiveTimeline();
       try (SparkRDDWriteClient client1 = getHoodieWriteClient(cfg)) {
         // trigger compaction again.
@@ -256,7 +258,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
         metaClient.reloadActiveTimeline();
         // verify that there is no new rollback instant generated
         HoodieInstant newRollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
-        assertEquals(rollbackInstant.getTimestamp(), newRollbackInstant.getTimestamp());
+        assertEquals(rollbackInstant.requestedTime(), newRollbackInstant.requestedTime());
       }
     }
   }
@@ -265,6 +267,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
   @ValueSource(booleans = {true, false})
   public void testSimpleInsertUpdateAndDelete(boolean populateMetaFields) throws Exception {
     Properties properties = populateMetaFields ? new Properties() : getPropertiesForKeyGen();
+    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
@@ -290,7 +293,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
-      assertEquals("001", deltaCommit.get().getTimestamp(), "Delta commit should be 001");
+      assertEquals("001", deltaCommit.get().requestedTime(), "Delta commit should be 001");
 
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
@@ -333,7 +336,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       metaClient = HoodieTableMetaClient.reload(metaClient);
       deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
       assertTrue(deltaCommit.isPresent());
-      assertEquals("004", deltaCommit.get().getTimestamp(), "Latest Delta commit should be 004");
+      assertEquals("004", deltaCommit.get().requestedTime(), "Latest Delta commit should be 004");
 
       commit = metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
@@ -390,11 +393,10 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
               FSUtils.constructAbsolutePath(config.getBasePath(),
                   correctWriteStat.getPartitionPath()))
           .withFileId(correctWriteStat.getFileId())
-          .withDeltaCommit(newCommitTime)
+          .withInstantTime(newCommitTime)
           .withLogVersion(correctLogFile.getLogVersion())
           .withFileSize(0L)
           .withSizeThreshold(config.getLogFileMaxSize()).withStorage(hoodieStorage())
-          .withRolloverLogWriteToken(fakeToken)
           .withLogWriteToken(fakeToken)
           .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
           .withFileCreationCallback(new LogFileCreationCallback() {

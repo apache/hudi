@@ -19,11 +19,11 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
@@ -54,14 +55,23 @@ import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.R
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarness {
+
+  @Override
+  protected Properties getMetaProps() {
+    Properties metaProps =  super.getMetaProps();
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.COMMIT_TIME_ORDERING.name());
+    metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+    metaProps.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), OverwriteWithLatestAvroPayload.class.getName());
+    return metaProps;
+  }
+
   @BeforeAll
   public static void setUp() throws IOException {
     HoodieRecordMerger merger = new OverwriteWithLatestMerger();
     readerContext = new HoodieTestReaderContext(
         Option.of(merger),
         Option.of(OverwriteWithLatestAvroPayload.class.getName()));
-    properties.setProperty(
-        HoodieCommonConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.OVERWRITE_WITH_LATEST.name());
+    properties.setProperty("hoodie.write.record.merge.mode", RecordMergeMode.COMMIT_TIME_ORDERING.name());
 
     // -------------------------------------------------------------
     // The test logic is as follows:

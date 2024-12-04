@@ -27,9 +27,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -38,6 +37,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.HoodieHFileInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
@@ -217,16 +217,16 @@ public class HoodieInputFormatUtils {
    * @param timeline
    * @return
    */
-  public static HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
-    HoodieDefaultTimeline commitsAndCompactionTimeline = timeline.getWriteTimeline();
+  public static HoodieTimeline filterInstantsTimeline(HoodieTimeline timeline) {
+    HoodieTimeline commitsAndCompactionTimeline = (HoodieTimeline)timeline.getWriteTimeline();
     Option<HoodieInstant> pendingCompactionInstant = commitsAndCompactionTimeline
         .filterPendingCompactionTimeline().firstInstant();
     if (pendingCompactionInstant.isPresent()) {
-      HoodieDefaultTimeline instantsTimeline = commitsAndCompactionTimeline
-          .findInstantsBefore(pendingCompactionInstant.get().getTimestamp());
+      HoodieTimeline instantsTimeline = (HoodieTimeline)(commitsAndCompactionTimeline
+          .findInstantsBefore(pendingCompactionInstant.get().requestedTime()));
       int numCommitsFilteredByCompaction = commitsAndCompactionTimeline.getCommitsTimeline().countInstants()
           - instantsTimeline.getCommitsTimeline().countInstants();
-      LOG.info("Earliest pending compaction instant is: " + pendingCompactionInstant.get().getTimestamp()
+      LOG.info("Earliest pending compaction instant is: " + pendingCompactionInstant.get().requestedTime()
           + " skipping " + numCommitsFilteredByCompaction + " commits");
 
       return instantsTimeline;
@@ -251,8 +251,8 @@ public class HoodieInputFormatUtils {
                                                      List<Path> inputPaths) throws IOException {
     Set<String> partitionsToList = new HashSet<>();
     for (HoodieInstant commit : commitsToCheck) {
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(),
-          HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = tableMetaClient.getCommitMetadataSerDe().deserialize(commit,
+          timeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
       partitionsToList.addAll(commitMetadata.getPartitionToWriteStats().keySet());
     }
     if (partitionsToList.isEmpty()) {
@@ -299,7 +299,7 @@ public class HoodieInputFormatUtils {
    */
   public static Option<HoodieTimeline> getFilteredCommitsTimeline(JobContext job, HoodieTableMetaClient tableMetaClient) {
     String tableName = tableMetaClient.getTableConfig().getTableName();
-    HoodieDefaultTimeline baseTimeline;
+    HoodieTimeline baseTimeline;
     if (HoodieHiveUtils.stopAtCompaction(job, tableName)) {
       baseTimeline = filterInstantsTimeline(tableMetaClient.getActiveTimeline());
     } else {
@@ -424,7 +424,7 @@ public class HoodieInputFormatUtils {
         Arrays.stream(fileStatuses)
             .map(HadoopFSUtils::convertToStoragePathInfo)
             .collect(Collectors.toList()));
-    List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+    List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
     for (HoodieBaseFile filteredFile : filteredFiles) {
@@ -570,8 +570,9 @@ public class HoodieInputFormatUtils {
   /**
    * `schema.on.read` and skip merge not implemented
    */
-  public static boolean shouldUseFilegroupReader(final JobConf jobConf) {
+  public static boolean shouldUseFilegroupReader(final JobConf jobConf, final InputSplit split) {
     return jobConf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue())
-        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue());
+        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
+        && !(split instanceof BootstrapBaseFileSplit);
   }
 }

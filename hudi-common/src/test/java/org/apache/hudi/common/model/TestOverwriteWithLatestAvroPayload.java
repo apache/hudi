@@ -64,7 +64,7 @@ public class TestOverwriteWithLatestAvroPayload {
 
     OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
     OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(record2, 2);
-    assertEquals(payload1.preCombine(payload2), payload2);
+    assertEquals(payload1.preCombine(payload2), payload1);
     assertEquals(payload2.preCombine(payload1), payload2);
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
@@ -90,7 +90,7 @@ public class TestOverwriteWithLatestAvroPayload {
 
     OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
     OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(delRecord1, 2);
-    assertEquals(payload1.preCombine(payload2), payload2);
+    assertEquals(payload1.preCombine(payload2), payload1);
     assertEquals(payload2.preCombine(payload1), payload2);
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
