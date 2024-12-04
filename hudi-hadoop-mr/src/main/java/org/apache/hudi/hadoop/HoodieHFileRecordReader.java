@@ -43,6 +43,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 
 import java.io.IOException;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
@@ -60,7 +61,8 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
     StoragePath path = convertToStoragePath(fileSplit.getPath());
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-    reader = HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, storageConf)).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+    reader = HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, storageConf, new DefaultStorageStrategy()))
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, path, HoodieFileFormat.HFILE, Option.empty());
 
     schema = reader.getSchema();

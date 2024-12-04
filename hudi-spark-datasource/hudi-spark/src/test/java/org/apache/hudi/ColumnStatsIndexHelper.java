@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.SparkContext;
@@ -177,7 +178,7 @@ public class ColumnStatsIndexHelper {
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
                     .flatMap(path -> {
-                      HoodieStorage storage = new HoodieHadoopStorage(path, serializableConfiguration.value());
+                      HoodieStorage storage = new HoodieHadoopStorage(path, serializableConfiguration.value(), new DefaultStorageStrategy());
                           return utils.readColumnStatsFromMetadata(
                                   storage,
                                   new StoragePath(path),

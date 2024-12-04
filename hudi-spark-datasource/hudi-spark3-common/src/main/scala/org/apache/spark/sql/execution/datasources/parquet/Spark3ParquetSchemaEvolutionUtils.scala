@@ -26,6 +26,8 @@ import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -61,7 +63,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
     val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
-      new HoodieHadoopStorage(tablePath, sharedConf), if (validCommits == null) "" else validCommits,
+      new HoodieHadoopStorage(tablePath, sharedConf, new DefaultStorageStrategy(tablePath)), if (validCommits == null) "" else validCommits,
       layout.getInstantFileNameParser, layout.getCommitMetadataSerDe, layout.getInstantGenerator)
   } else {
     null

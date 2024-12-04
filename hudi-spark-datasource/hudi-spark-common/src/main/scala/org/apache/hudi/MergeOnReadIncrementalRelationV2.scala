@@ -216,7 +216,7 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     }).asJava
 
   protected lazy val affectedFilesInCommits: java.util.List[StoragePathInfo] = {
-    listAffectedFilesForCommits(conf, metaClient.getBasePath, commitsMetadata)
+    listAffectedFilesForCommits(conf, metaClient.getBasePath, metaClient.getStorageStrategy, commitsMetadata)
   }
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the

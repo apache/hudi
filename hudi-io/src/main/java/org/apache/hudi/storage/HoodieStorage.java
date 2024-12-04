@@ -25,6 +25,7 @@ import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,19 +49,23 @@ public abstract class HoodieStorage implements Closeable {
   public static final Logger LOG = LoggerFactory.getLogger(HoodieStorage.class);
 
   protected final StorageConfiguration<?> storageConf;
+  protected StorageStrategy storageStrategy;
 
-  public HoodieStorage(StorageConfiguration<?> storageConf) {
+  public HoodieStorage(StorageConfiguration<?> storageConf, StorageStrategy storageStrategy) {
     this.storageConf = storageConf;
+    this.storageStrategy = storageStrategy;
   }
 
   /**
    * @param path        path to instantiate the storage.
    * @param storageConf new storage configuration.
+   * @param storageStrategy new storage strategy
    * @return new {@link HoodieStorage} instance with the configuration.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract HoodieStorage newInstance(StoragePath path,
-                                            StorageConfiguration<?> storageConf);
+                                            StorageConfiguration<?> storageConf,
+                                            StorageStrategy storageStrategy);
 
   /**
    * @return the scheme of the storage.
@@ -465,5 +470,13 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public List<StoragePathInfo> globEntries(StoragePath pathPattern) throws IOException {
     return globEntries(pathPattern, e -> true);
+  }
+
+  public void setStorageStrategy(StorageStrategy storageStrategy) {
+    this.storageStrategy = storageStrategy;
+  }
+
+  public StorageStrategy getStorageStrategy() {
+    return this.storageStrategy;
   }
 }

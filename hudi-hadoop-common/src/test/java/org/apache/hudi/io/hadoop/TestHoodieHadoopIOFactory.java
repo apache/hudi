@@ -28,6 +28,7 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.junit.jupiter.api.Test;
 
@@ -45,7 +46,7 @@ public class TestHoodieHadoopIOFactory {
   @Test
   public void testGetFileFormatUtils() throws IOException {
     try (HoodieStorage storage =
-             new HoodieHadoopStorage(HadoopFSUtils.getFs(DEFAULT_URI, getDefaultStorageConf()))) {
+             new HoodieHadoopStorage(HadoopFSUtils.getFs(DEFAULT_URI, getDefaultStorageConf()), new DefaultStorageStrategy())) {
       HoodieIOFactory ioFactory = new HoodieHadoopIOFactory(storage);
       assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.parquet")) instanceof ParquetUtils);
       assertTrue(ioFactory.getFileFormatUtils(new StoragePath("file:///a/b.orc")) instanceof OrcUtils);

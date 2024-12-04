@@ -67,6 +67,7 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -144,11 +145,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @BeforeAll
   public static void setUpClass() throws IOException {
     if (shouldUseExternalHdfs()) {
-      storage = new HoodieHadoopStorage(useExternalHdfs());
+      storage = new HoodieHadoopStorage(useExternalHdfs(), new DefaultStorageStrategy());
     } else {
       // Append is not supported in LocalFileSystem. HDFS needs to be setup.
       hdfsTestService = new HdfsTestService();
-      storage = new HoodieHadoopStorage(hdfsTestService.start(true).getFileSystem());
+      storage = new HoodieHadoopStorage(hdfsTestService.start(true).getFileSystem(), new DefaultStorageStrategy());
     }
   }
 
@@ -165,6 +166,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     basePath =
         new StoragePath(workDir.toString(),
             testInfo.getDisplayName() + System.currentTimeMillis()).toString();
+    storage.setStorageStrategy(new DefaultStorageStrategy(basePath));
     partitionPath = new StoragePath(basePath, "partition_path");
     spillableBasePath = new StoragePath(workDir.toString(), ".spillable_path").toString();
     assertTrue(storage.createDirectory(partitionPath));

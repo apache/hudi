@@ -75,6 +75,7 @@ import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapred.lib.CombineFileInputFormat;
 import org.apache.hadoop.mapred.lib.CombineFileSplit;
 import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -394,7 +395,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       Arrays.stream(paths).forEach(path -> {
         final HoodieStorage storage;
         try {
-          storage = new HoodieHadoopStorage(path.getFileSystem(job));
+          storage = new HoodieHadoopStorage(path.getFileSystem(job), new DefaultStorageStrategy());
           Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
           if (tablePath.isPresent()) {
             uniqTablePaths.add(tablePath.get().toUri().toString());

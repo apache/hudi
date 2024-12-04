@@ -34,6 +34,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkClientUtil;
@@ -104,7 +105,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
     if (this.metadataTable == null) {
       this.metadataTable = HoodieTableMetadata.create(
           HoodieFlinkEngineContext.DEFAULT,
-          new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf()),
+          new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf(), new DefaultStorageStrategy(basePath)),
           metadataConfig,
           basePath);
     }

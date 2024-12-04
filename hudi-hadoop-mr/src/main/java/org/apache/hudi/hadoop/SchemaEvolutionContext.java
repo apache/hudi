@@ -42,6 +42,7 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -166,7 +167,7 @@ public class SchemaEvolutionContext {
     if (split instanceof FileSplit) {
       Path path = ((FileSplit) split).getPath();
       FileSystem fs = path.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy());
       return TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
     }
     return Option.empty();
@@ -176,7 +177,7 @@ public class SchemaEvolutionContext {
     try {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy());
       Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();

@@ -39,6 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.testutils.ArrayWritableTestUtil;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
@@ -112,7 +113,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     baseJobConf = new JobConf(storageConf.unwrap());
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     fs.setConf(baseJobConf);
-    storage = new HoodieHadoopStorage(fs);
+    storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy());
   }
 
   @AfterAll

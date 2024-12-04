@@ -57,6 +57,7 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.io.util.StorageIOUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -66,6 +67,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,6 +142,7 @@ public class HoodieTableMetaClient implements Serializable {
   protected StoragePath metaPath;
 
   private transient HoodieStorage storage;
+  private transient StorageStrategy storageStrategy;
   private boolean loadActiveTimelineOnLoad;
   protected StorageConfiguration<?> storageConf;
   private HoodieTableType tableType;
@@ -171,6 +175,9 @@ public class HoodieTableMetaClient implements Serializable {
     this.basePath = new StoragePath(basePath);
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath, recordMergeMode, payloadClassName, recordMergerStrategy);
+    this.storageStrategy = StorageIOUtils.createStorageStrategy(tableConfig.getStorageStrategy(),
+            basePath, tableConfig.getTableName(), tableConfig.getStoragePrefix());
+    this.storage.setStorageStrategy(storageStrategy);
     this.indexMetadataOpt = getIndexMetadata();
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
@@ -447,6 +454,9 @@ public class HoodieTableMetaClient implements Serializable {
 
   public void setStorage(HoodieStorage storage) {
     this.storage = storage;
+    if (storage.getStorageStrategy() != null) {
+      setStorageStrategy(storageStrategy);
+    }
   }
 
   public HoodieStorage getRawStorage() {
@@ -455,6 +465,16 @@ public class HoodieTableMetaClient implements Serializable {
 
   public StorageConfiguration<?> getStorageConf() {
     return storageConf;
+  }
+
+  public StorageStrategy getStorageStrategy() {
+    return storageStrategy != null
+        ? storageStrategy
+        : new DefaultStorageStrategy(basePath.toString());
+  }
+
+  public void setStorageStrategy(StorageStrategy storageStrategy) {
+    this.storageStrategy = storageStrategy;
   }
 
   /**

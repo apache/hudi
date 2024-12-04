@@ -53,6 +53,8 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -530,10 +532,11 @@ public class HoodieInputFormatUtils {
    */
   public static List<StoragePathInfo> listAffectedFilesForCommits(Configuration hadoopConf,
                                                                   StoragePath basePath,
+                                                                  StorageStrategy storageStrategy,
                                                                   List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
-    HoodieStorage storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
+    HoodieStorage storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf), storageStrategy);
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata : metadataList) {
       fullPathToInfoMap.putAll(metadata.getFullPathToInfo(storage, basePath.toString()));
@@ -561,7 +564,8 @@ public class HoodieInputFormatUtils {
     } else {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(jobConf);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      // TODO: pass an actual storage strategy
+      HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy());
       Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return tablePath.get().toString();
     }

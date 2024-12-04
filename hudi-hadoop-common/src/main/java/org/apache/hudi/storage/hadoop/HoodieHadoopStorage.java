@@ -46,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
@@ -59,35 +60,36 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 public class HoodieHadoopStorage extends HoodieStorage {
   private final FileSystem fs;
 
-  public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf) {
-    super(conf);
+  public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf, StorageStrategy storageStrategy) {
+    super(conf, storageStrategy);
     this.fs = HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class));
   }
 
-  public HoodieHadoopStorage(Path path, Configuration conf) {
-    super(HadoopFSUtils.getStorageConf(conf));
+  public HoodieHadoopStorage(Path path, Configuration conf, StorageStrategy storageStrategy) {
+    super(HadoopFSUtils.getStorageConf(conf), storageStrategy);
     this.fs = HadoopFSUtils.getFs(path, conf);
   }
 
-  public HoodieHadoopStorage(String path, Configuration conf) {
-    super(HadoopFSUtils.getStorageConf(conf));
+  public HoodieHadoopStorage(String path, Configuration conf, StorageStrategy storageStrategy) {
+    super(HadoopFSUtils.getStorageConf(conf), storageStrategy);
     this.fs = HadoopFSUtils.getFs(path, conf);
   }
 
-  public HoodieHadoopStorage(String path, StorageConfiguration<?> conf) {
-    super(conf);
+  public HoodieHadoopStorage(String path, StorageConfiguration<?> conf, StorageStrategy storageStrategy) {
+    super(conf, storageStrategy);
     this.fs = HadoopFSUtils.getFs(path, conf);
   }
 
   public HoodieHadoopStorage(StoragePath path,
                              StorageConfiguration<?> conf,
+                             StorageStrategy storageStrategy,
                              boolean enableRetry,
                              long maxRetryIntervalMs,
                              int maxRetryNumbers,
                              long initialRetryIntervalMs,
                              String retryExceptions,
                              ConsistencyGuard consistencyGuard) {
-    super(conf);
+    super(conf, storageStrategy);
     FileSystem fileSystem = getFs(path, conf.unwrapCopyAs(Configuration.class));
 
     if (enableRetry) {
@@ -99,14 +101,14 @@ public class HoodieHadoopStorage extends HoodieStorage {
     this.fs = new HoodieWrapperFileSystem(fileSystem, consistencyGuard);
   }
 
-  public HoodieHadoopStorage(FileSystem fs) {
-    super(new HadoopStorageConfiguration(fs.getConf()));
+  public HoodieHadoopStorage(FileSystem fs, StorageStrategy storageStrategy) {
+    super(new HadoopStorageConfiguration(fs.getConf()), storageStrategy);
     this.fs = fs;
   }
 
   @Override
-  public HoodieStorage newInstance(StoragePath path, StorageConfiguration<?> storageConf) {
-    return new HoodieHadoopStorage(path, storageConf);
+  public HoodieStorage newInstance(StoragePath path, StorageConfiguration<?> storageConf, StorageStrategy storageStrategy) {
+    return new HoodieHadoopStorage(path, storageConf, storageStrategy);
   }
 
   @Override
@@ -281,7 +283,7 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public HoodieStorage getRawStorage() {
     if (fs instanceof HoodieWrapperFileSystem) {
-      return new HoodieHadoopStorage(((HoodieWrapperFileSystem) fs).getFileSystem());
+      return new HoodieHadoopStorage(((HoodieWrapperFileSystem) fs).getFileSystem(), this.storageStrategy);
     } else {
       return this;
     }
