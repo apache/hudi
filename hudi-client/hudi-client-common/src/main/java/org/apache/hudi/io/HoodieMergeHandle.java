@@ -147,6 +147,16 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
+  /**
+   * Used by `HoodieSparkFileGroupReaderBasedMergeHandle`.
+   *
+   * @param config              Hudi write config
+   * @param instantTime         Instant time to use
+   * @param partitionPath       Partition path
+   * @param fileId              File group ID for the merge handle to operate on
+   * @param hoodieTable         {@link HoodieTable} instance
+   * @param taskContextSupplier Task context supplier
+   */
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);

@@ -69,34 +69,12 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
-@SuppressWarnings("Duplicates")
 /**
- * Handle to merge incoming records to those in storage.
+ * A merge handle implementation based on the {@link HoodieFileGroupReader}.
  * <p>
- * Simplified Logic:
- * For every existing record
- *     Check if there is a new record coming in. If yes, merge two records and write to file
- *     else write the record as is
- * For all pending records from incoming batch, write to file.
- *
- * Illustration with simple data.
- * Incoming data:
- *     rec1_2, rec4_2, rec5_1, rec6_1
- * Existing data:
- *     rec1_1, rec2_1, rec3_1, rec4_1
- *
- * For every existing record, merge w/ incoming if required and write to storage.
- *    => rec1_1 and rec1_2 is merged to write rec1_2 to storage
- *    => rec2_1 is written as is
- *    => rec3_1 is written as is
- *    => rec4_2 and rec4_1 is merged to write rec4_2 to storage
- * Write all pending records from incoming set to storage
- *    => rec5_1 and rec6_1
- *
- * Final snapshot in storage
- * rec1_2, rec2_1, rec3_1, rec4_2, rec5_1, rec6_1
- *
- * </p>
+ * This merge handle is used for compaction on Spark, which passes a file slice from the
+ * compaction operation of a single file group to a file group reader, get an iterator of
+ * the records, and writes the records to a new base file.
  */
 @NotThreadSafe
 public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
@@ -106,9 +84,6 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
   protected FileSlice fileSlice;
   protected Configuration conf;
 
-  /**
-   * Called by compactor code path using the file group reader.
-   */
   public HoodieSparkFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                     CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                                     Option<BaseKeyGenerator> keyGeneratorOpt,
@@ -138,9 +113,6 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
-  /**
-   * Extract old file path, initialize StorageWriter and WriteStatus.
-   */
   private void init(CompactionOperation operation, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.baseFileToMerge = baseFileToMerge.orElse(null);
@@ -204,6 +176,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     }
+    // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), new HadoopStorageConfiguration(conf)),
@@ -219,10 +192,12 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
         Long.MAX_VALUE,
         usePosition)) {
       fileGroupReader.initRecordIterators();
+      // Reads the records from the file slice
       try (HoodieFileGroupReaderIterator<InternalRow> recordIterator
                = (HoodieFileGroupReaderIterator<InternalRow>) fileGroupReader.getClosableIterator()) {
         StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema);
         while (recordIterator.hasNext()) {
+          // Constructs Spark record for the Spark Parquet file writer
           InternalRow row = recordIterator.next();
           HoodieKey recordKey = new HoodieKey(
               row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
@@ -235,6 +210,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
             writeStatus.markFailure(record, failureEx, recordMetadata);
             continue;
           }
+          // Writes the record
           try {
             writeToFile(recordKey, record, readerSchema, config.getPayloadConfig().getProps(), preserveMetadata);
             writeStatus.markSuccess(record, recordMetadata);

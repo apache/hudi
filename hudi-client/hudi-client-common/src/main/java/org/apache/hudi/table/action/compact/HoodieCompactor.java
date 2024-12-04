@@ -89,6 +89,11 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    */
   public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime);
 
+  /**
+   * @param context {@link HoodieEngineContext} instance
+   *
+   * @return the {@link EngineBroadcastManager} if available.
+   */
   public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context) {
     return Option.empty();
   }
@@ -137,12 +142,13 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
-    boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader() // the engine needs to support fg reader first
+    boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader()   // the engine needs to support fg reader first
         && !metaClient.isMetadataTable()
         && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-        && !hasBootstrapFile(operations)                                                    // bootstrap file read for fg reader is not ready
-        && StringUtils.isNullOrEmpty(config.getInternalSchema())                            // schema evolution support for fg reader is not ready
-        && !containsUnsupportedTypesForFileGroupReader(config.getSchema());
+        && !hasBootstrapFile(operations)                                            // bootstrap file read for fg reader is not ready
+        && StringUtils.isNullOrEmpty(config.getInternalSchema())                    // schema evolution support for fg reader is not ready
+        && !containsUnsupportedTypesForFileGroupReader(config.getSchema())          // Enum type support by fg reader is not ready
+        && config.populateMetaFields();                                             // Virtual key support by fg reader is not ready
 
     if (useFileGroupReaderBasedCompaction) {
       Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context);
