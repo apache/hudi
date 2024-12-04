@@ -285,6 +285,14 @@ FROM hudi_table_changes(
 )
 ```
 
+# add note on checkpoint translation from 0.x to 1.x. same for incremental query below
+:::note CDC Query Checkpointing between Hudi 0.x and 1.x
+In Hudi 1.0, we switch the incremental and CDC query to used completion time, instead of instant time, to determine the
+range of commits to incrementally pull from. The checkpoint stored for Hudi incremental source and related sources is
+also changed to use completion time. To support compatiblity, Hudi does a checkpoint translation from requested instant
+time to completion time depending on the source table version. 
+:::
+
 ### Incremental Query
 
 Incremental queries are useful when you want to obtain the latest values for all records that have changed after a given commit time. They help author incremental data pipelines with
@@ -310,6 +318,13 @@ see all changes in a given time window and not just the latest values.
 :::
 
 Please refer to [configurations](/docs/basic_configurations) section for the important configuration options.
+
+:::note Incremental Query Checkpointing between Hudi 0.x and 1.0.
+In Hudi 1.0, we switch the incremental and CDC query to used completion time, instead of instant time, to determine the
+range of commits to incrementally pull from. The checkpoint stored for Hudi incremental source and related sources is
+also changed to use completion time. To support compatiblity, Hudi does a checkpoint translation from requested instant
+time to completion time depending on the source table version.
+:::
 
 ### Query Indexes and Timeline
 
