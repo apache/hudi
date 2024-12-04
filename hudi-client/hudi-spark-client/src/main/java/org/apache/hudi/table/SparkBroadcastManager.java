@@ -24,11 +24,10 @@ import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -89,14 +88,9 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
   @Override
   public Option<HoodieReaderContext> retrieveFileGroupReaderContext(StoragePath basePath) {
     if (parquetReaderBroadcast == null) {
-      LOG.warn("ParquetReader is not broadcast; cannot create file group reader");
-      return Option.empty();
+      throw new HoodieException("Spark Parquet reader broadcast is not initialized.");
     }
 
-    // Reconstruct metaClient, since underlying properties may not be passed from driver to executors.
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(basePath)
-        .setConf(new HadoopStorageConfiguration(configurationBroadcast.getValue().value())).build();
     SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
     if (sparkParquetReader != null) {
       List<Filter> filters = new ArrayList<>();
@@ -105,8 +99,7 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq()));
     } else {
-      LOG.warn("ParquetFileReader is null");
-      return Option.empty();
+      throw new HoodieException("Cannot get the broadcast Spark Parquet reader.");
     }
   }
 

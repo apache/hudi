@@ -198,15 +198,11 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
 
   public void write() {
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
-    Schema readerSchema;
+    Schema readerSchema = HoodieAvroUtils.addMetadataFields(
+        new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     Option<InternalSchema> internalSchemaOption = Option.empty();
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
-      readerSchema = HoodieAvroUtils.addMetadataFields(
-          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
-    } else {
-      readerSchema = HoodieAvroUtils.addMetadataFields(
-          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     }
     try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
@@ -246,7 +242,6 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
             LOG.error("Error writing record  " + record, e);
             writeStatus.markFailure(record, e, recordMetadata);
           }
-
         }
 
         // The stats of inserts, updates, and deletes are updated once at the end
