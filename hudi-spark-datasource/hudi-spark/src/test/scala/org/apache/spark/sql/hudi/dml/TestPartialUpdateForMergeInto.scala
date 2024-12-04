@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewS
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 
@@ -70,7 +71,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         testPartialUpdate("mor", "parquet")
         fail("Expected exception to be thrown")
       } catch {
-        case t: Throwable => assertTrue(t.isInstanceOf[UnsupportedOperationException])
+        case t: Throwable => assertTrue(t.isInstanceOf[HoodieNotSupportedException])
       }
     }
   }
