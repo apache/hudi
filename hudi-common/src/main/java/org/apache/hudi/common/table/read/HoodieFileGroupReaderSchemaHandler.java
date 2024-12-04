@@ -38,7 +38,6 @@ import org.apache.avro.Schema;
 import javax.annotation.Nullable;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
