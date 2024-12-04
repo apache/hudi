@@ -33,11 +33,13 @@ import org.apache.spark.unsafe.types.UTF8String
 object DataSkippingUtils extends Logging {
 
   /**
-   * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index index table
-   * to filter out candidate files that would hold records matching the original filter
+   * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index table
+   * to filter out candidate files that would hold records matching the original filter.
+   * In case the column stats were creating using expression index, the index filter must also account for the expression.
    *
    * @param dataTableFilterExpr source table's query's filter expression
    * @param indexSchema index table schema
+   * @param isExpressionIndex whether the index is an expression index
    * @return filter for column-stats index's table
    */
   def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, indexSchema: StructType, isExpressionIndex: Boolean = false): Expression = {

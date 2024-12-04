@@ -263,9 +263,6 @@ class ExpressionIndexSupport(spark: SparkSession,
     (transposedRows, indexSchema)
   }
 
-  /**
-   * @VisibleForTesting
-   */
   def composeIndexSchema(targetColumnNames: Seq[String], indexedColumns: Set[String], tableSchema: StructType, expressionIndexQuery: Expression): (StructType, Seq[String]) = {
     val fileNameField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME, StringType, nullable = true, Metadata.empty)
     val valueCountField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT, LongType, nullable = true, Metadata.empty)
@@ -337,7 +334,7 @@ class ExpressionIndexSupport(spark: SparkSession,
     metadataConfig.isEnabled && metaClient.getIndexMetadata.isPresent && !metaClient.getIndexMetadata.get().getIndexDefinitions.isEmpty
   }
 
-  def filterQueriesWithFunctionalFilterKey(queryFilters: Seq[Expression], sourceFieldOpt: Option[String]): List[Tuple2[Expression, List[String]]] = {
+  private def filterQueriesWithFunctionalFilterKey(queryFilters: Seq[Expression], sourceFieldOpt: Option[String]): List[Tuple2[Expression, List[String]]] = {
     var expressionIndexQueries: List[Tuple2[Expression, List[String]]] = List.empty
     for (query <- queryFilters) {
       val attributeFetcher = (expr: Expression) => {
@@ -427,9 +424,9 @@ class ExpressionIndexSupport(spark: SparkSession,
     queryAndLiteralsOpt
   }
 
-  def loadExpressionIndexRecords(indexPartition: String,
-                                   prunedPartitions: Set[String],
-                                   shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
+  private def loadExpressionIndexRecords(indexPartition: String,
+                                         prunedPartitions: Set[String],
+                                         shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
     val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.get(indexPartition)
     val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadExpressionIndexForColumnsInternal(
       indexDefinition.getSourceFields.asScala.toSeq, prunedPartitions, indexPartition, shouldReadInMemory)
