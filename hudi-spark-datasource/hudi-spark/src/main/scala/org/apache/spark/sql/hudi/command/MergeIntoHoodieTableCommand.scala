@@ -432,6 +432,21 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       false
     }
 
+    // validate that we can support partial updates
+    if (writePartialUpdates) {
+      if (hoodieCatalogTable.tableConfig.getBootstrapBasePath.isPresent) {
+        throw new UnsupportedOperationException("Partial updates are not supported for bootstrap tables.")
+      }
+
+      if (!hoodieCatalogTable.tableConfig.populateMetaFields()) {
+        throw new UnsupportedOperationException("Partial updates are not supported for virtual key tables.")
+      }
+
+      if (HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(fullSchema)) {
+        throw new UnsupportedOperationException("Partial updates are not supported for tables with enum columns")
+      }
+    }
+
     writeParams ++= Seq(
       // Append (encoded) updating actions
       PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
