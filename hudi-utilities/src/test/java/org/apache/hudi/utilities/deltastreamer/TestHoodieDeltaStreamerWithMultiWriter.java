@@ -107,6 +107,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     props.setProperty("hoodie.write.lock.provider",
         "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    props.setProperty("hoodie.merge.use.record.positions", "false");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, propsFilePath);
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 100;
