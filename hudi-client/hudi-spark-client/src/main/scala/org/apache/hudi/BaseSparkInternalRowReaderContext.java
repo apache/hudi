@@ -88,7 +88,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public HoodieRecord<InternalRow> constructHoodieRecord(Option<InternalRow> rowOption,
-                                                         Map<String, Object> metadataMap) {
+                                                         Map<String, Object> metadataMap, Option<Schema> schemaOpt) {
     if (!rowOption.isPresent()) {
       return new HoodieEmptyRecord<>(
           new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY),
@@ -96,7 +96,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
-    Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
+    Schema schema = schemaOpt.get();
     InternalRow row = rowOption.get();
     return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
   }

@@ -110,8 +110,8 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public HoodieRecord constructHoodieRecord(
       Option<IndexedRecord> recordOpt,
-      Map<String, Object> metadataMap
-  ) {
+      Map<String, Object> metadataMap,
+      Option<Schema> schemaOpt) {
     String appliedPayloadClass =
         payloadClass.isPresent()
             ? payloadClass.get()

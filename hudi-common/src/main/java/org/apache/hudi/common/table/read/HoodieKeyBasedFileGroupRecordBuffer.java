@@ -72,11 +72,15 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       enablePartialMerging = true;
     }
 
+    // generate schema Id;
+    Schema dataBlockSchema = recordsIteratorSchemaPair.getRight();
+    Short dataBlockSchemaId = generateOrFetchSchemaId(dataBlockSchema);
+
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            nextRecord, recordsIteratorSchemaPair.getRight());
+            nextRecord, dataBlockSchema, dataBlockSchemaId);
         String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
         processNextDataRecord(nextRecord, metadata, recordKey);
       }

@@ -143,6 +143,7 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_OPERATION = "_3";
   public static final String INTERNAL_META_INSTANT_TIME = "_4";
   public static final String INTERNAL_META_SCHEMA = "_5";
+  public static final String INTERNAL_META_SCHEMA_ID = "_6";
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
@@ -255,10 +256,11 @@ public abstract class HoodieReaderContext<T> {
    *
    * @param recordOption An option of the record in engine-specific type if exists.
    * @param metadataMap  The record metadata.
+   * @param schemaOpt schema of interest.
    * @return A new instance of {@link HoodieRecord}.
    */
   public abstract HoodieRecord<T> constructHoodieRecord(Option<T> recordOption,
-                                                        Map<String, Object> metadataMap);
+                                                        Map<String, Object> metadataMap, Option<Schema> schemaOpt);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
@@ -292,10 +294,10 @@ public abstract class HoodieReaderContext<T> {
    * @param schema The Avro schema of the record.
    * @return A mapping containing the metadata.
    */
-  public Map<String, Object> generateMetadataForRecord(T record, Schema schema) {
+  public Map<String, Object> generateMetadataForRecord(T record, Schema schema, Short schemaId) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema));
-    meta.put(INTERNAL_META_SCHEMA, schema);
+    meta.put(INTERNAL_META_SCHEMA_ID, schemaId);
     return meta;
   }
 
@@ -303,13 +305,13 @@ public abstract class HoodieReaderContext<T> {
    * Updates the schema and reset the ordering value in existing metadata mapping of a record.
    *
    * @param meta   Metadata in a mapping.
-   * @param schema New schema to set.
+   * @param schemaId New schemaId to set.
    * @return The input metadata mapping.
    */
   public Map<String, Object> updateSchemaAndResetOrderingValInMetadata(Map<String, Object> meta,
-                                                                       Schema schema) {
+                                                                       Short schemaId) {
     meta.remove(INTERNAL_META_ORDERING_FIELD);
-    meta.put(INTERNAL_META_SCHEMA, schema);
+    meta.put(INTERNAL_META_SCHEMA_ID, schemaId);
     return meta;
   }
 
