@@ -153,7 +153,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       insertBatchWithoutCommit(client.createNewInstantTime(), numRecords);
       // rollback the pending instant
       if (commitRollback) {
-        client.rollbackFailedWrites();
+        client.rollbackFailedWrites(metaClient);
       } else {
         HoodieInstant pendingInstant = metaClient.getActiveTimeline().filterPendingExcludingCompaction()
             .lastInstant().orElseThrow(() -> new HoodieException("Pending instant does not exist"));
