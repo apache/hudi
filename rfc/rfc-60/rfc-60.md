@@ -62,11 +62,18 @@ maintains atomicity, transactional guarantees, and Exactly Once semantics.
 ![](HudiStorageCacheLayer.png)
 
 ### Hudi Table Second-Level Latency
-When data is ingested into the lake, it is first written to data files and metadata, and only becomes visible after the transaction 
+Before, when data is ingested into the lake, it is first written to data files and metadata, and only becomes visible after the transaction 
 is successfully committed. Since writing data files is relatively slow, it typically involves minute-level commits. Here, the capabilities 
 of the Federated Storage Layout can be extended by writing data to high-speed storage systems like Kafka, HBase, or Redis, and recording 
 metadata such as offsets or keys in the lake table's metadata. During reads, the content from both persistent storage and high-speed storage 
 can be combined, enabling Hudi to achieve second-level latency.
+
+Case 3 is another implementation of the Federated Storage Layout, rather than just a concept of a caching layer. In Case 3, we effectively 
+use Kafka as a log storage (since both follow an append-only model like avro) and implement a complete set of HoodieKafkaLogScanner and corresponding 
+Compactor. Regarding data visibility in Case 3, the data should be visible externally as soon as it enters Kafka, without a strong dependency on 
+Compaction/Clustering operations. For the query side, it will return a union of data from Kafka and the base files. Of course, it also needs to provide 
+the capability to read/stream Kafka logs in a read-only manner. In summary, this approach aims to achieve second-level latency and visibility for lake tables 
+based on the Hudi Federated Storage Layout.
 
 In addition, we are proposing an interface that would allow users to implement their own custom strategy to allow them
 to distribute the data files across cloud stores, hdfs or on prem based on their specific use-cases.
@@ -109,6 +116,38 @@ not meet their use-case.
 
 ## Design
 
+### Config
+We will add two table-level parameters, namely Hoodie Table Config:
+
+The first one, `hoodie.storage.path` allows users to specify additional physical storage locations apart from the Base Path, separated by commas if there are multiple.
+
+The second one, `hoodie.storage.strategy.class` allows users to specify the storage strategy for the current Hudi table, such as 
+HoodieDefaultStorageStrategy (default), HoodieCacheLayerStorageStrategy, and HoodieObjectStorageStrategy.
+Take HoodieCacheLayerStorageStrategy as example, related table config should like this
+```text
+[sss@ssss ~]$ hdfs dfs -cat hdfs://nsxxx/user/jdr_lakehouse/gdm.db/xxx/.hoodie/hoodie.properties
+#Updated at 2024-08-07T11:49:10.252Z
+#Wed Aug 07 19:49:10 CST 2024
+hoodie.table.keygenerator.class=org.apache.hudi.keygen.ComplexAvroKeyGenerator
+hoodie.table.precombine.field=receive_ts
+hoodie.table.version=5
+hoodie.datasource.write.hive_style_partitioning=true
+hoodie.table.checksum=318067208
+hoodie.table.create.schema={xxxx}
+hoodie.table.cdc.enabled=false
+hoodie.archivelog.folder=archived
+hoodie.table.name=xxxx
+hoodie.table.type=COPY_ON_WRITE
+hoodie.datasource.write.partitionpath.urlencode=false
+hoodie.datasource.write.drop.partition.columns=false
+hoodie.timeline.layout.version=1
+hoodie.table.recordkey.fields=mid,dt
+hoodie.table.partition.fields=dt,application,business
+hoodie.storage.path=hdfs\://nsxxxx/user/jdr_lakehouse/jdr_lakehouse_traffic/gdm.db/gdm_jdr_xxxxx
+hoodie.storage.strategy.class=org.apache.hudi.common.storage.HoodieCacheLayerStorageStrategy
+```
+
+
 ### Core Abstraction
 
 ```java
@@ -117,12 +156,13 @@ not meet their use-case.
  */
 public interface HoodieStorageStrategy extends Serializable {
   /**
-   * Return a storage location for the given filename.
+   * Return a storage location for the given path
    *
-   * @param path fileName
-   * @return a storage location string for a data file
+   * @param path
+   * @param configMap
+   * @return Append the appropriate prefix based on the Path and return
    */
-  StoragePath storageLocation(String path, String instantTime);
+  StoragePath storageLocation(String path, Map<String, String> configMap);
 
   /**
    * Return all possible StoragePaths
