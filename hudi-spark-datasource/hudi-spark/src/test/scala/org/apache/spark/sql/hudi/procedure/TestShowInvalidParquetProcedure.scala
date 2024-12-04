@@ -198,6 +198,13 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
       assertResult(2) {
         result.length
       }
+
+      result = spark.sql(
+        s"""call show_invalid_parquet(path => '$basePath', partitions => 'year=2023')""".stripMargin).collect()
+      assertResult(0) {
+        result.length
+      }
+
     }
   }
 }
