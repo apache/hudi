@@ -16,28 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.engine;
+package org.apache.hudi.table;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePath;
+
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.Serializable;
-import java.util.function.Supplier;
 
-/**
- * Base task context supplier.
- */
-public abstract class TaskContextSupplier implements Serializable {
+public class PartialUpdateReaderContext implements Serializable {
 
-  public abstract Supplier<Integer> getPartitionIdSupplier();
+  // Prepare broadcast variables.
+  public void prepareReaderContext() {
+    // NO operation.
+  }
 
-  public abstract Supplier<Integer> getStageIdSupplier();
-
-  public abstract Supplier<Long> getAttemptIdSupplier();
-
-  public abstract Option<String> getProperty(EngineProperty prop);
-
-  public Option<HoodieReaderContext> getReaderContext(HoodieTableMetaClient metaClient, boolean useReaderContext) {
+  // Create reader context based on broadcast variables.
+  public Option<HoodieReaderContext> getReaderContext(StoragePath basePath) {
     return Option.empty();
   }
+
+  // Fetch broadcast storage config.
+  public Option<Configuration> getStorageConfig() {
+    return Option.empty();
+  }
+
 }
