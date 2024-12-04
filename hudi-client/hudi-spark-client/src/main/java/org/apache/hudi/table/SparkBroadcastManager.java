@@ -46,6 +46,9 @@ import java.util.List;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
 
+/**
+ * Broadcast variable management for Spark.
+ */
 public class SparkBroadcastManager extends EngineBroadcastManager {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkBroadcastManager.class);
@@ -61,7 +64,6 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     this.context = context;
   }
 
-  // Prepare broadcast variables.
   @Override
   public void prepareAndBroadcast() {
     if (!(context instanceof HoodieSparkEngineContext)) {
@@ -80,6 +82,7 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     // Do broadcast.
     sqlConfBroadcast = jsc.broadcast(sqlConf);
     configurationBroadcast = jsc.broadcast(new SerializableConfiguration(jsc.hadoopConfiguration()));
+    // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
     parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());

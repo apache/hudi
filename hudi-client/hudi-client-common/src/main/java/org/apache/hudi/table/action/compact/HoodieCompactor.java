@@ -166,7 +166,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
   }
 
   /**
-   * Execute a single compaction operation and report back status.
+   * Execute a single compaction operation using file group reader and report back status.
    */
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
                                    HoodieTableMetaClient metaClient,

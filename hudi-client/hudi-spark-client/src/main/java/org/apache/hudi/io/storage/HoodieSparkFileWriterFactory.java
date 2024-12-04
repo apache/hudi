@@ -59,6 +59,8 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     String writeSchema = config.getStringOrDefault(
         WRITE_SCHEMA_OVERRIDE, config.getString(AVRO_SCHEMA_STRING));
     if (!StringUtils.isNullOrEmpty(writeSchema)) {
+      // The parquet write legacy format property needs to be overridden
+      // if there is a decimal field of small precision, to maintain the compatibility.
       HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty(
           config.getProps(), new Schema.Parser().parse(writeSchema));
     }
