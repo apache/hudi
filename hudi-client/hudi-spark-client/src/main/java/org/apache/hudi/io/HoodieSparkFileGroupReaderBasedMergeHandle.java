@@ -168,6 +168,11 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     }
   }
 
+  /**
+   * Reads the file slice of a compaction operation using a file group reader,
+   * by getting an iterator of the records; then writes the records to a new base file
+   * using Spark parquet writer.
+   */
   public void write() {
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Schema readerSchema = HoodieAvroUtils.addMetadataFields(
@@ -233,6 +238,17 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     }
   }
 
+  /**
+   * Writes a single record to the new file.
+   *
+   * @param key                          record key
+   * @param record                       the record of {@link HoodieSparkRecord}
+   * @param schema                       record schema
+   * @param prop                         table properties
+   * @param shouldPreserveRecordMetadata should preserve meta fields or not
+   *
+   * @throws IOException
+   */
   protected void writeToFile(HoodieKey key, HoodieSparkRecord record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata)
       throws IOException {
     // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
