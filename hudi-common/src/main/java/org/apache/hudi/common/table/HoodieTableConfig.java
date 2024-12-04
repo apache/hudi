@@ -262,7 +262,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.populate.meta.fields")
       .defaultValue(true)
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
-          + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
+          + "and incremental queries will not be functional. In the disabled state, the number of record key fields must be equal to one");
 
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")

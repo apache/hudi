@@ -119,7 +119,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true);
     this.recordMap = recordMap;
-    this.useWriterSchema = true;
+    this.useWriterSchema = config.populateMetaFields();
   }
 
   @Override
