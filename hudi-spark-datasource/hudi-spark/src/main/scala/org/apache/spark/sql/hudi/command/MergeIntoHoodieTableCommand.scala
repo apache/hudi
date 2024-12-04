@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, RECORD_MERGE_MODE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
@@ -435,20 +435,20 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // validate that we can support partial updates
     if (writePartialUpdates) {
       if (hoodieCatalogTable.tableConfig.getBootstrapBasePath.isPresent) {
-        throw new UnsupportedOperationException("Partial updates are not supported for bootstrap tables.")
+        throw new HoodieNotSupportedException("Partial updates are not supported for bootstrap tables.")
       }
 
       if (!hoodieCatalogTable.tableConfig.populateMetaFields()) {
-        throw new UnsupportedOperationException("Partial updates are not supported for virtual key tables.")
+        throw new HoodieNotSupportedException("Partial updates are not supported for virtual key tables.")
       }
 
       if (HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(fullSchema)) {
-        throw new UnsupportedOperationException("Partial updates are not supported for tables with enum columns")
+        throw new HoodieNotSupportedException("Partial updates are not supported for tables with enum columns")
       }
 
       if (parameters.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(),
         DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean) {
-        throw new UnsupportedOperationException("Partial updates are not supported for tables with schema on read evolution")
+        throw new HoodieNotSupportedException("Partial updates are not supported for tables with schema on read evolution")
       }
     }
 
