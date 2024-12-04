@@ -1,7 +1,7 @@
 # Presto Hudi Connector
 
 ##Overview
-The **Presto Hudi Connector** enables querying Hudi tables synced to Hive metastore. The connector usesthe **metastore** only to track partition locations. It makes use of the underlying Hudi filesystem and input formats to list data files. To learn more about the design of the connector, please check out [RFC-40](https://github.com/apache/hudi/blob/master/rfc/rfc-44/rfc-44.md).
+The **Presto Hudi Connector** enables querying Hudi tables synced to Hive metastore. The connector usesthe metastore only to track partition locations. It makes use of the underlying Hudi filesystem and input formats to list data files. To learn more about the design of the connector, please check out [RFC-40](https://github.com/apache/hudi/blob/master/rfc/rfc-44/rfc-44.md).
 
 ##Requirements
 To use Hudi, we need:
@@ -44,15 +44,47 @@ stock_ticks_cow is a Hudi cow table that we refer in the Hudi quickstart documen
 
 Here are some sample queries:
 
-```
+``` 
 USE hudi.default;
- SELECT ts, fare, rider, driver, city FROM  hudi_table WHERE fare > 20.0;
-```
+SELECT ts, fare, rider, driver, city FROM  trips_table WHERE fare > 20.0;
+``` 
 
+Output:
+
+```
+     ts       | fare  |  rider  |  driver  |        city        
+---------------+-------+---------+----------+--------------------
+ 1695516137016 | 34.15 | rider-F | driver-P | city=sao_paulo     
+ 1695046462179 |  33.9 | rider-D | driver-L | city=san_francisco 
+ 1695091554788 |  27.7 | rider-C | driver-M | city=san_francisco 
+```
  
 
-```
-UPDATE hudi_table SET fare = 25.0 WHERE rider = 'rider-D';
+
+#Historical
+ 
+| **PrestoDB Version** | **Installation description** | **Query types supported** |
+|----------------------|------------------------------|---------------------------|
+| < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
+| > = 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
+| > = 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables. |
+| > = 0.268             | No action needed. Hudi 0.9.0 version is a compile time dependency. | Snapshot querying on bootstrap tables. |
+| > = 0.272             | No action needed. Hudi 0.10.1 version is a compile time dependency. | File listing optimizations. Improved query performance. |
+| > = 0.275             | No action needed. Hudi 0.11.0 version is a compile time dependency. | All of the above. Native Hudi connector that is on par with Hive connector. |
+
+
+> **Note**
+>
+>Incremental queries and point in time queries are not supported either through the Hive connector or Hudi
+connector. However, it is in our roadmap, and you can track the development
+under [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210).
+ 
+To use the Hudi connector, please configure hudi catalog in ` /presto-server-0.2xxx/etc/catalog/hudi.properties` as follows:
+
+```properties
+connector.name=hudi
+hive.metastore.uri=thrift://xxx.xxx.xxx.xxx:9083
+hive.config.resources=.../hadoop-2.x/etc/hadoop/core-site.xml,.../hadoop-2.x/etc/hadoop/hdfs-site.xml
 ```
 
- 
+To learn more about the usage of Hudi connector, please read [prestodb documentation](https://prestodb.io/docs/current/connector/hudi.html).
