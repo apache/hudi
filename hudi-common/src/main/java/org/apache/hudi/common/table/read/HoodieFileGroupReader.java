@@ -277,6 +277,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (recordBuffer != null) {
       recordBuffer.close();
     }
+    if (readerContext != null) {
+      readerContext.close();
+    }
   }
 
   public HoodieFileGroupReaderIterator<T> getClosableIterator() {
