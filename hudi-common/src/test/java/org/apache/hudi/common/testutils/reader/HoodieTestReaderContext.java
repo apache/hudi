@@ -51,8 +51,6 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
-
 public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> {
   private Option<HoodieRecordMerger> customMerger;
   private Option<String> payloadClass;
@@ -100,11 +98,6 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
     return getFieldValueFromIndexedRecord(record, schema, fieldName);
-  }
-
-  @Override
-  public String getRecordKey(IndexedRecord record, Schema schema) {
-    return getFieldValueFromIndexedRecord(record, schema, ROW_KEY).toString();
   }
 
   @Override

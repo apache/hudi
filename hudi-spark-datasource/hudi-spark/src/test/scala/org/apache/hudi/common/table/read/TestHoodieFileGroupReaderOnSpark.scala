@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.{SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
@@ -85,9 +84,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, storageConf: StorageConfiguration[_]): HoodieReaderContext[InternalRow] = {
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
-    val metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(tablePath).build
-    val recordKeyField = metaClient.getTableConfig.getRecordKeyFields.get()(0)
-    new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, Seq.empty)
+    new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty)
   }
 
   override def commitToTable(recordList: util.List[HoodieRecord[_]], operation: String, options: util.Map[String, String]): Unit = {

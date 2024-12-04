@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
@@ -118,6 +119,15 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
+
+    // only needed when doing mor merging
+    if (readerContext.getHasLogFiles()) {
+      // TODO: [HUDI-8460] add handling for multiple recordkey fields
+      String[] recordKeyFields = readerContext.getSchemaHandler().getRecordKeyFields();
+      ValidationUtils.checkArgument(recordKeyFields.length == 1, "Number of record key fields set in tableconfig is not 1, but populateMetaFields is disabled");
+      readerContext.setRecordKeyFieldName(recordKeyFields[0]);
+    }
+    
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient, tableConfig.getRecordMergeMode(), props, this.logFiles.isEmpty(), isSkipMerge, shouldUseRecordPosition);
   }

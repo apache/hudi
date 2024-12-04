@@ -59,12 +59,10 @@ import scala.collection.mutable
  * @param parquetFileReader A reader that transforms a [[PartitionedFile]] to an iterator of
  *                          [[InternalRow]]. This is required for reading the base file and
  *                          not required for reading a file group with only log files.
- * @param recordKeyColumn   column name for the recordkey
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
 class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
-                                              recordKeyColumn: String,
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
