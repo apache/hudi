@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.AvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -34,6 +35,9 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
 
+import javax.annotation.Nullable;
+
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,7 +55,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 /**
  * This class is responsible for handling the schema for the file group reader.
  */
-public class HoodieFileGroupReaderSchemaHandler<T> {
+public class HoodieFileGroupReaderSchemaHandler<T> implements Closeable {
 
   protected final Schema dataSchema;
 
@@ -71,6 +75,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
 
   protected final TypedProperties properties;
 
+  private final AvroSchemaCache avroSchemaCache;
+
   public HoodieFileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                             Schema dataSchema,
                                             Schema requestedSchema,
@@ -85,6 +91,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     this.requiredSchema = prepareRequiredSchema();
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
+    this.avroSchemaCache = AvroSchemaCache.getInstance();
   }
 
   public Schema getDataSchema() {
@@ -226,5 +233,25 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       fields.set(i, new Schema.Field(curr.name(), curr.schema(), curr.doc(), curr.defaultVal()));
     }
     return createNewSchemaFromFieldsWithReference(dataSchema, fields);
+  }
+
+  /**
+   * Encodes the given avro schema for efficient serialization.
+   */
+  public Integer encodeAvroSchema(Schema schema) {
+    return this.avroSchemaCache.cacheSchema(schema);
+  }
+
+  /**
+   * Decodes the avro schema with given version ID.
+   */
+  @Nullable
+  public Schema decodeAvroSchema(Object versionId) {
+    return this.avroSchemaCache.getSchema((Integer) versionId).orElse(null);
+  }
+
+  @Override
+  public void close() {
+    this.avroSchemaCache.close();
   }
 }

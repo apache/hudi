@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, RECORD_MERGE_MODE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
@@ -44,7 +44,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
-import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{encodeAsBase64String, stripCasting, toStructType, CoercedAttributeReference}
+import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{encodeAsBase64String, stripCasting, toStructType, userGuideString, CoercedAttributeReference}
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
@@ -432,6 +432,25 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       false
     }
 
+    // validate that we can support partial updates
+    if (writePartialUpdates) {
+      if (hoodieCatalogTable.tableConfig.getBootstrapBasePath.isPresent) {
+        throw new HoodieNotSupportedException(
+          "Partial updates are not supported for bootstrap tables. " + userGuideString)
+      }
+
+      if (!hoodieCatalogTable.tableConfig.populateMetaFields()) {
+        throw new HoodieNotSupportedException(
+          "Partial updates are not supported for virtual key tables. " + userGuideString)
+      }
+
+      if (parameters.getOrElse(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key(),
+        DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean) {
+        throw new HoodieNotSupportedException(
+          "Partial updates are not supported for tables with schema on read evolution. " + userGuideString)
+      }
+    }
+
     writeParams ++= Seq(
       // Append (encoded) updating actions
       PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
@@ -809,6 +828,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 }
 
 object MergeIntoHoodieTableCommand {
+
+  val userGuideString: String = "To use the MERGE INTO statement on this MOR table, " +
+    "please specify `UPDATE SET *` as the update statement to update all columns, " +
+    "and set `" + DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key + "=false`."
 
   object CoercedAttributeReference {
     def unapply(expr: Expression): Option[AttributeReference] = {

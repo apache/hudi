@@ -212,6 +212,9 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       String fieldName
   ) {
     Schema.Field field = recordSchema.getField(fieldName);
+    if (field == null) {
+      return null;
+    }
     int pos = field.pos();
     return record.get(pos);
   }

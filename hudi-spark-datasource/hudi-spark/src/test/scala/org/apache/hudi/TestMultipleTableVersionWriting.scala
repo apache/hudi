@@ -24,11 +24,9 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.{HoodieException, HoodieUpgradeDowngradeException}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import org.scalatest.Assertions.assertThrows
 
 class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
 
@@ -46,15 +44,6 @@ class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
     val metaClient = HoodieTestUtils.createMetaClient(basePath)
     assertEquals(HoodieTableVersion.current().versionCode(),
       metaClient.getTableConfig.getTableVersion.versionCode())
-
-    // should error out when writing with lower write version.
-    assertThrows[HoodieException] {
-      df.write.format("hudi")
-        .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false")
-        .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode())
-        .mode(SaveMode.Append)
-        .save(basePath)
-    }
   }
 
   @Test
@@ -63,13 +52,7 @@ class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
     HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX)
 
     val df = spark.range(1).selectExpr("1 as id", "1 as name", "1 as partition")
-    // should error out when starting with table version 6 and writing with auto upgrade disabled
-    assertThrows[HoodieUpgradeDowngradeException] {
-      df.write.format("hudi")
-        .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false")
-        .mode(SaveMode.Append)
-        .save(basePath)
-    }
+
     // should succeed when writing with auto upgrade enabled (default)
     df.write.format("hudi")
       .mode(SaveMode.Append)

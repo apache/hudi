@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v1.CommitMetadataSerDeV1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -82,6 +83,10 @@ public class LegacyArchivedMetaEntryReader {
     return loadInstants(null);
   }
 
+  public ClosableIterator<ActiveAction> getActiveActionsIterator(HoodieArchivedTimeline.TimeRangeFilter filter) {
+    return loadInstants(filter);
+  }
+
   /**
    * Reads the avro record for instant and details.
    */
@@ -92,10 +97,19 @@ public class LegacyArchivedMetaEntryReader {
     final Option<byte[]> details = getMetadataKey(action).map(key -> {
       Object actionData = record.get(key);
       if (actionData != null) {
-        if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
+        if (actionData instanceof IndexedRecord) {
           return HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData);
         } else {
-          return getUTF8Bytes(actionData.toString());
+          // should be json bytes.
+          try {
+            HoodieInstant instant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, stateTransitionTime);
+            org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata = new CommitMetadataSerDeV1().deserialize(instant, getUTF8Bytes(actionData.toString()),
+                org.apache.hudi.common.model.HoodieCommitMetadata.class);
+            // convert to avro bytes.
+            return metaClient.getCommitMetadataSerDe().serialize(commitMetadata).get();
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
         }
       }
       return null;

@@ -107,28 +107,15 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
   }
 
-  private Writer openWriter() {
+  private Writer openWriter(StoragePath archivePath) {
     try {
       if (this.writer == null) {
-        return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent()).withInstantTime("")
+        return HoodieLogFormat.newWriterBuilder().onParentPath(archivePath).withInstantTime("")
             .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
             .withStorage(metaClient.getStorage()).build();
       } else {
         return this.writer;
       }
-    } catch (IOException e) {
-      throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
-    }
-  }
-
-  public Writer reOpenWriter() {
-    try {
-      if (this.writer != null) {
-        this.writer.close();
-        this.writer = null;
-      }
-      this.writer = openWriter();
-      return writer;
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
     }
@@ -155,7 +142,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
       boolean success = true;
       if (!instantsToArchive.isEmpty()) {
-        this.writer = openWriter();
+        this.writer = openWriter(archiveFilePath.getParent());
         LOG.info("Archiving instants " + instantsToArchive);
         archive(context, instantsToArchive);
         LOG.info("Deleting archived instants " + instantsToArchive);
@@ -170,6 +157,21 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       if (acquireLock) {
         txnManager.endTransaction(Option.empty());
       }
+    }
+  }
+
+  /**
+   * Keeping for downgrade from 1.x LSM archived timeline.
+   */
+  public void flushArchiveEntries(List<IndexedRecord> archiveRecords, StoragePath archivePath) throws HoodieCommitException {
+    try {
+      Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
+      this.writer = openWriter(archivePath);
+      writeToFile(wrapperSchema, archiveRecords);
+    } catch (Exception e) {
+      throw new HoodieCommitException("Failed to archive commits", e);
+    } finally {
+      close();
     }
   }
 

@@ -114,7 +114,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         };
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
         LOG.debug("Deleting archived instants");
-        deleteArchivedInstants(instantsToArchive, context);
+        deleteArchivedActions(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
       } else {
@@ -320,7 +320,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     });
   }
 
-  private boolean deleteArchivedInstants(List<ActiveAction> activeActions, HoodieEngineContext context) {
+  private boolean deleteArchivedActions(List<ActiveAction> activeActions, HoodieEngineContext context) {
     List<HoodieInstant> pendingInstants = new ArrayList<>();
     List<HoodieInstant> completedInstants = new ArrayList<>();
 

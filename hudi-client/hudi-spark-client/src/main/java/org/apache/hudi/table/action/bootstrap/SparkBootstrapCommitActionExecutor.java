@@ -214,7 +214,7 @@ public class SparkBootstrapCommitActionExecutor<T>
       LOG.info("Finished writing bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
           + config.getBasePath());
     }
-    commit(result.getWriteStatuses(), result, bootstrapSourceAndStats.values().stream()
+    commit(result, bootstrapSourceAndStats.values().stream()
         .flatMap(f -> f.stream().map(Pair::getValue)).collect(Collectors.toList()));
     LOG.info("Committing metadata bootstrap !!");
   }

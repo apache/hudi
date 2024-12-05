@@ -150,9 +150,6 @@ public class TimelineMetadataUtils {
 
   public static Option<byte[]> serializeCommitMetadata(CommitMetadataSerDe commitMetadataSerDe,
                                                        org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata) throws IOException {
-    if (commitMetadata instanceof org.apache.hudi.common.model.HoodieReplaceCommitMetadata) {
-      return serializeAvroMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata), HoodieReplaceCommitMetadata.class);
-    }
     return commitMetadataSerDe.serialize(commitMetadata);
   }
 

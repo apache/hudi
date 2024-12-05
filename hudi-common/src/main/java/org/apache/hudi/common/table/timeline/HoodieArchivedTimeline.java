@@ -60,7 +60,11 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
     /**
      * Loads the instantTime, completionTime, action, plan.
      */
-    PLAN
+    PLAN,
+    /**
+     * Loads the instantTime, completionTime, action, plan, metadata.
+     */
+    FULL
   }
 
   /**

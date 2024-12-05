@@ -38,7 +38,7 @@ public abstract class BaseHoodieIndexClient {
   }
 
   /**
-   * Register a functional index.
+   * Register a expression index.
    * Index definitions are stored in user-specified path or, by default, in .hoodie/.index_defs/index.json.
    * For the first time, the index definition file will be created if not exists.
    * For the second time, the index definition file will be updated if exists.
@@ -57,7 +57,7 @@ public abstract class BaseHoodieIndexClient {
   }
 
   /**
-   * Create a functional index.
+   * Create a expression index.
    */
   public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) throws Exception;
 

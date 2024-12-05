@@ -64,7 +64,7 @@ public class TestMetadataPartitionType {
     switch (partitionType) {
       case FILES:
       case ALL_PARTITIONS:
-      case FUNCTIONAL_INDEX:
+      case EXPRESSION_INDEX:
       case SECONDARY_INDEX:
         metadataConfigBuilder.enable(true);
         expectedEnabledPartitions = 2;
@@ -92,8 +92,8 @@ public class TestMetadataPartitionType {
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfigBuilder.build().getProps(), metaClient);
 
     // Verify partition type is enabled due to config
-    if (partitionType == MetadataPartitionType.FUNCTIONAL_INDEX || partitionType == MetadataPartitionType.SECONDARY_INDEX) {
-      assertEquals(2, enabledPartitions.size(), "FUNCTIONAL_INDEX should be enabled by SQL, only FILES and SECONDARY_INDEX is enabled in this case.");
+    if (partitionType == MetadataPartitionType.EXPRESSION_INDEX || partitionType == MetadataPartitionType.SECONDARY_INDEX) {
+      assertEquals(2, enabledPartitions.size(), "EXPRESSION_INDEX should be enabled by SQL, only FILES and SECONDARY_INDEX is enabled in this case.");
       assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES));
     } else {
       assertEquals(expectedEnabledPartitions, enabledPartitions.size());
@@ -140,25 +140,25 @@ public class TestMetadataPartitionType {
   }
 
   @Test
-  public void testFunctionalIndexPartitionEnabled() {
+  public void testExpressionIndexPartitionEnabled() {
     HoodieTableMetaClient metaClient = Mockito.mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
 
-    // Simulate the meta client having FUNCTIONAL_INDEX available
+    // Simulate the meta client having EXPRESSION_INDEX available
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
     Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(true);
-    HoodieIndexMetadata functionalIndexMetadata =
-        new HoodieIndexMetadata(Collections.singletonMap("func_index_dummy", new HoodieIndexDefinition("func_index_dummy", null, null, null, null)));
-    Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.of(functionalIndexMetadata));
-    Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.FUNCTIONAL_INDEX)).thenReturn(true);
+    HoodieIndexMetadata expressionIndexMetadata =
+        new HoodieIndexMetadata(Collections.singletonMap("expr_index_dummy", new HoodieIndexDefinition("expr_index_dummy", null, null, null, null)));
+    Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.of(expressionIndexMetadata));
+    Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.EXPRESSION_INDEX)).thenReturn(true);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig.getProps(), metaClient);
 
-    // Verify FUNCTIONAL_INDEX and FILES is enabled due to availability, and SECONDARY_INDEX by default
-    assertEquals(3, enabledPartitions.size(), "FUNCTIONAL_INDEX, FILES and SECONDARY_INDEX should be available");
+    // Verify EXPRESSION_INDEX and FILES is enabled due to availability, and SECONDARY_INDEX by default
+    assertEquals(3, enabledPartitions.size(), "EXPRESSION_INDEX, FILES and SECONDARY_INDEX should be available");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES), "FILES should be enabled by availability");
-    assertTrue(enabledPartitions.contains(MetadataPartitionType.FUNCTIONAL_INDEX), "FUNCTIONAL_INDEX should be enabled by availability");
+    assertTrue(enabledPartitions.contains(MetadataPartitionType.EXPRESSION_INDEX), "EXPRESSION_INDEX should be enabled by availability");
     assertTrue(enabledPartitions.contains(MetadataPartitionType.SECONDARY_INDEX), "SECONDARY_INDEX should be enabled by default");
   }
 
@@ -172,7 +172,7 @@ public class TestMetadataPartitionType {
   @Test
   public void testFromPartitionPath() {
     assertEquals(MetadataPartitionType.FILES, MetadataPartitionType.fromPartitionPath("files"));
-    assertEquals(MetadataPartitionType.FUNCTIONAL_INDEX, MetadataPartitionType.fromPartitionPath("func_index_dummy"));
+    assertEquals(MetadataPartitionType.EXPRESSION_INDEX, MetadataPartitionType.fromPartitionPath("expr_index_dummy"));
     assertEquals(MetadataPartitionType.SECONDARY_INDEX, MetadataPartitionType.fromPartitionPath("secondary_index_dummy"));
     assertEquals(MetadataPartitionType.COLUMN_STATS, MetadataPartitionType.fromPartitionPath("column_stats"));
     assertEquals(MetadataPartitionType.BLOOM_FILTERS, MetadataPartitionType.fromPartitionPath("bloom_filters"));
@@ -194,21 +194,21 @@ public class TestMetadataPartitionType {
 
   @ParameterizedTest
   @EnumSource(MetadataPartitionType.class)
-  public void testGetNonFunctionalIndexPath(MetadataPartitionType partitionType) {
+  public void testGetNonExpressionIndexPath(MetadataPartitionType partitionType) {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    String functionalIndexName = "dummyFunctionalIndex";
+    String expressionIndexName = "dummyExpressionIndex";
     String secondaryIndexName = "dummySecondaryIndex";
     Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
     indexDefinitions.put(
-        functionalIndexName,
-        new HoodieIndexDefinition("func_index_dummyFunctionalIndex", "column_stats", "lower", Collections.singletonList("name"), null));
+        expressionIndexName,
+        new HoodieIndexDefinition("expr_index_dummyExpressionIndex", "column_stats", "lower", Collections.singletonList("name"), null));
     indexDefinitions.put(
         secondaryIndexName,
         new HoodieIndexDefinition("secondary_index_dummySecondaryIndex", null, null, Collections.singletonList("name"), null));
     HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(indexDefinitions);
     when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
-    if (partitionType == MetadataPartitionType.FUNCTIONAL_INDEX) {
-      assertEquals("func_index_dummyFunctionalIndex", partitionType.getPartitionPath(metaClient, functionalIndexName));
+    if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
+      assertEquals("expr_index_dummyExpressionIndex", partitionType.getPartitionPath(metaClient, expressionIndexName));
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
       assertEquals("secondary_index_dummySecondaryIndex", partitionType.getPartitionPath(metaClient, secondaryIndexName));
     } else {
@@ -217,8 +217,8 @@ public class TestMetadataPartitionType {
   }
 
   @Test
-  public void testExceptionForMissingFunctionalIndexMetadata() {
-    MetadataPartitionType partitionType = MetadataPartitionType.FUNCTIONAL_INDEX;
+  public void testExceptionForMissingExpressionIndexMetadata() {
+    MetadataPartitionType partitionType = MetadataPartitionType.EXPRESSION_INDEX;
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
 
@@ -229,14 +229,14 @@ public class TestMetadataPartitionType {
   @Test
   public void testIndexNameWithoutPrefix() {
     for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
-      String userIndexName = MetadataPartitionType.isGenericIndex(partitionType.getPartitionPath()) ? "idx" : "";
+      String userIndexName = MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath()) ? "idx" : "";
       HoodieIndexDefinition indexDefinition = createIndexDefinition(partitionType, userIndexName);
       assertEquals(partitionType.getIndexNameWithoutPrefix(indexDefinition), userIndexName);
     }
 
     assertThrows(IllegalArgumentException.class, () -> {
       HoodieIndexDefinition indexDefinition = createIndexDefinition(MetadataPartitionType.RECORD_INDEX, "");
-      MetadataPartitionType.FUNCTIONAL_INDEX.getIndexNameWithoutPrefix(indexDefinition);
+      MetadataPartitionType.EXPRESSION_INDEX.getIndexNameWithoutPrefix(indexDefinition);
     });
   }
 
@@ -246,20 +246,24 @@ public class TestMetadataPartitionType {
   }
 
   @Test
-  public void testIsGenericIndex() {
-    assertTrue(MetadataPartitionType.isGenericIndex("func_index_"));
-    assertTrue(MetadataPartitionType.isGenericIndex("func_index_idx"));
-    assertTrue(MetadataPartitionType.isGenericIndex("secondary_index_"));
-    assertTrue(MetadataPartitionType.isGenericIndex("secondary_index_idx"));
+  public void testIsExpressionOrSecondaryIndex() {
+    assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("expr_index_"));
+    assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("expr_index_idx"));
+    assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index_"));
+    assertTrue(MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index_idx"));
 
-    assertFalse(MetadataPartitionType.isGenericIndex("func_index"));
-    assertFalse(MetadataPartitionType.isGenericIndex("func_indexidx"));
-    assertFalse(MetadataPartitionType.isGenericIndex("secondary_index"));
-    assertFalse(MetadataPartitionType.isGenericIndex("secondary_indexidx"));
+    assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.isExpressionOrSecondaryIndex("expr_index"),
+        "No MetadataPartitionType for partition path: expr_index");
+    assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.isExpressionOrSecondaryIndex("expr_indexidx"),
+        "No MetadataPartitionType for partition path: expr_indexidx");
+    assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_index"),
+        "No MetadataPartitionType for partition path: secondary_index");
+    assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_indexidx"),
+        "No MetadataPartitionType for partition path: secondary_indexidx");
 
     for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
-      if (partitionType != MetadataPartitionType.FUNCTIONAL_INDEX && partitionType != MetadataPartitionType.SECONDARY_INDEX) {
-        assertFalse(MetadataPartitionType.isGenericIndex(partitionType.getPartitionPath()));
+      if (partitionType != MetadataPartitionType.EXPRESSION_INDEX && partitionType != MetadataPartitionType.SECONDARY_INDEX) {
+        assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath()));
       }
     }
   }

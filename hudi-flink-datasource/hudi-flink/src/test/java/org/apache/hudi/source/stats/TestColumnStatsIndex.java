@@ -55,6 +55,7 @@ public class TestColumnStatsIndex {
     Configuration conf = TestConfigurations.getDefaultConf(path);
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.setString("hoodie.metadata.index.partition.stats.enable", "true");
+    conf.setString("hoodie.metadata.index.column.stats.enable", "true");
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true)
         .withMetadataIndexColumnStats(true)

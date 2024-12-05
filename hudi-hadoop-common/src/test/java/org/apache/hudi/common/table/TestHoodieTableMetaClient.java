@@ -45,7 +45,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.index.functional.HoodieFunctionalIndex.IDENTITY_FUNCTION;
+import static org.apache.hudi.index.functional.HoodieExpressionIndex.IDENTITY_FUNCTION;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -262,7 +262,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .initTable(this.metaClient.getStorageConf(), basePath);
     Map<String, Map<String, String>> columnsMap = new HashMap<>();
     columnsMap.put("c1", Collections.emptyMap());
-    String indexName = MetadataPartitionType.FUNCTIONAL_INDEX.getPartitionPath() + "idx";
+    String indexName = MetadataPartitionType.EXPRESSION_INDEX.getPartitionPath() + "idx";
     HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, "column_stats", IDENTITY_FUNCTION,
         new ArrayList<>(columnsMap.keySet()), Collections.emptyMap());
     metaClient.buildIndexDefinition(indexDefinition);

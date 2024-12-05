@@ -2157,13 +2157,17 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // set hoodie.table.version to 2 in hoodie.properties file
     changeTableVersion(HoodieTableVersion.TWO);
-    properties.setProperty("hoodie.write.table.version", "8");
+    // Set Writer Version 6.
+    HoodieTableConfig tableConfig2 = metaClient.getTableConfig();
+    tableConfig2.setTableVersion(HoodieTableVersion.SIX);
+    initMetaClient(COPY_ON_WRITE);
     writeConfig = getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withProperties(properties)
         .withEmbeddedTimelineServerEnabled(false)
+        .withWriteTableVersion(HoodieTableVersion.SIX.versionCode())
         .build();
 
     // With next commit the table should be re-bootstrapped and partial commit should be rolled back.

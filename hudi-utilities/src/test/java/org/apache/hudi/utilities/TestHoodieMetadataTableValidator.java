@@ -279,7 +279,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
             + "hoodie.metadata.record.index.enable = 'true', "
             + "hoodie.datasource.write.recordkey.field = 'record_key_col', "
             + "hoodie.enable.data.skipping = 'true', "
-            + "hoodie.datasource.write.precombine.field = 'ts'"
+            + "hoodie.datasource.write.precombine.field = 'ts', "
+            + "hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'"
             + ") "
             + "partitioned by(partition_key_col) "
             + "location '" + basePath + "'");
@@ -292,7 +293,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
 
     // create secondary index
-    sparkSession.sql("create index idx_not_record_key_col on tbl using secondary_index(not_record_key_col)");
+    sparkSession.sql("create index idx_not_record_key_col on tbl (not_record_key_col)");
     validateSecondaryIndex();
 
     // updating record `not_record_key_col` column from `abc` to `cde`
