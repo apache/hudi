@@ -20,8 +20,8 @@
 package org.apache.hudi
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
-import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
+import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
@@ -45,7 +45,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Sp
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.mutable
@@ -59,12 +59,10 @@ import scala.collection.mutable
  * @param parquetFileReader A reader that transforms a [[PartitionedFile]] to an iterator of
  *                          [[InternalRow]]. This is required for reading the base file and
  *                          not required for reading a file group with only log files.
- * @param recordKeyColumn   column name for the recordkey
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
 class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
-                                              recordKeyColumn: String,
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter

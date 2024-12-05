@@ -304,6 +304,13 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-test</artifactId>
+      <version>${zk-curator.version}</version>
+      <scope>test</scope>
+    </dependency>
+    
     <!-- Hadoop -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
