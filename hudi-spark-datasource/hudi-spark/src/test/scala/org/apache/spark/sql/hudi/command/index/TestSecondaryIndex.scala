@@ -300,7 +300,11 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
         // Step 1: Initial Insertion of Records
         val dataGen = new HoodieTestDataGenerator()
-        val hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen)
+
+        var hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen)
+        // Since the same row_key could be generated for different partitions, which may cause troubles for SI,
+        // we use non-partition tables to reduce test flakiness.
+        hudiOpts.-(PARTITIONPATH_FIELD.key)
 
         // Verify initial state of secondary index
         val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
