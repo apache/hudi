@@ -2,7 +2,7 @@ name: Publish Hudi-Internal Daily Changelog Release
 
 on:
   schedule:
-    - cron: '0 16 * * *' # 4pm PST daily
+    - cron: '0 16 * * *' # 8am PST (4pm UTC) daily
   workflow_call:
   workflow_dispatch:
     inputs:
@@ -69,7 +69,12 @@ jobs:
           echo "Detected previous release version: $DETECTED_PREV_RELEASE_VERSION"
 
           # If the next release version is not provided or it is null/empty, auto-detect it:
-          if [ -z "${{ inputs.releaseVersion }}" ] || [ "${{ inputs.releaseVersion }}" == "auto-detect" ]; then
+          RELEASE_VERSION_INPUT="${{ inputs.releaseVersion }}"
+          if [ -z "$RELEASE_VERSION_INPUT" ]; then
+            echo "release version is empty."
+            RELEASE_VERSION_INPUT="auto-detect"
+          fi
+          if [ "$RELEASE_VERSION_INPUT" == "auto-detect" ]; then
               # Use this to bump the major version.
               RELEASE_MAJOR_VERSION="1"
               RELEASE_MINOR_VERSION="${{ steps.determine-hudi-release-version.outputs.CALCULATED_MINOR_VERSION }}"
@@ -78,7 +83,7 @@ jobs:
               # Construct the final release version
               RELEASE_VERSION="${RELEASE_MAJOR_VERSION}.${RELEASE_MINOR_VERSION}.${RELEASE_PATCH_VERSION}"
           else
-              RELEASE_VERSION="${{ inputs.releaseVersion }}"
+              RELEASE_VERSION="$RELEASE_VERSION_INPUT"
           fi
 
           # Check if the release version is greater than the previous release version
@@ -199,12 +204,12 @@ jobs:
           gh pr create \
             --base master \
             --head "$CHANGELOG_BRANCH_NAME" \
-            --title "${{ inputs.auditNumber }}: Changelog for $RELEASE_BRANCH_NAME" \
+            --title "$AUDIT_NUMBER: Changelog for $RELEASE_BRANCH_NAME" \
             --body "Auto-created PR to update the changelog for release $RELEASE_VERSION." \
           
           # Set auto-merge only if the release version is auto-detected. If someone is running this manually,
           # we should not auto-merge the PR.
-          if [ "${{ inputs.releaseVersion }}" == "auto-detect" ]; then
+          if [ "$RELEASE_VERSION_INPUT" == "auto-detect" ]; then
             PR_NUMBER=$(gh pr view --json number -q ".number")
             gh pr merge $PR_NUMBER --auto --delete-branch --squash
           fi
