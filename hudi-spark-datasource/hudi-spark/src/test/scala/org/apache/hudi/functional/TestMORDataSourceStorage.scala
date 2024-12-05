@@ -241,20 +241,31 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     val metaClient = HoodieTestUtils.createMetaClient(storage.getConf, basePath)
     // Upsert
-    for (i <- 1 to 2) {
+    for (i <- 1 to 3) {
       // Generate some deletes so that if the record positions are still enabled during pending
       // compaction, the positions of the log files generated for the base file under pending
       // compaction can be wrong.
-      val updates2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 10)).asScala.toList
-      val deletes2 = recordsToStrings(dataGen.generateUniqueDeleteRecords("002", 20)).asScala.toList
-      val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(updates2, 2))
-        .union(spark.read.json(spark.sparkContext.parallelize(deletes2, 2)))
+      val updates2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 5)).asScala.toList
+      val deletes2 = recordsToStrings(dataGen.generateUniqueDeleteRecords("002", 15)).asScala.toList
+      val inputDF2: Dataset[Row] =
+        if (i == 3) {
+          spark.read.json(spark.sparkContext.parallelize(deletes2, 2))
+        } else {
+          spark.read.json(spark.sparkContext.parallelize(updates2, 2))
+            .union(spark.read.json(spark.sparkContext.parallelize(deletes2, 2)))
+        }
       inputDF2.write.format("hudi")
         .options(optionWithoutCompactionExecution)
+        .option(DataSourceWriteOptions.OPERATION.key,
+          if (i == 3) {
+            DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL
+          } else {
+            DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL
+          })
         .mode(SaveMode.Append)
         .save(basePath)
 
-      assertEquals(100 - i * 20, spark.read.format("hudi")
+      assertEquals(100 - i * 15, spark.read.format("hudi")
         .option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key, "true").load(basePath).count())
       // Compaction should be scheduled and pending
       assertEquals(1,
@@ -262,35 +273,46 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       assertEquals(i + 1, metaClient.getActiveTimeline.getDeltaCommitTimeline.countInstants())
       // The deltacommit from the first round should write record positions in the log files
       // since it happens before the pending compaction.
-      // The deltacommit from the second round should not write record positions in the log files
-      // since it happens after the pending compaction
+      // The deltacommit from the second and third round should not write record positions in the
+      // log files since it happens after the pending compaction
       validateRecordPositionsInLogFiles(
         metaClient, shouldContainRecordPosition = !enableNBCC && i == 1)
     }
 
-    for (i <- 3 to 4) {
+    for (i <- 4 to 6) {
       // Trigger compaction execution
-      val updates3 = recordsToStrings(dataGen.generateUniqueUpdates("004", 10)).asScala.toList
-      val deletes3 = recordsToStrings(dataGen.generateUniqueDeleteRecords("004", 20)).asScala.toList
-      val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(updates3, 2))
-        .union(spark.read.json(spark.sparkContext.parallelize(deletes3, 2)))
+      val updates3 = recordsToStrings(dataGen.generateUniqueUpdates("004", 5)).asScala.toList
+      val deletes3 = recordsToStrings(dataGen.generateUniqueDeleteRecords("004", 15)).asScala.toList
+      val inputDF3: Dataset[Row] =
+        if (i == 3) {
+          spark.read.json(spark.sparkContext.parallelize(deletes3, 2))
+        } else {
+          spark.read.json(spark.sparkContext.parallelize(updates3, 2))
+            .union(spark.read.json(spark.sparkContext.parallelize(deletes3, 2)))
+        }
       inputDF3.write.format("hudi")
         .options(optionWithCompactionExecution)
+        .option(DataSourceWriteOptions.OPERATION.key,
+          if (i == 3) {
+            DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL
+          } else {
+            DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL
+          })
         .mode(SaveMode.Append)
         .save(basePath)
 
-      assertEquals(100 - i * 20, spark.read.format("hudi")
+      assertEquals(100 - i * 15, spark.read.format("hudi")
         .option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key, "true").load(basePath).count())
       // Compaction should complete
       assertTrue(metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().empty())
       assertEquals(1, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.countInstants())
       assertEquals(i + 1, metaClient.getActiveTimeline.getDeltaCommitTimeline.countInstants())
-      // The deltacommit from the third round should not write record positions in the log files
+      // The deltacommit from the forth round should not write record positions in the log files
       // since it happens before the compaction is executed.
-      // The deltacommit from the fourth round should write record positions in the log files
-      // since it happens after the completed compaction
+      // The deltacommit from the fifth and sixth round should write record positions in the log
+      // files since it happens after the completed compaction
       validateRecordPositionsInLogFiles(
-        metaClient, shouldContainRecordPosition = !enableNBCC && i == 4)
+        metaClient, shouldContainRecordPosition = !enableNBCC && i != 4)
     }
   }
 
