@@ -33,7 +33,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -759,20 +758,5 @@ public class TestHoodieAvroUtils {
     assertTrue(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD)));
     assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES)));
     assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(EXAMPLE_SCHEMA)));
-  }
-
-  @Test
-  void testContainsUnsupportedTypesForFileGroupReader() {
-    assertTrue(HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(HoodieTestDataGenerator.AVRO_SCHEMA));
-    assertFalse(HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD)));
-    Schema nestedMapEnum = Schema.createRecord("nestedMap", null, null, false, Arrays.asList(
-        new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
-        new Schema.Field("nested", Schema.createUnion(Schema.create(Schema.Type.NULL),
-            Schema.createRecord("nestedSchema", null, null, false,
-                Collections.singletonList(new Schema.Field("mapField", Schema.createMap(Schema.createEnum("enumField", "", "",
-                    Arrays.asList("item1", "item2", "item3"))), null, null)
-                ))), null, null)
-    ));
-    assertTrue(HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(nestedMapEnum));
   }
 }
