@@ -255,15 +255,10 @@ spark-submit \
 
 Asynchronous indexing feature is still evolving. Few points to note from deployment perspective while running the indexer:
 
-- While an index can be created concurrently with ingestion, it cannot be dropped concurrently. Please stop all writers
-  before dropping an index.
 - Files index is created by default as long as the metadata table is enabled.
 - Trigger indexing for one metadata partition (or index type) at a time.
-- If an index is enabled via async HoodieIndexer, then ensure that index is also enabled in configs corresponding to regular ingestion writers. Otherwise, metadata writer will
+- If an index is enabled via async indexing, then ensure that index is also enabled in configs corresponding to regular ingestion writers. Otherwise, metadata writer will
   think that particular index was disabled and cleanup the metadata partition.
-- In the case of multi-writers, enable async index and specific index config for all writers.
-- Unlike other table services like compaction and clustering, where we have a separate configuration to run inline, there is no such inline config here.
-  For example, if async indexing is disabled and metadata is enabled along with column stats index type, then both files and column stats index will be created synchronously with ingestion.
 
 Some of these limitations will be removed in the upcoming releases. Please
 follow [HUDI-2488](https://issues.apache.org/jira/browse/HUDI-2488) for developments on this feature.
