@@ -106,7 +106,7 @@ public class RunCompactionActionExecutor<T> extends
       }
 
       HoodieData<WriteStatus> statuses = compactor.compact(
-          context, compactionPlan, table, configCopy, instantTime, compactionHandler);
+          context, operationType, compactionPlan, table, configCopy, instantTime, compactionHandler);
 
       compactor.maybePersist(statuses, context, config, instantTime);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());

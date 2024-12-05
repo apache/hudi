@@ -102,7 +102,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    * Execute compaction operations and report back status.
    */
   public HoodieData<WriteStatus> compact(
-      HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
+      HoodieEngineContext context, WriteOperationType operationType,
+      HoodieCompactionPlan compactionPlan,
       HoodieTable table, HoodieWriteConfig config, String compactionInstantTime,
       HoodieCompactionHandler compactionHandler) {
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
@@ -145,6 +146,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader()   // the engine needs to support fg reader first
         && !metaClient.isMetadataTable()
         && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+        && operationType == WriteOperationType.COMPACT
         && !hasBootstrapFile(operations)                                            // bootstrap file read for fg reader is not ready
         && StringUtils.isNullOrEmpty(config.getInternalSchema())                    // schema evolution support for fg reader is not ready
         && config.populateMetaFields();                                             // Virtual key support by fg reader is not ready
