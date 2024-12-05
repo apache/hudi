@@ -36,6 +36,7 @@ public class HoodieReadStats implements Serializable {
   private long numUpdates = 0L;
   // Total number of records deleted
   protected long numDeletes;
+  protected long totalLogReadTimeMs;
 
   public HoodieReadStats() {
   }
@@ -58,6 +59,10 @@ public class HoodieReadStats implements Serializable {
     return numDeletes;
   }
 
+  public long getTotalLogReadTimeMs() {
+    return totalLogReadTimeMs;
+  }
+
   public void incrementNumInserts() {
     numInserts++;
   }
@@ -68,5 +73,9 @@ public class HoodieReadStats implements Serializable {
 
   public void incrementNumDeletes() {
     numDeletes++;
+  }
+
+  public void setTotalLogReadTimeMs(long totalLogReadTimeMs) {
+    this.totalLogReadTimeMs = totalLogReadTimeMs;
   }
 }

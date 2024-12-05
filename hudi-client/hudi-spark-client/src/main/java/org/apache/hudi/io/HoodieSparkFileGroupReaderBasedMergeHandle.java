@@ -20,6 +20,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -82,6 +83,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
   protected HoodieReaderContext readerContext;
   protected FileSlice fileSlice;
   protected Configuration conf;
+  protected HoodieReadStats readStats;
 
   public HoodieSparkFileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                     CompactionOperation operation, TaskContextSupplier taskContextSupplier,
@@ -225,11 +227,11 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
 
         // The stats of inserts, updates, and deletes are updated once at the end
         // These will be set in the write stat when closing the merge handle
-        HoodieReadStats stats = fileGroupReader.getStats();
-        this.insertRecordsWritten = stats.getNumInserts();
-        this.updatedRecordsWritten = stats.getNumUpdates();
-        this.recordsDeleted = stats.getNumDeletes();
-        this.recordsWritten = stats.getNumInserts() + stats.getNumUpdates();
+        this.readStats = fileGroupReader.getStats();
+        this.insertRecordsWritten = readStats.getNumInserts();
+        this.updatedRecordsWritten = readStats.getNumUpdates();
+        this.recordsDeleted = readStats.getNumDeletes();
+        this.recordsWritten = readStats.getNumInserts() + readStats.getNumUpdates();
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
@@ -264,5 +266,18 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
   @Override
   protected void writeIncomingRecords() {
     // no operation.
+  }
+
+  @Override
+  public List<WriteStatus> close() {
+    try {
+      super.close();
+      if (writeStatus.getStat().getRuntimeStats() != null) {
+        writeStatus.getStat().getRuntimeStats().setTotalScanTime(readStats.getTotalLogReadTimeMs());
+      }
+      return Collections.singletonList(writeStatus);
+    } catch (Exception e) {
+      throw new HoodieUpsertException("Failed to close HoodieSparkFileGroupReaderBasedMergeHandle", e);
+    }
   }
 }

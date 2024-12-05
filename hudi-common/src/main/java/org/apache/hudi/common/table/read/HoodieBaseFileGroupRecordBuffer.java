@@ -90,7 +90,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected final Option<String> payloadClass;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> records;
-  protected final HoodieReadStats readerStats;
+  protected final HoodieReadStats readStats;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
   protected T nextRecord;
@@ -103,7 +103,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                          RecordMergeMode recordMergeMode,
                                          Option<String> partitionNameOverrideOpt,
                                          Option<String[]> partitionPathFieldOpt,
-                                         TypedProperties props) {
+                                         TypedProperties props,
+                                         HoodieReadStats readStats) {
     this.readerContext = readerContext;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.partitionNameOverrideOpt = partitionNameOverrideOpt;
@@ -127,7 +128,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT));
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
-    this.readerStats = new HoodieReadStats();
+    this.readStats = readStats;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
@@ -140,11 +141,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   @Override
   public void setBaseFileIterator(ClosableIterator<T> baseFileIterator) {
     this.baseFileIterator = baseFileIterator;
-  }
-
-  @Override
-  public HoodieReadStats getStats() {
-    return readerStats;
   }
 
   /**
@@ -510,18 +506,18 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       if (resultRecord.isPresent()) {
         // Updates
         nextRecord = readerContext.seal(resultRecord.get());
-        readerStats.incrementNumUpdates();
+        readStats.incrementNumUpdates();
         return true;
       } else {
         // Deletes
-        readerStats.incrementNumDeletes();
+        readStats.incrementNumDeletes();
         return false;
       }
     }
 
     // Inserts
     nextRecord = readerContext.seal(baseRecord);
-    readerStats.incrementNumInserts();
+    readStats.incrementNumInserts();
     return true;
   }
 
