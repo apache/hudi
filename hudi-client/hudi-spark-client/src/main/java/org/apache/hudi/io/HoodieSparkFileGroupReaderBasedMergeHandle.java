@@ -272,6 +272,14 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
   public List<WriteStatus> close() {
     try {
       super.close();
+      writeStatus.getStat().setTotalLogReadTimeMs(readStats.getTotalLogReadTimeMs());
+      writeStatus.getStat().setTotalUpdatedRecordsCompacted(readStats.getTotalUpdatedRecordsCompacted());
+      writeStatus.getStat().setTotalLogFilesCompacted(readStats.getTotalLogFilesCompacted());
+      writeStatus.getStat().setTotalLogRecords(readStats.getTotalLogRecords());
+      writeStatus.getStat().setTotalLogBlocks(readStats.getTotalLogBlocks());
+      writeStatus.getStat().setTotalCorruptLogBlock(readStats.getTotalCorruptLogBlock());
+      writeStatus.getStat().setTotalRollbackBlocks(readStats.getTotalRollbackBlocks());
+
       if (writeStatus.getStat().getRuntimeStats() != null) {
         writeStatus.getStat().getRuntimeStats().setTotalScanTime(readStats.getTotalLogReadTimeMs());
       }

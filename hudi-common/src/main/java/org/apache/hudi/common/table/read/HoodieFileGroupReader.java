@@ -280,6 +280,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withRecordBuffer(recordBuffer)
         .build()) {
       readStats.setTotalLogReadTimeMs(logRecordReader.getTotalTimeTakenToReadAndMergeBlocks());
+      readStats.setTotalUpdatedRecordsCompacted(logRecordReader.getNumMergedRecordsInLog());
+      readStats.setTotalLogFilesCompacted(logRecordReader.getTotalLogFiles());
+      readStats.setTotalLogRecords(logRecordReader.getTotalLogRecords());
+      readStats.setTotalLogBlocks(logRecordReader.getTotalLogBlocks());
+      readStats.setTotalCorruptLogBlock(logRecordReader.getTotalCorruptBlocks());
+      readStats.setTotalRollbackBlocks(logRecordReader.getTotalRollbacks());
     }
   }
 
