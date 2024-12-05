@@ -456,8 +456,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     boolean canUseFileGroupReaderBasedClustering = getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         && clusteringOps.stream().allMatch(slice -> StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()))
-        && StringUtils.isNullOrEmpty(getWriteConfig().getInternalSchema())
-        && !HoodieAvroUtils.containsUnsupportedTypesForFileGroupReader(tableSchemaWithMetaFields);
+        && StringUtils.isNullOrEmpty(getWriteConfig().getInternalSchema());
 
     if (canUseFileGroupReaderBasedClustering) {
       return readRecordsForGroupAsRowWithFileGroupReader(jsc, instantTime, tableSchemaWithMetaFields, clusteringOps);
