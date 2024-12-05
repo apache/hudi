@@ -242,7 +242,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             Comparable incomingOrderingValue = readerContext.getOrderingValue(
                 Option.of(record), metadata, readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
             if (incomingOrderingValue.compareTo(existingOrderingValue) > 0) {
-              return Option.of(Pair.of(isDeleteRecord(Option.of(record), (Schema) metadata.get(INTERNAL_META_SCHEMA_ID))
+              return Option.of(Pair.of(isDeleteRecord(Option.of(record), readerContext.getSchemaHandler().decodeAvroSchema(metadata.get(INTERNAL_META_SCHEMA_ID)))
                   ? Option.empty() : Option.of(record), metadata));
             }
             return Option.empty();
@@ -392,7 +392,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected Option<T> merge(Option<T> older, Map<String, Object> olderInfoMap,
                             Option<T> newer, Map<String, Object> newerInfoMap) throws IOException {
     if (!older.isPresent()) {
-      return isDeleteRecord(newer, (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA_ID)) ? Option.empty() : newer;
+      return isDeleteRecord(newer, readerContext.getSchemaHandler().decodeAvroSchema(newerInfoMap.get(INTERNAL_META_SCHEMA_ID))) ? Option.empty() : newer;
     }
 
     if (enablePartialMerging) {
@@ -414,7 +414,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     } else {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
-          return isDeleteRecord(newer, (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA_ID)) ? Option.empty() : newer;
+          return isDeleteRecord(newer, readerContext.getSchemaHandler().decodeAvroSchema(newerInfoMap.get(INTERNAL_META_SCHEMA_ID))) ? Option.empty() : newer;
         case EVENT_TIME_ORDERING:
           Comparable newOrderingValue = readerContext.getOrderingValue(
               newer, newerInfoMap, readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
@@ -425,9 +425,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
               older, olderInfoMap, readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
           if (!isDeleteRecordWithNaturalOrder(older, oldOrderingValue)
               && oldOrderingValue.compareTo(newOrderingValue) > 0) {
-            return isDeleteRecord(older, (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA_ID)) ? Option.empty() : older;
+            return isDeleteRecord(older, readerContext.getSchemaHandler().decodeAvroSchema(olderInfoMap.get(INTERNAL_META_SCHEMA_ID))) ? Option.empty() : older;
           }
-          return isDeleteRecord(newer, (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA_ID)) ? Option.empty() : newer;
+          return isDeleteRecord(newer, readerContext.getSchemaHandler().decodeAvroSchema(newerInfoMap.get(INTERNAL_META_SCHEMA_ID))) ? Option.empty() : newer;
         case CUSTOM:
         default:
           if (payloadClass.isPresent()) {
