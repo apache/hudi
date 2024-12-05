@@ -155,7 +155,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       LOG.info("RDD PreppedRecords was persisted at: " + inputRDD.getStorageLevel());
     }
 
-    disableWriteRecordPositionsWithPendingCompaction();
+    maybeDisableWriteRecordPositions();
 
     // Handle records update with clustering
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);

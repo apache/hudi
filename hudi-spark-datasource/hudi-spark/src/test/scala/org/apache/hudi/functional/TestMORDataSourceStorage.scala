@@ -22,14 +22,15 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieLogFile}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieLogFile, HoodieTableType, WriteConcurrencyMode}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.index.HoodieIndex.IndexType.{BUCKET, SIMPLE}
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
@@ -42,7 +43,7 @@ import org.apache.spark.sql.functions.{col, lit}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.collection.JavaConverters._
 
@@ -189,8 +190,9 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     assertEquals(1, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.countInstants())
   }
 
-  @Test
-  def testAutoDisablingRecordPositionsUnderPendingCompaction(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testAutoDisablingRecordPositionsUnderPendingCompaction(enableNBCC: Boolean): Unit = {
     val options = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -201,8 +203,15 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
-    )
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieIndexConfig.INDEX_TYPE.key -> (if (enableNBCC) BUCKET.name else SIMPLE.name),
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> (
+        if (enableNBCC) {
+          WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name
+        } else {
+          WriteConcurrencyMode.SINGLE_WRITER.name
+        }),
+      HoodieTableConfig.TYPE.key -> HoodieTableType.MERGE_ON_READ.name())
     val optionWithoutCompactionExecution = options ++ Map(
       HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
       HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key -> "true",
@@ -255,7 +264,8 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       // since it happens before the pending compaction.
       // The deltacommit from the second round should not write record positions in the log files
       // since it happens after the pending compaction
-      validateRecordPositionsInLogFiles(metaClient, shouldContainRecordPosition = i == 1)
+      validateRecordPositionsInLogFiles(
+        metaClient, shouldContainRecordPosition = !enableNBCC && i == 1)
     }
 
     for (i <- 3 to 4) {
@@ -279,7 +289,8 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       // since it happens before the compaction is executed.
       // The deltacommit from the fourth round should write record positions in the log files
       // since it happens after the completed compaction
-      validateRecordPositionsInLogFiles(metaClient, shouldContainRecordPosition = i == 4)
+      validateRecordPositionsInLogFiles(
+        metaClient, shouldContainRecordPosition = !enableNBCC && i == 4)
     }
   }
 
