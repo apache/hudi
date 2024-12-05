@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewS
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.CompactionUtils
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.metadata.HoodieTableMetadata
 
 import org.apache.avro.Schema
@@ -64,6 +65,17 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test partial update and insert with MOR and Parquet log format") {
     testPartialUpdateWithInserts("mor", "parquet")
+  }
+
+  test("Test partial update with schema on read enabled") {
+    withSQLConf(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key() -> "true") {
+      try {
+        testPartialUpdate("mor", "parquet")
+        fail("Expected exception to be thrown")
+      } catch {
+        case t: Throwable => assertTrue(t.isInstanceOf[HoodieNotSupportedException])
+      }
+    }
   }
 
   test("Test fallback to full update with MOR even if partial updates are enabled") {
