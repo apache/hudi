@@ -34,7 +34,8 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 /**
- * Record merger for spark that implements the default merger strategy
+ * Record merger for spark that implements the default merger strategy,
+ * which should be EVENT_TIME_ORDERING based.
  */
 public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
@@ -48,31 +49,6 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
 
-    if (newer instanceof HoodieSparkRecord) {
-      HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
-      if (newSparkRecord.isDelete(newSchema, props)) {
-        // Delete record
-        return Option.empty();
-      }
-    } else {
-      if (newer.getData() == null) {
-        // Delete record
-        return Option.empty();
-      }
-    }
-
-    if (older instanceof HoodieSparkRecord) {
-      HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
-      if (oldSparkRecord.isDelete(oldSchema, props)) {
-        // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    } else {
-      if (older.getData() == null) {
-        // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    }
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
       return Option.of(Pair.of(older, oldSchema));
     } else {
@@ -85,31 +61,6 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
 
-    if (newer instanceof HoodieSparkRecord) {
-      HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
-      if (newSparkRecord.isDelete(newSchema, props)) {
-        // Delete record
-        return Option.empty();
-      }
-    } else {
-      if (newer.getData() == null) {
-        // Delete record
-        return Option.empty();
-      }
-    }
-
-    if (older instanceof HoodieSparkRecord) {
-      HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
-      if (oldSparkRecord.isDelete(oldSchema, props)) {
-        // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    } else {
-      if (older.getData() == null) {
-        // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    }
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
       return Option.of(SparkRecordMergingUtils.mergePartialRecords(
           (HoodieSparkRecord) newer, newSchema, (HoodieSparkRecord) older, oldSchema, readerSchema, props));
