@@ -92,48 +92,6 @@ public class HoodieWriteStat extends HoodieReadStats {
   private String partitionPath;
 
   /**
-   * Total number of log records that were compacted by a compaction operation.
-   */
-  @Nullable
-  private long totalLogRecords;
-
-  /**
-   * Total number of log files compacted for a file slice with this base fileid.
-   */
-  @Nullable
-  private long totalLogFilesCompacted;
-
-  /**
-   * Total size of all log files for a file slice with this base fileid.
-   */
-  @Nullable
-  private long totalLogSizeCompacted;
-
-  /**
-   * Total number of records updated by a compaction operation.
-   */
-  @Nullable
-  private long totalUpdatedRecordsCompacted;
-
-  /**
-   * Total number of log blocks seen in a compaction operation.
-   */
-  @Nullable
-  private long totalLogBlocks;
-
-  /**
-   * Total number of corrupt blocks seen in a compaction operation.
-   */
-  @Nullable
-  private long totalCorruptLogBlock;
-
-  /**
-   * Total number of rollback blocks seen in a compaction operation.
-   */
-  @Nullable
-  private long totalRollbackBlocks;
-
-  /**
    * File Size as of close.
    */
   private long fileSizeInBytes;
@@ -241,30 +199,6 @@ public class HoodieWriteStat extends HoodieReadStats {
     this.partitionPath = partitionPath;
   }
 
-  public long getTotalLogRecords() {
-    return totalLogRecords;
-  }
-
-  public void setTotalLogRecords(long totalLogRecords) {
-    this.totalLogRecords = totalLogRecords;
-  }
-
-  public long getTotalLogFilesCompacted() {
-    return totalLogFilesCompacted;
-  }
-
-  public void setTotalLogFilesCompacted(long totalLogFilesCompacted) {
-    this.totalLogFilesCompacted = totalLogFilesCompacted;
-  }
-
-  public long getTotalUpdatedRecordsCompacted() {
-    return totalUpdatedRecordsCompacted;
-  }
-
-  public void setTotalUpdatedRecordsCompacted(long totalUpdatedRecordsCompacted) {
-    this.totalUpdatedRecordsCompacted = totalUpdatedRecordsCompacted;
-  }
-
   public void setTempPath(String tempPath) {
     this.tempPath = tempPath;
   }
@@ -272,39 +206,7 @@ public class HoodieWriteStat extends HoodieReadStats {
   public String getTempPath() {
     return this.tempPath;
   }
-
-  public long getTotalLogSizeCompacted() {
-    return totalLogSizeCompacted;
-  }
-
-  public void setTotalLogSizeCompacted(long totalLogSizeCompacted) {
-    this.totalLogSizeCompacted = totalLogSizeCompacted;
-  }
-
-  public long getTotalLogBlocks() {
-    return totalLogBlocks;
-  }
-
-  public void setTotalLogBlocks(long totalLogBlocks) {
-    this.totalLogBlocks = totalLogBlocks;
-  }
-
-  public long getTotalCorruptLogBlock() {
-    return totalCorruptLogBlock;
-  }
-
-  public void setTotalCorruptLogBlock(long totalCorruptLogBlock) {
-    this.totalCorruptLogBlock = totalCorruptLogBlock;
-  }
-
-  public long getTotalRollbackBlocks() {
-    return totalRollbackBlocks;
-  }
-
-  public void setTotalRollbackBlocks(long totalRollbackBlocks) {
-    this.totalRollbackBlocks = totalRollbackBlocks;
-  }
-
+  
   public long getFileSizeInBytes() {
     return fileSizeInBytes;
   }

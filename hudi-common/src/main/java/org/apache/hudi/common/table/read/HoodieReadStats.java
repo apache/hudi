@@ -36,6 +36,22 @@ public class HoodieReadStats implements Serializable {
   private long numUpdates = 0L;
   // Total number of records deleted
   protected long numDeletes;
+  // Time reading and merging all records from the log files
+  protected long totalLogReadTimeMs;
+  // Total number of log records that were compacted by a compaction operation
+  protected long totalLogRecords;
+  // Total number of log files compacted for a file slice with this base fileid
+  protected long totalLogFilesCompacted;
+  // Total size of all log files for a file slice with this base fileid
+  protected long totalLogSizeCompacted;
+  // Total number of records updated by a compaction operation
+  protected long totalUpdatedRecordsCompacted;
+  // Total number of log blocks seen in a compaction operation
+  protected long totalLogBlocks;
+  // Total number of corrupt blocks seen in a compaction operation
+  protected long totalCorruptLogBlock;
+  // Total number of rollback blocks seen in a compaction operation
+  protected long totalRollbackBlocks;
 
   public HoodieReadStats() {
   }
@@ -58,6 +74,38 @@ public class HoodieReadStats implements Serializable {
     return numDeletes;
   }
 
+  public long getTotalLogReadTimeMs() {
+    return totalLogReadTimeMs;
+  }
+
+  public long getTotalLogRecords() {
+    return totalLogRecords;
+  }
+
+  public long getTotalLogFilesCompacted() {
+    return totalLogFilesCompacted;
+  }
+
+  public long getTotalUpdatedRecordsCompacted() {
+    return totalUpdatedRecordsCompacted;
+  }
+
+  public long getTotalLogSizeCompacted() {
+    return totalLogSizeCompacted;
+  }
+
+  public long getTotalLogBlocks() {
+    return totalLogBlocks;
+  }
+
+  public long getTotalCorruptLogBlock() {
+    return totalCorruptLogBlock;
+  }
+
+  public long getTotalRollbackBlocks() {
+    return totalRollbackBlocks;
+  }
+
   public void incrementNumInserts() {
     numInserts++;
   }
@@ -68,5 +116,37 @@ public class HoodieReadStats implements Serializable {
 
   public void incrementNumDeletes() {
     numDeletes++;
+  }
+
+  public void setTotalLogReadTimeMs(long totalLogReadTimeMs) {
+    this.totalLogReadTimeMs = totalLogReadTimeMs;
+  }
+
+  public void setTotalLogRecords(long totalLogRecords) {
+    this.totalLogRecords = totalLogRecords;
+  }
+
+  public void setTotalLogFilesCompacted(long totalLogFilesCompacted) {
+    this.totalLogFilesCompacted = totalLogFilesCompacted;
+  }
+
+  public void setTotalUpdatedRecordsCompacted(long totalUpdatedRecordsCompacted) {
+    this.totalUpdatedRecordsCompacted = totalUpdatedRecordsCompacted;
+  }
+
+  public void setTotalLogSizeCompacted(long totalLogSizeCompacted) {
+    this.totalLogSizeCompacted = totalLogSizeCompacted;
+  }
+
+  public void setTotalLogBlocks(long totalLogBlocks) {
+    this.totalLogBlocks = totalLogBlocks;
+  }
+
+  public void setTotalCorruptLogBlock(long totalCorruptLogBlock) {
+    this.totalCorruptLogBlock = totalCorruptLogBlock;
+  }
+
+  public void setTotalRollbackBlocks(long totalRollbackBlocks) {
+    this.totalRollbackBlocks = totalRollbackBlocks;
   }
 }
