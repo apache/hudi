@@ -33,6 +33,7 @@ import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, 
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, Literal}
 import org.apache.spark.sql.types.StringType
@@ -42,6 +43,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.io.File
+
 import scala.collection.JavaConverters._
 
 class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
@@ -145,7 +147,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       PRECOMBINE_FIELD.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> "COMMIT_TIME_ORDERING"
     ) ++ metadataOpts
     setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true)
     val lastDf = dfList.last

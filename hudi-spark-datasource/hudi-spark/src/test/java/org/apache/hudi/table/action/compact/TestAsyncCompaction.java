@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.table.action.compact;
@@ -45,8 +46,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -237,8 +238,10 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
       // validate the compaction plan does not include pending log files.
       HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
-          metaClient.reloadActiveTimeline().readCompactionPlanAsBytes(INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime)).get());
-      assertTrue(compactionPlan.getOperations().stream().noneMatch(op -> op.getDeltaFilePaths().stream().anyMatch(deltaFile -> deltaFile.contains(pendingInstantTime))),
+          metaClient.reloadActiveTimeline()
+              .readCompactionPlanAsBytes(INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime)).get());
+      assertTrue(compactionPlan.getOperations().stream()
+              .noneMatch(op -> op.getDeltaFilePaths().stream().anyMatch(deltaFile -> deltaFile.contains(pendingInstantTime))),
           "compaction plan should not include pending log files");
 
       // execute inflight compaction.
@@ -329,11 +332,13 @@ public class TestAsyncCompaction extends CompactionTestBase {
     assertNull(tryScheduleCompaction(compactionInstantTime, client, cfg), "Compaction Instant can be scheduled with older timestamp");
 
     // Schedule with timestamp same as that of committed instant
-    assertNull(tryScheduleCompaction(secondInstantTime, client, cfg), "Compaction Instant to be scheduled can have same timestamp as committed instant");
+    assertNull(tryScheduleCompaction(secondInstantTime, client, cfg),
+        "Compaction Instant to be scheduled can have same timestamp as committed instant");
 
     final String compactionInstantTime2 = client.createNewInstantTime();
     // Schedule compaction but do not run them
-    assertNotNull(tryScheduleCompaction(compactionInstantTime2, client, cfg), "Compaction Instant can be scheduled with greater timestamp");
+    assertNotNull(tryScheduleCompaction(compactionInstantTime2, client, cfg),
+        "Compaction Instant can be scheduled with greater timestamp");
   }
 
   @Test
@@ -407,7 +412,8 @@ public class TestAsyncCompaction extends CompactionTestBase {
       metaClient.reloadActiveTimeline();
       HoodieInstant pendingCompactionInstant =
           metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
-      assertEquals(compactionInstantTime, pendingCompactionInstant.requestedTime(), "Pending Compaction instant has expected instant time");
+      assertEquals(compactionInstantTime, pendingCompactionInstant.requestedTime(),
+          "Pending Compaction instant has expected instant time");
 
       Set<HoodieFileGroupId> fileGroupsBeforeReplace = getAllFileGroups(hoodieTable, dataGen.getPartitionPaths());
       // replace by using insertOverwrite

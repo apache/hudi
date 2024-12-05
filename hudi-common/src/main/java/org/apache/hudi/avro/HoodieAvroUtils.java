@@ -1488,4 +1488,31 @@ public class HoodieAvroUtils {
     }
   }
 
+  /**
+   * Returns whether the schema contains types not supported by the file group reader.
+   * Right now only ENUM type in Avro has known issues.
+   *
+   * @param schema Avro schema
+   *
+   * @return whether the schema contains types not supported by the file group reader.
+   */
+  public static boolean containsUnsupportedTypesForFileGroupReader(Schema schema) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (Field field : schema.getFields()) {
+          if (containsUnsupportedTypesForFileGroupReader(field.schema())) {
+            return true;
+          }
+        }
+        return false;
+      case ARRAY:
+        return containsUnsupportedTypesForFileGroupReader(schema.getElementType());
+      case MAP:
+        return containsUnsupportedTypesForFileGroupReader(schema.getValueType());
+      case UNION:
+        return containsUnsupportedTypesForFileGroupReader(getActualSchemaFromUnion(schema, null));
+      default:
+        return schema.getType() == Schema.Type.ENUM;
+    }
+  }
 }
