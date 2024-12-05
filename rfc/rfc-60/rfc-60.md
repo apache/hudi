@@ -179,69 +179,15 @@ public interface HoodieStorageStrategy extends Serializable {
    * @param path
    * @return relative path
    */
-  String getRelativePath(Path path);
-}
-```
-
-```java
-public class HoodieStorageStrategyFactory {
-  private HoodieStorageStrategyFactory() {
-  }
-
-  public static HoodieStorageStrategy getInstant(HoodieTableMetaClient metaClient, Boolean reset) {
-    HoodieTableConfig config = metaClient.getTableConfig();
-    if (reset) {
-      return getInstant(HoodieStorageStrategyType.DEFAULT.value, metaClient.getBasePath(), config.getStoragePath(), metaClient);
-    }
-    return getInstant(config.getStorageStrategy(), metaClient.getBasePath(), config.getStoragePath(), metaClient);
-  }
-
-  public static HoodieStorageStrategy getInstant(HoodieTableMetaClient metaClient) {
-    return getInstant(metaClient, false);
-  }
-
-  /**
-   *  Just for HoodieParquetInputFormatBase
-   * @param config
-   * @param basePath
-   * @return
-   */
-  public static HoodieStorageStrategy getInstant(HoodieTableConfig config, String basePath, Boolean reset) {
-    if (reset) {
-      return getInstant(HoodieStorageStrategyType.DEFAULT.value, basePath, config.getStoragePath(), null);
-    }
-    return getInstant(config.getStorageStrategy(), basePath, config.getStoragePath(), null);
-  }
-
-  private static HoodieStorageStrategy getInstant(
-      String storageStrategyClass,
-      String basePath,
-      String storagePath, HoodieTableMetaClient metaClient) {
-    return (HoodieStorageStrategy) ReflectionUtils.loadClass(storageStrategyClass,
-        basePath, storagePath, metaClient == null ? Option.empty() : Option.of(metaClient));
-  }
-}
-```
-
-```java
-public enum HoodieStorageStrategyType {
-  DEFAULT(HoodieDefaultStorageStrategy.class.getName()),
-  CACHE_LAYER(HoodieCacheLayerStorageStrategy.class.getName()),
-  OBJECT_STORAGE_STRATEGY(ObjectStorageStrategy.class.getName());
-
-  public final String value;
-
-  HoodieStorageStrategyType(String strategy) {
-    this.value = strategy;
-  }
+  StoragePath getRelativePath(Path path);
 }
 ```
 
 ### Case1: Generating File Paths for Object Store Optimized Layout
 
 We want to distribute files evenly across multiple random prefixes, instead of following the traditional Hive storage
-layout of keeping them under a common table path/prefix. In addition to the `Table Path`, for this new layout user will
-configure another `Table Storage Path` under which the actual data files will be distributed. The original `Table Path` will
+layout of keeping them under a common table path/prefix. In addition to the `Hoodie Base Path`, for this new layout user will
+configure another `Table Storage Path` using config `hoodie.storage.path` under which the actual data files will be distributed. The original `Table Path` will
 be used to maintain the table/partitions Hudi metadata.
 
 For the purpose of this documentation let's assume:
@@ -287,10 +233,12 @@ s3://<table_storage_bucket>/0bfb3d6e/<hudi_table_name>/.075f3295-def8-4a42-a927-
 ...
 ```
 
-Storage strategy would only return a storage location instead of a full path. In the above example,
-the storage location is `s3://<table_storage_bucket>/0bfb3d6e/`, and the lower-level folder structure would be appended
-later automatically to get the actual file path. In another word, 
-users would only be able to customize upper-level folder structure (storage location). 
+Storage strategy would append proper prefix based on input relative path abd return as StoragePath. In the above example,
+the storage location is `s3://<table_storage_bucket>/` (hoodie.storage.path),
+We first calculate the hash value based on the partition and file ID, then concatenate the final StoragePath in the format of 
+`prefix/hash/tablename/partition`. 
+
+In another word, users would only be able to customize upper-level folder structure (storage location).
 Having a fixed lower-level folder structure would be beneficial because:
 - It's much more intuitive in case someone needs to check data files
 - Easier to figure out where the data is when Hudi needs to fall back on file listing
@@ -360,16 +308,7 @@ risk of storage overflow in the cache layer.
  * 2. COW + Insert + Clustering
  */
 public class HoodieCacheLayerStorageStrategy extends HoodieDefaultStorageStrategy {
-
-  private HoodieTableType tableType;
-  private String hoodieStorageStrategyModifyTime;
-
-  /**
-   * Only support on Storage Path as cache layer
-   * @param basePath
-   * @param storagePath
-   * @param metaClient
-   */
+  
   public HoodieCacheLayerStorageStrategy(String basePath,
                                          String storagePath,
                                          Option<HoodieTableMetaClient> metaClient) {
@@ -389,51 +328,17 @@ public class HoodieCacheLayerStorageStrategy extends HoodieDefaultStorageStrateg
    */
   @Override
   public StoragePath storageLocation(String path, String instantTime) {
-    if (isCommonCommit(instantTime)) {
-      return FSUtils.getPartitionPath(storagePaths.get(0), path);
-    } else {
-      return FSUtils.getPartitionPath(basePath, path);
-    }
+    // 
   }
 
   @Override
   public Set<Path> getAllLocations(String partitionPath, boolean checkExist) {
-    return allLocationPrefix.stream().map(path -> {
-      return FSUtils.getPartitionPath(path, partitionPath);
-    }).filter(path -> {
-      if (checkExist) {
-        HoodieWrapperFileSystem fs = metaClient.get().getFs();
-        try {
-          return fs.exists(path);
-        } catch (IOException e) {
-          throw new HoodieIOException(e.getMessage(), e);
-        }
-      } else {
-        return true;
-      }
-    }).collect(Collectors.toSet());
+    // 
   }
 
   @Override
   public String getRelativePath(Path path) {
     // getRelativePath
-  }
-  
-  private boolean isCommonCommit(String instantTime) {
-    ValidationUtils.checkState(!metaClient.get().getActiveTimeline().isBeforeTimelineStarts(instantTime),
-        String.format("WHT? instant %s is before active time line start instant %s", instantTime, metaClient.get().getActiveTimeline().firstInstant()));
-    if (metaClient.get().getActiveTimeline().empty()) {
-      return true;
-    }
-    if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
-      return metaClient.get().getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(DELTA_COMMIT_ACTION))
-          .findInstantsAfter(hoodieStorageStrategyModifyTime)
-          .containsInstant(instantTime);
-    } else {
-      return metaClient.get().getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION))
-          .findInstantsAfter(hoodieStorageStrategyModifyTime)
-          .containsInstant(instantTime);
-    }
   }
 }
 ```
@@ -462,7 +367,7 @@ for metadata table to be populated.
 After enabling the Federated Storage Layout feature, under certain strategies such as the "data cache layer," 
 data from different lake tables may be stored on different physical media, resulting in different schemes. 
 For example, cache layer data may be stored on hdfs://ns1/, while persistent layer data is stored on hdfs://ns2/. 
-In this case, we need to add a new field named "scheme" in MDT HoodieMetadataFileInfo to store the scheme information for different files, 
+In this case, we need to add a new field named "prefix" in MDT HoodieMetadataFileInfo to store the prefix information for different files, 
 which will be used for path restoration.
 
 ```avro schema
@@ -488,9 +393,10 @@ which will be used for path restoration.
                                 "doc": "True if this file has been deleted"
                             },
                             {
-                                "name":"scheme",
+                                "name":"prefix",
                                 "type": ["null","string"],
-                                "default":null
+                                "default":null,
+                                "doc": "prefix for current file, for example hdfs://ns2002:8020/ or s3a://bucket/"
                             }
                         ]
                     }
@@ -509,6 +415,7 @@ We already have the abstractions HoodieStorage, StoragePath, and HoodieWrapperFi
 HoodieStorageStrategy member variable to HoodieStorage. This will allow HoodieStorage to generate the corresponding 
 StoragePath based on different strategies. Subsequent operations, such as HoodieCreateHandle, can directly work with 
 the modified StoragePath, thus remaining transparent to the subsequent code logic.
+
 For HoodieWrapperFileSystem, after enabling the Federated Storage Layout feature, a single HoodieWrapperFileSystem 
 instance will handle file objects with different schemes. Therefore, we need to cache the inner file systems corresponding 
 to different schemes within HoodieWrapperFileSystem. When necessary, the correct inner file system object can be retrieved 
