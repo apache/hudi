@@ -38,8 +38,7 @@ is tracked using internal tables. This approach provides the following advantage
 
 ## Types of table metadata
 
-Following are the different types of metadata currently supported. Please refer [SQL DDL](/docs/next/sql_ddl) to get more information
-on how to create these indexes.
+Following are the different types of metadata currently supported.
 
 - ***[files index](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+Improvements)***: 
   Stored as *files* partition in the metadata table. Contains file information such as file name, size, and active state
@@ -62,11 +61,6 @@ on how to create these indexes.
     hoodie.metadata.index.column.stats.columns=<comma-separated-column-names>
   ```
 
-- ***Secondary Index***
-  Secondary index is an index defined on user specified column of the table. It can only be created on non primary columns
-  of the table. The index stores a mapping between the indexed column and the corresponding records containing the indexed column
-  value. Multiple secondary indexes can be created on a single table and all these indexes are stored in partition with prefix
-  *secondary_index_* under metadata table.
 
 To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-and-secondary-index-experimental).
 
