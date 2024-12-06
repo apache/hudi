@@ -118,6 +118,11 @@ public class HoodieJavaDataFrame<T> implements HoodieData<T> {
   }
 
   @Override
+  public int deduceNumPartitions() {
+    return 0;
+  }
+
+  @Override
   public <O> HoodieData<O> map(SerializableFunction<T, O> func) {
     return null;
   }

@@ -810,7 +810,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PREFER_DATAFRAME_API = ConfigProperty
       .key("hoodie.datasource.write.prefer.dataframe")
-      .defaultValue(true)
+      .defaultValue(false)
       .withDocumentation("Field used tod determine whether RDD or DataFrame API should be used while writing the the data");
 
   /**

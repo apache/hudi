@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -37,6 +36,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.SparkConf;
@@ -54,6 +54,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
+
 /**
  * Provides an RDD based API for accessing/filtering Hoodie tables, based on keys.
  */
@@ -69,7 +71,7 @@ public class SparkDataFrameReadClient<T> implements Serializable {
   private HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
   private final transient HoodieSparkEngineContext context;
-  private final transient Configuration hadoopConf;
+  private final transient StorageConfiguration hadoopConf;
 
   /**
    * @param basePath path to Hoodie table
@@ -109,7 +111,7 @@ public class SparkDataFrameReadClient<T> implements Serializable {
    */
   public SparkDataFrameReadClient(HoodieSparkEngineContext context, HoodieWriteConfig clientConfig) {
     this.context = context;
-    this.hadoopConf = context.getHadoopConf().get();
+    this.hadoopConf = getStorageConf();
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
@@ -231,7 +233,7 @@ public class SparkDataFrameReadClient<T> implements Serializable {
         HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(hoodieTable.getMetaClient().getBasePath()).setLoadActiveTimelineOnLoad(true).build();
     return CompactionUtils.getAllPendingCompactionPlans(metaClient).stream()
         .map(
-            instantWorkloadPair -> Pair.of(instantWorkloadPair.getKey().getTimestamp(), instantWorkloadPair.getValue()))
+            instantWorkloadPair -> Pair.of(instantWorkloadPair.getKey().requestedTime(), instantWorkloadPair.getValue()))
         .collect(Collectors.toList());
   }
 }

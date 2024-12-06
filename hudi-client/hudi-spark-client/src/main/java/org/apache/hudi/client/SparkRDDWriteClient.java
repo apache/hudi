@@ -382,4 +382,20 @@ public class SparkRDDWriteClient<T> extends
   protected void releaseResources(String instantTime) {
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
   }
+
+  public Dataset<WriteStatus> postWriteDF(HoodieWriteMetadata<Dataset<WriteStatus>> result, String instantTime, HoodieTable hoodieTable) {
+    if (result.isCommitted()) {
+      // Perform post commit operations.
+      if (result.getFinalizeDuration().isPresent()) {
+        metrics.updateFinalizeWriteMetrics(result.getFinalizeDuration().get().toMillis(),
+            result.getWriteStats().get().size());
+      }
+
+      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+      mayBeCleanAndArchive(hoodieTable);
+
+      emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
+    }
+    return result.getWriteStatuses();
+  }
 }

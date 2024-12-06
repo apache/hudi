@@ -18,12 +18,15 @@
 
 package org.apache.hudi.table.action.commit
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.client.utils.{SparkPartitionUtils, SparkValidatorUtils}
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.timeline.HoodieInstant.State
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.common.util.{CommitUtils, Option}
@@ -32,6 +35,7 @@ import org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE
 import org.apache.hudi.data.HoodieJavaDataFrame
 import org.apache.hudi.exception.{HoodieCommitException, HoodieIOException, HoodieUpsertException}
 import org.apache.hudi.execution.SparkLazyInsertIterable
+import org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf
 import org.apache.hudi.io.{CreateHandleFactory, HoodieMergeHandle, HoodieMergeHandleFactory}
 import org.apache.hudi.keygen.BaseKeyGenerator
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -93,7 +97,7 @@ abstract class BaseSparkDataFrameCommitActionExecutor[T](context: HoodieEngineCo
     val workloadProfile = new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex.canIndexLogFiles)
     BaseSparkDataFrameCommitActionExecutor.LOG.debug("Input workload profile :" + workloadProfile)
     // partition using the insert partitioner
-    val partitioner = getPartitioner(workloadProfile)
+    val partitioner: org.apache.spark.Partitioner = getPartitioner(workloadProfile)
     saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime)
     context.setJobStatus(this.getClass.getSimpleName, "Doing partition and writing data: " + config.getTableName)
     val writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner)
@@ -258,7 +262,7 @@ abstract class BaseSparkDataFrameCommitActionExecutor[T](context: HoodieEngineCo
     result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds, extraMetadata, operationType, getSchemaToStoreInCommit, getCommitActionType)))
   }
 
-  override protected def commit(extraMetadata: Option[util.Map[String, String]], result: HoodieWriteMetadata[HoodieData[WriteStatus]]): Unit = {
+  protected def commit(extraMetadata: Option[util.Map[String, String]], result: HoodieWriteMetadata[HoodieData[WriteStatus]]): Unit = {
     context.setJobStatus(this.getClass.getSimpleName, "Commit write status collect: " + config.getTableName)
     val actionType = getCommitActionType
     BaseSparkDataFrameCommitActionExecutor.LOG.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType)
@@ -270,7 +274,8 @@ abstract class BaseSparkDataFrameCommitActionExecutor[T](context: HoodieEngineCo
       val activeTimeline: HoodieActiveTimeline = table.getActiveTimeline
       val metadata = result.getCommitMetadata.get
       writeTableMetadata(metadata, actionType)
-      activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType, instantTime), Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
+      activeTimeline.saveAsComplete(table.getMetaClient.createNewInstant(State.INFLIGHT, actionType, instantTime),
+        serializeCommitMetadata(table.getMetaClient.getCommitMetadataSerDe, metadata))
       BaseSparkDataFrameCommitActionExecutor.LOG.info("Committed " + instantTime)
       result.setCommitMetadata(Option.of(metadata))
     } catch {
@@ -334,15 +339,15 @@ abstract class BaseSparkDataFrameCommitActionExecutor[T](context: HoodieEngineCo
     else {
       if (upsertHandle.baseFileForMerge.getBootstrapBaseFile.isPresent) {
         val partitionFields = table.getMetaClient.getTableConfig.getPartitionFields
-        val partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath, table.getMetaClient.getTableConfig.getBootstrapBasePath.get, upsertHandle.getWriterSchema, table.getHadoopConf)
+        val partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath, table.getMetaClient.getTableConfig.getBootstrapBasePath.get, upsertHandle.getWriterSchema, getStorageConf.unwrapAs(classOf[Configuration]))
         upsertHandle.setPartitionFields(partitionFields)
         upsertHandle.setPartitionValues(partitionValues)
       }
       HoodieMergeHelper.newInstance.runMerge(table, upsertHandle)
     }
     // TODO(vc): This needs to be revisited
-    if (upsertHandle.getPartitionPath == null) BaseSparkDataFrameCommitActionExecutor.LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath + ", " + upsertHandle.writeStatuses)
-    Collections.singletonList(upsertHandle.writeStatuses).iterator
+    if (upsertHandle.getPartitionPath == null) BaseSparkDataFrameCommitActionExecutor.LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath + ", " + upsertHandle.getWriteStatusesAsIterator)
+    upsertHandle.getWriteStatusesAsIterator
   }
 
   override protected def getUpdateHandle(partitionPath: String, fileId: String, recordItr: util.Iterator[HoodieRecord[T]]): HoodieMergeHandle[_, _, _, _] = HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt)
