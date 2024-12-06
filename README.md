@@ -18,7 +18,7 @@
 
 # Apache Hudi
 
-Apache Hudi is a open data lakehouse platform, built on a high-performance open table format 
+Apache Hudi is an open data lakehouse platform, built on a high-performance open table format 
 to ingest, index, store, serve, transform and manage your data across multiple cloud data environments.
 
 <img src="https://hudi.apache.org/assets/images/hudi-logo-medium.png" alt="Hudi logo" height="80px" align="right" />
@@ -122,8 +122,8 @@ mvn clean javadoc:aggregate -Pjavadocs
 
 ### Build with different Spark versions
 
-The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version, corresponding to `spark3` profile is
-3.5.0. The default Scala version is 2.12. Scala 2.13 is supported for Spark 3.5 and above.
+The default Spark 3.x version, corresponding to `spark3` profile is
+3.5.3. The default Scala version is 2.12. Scala 2.13 is supported for Spark 3.5 and above.
 
 Refer to the table below for building with different Spark and Scala versions.
 
@@ -160,14 +160,16 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 1.18. The default Flink 1.18.x version, corresponding to `flink1.18` profile is 1.18.0.
+The default Flink version supported is 1.20. The default Flink 1.20.x version, corresponding to `flink1.20` profile is 1.20.0.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
 Refer to the table below for building with different Flink and Scala versions.
 
 | Maven build options | Expected Flink bundle jar name | Notes                            |
 |:--------------------|:-------------------------------|:---------------------------------|
-| (empty)             | hudi-flink1.18-bundle          | For Flink 1.18 (default options) |
-| `-Dflink1.18`       | hudi-flink1.18-bundle          | For Flink 1.18 (same as default) |
+| (empty)             | hudi-flink1.20-bundle          | For Flink 1.20 (default options) |
+| `-Dflink1.20`       | hudi-flink1.20-bundle          | For Flink 1.20 (same as default) |
+| `-Dflink1.19`       | hudi-flink1.19-bundle          | For Flink 1.19                   |
+| `-Dflink1.18`       | hudi-flink1.18-bundle          | For Flink 1.18                   |
 | `-Dflink1.17`       | hudi-flink1.17-bundle          | For Flink 1.17                   |
 | `-Dflink1.16`       | hudi-flink1.16-bundle          | For Flink 1.16                   |
 | `-Dflink1.15`       | hudi-flink1.15-bundle          | For Flink 1.15                   |
