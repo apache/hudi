@@ -233,9 +233,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   /**
    * Submit job to execute clustering for the group using Avro/HoodieRecord representation.
    */
-  private CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsync(HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
-                                                                                boolean preserveHoodieMetadata, String instantTime,
-                                                                                ExecutorService clusteringExecutorService) {
+  protected CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsync(HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
+                                                                                  boolean preserveHoodieMetadata, String instantTime,
+                                                                                  ExecutorService clusteringExecutorService) {
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
       HoodieData<HoodieRecord<T>> inputRecords = readRecordsForGroup(jsc, clusteringGroup, instantTime);
@@ -254,11 +254,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   /**
    * Submit job to execute clustering for the group, directly using the spark native Row representation.
    */
-  private CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsyncAsRow(HoodieClusteringGroup clusteringGroup,
-                                                                                     Map<String, String> strategyParams,
-                                                                                     boolean shouldPreserveHoodieMetadata,
-                                                                                     String instantTime,
-                                                                                     ExecutorService clusteringExecutorService) {
+  protected CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsyncAsRow(HoodieClusteringGroup clusteringGroup,
+                                                                                       Map<String, String> strategyParams,
+                                                                                       boolean shouldPreserveHoodieMetadata,
+                                                                                       String instantTime,
+                                                                                       ExecutorService clusteringExecutorService) {
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
       Dataset<Row> inputRecords = readRecordsForGroupAsRow(jsc, clusteringGroup, instantTime);
