@@ -8,7 +8,7 @@ toc_max_heading_level: 4
 
 Hudi handles mutations to records and streaming data, as we briefly touched upon in [timeline ordering](/docs/next/timeline#ordering-of-actions) section. 
 To provide users full-fledged support for stream processing, Hudi goes all the way making the storage engine and the underlying storage format 
-understand how to merge change changes to the same record key, that may arrive even in different order at different times. With the rise of mobile applications
+understand how to merge changes to the same record key, that may arrive even in different order at different times. With the rise of mobile applications
  and IoT, these scenarios have become the normal than an exception. For e.g. a social networking application uploading user events several hours after they happened,
 when the user connects to WiFi networks.
 
@@ -30,7 +30,7 @@ different merge results when switching between the modes.
 
 ### COMMIT_TIME_ORDERING
 
-This is the default merge mode. Here, we expect the input records to arrive in strict order such that arrival order is same as their
+Here, we expect the input records to arrive in strict order such that arrival order is same as their
 delta commit order on the table. Merging simply picks the record belonging to the latest write as the merged result. In relational data mode speak, 
 this provides overwrite semantics aligned with serializable writes on the timeline. 
 
@@ -43,7 +43,7 @@ that denotes the ordering of the writes in the upstream database.
 
 ### EVENT_TIME_ORDERING
 
-While commit time ordering provides a well-understood standard behavior, it's hardly sufficient. The commit time is unrelated to the actual 
+This is the default merge mode. While commit time ordering provides a well-understood standard behavior, it's hardly sufficient. The commit time is unrelated to the actual 
 ordering of data that a user may care about and strict ordering of input in complex distributed systems is difficult to achieve. 
 With event time ordering, the merging picks the record with the highest value on a user specified _**ordering or precombine field**_ as the merged result. 
 
@@ -52,7 +52,7 @@ With event time ordering, the merging picks the record with the highest value on
 </figure>
 
 In the example above, two microservices product change records about orders at different times, that can arrive out-of-order. As color coded, 
-this can lead to application level inconsistent states in the table if simply merged in commit time order like a cancelled order being re-created or 
+this can lead to application-level inconsistent states in the table if simply merged in commit time order like a cancelled order being re-created or 
 a paid order moved back to just created state expecting payment again. Event time ordering helps by ignoring older state changes that arrive late and
 avoiding order status from "jumping back" in time. Combined with [non-blocking concurrency control](/docs/next/concurrency_control#non-blocking-concurrency-control-mode), 
 this provides a very powerful way for processing such data streams efficiently and correctly.
@@ -67,7 +67,7 @@ across order_info and payment_info without costly self-join on each access.
 
 Hudi allows authoring of cross-language custom record mergers on top of a standard record merger API, that supports full and partial merges. The java APIs 
 are sketched below at a high-level. It simply takes older/newer records in engine native formats and produces a merged record or returns empty to skip them entirely (e.g. soft deletes).
-Record merger is configured using a `hoodie.record.merge.strategy.id` table config whose value is an uuid, that is expected to be returned by `getMergingStrategy()`
+Record merger is configured using a `hoodie.write.record.merge.strategy.id` write config whose value is an uuid, that is taken by the writer to persist in the table config, and is expected to be returned by `getMergingStrategy()`
 method below. Using this mechanism, Hudi can automatically deduce the record merger to use for the table across different language/engine runtimes.
 
 ```Java
@@ -91,6 +91,15 @@ interface HoodieRecordMerger {
 }
 ```
 
+### Record Merge Configs
+
+The record merge mode and optional record merge strategy ID and custom merge implementation classes can be specified using the below configs. 
+
+| Config Name                            | Default                                                                | Description                                                                                                                                                                                                                         |
+| ---------------------------------------| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.write.record.merge.mode  | EVENT_TIME_ORDERING | Determines the logic of merging different records with the same record key. Valid values: (1) `COMMIT_TIME_ORDERING`: use commit time to merge records, i.e., the record from later commit overwrites the earlier record with the same key. (2) `EVENT_TIME_ORDERING` (default): use event time as the ordering to merge records, i.e., the record with the larger event time overwrites the record with the smaller event time on the same key, regardless of commit time. The event time or preCombine field needs to be specified by the user. (3) `CUSTOM`: use custom merging logic specified by the user.<br />`Config Param: RECORD_MERGE_MODE`<br />`Since Version: 1.0.0` |
+| hoodie.write.record.merge.strategy.id  | N/A (Optional) | ID of record merge strategy. When you specify this config, you also need to specify `hoodie.write.record.merge.custom.implementation.classes`. Hudi picks the `HoodieRecordMerger` implementation class from the list of classes in `hoodie.write.record.merge.custom.implementation.classes` that has the specified merge strategy ID.<br />`Config Param: RECORD_MERGE_STRATEGY_ID`<br />`Since Version: 0.13.0` |
+| hoodie.write.record.merge.custom.implementation.classes  | N/A (Optional) | List of `HoodieRecordMerger` implementations constituting Hudi's merging strategy based on the engine used. Hudi picks the `HoodieRecordMerger` implementation class from this list based on the specified `hoodie.write.record.merge.strategy.id`.<br />`Config Param: RECORD_MERGE_IMPL_CLASSES`<br />`Since Version: 0.13.0` |
 
 
 ### Record Payloads
@@ -224,7 +233,7 @@ Result data after merging using `PartialUpdateAvroPayload`:
 
 Payload class can be specified using the below configs. For more advanced configs refer [here](https://hudi.apache.org/docs/configurations#RECORD_PAYLOAD)
 
-**Spark based configs;**
+**Spark based configs:**
 
 | Config Name                            | Default                                                                | Description                                                                                                                                                                                                                         |
 | ---------------------------------------| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
