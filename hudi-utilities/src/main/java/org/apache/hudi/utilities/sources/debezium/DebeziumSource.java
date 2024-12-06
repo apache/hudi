@@ -122,7 +122,8 @@ public abstract class DebeziumSource extends RowSource {
       Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
       LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
       LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
-      return Pair.of(Option.of(dataset), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
+      return Pair.of(Option.of(dataset),
+              new StreamerCheckpointV2(overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
     } catch (Exception e) {
       LOG.error("Fatal error reading and parsing incoming debezium event", e);
       throw new HoodieReadFromSourceException("Fatal error reading and parsing incoming debezium event", e);
