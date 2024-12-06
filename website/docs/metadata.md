@@ -50,6 +50,10 @@ Following are the different types of metadata currently supported.
   null counts, size, etc., for all data files and are used while serving queries with predicates matching interested 
   columns. This index is used along with the [data skipping](https://www.onehouse.ai/blog/hudis-column-stats-index-and-data-skipping-feature-help-speed-up-queries-by-an-orders-of-magnitude) 
   to speed up queries by orders of magnitude.
+  ```properties
+    hoodie.metadata.index.column.stats.enable=true
+    hoodie.metadata.index.column.stats.columns=<comma-separated-column-names>
+  ```
 
 - ***Partition Stats Index***
   Partition stats index aggregates statistics at the partition level for the columns for which it is enabled. This helps
@@ -58,9 +62,13 @@ Following are the different types of metadata currently supported.
   to specify the columns for which stats should be aggregated):
   ```properties
     hoodie.metadata.index.partition.stats.enable=true
-    hoodie.metadata.index.column.stats.columns=<comma-separated-column-names>
   ```
 
+:::note
+1. `column_stats` index is a prerequisite for enabling `partition_stats` index.
+2. `column_stats` and `partition_stats` index is not yet supported for [complex types](https://avro.apache.org/docs/1.11.1/specification/#complex-types). 
+3. By default, only first 32 columns are indexed. To index more columns, set `hoodie.metadata.index.column.stats.max.columns.to.index` to the desired value.
+:::
 
 To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-and-secondary-index-experimental).
 

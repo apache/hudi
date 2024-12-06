@@ -127,6 +127,11 @@ ON <merge_condition>
 There are two kinds of `INSERT` clauses:
 1. `INSERT *` clauses require that the source table has the same columns as those in the target table.
 2. `INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])` clauses do not require to specify all the columns of the target table. For unspecified target columns, insert the `NULL` value.
+3. Partial update is not yet supported in the following cases: 
+   i. When the target table is a bootstrapped table. 
+   ii. When virtual keys is enabled. 
+   iii. When schema on read is enabled.
+   iv. When there is an enum field in the source data.
 :::
 
 Examples below
