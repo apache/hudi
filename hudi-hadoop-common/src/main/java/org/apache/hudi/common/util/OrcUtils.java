@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -58,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
@@ -89,28 +91,21 @@ public class OrcUtils extends FileFormatUtils {
    * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
     return fetchRecordKeysWithPositions(storage, filePath, Option.empty());
   }
 
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       if (!storage.exists(filePath)) {
-        return Collections.emptyList();
+        return ClosableIterator.wrap(Collections.emptyIterator());
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
-    List<Pair<HoodieKey, Long>> hoodieKeysAndPositions = new ArrayList<>();
-    long position = 0;
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(storage, filePath, keyGeneratorOpt)) {
-      while (iterator.hasNext()) {
-        hoodieKeysAndPositions.add(Pair.of(iterator.next(), position));
-        position++;
-      }
-    }
-    return hoodieKeysAndPositions;
+    AtomicLong position = new AtomicLong(0);
+    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt), key -> Pair.of(key, position.getAndIncrement()));
   }
 
   @Override
