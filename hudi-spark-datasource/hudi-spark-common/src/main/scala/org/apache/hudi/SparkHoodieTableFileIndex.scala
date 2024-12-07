@@ -149,10 +149,13 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         }
       }
     } else {
-      // If the partition columns have not stored in hoodie.properties(the table that was
-      // created earlier), we trait it as a non-partitioned table.
-      logWarning("No partition columns available from hoodie.properties." +
-        " Partition pruning will not work")
+      // no warning for metadata table
+      if (!metaClient.isInstanceOf[HoodieTableMetaClient]) {
+        // If the partition columns have not stored in hoodie.properties(the table that was
+        // created earlier), we trait it as a non-partitioned table.
+        logWarning("No partition columns available from hoodie.properties." +
+          " Partition pruning will not work")
+      }
       new StructType()
     }
   }
