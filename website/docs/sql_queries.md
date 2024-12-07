@@ -55,7 +55,7 @@ CREATE TABLE hudi_indexed_table (
 ) USING HUDI
 options(
     primaryKey ='uuid',
-    hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+    hoodie.write.record.merge.mode = "COMMIT_TIME_ORDERING"
 )
 PARTITIONED BY (city);
 
@@ -344,7 +344,7 @@ CREATE TABLE hudi_indexed_table (
 ) USING HUDI
 options(
     primaryKey ='uuid',
-    hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+    hoodie.write.record.merge.mode = "COMMIT_TIME_ORDERING"
 )
 PARTITIONED BY (city);
 

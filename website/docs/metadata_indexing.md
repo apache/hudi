@@ -142,8 +142,7 @@ configuration below.
 :::
 
 ```
-# ensure that both metadata and async indexing is enabled as below two configs
-hoodie.metadata.enable=true
+# ensure that async indexing is enabled
 hoodie.metadata.index.async=true
 # enable column_stats index config
 hoodie.metadata.index.column.stats.enable=true

@@ -128,6 +128,6 @@ If you're planning on enabling Column Stats Index for already existing table, pl
 
 To enable Data Skipping in your queries make sure to set following properties to `true` (on the read path): 
 
-  - `hoodie.enable.data.skipping` (to enable Data Skipping)
-  - `hoodie.metadata.enable` (to enable Metadata Table use on the read path)
+  - `hoodie.enable.data.skipping` (to enable Data Skipping, enabled by default)
+  - `hoodie.metadata.enable` (to enable Metadata Table use on the read path, enabled by default)
   - `hoodie.metadata.index.column.stats.enable` (to enable Column Stats Index use on the read path)

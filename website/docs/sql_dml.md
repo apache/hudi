@@ -239,9 +239,7 @@ DML operations can be sped up using column statistics for data skipping and usin
 For e.g. the following helps speed up the `DELETE` operation on a Hudi table, by using the record level index.
 
 ```sql
-SET hoodie.enable.data.skipping=true;
 SET hoodie.metadata.record.index.enable=true;
-SET hoodie.metadata.enable=true;
 
 DELETE from hudi_table where uuid = 'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa';
 ```

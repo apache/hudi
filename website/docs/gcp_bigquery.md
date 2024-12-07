@@ -99,5 +99,4 @@ spark-submit --master yarn \
 --hoodie-conf hoodie.datasource.write.hive_style_partitioning=true \
 --hoodie-conf hoodie.datasource.write.drop.partition.columns=true \
 --hoodie-conf hoodie.partition.metafile.use.base.format=true \
---hoodie-conf hoodie.metadata.enable=true \
 ```

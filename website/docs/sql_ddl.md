@@ -281,7 +281,7 @@ CREATE TABLE hudi_indexed_table (
 ) USING HUDI
 options(
     primaryKey ='uuid',
-    hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+    hoodie.write.record.merge.mode = "COMMIT_TIME_ORDERING"
 )
 PARTITIONED BY (city);
 
@@ -450,7 +450,9 @@ CREATE TABLE hudi_table (
     primaryKey ='id',
     hoodie.metadata.record.index.enable = 'true', -- enable record index
     hoodie.metadata.index.partition.stats.enable = 'true', -- enable partition stats index
-    hoodie.metadata.index.column.stats.column.list = 'rider' -- create column stats index on rider column
+    hoodie.metadata.index.column.stats.enable = 'true', -- enable column stats
+    hoodie.metadata.index.column.stats.column.list = 'rider', -- create column stats index on rider column
+    hoodie.write.record.merge.mode = "COMMIT_TIME_ORDERING" -- enable commit time ordering, required for secondary index
 )
 PARTITIONED BY (city, state)
 LOCATION 'file:///tmp/hudi_test_table';
@@ -459,10 +461,6 @@ INSERT INTO hudi_table VALUES (1695159649,'trip1','rider-A','driver-K',19.10,'sa
 INSERT INTO hudi_table VALUES (1695091554,'trip2','rider-C','driver-M',27.70,'sunnyvale','california');
 INSERT INTO hudi_table VALUES (1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas');
 INSERT INTO hudi_table VALUES (1695516137,'trip4','rider-F','driver-P',34.15,'houston','texas');
-
--- Enable data skipping for the reader
-set hoodie.metadata.enable=true;
-set hoodie.enable.data.skipping=true;
     
 -- simple partition predicate --
 select * from hudi_table where city = 'sunnyvale';
@@ -487,7 +485,7 @@ trip1	rider-A	driver-K
 Time taken: 0.368 seconds, Fetched 1 row(s)
       
 -- create secondary index on driver --
-CREATE INDEX driver_idx ON hudi_table USING secondary_index(driver);
+CREATE INDEX driver_idx ON hudi_table (driver);
 
 -- secondary key predicate --
 SELECT id, driver, city, state FROM hudi_table WHERE driver IN ('driver-K', 'driver-M');
