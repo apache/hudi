@@ -103,7 +103,7 @@ TBLPROPERTIES (
 );
 ```
 
-### Create table with record merge mode {#create-table-with-record-merge-mode}
+### Create table with merge modes {#create-table-with-record-merge-mode}
 
 Hudi supports different [record merge modes](/docs/next/record_merger) to handle merge of incoming records with existing
 records. To create a table with specific record merge mode, you can set `recordMergeMode` option.
@@ -126,8 +126,8 @@ LOCATION 'file:///tmp/hudi_table_merge_mode/';
 
 With `EVENT_TIME_ORDERING`, the record with the larger event time (`precombineField`) overwrites the record with the
 smaller event time on the same key, regardless of transaction's commit time. Users can set `CUSTOM` mode to provide their own
-merge logic. With `CUSTOM` merge mode, you also need to provide your payload class that implements the merge logic. For 
-example, you can use `PartialUpdateAvroPayload` to merge the records as below.
+merge logic. With `CUSTOM` merge mode, you can provide a custom class that implements the merge logic. The interfaces 
+to implement is explained in detail [here](/docs/next/record_merger#custom).
 
 ```sql
 CREATE TABLE IF NOT EXISTS hudi_table_merge_mode_custom (
@@ -141,7 +141,7 @@ TBLPROPERTIES (
   primaryKey = 'id',
   precombineField = 'ts',
   recordMergeMode = 'CUSTOM',
-  'hoodie.datasource.write.payload.class' = 'org.apache.hudi.common.model.PartialUpdateAvroPayload'
+  'hoodie.record.merge.strategy.id' = '<unique-uuid>'
 )
 LOCATION 'file:///tmp/hudi_table_merge_mode_custom/';
 ```
@@ -317,7 +317,8 @@ SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E';
 
 ### Create Expression Index
 
-A [expression index](https://github.com/apache/hudi/blob/00ece7bce0a4a8d0019721a28049723821e01842/rfc/rfc-63/rfc-63.md) is an index on a function of a column. It is a new addition to Hudi's [multi-modal indexing](https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi) 
+A [expression index](https://github.com/apache/hudi/blob/00ece7bce0a4a8d0019721a28049723821e01842/rfc/rfc-63/rfc-63.md) is an index on a function of a column. 
+It is a new addition to Hudi's [multi-modal indexing](https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi) 
 subsystem. Expression indexes can be used to implement logical partitioning of a table, by creating `column_stats` indexes 
 on an expression of a column. For e.g. an expression index extracting a date from a timestamp field, can effectively implement 
 date based partitioning, provide same benefits to queries, even if the physical layout is different.
