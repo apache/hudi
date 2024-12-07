@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.0e0faa8c.css">
-<script src="/cn/assets/js/runtime~main.c40be2fb.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.40ee521d.js" defer="defer"></script>
 <script src="/cn/assets/js/main.2638f907.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -71,10 +71,9 @@ Contains the mapping of the record key to location. Record index is a global ind
 other existing indexes and can provide a speedup orders of magnitude faster in large deployments where index lookup dominates write latencies. To accommodate very high scales, it utilizes hash-based
 sharding of the key space. Additionally, when it comes to reading data, the index allows for point lookups significantly speeding up index mapping retrieval process.</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="expression-index">Expression Index<a href="#expression-index" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
-<p>An <a href="https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md" target="_blank" rel="noopener noreferrer">expression index</a>
-is an index on a function of a column. If a query has a predicate on a function of a column, the functional index can
-be used to speed up the query. Functional index is stored in <em>func_index_</em> prefixed partitions (one for each
-function) under metadata table. Functional index can be created using SQL syntax. Please checkout SQL DDL
+<p>An <a href="https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md" target="_blank" rel="noopener noreferrer">expression index</a> is an index on a function of a column. If a query has a predicate on a function of a column, the expression index can
+be used to speed up the query. Expression index is stored in <em>expr_index_</em> prefixed partitions (one for each
+expression index) under metadata table. Expression index can be created using SQL syntax. Please checkout SQL DDL
 docs <a href="/cn/docs/next/sql_ddl#create-functional-index-experimental">here</a> for more details.</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="secondary-index">Secondary Index<a href="#secondary-index" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
 <p>Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for
