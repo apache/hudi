@@ -236,7 +236,7 @@ AS SELECT * FROM parquet_table;
 ### Create Index
 
 Hudi supports creating and dropping different types of indexes on a table. For more information on different
-type of indexes please refer [multi-modal indexing](docs/next/indexes#multi-modal-indexing). Secondary 
+type of indexes please refer [multi-modal indexing](/docs/next/indexes#multi-modal-indexing). Secondary 
 index, expression index and record indexes can be created using SQL create index command.
 
 ```sql
