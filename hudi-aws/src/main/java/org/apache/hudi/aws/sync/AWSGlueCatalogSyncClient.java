@@ -89,6 +89,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -513,6 +514,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateTableSchema(String tableName, MessageType newSchema, SchemaDifference schemaDiff) {
+    validateUpdateSchemaGlueSupport(schemaDiff);
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
       Map<String, String> newSchemaMap = parquetSchemaToMapSchema(newSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
@@ -551,6 +553,18 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update definition for table " + tableId(databaseName, tableName), e);
     }
+  }
+
+  private static void validateUpdateSchemaGlueSupport(SchemaDifference schemaDiff) {
+    schemaDiff.getUpdateColumnTypes().forEach((colName, types) -> {
+      if (types.getLeft().equalsIgnoreCase("int") && types.getRight().equalsIgnoreCase("float")) {
+        throw new HoodieGlueSyncException("Cannot update column type from int to float, due to spectrum compatibility. Column: " + colName);
+      }
+      if (new HashSet<>(Arrays.asList("int", "bigint", "float", "double")).contains(types.getLeft().toLowerCase())
+          && types.getRight().equalsIgnoreCase("string")) {
+        throw new HoodieGlueSyncException("Cannot update column type from " + types.getLeft() + " to string, due to athena/spectrum compatibility. Column: " + colName);
+      }
+    });
   }
 
   private String getStringFromPartition(List<Column> partitionKeys, List<String> values) {
