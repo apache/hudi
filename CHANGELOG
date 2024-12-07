@@ -455,3 +455,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-17390][MINOR] Remove extra timeline reload during conflict resolution (#996)
 [AUDIT-1071][ENG-17447] Final set of workflow automation follow ups (#1066)
 [AUDIT-1071]: Changelog for release-v1.51.0 (#1065)
+
+--- [2024-12-07 16:03:42] [release-v1.53.0] ---
+[ENG-17446][INTERNAL] Expose methods as protected in MultipleSparkJobExecutionStrategy (#1074)
+[AUDIT-1071][ENG-17447] Additional fixes to default trigger variables (#1072)
+[AUDIT-1071]: Changelog for release-v1.52.0 (#1071)
