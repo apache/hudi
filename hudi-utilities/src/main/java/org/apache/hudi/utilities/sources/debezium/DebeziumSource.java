@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -32,6 +33,7 @@ import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+import org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -101,6 +103,10 @@ public abstract class DebeziumSource extends RowSource {
       schemaRegistryProvider = new SchemaRegistryProvider(props, sparkContext);
     } else {
       schemaRegistryProvider = (SchemaRegistryProvider) schemaProvider;
+    }
+
+    if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
+      KafkaSourceUtil.configureSchemaDeserializer(schemaRegistryProvider, props);
     }
 
     offsetGen = new KafkaOffsetGen(props);
