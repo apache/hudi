@@ -432,14 +432,14 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="FLINK_AVRO_VERSION" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
       - name: Integration Test
         env:
           SCALA_PROFILE: 'scala-2.12'
@@ -447,8 +447,8 @@ jobs:
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
         if: ${{ endsWith(env.FLINK_PROFILE, '1.20') }}
         run: |
-          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
-          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="FLINK_AVRO_VERSION" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
+          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
+          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   docker-java17-test:
     runs-on: ubuntu-latest
