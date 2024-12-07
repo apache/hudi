@@ -117,24 +117,16 @@ public abstract class DebeziumSource extends RowSource {
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
 
-    if (totalNewMsgs == 0) {
-      // If there are no new messages, use empty dataframe with no schema. This is because the schema from schema registry can only be considered
-      // up to date if a change event has occurred.
-      return Pair.of(Option.of(sparkSession.emptyDataFrame()),
-          new StreamerCheckpointV2(overrideCheckpointStr.isEmpty()
-              ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
-    } else {
-      try {
-        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(getStringWithAltKeys(props, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
-        Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
-        LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
-        LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
-        return Pair.of(Option.of(dataset),
-            new StreamerCheckpointV2(overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
-      } catch (Exception e) {
-        LOG.error("Fatal error reading and parsing incoming debezium event", e);
-        throw new HoodieReadFromSourceException("Fatal error reading and parsing incoming debezium event", e);
-      }
+    try {
+      String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(getStringWithAltKeys(props, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
+      Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
+      LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
+      LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
+      return Pair.of(Option.of(dataset),
+              new StreamerCheckpointV2(overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
+    } catch (Exception e) {
+      LOG.error("Fatal error reading and parsing incoming debezium event", e);
+      throw new HoodieReadFromSourceException("Fatal error reading and parsing incoming debezium event", e);
     }
   }
 
