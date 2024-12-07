@@ -51,7 +51,7 @@ NOTE: Make sure you've cloned the [Hudi repository](https://github.com/apache/hu
 
 ```java
 cd <HUDI_WORKSPACE>
-mvn clean package -Pintegration-tests -DskipTests
+mvn clean package -Pintegration-tests -DskipTests -Dscala-2.11
 ```
 
 ### Bringing up Demo Cluster
