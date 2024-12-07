@@ -192,3 +192,18 @@ By default, Hudi turns off key based de-duplication for INSERT/BULK_INSERT opera
 ### Can concurrent inserts cause duplicates?
 
 Yes. As mentioned before, the default conflict detection strategy only check for conflicting updates to the same file group IDs. In the case of concurrent inserts, inserted records end up creating new file groups and thus can go undetected. Most common workload patterns use multi-writer capability in the case of running ingestion of new data and concurrently backfilling/deleting older data, with NO overlap in the primary keys of the records. However, this can be implemented (or better yet contributed) by a new “[ConflictResolutionStrategy](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/ConflictResolutionStrategy.java)”, that reads out keys of new conflicting operations, to check the uncommitted data against other concurrent writes and then decide whether or not to commit/abort. This is rather a fine tradeoff between saving the additional cost of reading keys on most common workloads. Historically, users have preferred to take this into their control to save costs e.g we turned off de-duplication for inserts due to the same feedback. Hudi supports a pre-commit validator mechanism already where such tests can be authored as well.
+
+### How to resolve "Skipping already committed batch `batchid` for streaming query `queryid`"?
+
+There are two popular approaches to writing hudi data using spark structured streaming if we're not using HudiDeltaStreamer. One is using `writeStream.forEachBatch` which writes the batch dataframe/dataset as an instance of spark-datasource, and the other one is simply using writeStream without forEachBatch, which invokes a [HoodieStreamingSink](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/HoodieStreamingSink.scala) for writing to Hudi table. Now, when we use the later one, there is this property https://hudi.apache.org/docs/configurations/#hoodiedatasourcewritestreamingcheckpointidentifier which gets applied in the Hudi Streaming Sink configuration automatically.
+In case we don't specify anything for this property, it will assume the default value of `default_single_writer`.
+
+The micro-batches that are written with this approach and the resultant deltacommits in the hoodie timeline (.hoodie folder inside the table) contain this identifier as an attribute `"_hudi_streaming_sink_checkpoint": "{\"default_single_writer\":\"latestBatchId\"}"` in the completed deltacommit instants.
+
+So in a way the `latestBatchId` is being maintained at two places in case of Hudi Streaming Sink: In the checkpoint directory as well as in the hoodie timeline.
+
+If we just change the checkpoint directory without changing the streaming checkpoint identifier and restart the job from earliest offset in kafka topic, while writing the new incoming batch, the first thing that HoodieStreamingSink does is load the latest completed deltacommit instant from the timeline and get the streaming checkpoint identifier as well as the latest committed batch id.
+
+If the streaming checkpoint identifier loaded from the hudi timeline matches with the streaming  checkpoint identifier from the incoming batch to be written, it simply skips the batches whose id's are smaller than the latestBatchId that it has got from the hudi timeline treating the incoming writer as existing writer and the incoming batch as a batch that has previously been committed.
+
+But if we change the checkpoint identifier, `HoodieStreamingSink` will treat it as a new writer and not skip any batches.
