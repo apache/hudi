@@ -18,9 +18,11 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.client.HoodieWriteResult;
-import org.apache.hudi.client.SparkRDDReadClient;
+import org.apache.hudi.client.SparkDataFrameWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.SparkDataFrameReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -47,6 +49,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FilterFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.slf4j.Logger;
@@ -209,6 +212,12 @@ public class DataSourceUtils {
     return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), createHoodieConfig(schemaStr, basePath, tblName, parameters));
   }
 
+  public static SparkDataFrameWriteClient createHoodieDataFrameClient(JavaSparkContext jssc, String schemaStr, String basePath,
+                                                                      String tblName, Map<String, String> parameters) {
+    return new SparkDataFrameWriteClient<>(new HoodieSparkEngineContext(jssc), createHoodieConfig(schemaStr, basePath,
+            tblName, parameters));
+  }
+
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
                                                    String instantTime, WriteOperationType operation, Boolean isPrepped) throws HoodieException {
     switch (operation) {
@@ -228,6 +237,29 @@ public class DataSourceUtils {
         return client.insertOverwrite(hoodieRecords, instantTime);
       case INSERT_OVERWRITE_TABLE:
         return client.insertOverwriteTable(hoodieRecords, instantTime);
+      default:
+        throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation.toString());
+    }
+  }
+
+  public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, Dataset<HoodieSparkRecord> hoodieRecords,
+                                                   String instantTime, WriteOperationType operation, Boolean isPrepped) throws HoodieException {
+    switch (operation) {
+      case BULK_INSERT:
+        Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
+                createUserDefinedBulkInsertPartitioner(client.getConfig());
+        return new HoodieWriteResult(client.bulkInsert(hoodieRecords, instantTime, userDefinedBulkInsertPartitioner));
+      case INSERT:
+        return new HoodieWriteResult(client.insert(hoodieRecords, instantTime));
+      case UPSERT:
+        if (isPrepped) {
+          return new HoodieWriteResult(client.upsertPreppedRecords(hoodieRecords, instantTime));
+        }
+        return new HoodieWriteResult(client.upsert(hoodieRecords, instantTime));
+      //      case INSERT_OVERWRITE:
+      //        return client.insertOverwrite(hoodieRecords, instantTime);
+      //      case INSERT_OVERWRITE_TABLE:
+      //        return client.insertOverwriteTable(hoodieRecords, instantTime);
       default:
         throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation.toString());
     }
@@ -295,6 +327,26 @@ public class DataSourceUtils {
       // so no dups to drop
       return incomingHoodieRecords;
     }
+  }
+
+  public static Dataset<HoodieSparkRecord> dropDuplicates(HoodieSparkEngineContext jssc, Dataset<HoodieSparkRecord> incomingHoodieRecords,
+      HoodieWriteConfig writeConfig) {
+    try {
+      SparkDataFrameReadClient client = new SparkDataFrameReadClient<>(jssc, writeConfig);
+      return client.tagLocation(incomingHoodieRecords)
+              .filter((FilterFunction) r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
+    } catch (TableNotFoundException e) {
+      // this will be executed when there is no hoodie table yet
+      // so no dups to drop
+      return incomingHoodieRecords;
+    }
+  }
+
+  public static Dataset<HoodieSparkRecord> dropDuplicates(JavaSparkContext jssc, Dataset<HoodieSparkRecord> incomingHoodieRecords,
+                                                          Map<String, String> parameters) {
+    HoodieWriteConfig writeConfig =
+        HoodieWriteConfig.newBuilder().withPath(parameters.get("path")).withProps(parameters).build();
+    return dropDuplicates(new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig);
   }
 
   @SuppressWarnings("unchecked")
