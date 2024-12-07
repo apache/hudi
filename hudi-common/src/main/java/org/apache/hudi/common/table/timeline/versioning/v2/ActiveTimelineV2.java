@@ -506,8 +506,6 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
                                            HoodieInstant toInstant, Option<byte[]> data) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     String fromInstantFileName = instantFileNameGenerator.getFileName(fromInstant);
-    // Ensures old state exists in timeline
-    LOG.info("Checking for file exists ?" + getInstantFileNamePath(fromInstantFileName));
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         // Re-create the .inflight file by opening a new file and write the commit metadata in
@@ -524,8 +522,10 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
               "Could not rename " + fromInstantPath + " to " + toInstantPath);
         }
       } else {
+        // Ensures old state exists in timeline
         ValidationUtils.checkArgument(
-            metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)));
+            metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)),
+            "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
         createCompleteFileInMetaPath(shouldLock, toInstant, data);
       }
     } catch (IOException e) {
