@@ -47,6 +47,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -62,6 +63,8 @@ public class ConsistentBucketIndexUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketIndexUtils.class);
 
+  private static final String TEMP_DIR = ".tmp";
+
   /**
    * Loads hashing metadata of the given partition, if it does not exist, creates a new one (also persist it into storage).
    *
@@ -72,7 +75,6 @@ public class ConsistentBucketIndexUtils {
    * @param table      Hoodie table
    * @param partition  Table partition
    * @param numBuckets Default bucket number
-   *
    * @return Consistent hashing metadata
    */
   public static HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable table, String partition, int numBuckets) {
@@ -85,7 +87,7 @@ public class ConsistentBucketIndexUtils {
 
     // There is no metadata, so try to create a new one and save it.
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
-    if (saveMetadata(table, metadata, false)) {
+    if (saveMetadata(table, metadata)) {
       return metadata;
     }
 
@@ -177,25 +179,45 @@ public class ConsistentBucketIndexUtils {
   /**
    * Saves the metadata into storage
    *
-   * @param table     Hoodie table
-   * @param metadata  Hashing metadata to be saved
-   * @param overwrite Whether to overwrite existing metadata
+   * @param table    Hoodie table
+   * @param metadata Hashing metadata to be saved
    * @return true if the metadata is saved successfully
    */
-  public static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata, boolean overwrite) {
+  public static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata) {
     HoodieStorage storage = table.getStorage();
     StoragePath dir = FSUtils.constructAbsolutePath(
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
+    StoragePath tmpDir = FSUtils.constructAbsolutePath(dir, TEMP_DIR);
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
-    try (OutputStream out = storage.create(fullPath, overwrite)) {
+    StoragePath tmpPath = new StoragePath(tmpDir, UUID.randomUUID() + "-" + metadata.getFilename());
+
+    try {
+      // write to temp path
+      OutputStream out = storage.create(tmpPath, true);
       byte[] bytes = metadata.toBytes();
       out.write(bytes);
       out.close();
+      // rename to final path
+      boolean renamed = storage.rename(tmpPath, fullPath);
+      if (!renamed) {
+        LOG.warn("Failed to rename bucket metadata: {} from tmp path: {} to final path: {}", metadata, tmpPath, fullPath);
+        return false;
+      }
+      LOG.info("Updated bucket metadata: {} at path: {}", metadata, fullPath);
       return true;
     } catch (IOException e) {
       LOG.warn("Failed to update bucket metadata: " + metadata, e);
+      return false;
+    } finally {
+      try {
+        // delete tmp file
+        if (storage.exists(tmpPath)) {
+          storage.deleteFile(tmpPath);
+        }
+      } catch (IOException e) {
+        LOG.warn("Failed to delete tmp file: " + tmpPath, e);
+      }
     }
-    return false;
   }
 
   /***
