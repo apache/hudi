@@ -11,27 +11,27 @@ of Hudi depends on the metadata table. Different types of index, from `files` in
 to `column_stats` index for data skipping, are part of the metadata table. A fundamental tradeoff in any data system
 that supports indices is to balance the write throughput with index updates. A brute-force way is to lock out the writes
 while indexing. Hudi supports index creation using SQL, Datasource as well as async indexing. However, very large tables 
-can take hours to index. This is where Hudi's novel asynchronous metadata indexing comes into play. Indexes in Hudi are
-created in two phases and uses a mix of optimistic concurrency control and log-based concurrency control models. The two
+can take hours to index. This is where Hudi's novel concurrent indexing comes into play. 
+
+## Concurrent Indexing
+
+Indexes in Hudi are created in two phases and uses a mix of optimistic concurrency control and multi-version concurrency control techniques. The two
 phase approach ensures that the other writers are unblocked.
 
-- Scheduling - This is the first phase which schedules an indexing plan and is protected by a lock. Indexing plan considers all the completed commits upto indexing instant.
-- Execution - This phase creates the index files as mentioned in the index plan. At the end of the phase Hudi ensures the completed commits after indexing instant used already created index plan to add corresponding index metadata. This check is protected by a metadata table lock and in case of failures indexing is aborted.
+- **Scheduling & Planning** : This is the first phase which schedules an indexing plan and is protected by a lock. Indexing plan considers all the completed commits upto indexing instant.
+- **Execution** : This phase creates the index files as mentioned in the index plan. At the end of the phase Hudi ensures the completed commits after indexing instant used already created index plan to add corresponding index metadata. This check is protected by a metadata table lock and in case of failures indexing is aborted.
 
-We can now create different metadata indices, including `files`, `bloom_filters`, `column_stats`, `partition_stats` and `record_index` 
-asynchronously in Hudi, which are then used by readers and writers to improve performance. Being able to index without blocking writing
-has two benefits,
+We can now create different indexes and metadata, including `bloom_filters`, `column_stats`, `partition_stats`, `record_index`, `secondary_index`
+and `expression_index` asynchronously in Hudi. Being able to index without blocking writing ensures write performance is unaffected and no 
+additional manual maintenance is necessary to add/remove indexes. It also reduces resource wastage by avoiding contention between writing and indexing.
 
-- improved write latency
-- reduced resource wastage due to contention between writing and indexing.
-
-In this document, we will learn how to create indexes using SQL, Datasource and how to setup asynchronous metadata indexing. 
-To learn more about the design of asynchronous indexing feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi).
+Please refer section [Setup Async Indexing](#setup-async-indexing) to get more details on how to setup
+asynchronous indexing. To learn more about the design of asynchronous indexing feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi).
 
 ## Index Creation Using SQL
 
 Currently indexes like secondary index, expression index and record index can be created using SQL create index command.
-For more information on these indexes please refer [metadata section](https://hudi.apache.org/docs/metadata/#metadata-table-indices)
+For more information on these indexes please refer [metadata section](/docs/next/metadata/#types-of-table-metadata)
 
 **Examples**
 ```sql
@@ -41,14 +41,14 @@ CREATE INDEX record_index ON hudi_indexed_table (uuid);
 -- Create secondary index on rider column.
 CREATE INDEX idx_rider ON hudi_indexed_table (rider);
 
--- Create expression index by performing transformation on driver and city column 
+-- Create expression index by performing transformation on ts and driver column 
 -- The index is created on the transformed column. Here column stats index is created on ts column
--- and bloom filters index is created on city column.
-CREATE INDEX idx_column_driver ON hudi_indexed_table USING column_stats(rider) OPTIONS(expr='upper');
-CREATE INDEX idx_bloom_city ON hudi_indexed_table USING bloom_filters(city) OPTIONS(expr='identity');
+-- and bloom filters index is created on driver column.
+CREATE INDEX idx_column_ts ON hudi_indexed_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format = 'yyyy-MM-dd');
+CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
 ```
 
-For more information on index creation using SQL refer [SQL DDL](https://hudi.apache.org/docs/next/sql_ddl#create-index) 
+For more information on index creation using SQL refer [SQL DDL](/docs/next/sql_ddl#create-index) 
 
 ## Index Creation Using Datasource
 
@@ -75,6 +75,10 @@ hoodie.metadata.index.bloom.filter.enable=true
 ```
 
 ## Setup Async Indexing
+
+In the example we will have continuous writing using Hudi Streamer and also create index in parallel. The index creation
+in example is done using HoodieIndexer so that schedule and execute phases are clearly visible for indexing. The asynchronous
+configurations can be used with Datasource and SQL based configs to create index as well.
 
 First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) which will continuously write data
 from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](https://registry.opendata.aws/nyc-tlc-trip-records-pds/), whose setup details are as below:
@@ -129,7 +133,7 @@ us schedule the indexing for COLUMN_STATS index. First we need to define a prope
 
 As mentioned before, metadata indices are pluggable. One can add any index at any point in time depending on changing
 business requirements. Some configurations to enable particular indices are listed below. Currently, available indices under
-metadata table can be explored [here](/docs/next/metadata#metadata-table-indices) along with [configs](/docs/next/metadata#enable-hudi-metadata-table-and-multi-modal-index-in-write-side) 
+metadata table can be explored [here](/docs/next/metadata/#types-of-table-metadata) along with [configs](/docs/next/metadata#enable-hudi-metadata-table-and-multi-modal-index-in-write-side) 
 to enable them. The full set of metadata configurations can be explored [here](/docs/next/configurations/#Metadata-Configs).
 
 :::note
@@ -138,8 +142,7 @@ configuration below.
 :::
 
 ```
-# ensure that both metadata and async indexing is enabled as below two configs
-hoodie.metadata.enable=true
+# ensure that async indexing is enabled
 hoodie.metadata.index.async=true
 # enable column_stats index config
 hoodie.metadata.index.column.stats.enable=true
@@ -248,15 +251,10 @@ spark-submit \
 
 Asynchronous indexing feature is still evolving. Few points to note from deployment perspective while running the indexer:
 
-- While an index can be created concurrently with ingestion, it cannot be dropped concurrently. Please stop all writers
-  before dropping an index.
 - Files index is created by default as long as the metadata table is enabled.
 - Trigger indexing for one metadata partition (or index type) at a time.
-- If an index is enabled via async HoodieIndexer, then ensure that index is also enabled in configs corresponding to regular ingestion writers. Otherwise, metadata writer will
+- If an index is enabled via async indexing, then ensure that index is also enabled in configs corresponding to regular ingestion writers. Otherwise, metadata writer will
   think that particular index was disabled and cleanup the metadata partition.
-- In the case of multi-writers, enable async index and specific index config for all writers.
-- Unlike other table services like compaction and clustering, where we have a separate configuration to run inline, there is no such inline config here.
-  For example, if async indexing is disabled and metadata is enabled along with column stats index type, then both files and column stats index will be created synchronously with ingestion.
 
 Some of these limitations will be removed in the upcoming releases. Please
 follow [HUDI-2488](https://issues.apache.org/jira/browse/HUDI-2488) for developments on this feature.

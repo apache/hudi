@@ -65,10 +65,9 @@ the [metadata table](/docs/next/metadata#metadata-table), significantly improvin
 
 
 ### Expression Index
-  An [expression index](https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md)
-  is an index on a function of a column. If a query has a predicate on a function of a column, the functional index can
-  be used to speed up the query. Functional index is stored in *func_index_* prefixed partitions (one for each
-  function) under metadata table. Functional index can be created using SQL syntax. Please checkout SQL DDL
+  An [expression index](https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md) is an index on a function of a column. If a query has a predicate on a function of a column, the expression index can
+  be used to speed up the query. Expression index is stored in *expr_index_* prefixed partitions (one for each
+  expression index) under metadata table. Expression index can be created using SQL syntax. Please checkout SQL DDL
   docs [here](/docs/next/sql_ddl#create-functional-index-experimental) for more details.
 
 ### Secondary Index

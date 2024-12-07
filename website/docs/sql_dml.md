@@ -167,6 +167,51 @@ For a Hudi table with user configured primary keys, the join condition in `Merge
 For a Table where Hudi auto generates primary keys, the join condition in MIT can be on any arbitrary data columns.
 :::
 
+### Merge Into with Partial Updates {#merge-into-partial-update}
+
+Partial updates only write updated columns instead of full change records. This is useful when you have wide tables (typical for ML feature stores) 
+with hundreds of columns and only a few columns are updated. It reduces the write amplification as well as helps in lowering the query
+latency. `MERGE INTO` statement above can be modified to use partial updates as shown below.
+
+```sql
+-- Create a Merge-on-Read table
+CREATE TABLE tableName (
+  id INT,
+  name STRING,
+  price DOUBLE,
+  _ts LONG,
+  description STRING
+) USING hudi 
+TBLPROPERTIES (
+  type = 'mor',
+  primaryKey = 'id',
+  preCombineField = '_ts'
+)
+LOCATION '/location/to/basePath';
+
+-- Insert values into the table
+INSERT INTO tableName VALUES
+  (1, 'a1', 10, 1000, 'a1: desc1'),
+  (2, 'a2', 20, 1200, 'a2: desc2'),
+  (3, 'a3', 30, 1250, 'a3: desc3');
+
+-- Perform partial updates using a MERGE INTO statement
+MERGE INTO tableName t0
+  USING (
+    SELECT 1 AS id, 'a1' AS name, 12 AS price, 1001 AS ts
+    UNION ALL
+    SELECT 3 AS id, 'a3' AS name, 25 AS price, 1260 AS ts
+  ) s0
+  ON t0.id = s0.id
+  WHEN MATCHED THEN UPDATE SET
+    price = s0.price,
+    _ts = s0.ts;
+
+SELECT id, name, price, _ts, description FROM tableName;
+```
+
+Notice, instead of `UPDATE SET *`, we are updating only the `price` and `_ts` columns.
+
 ### Delete From
 
 You can remove data from a Hudi table using the `DELETE FROM` statement.
@@ -194,9 +239,7 @@ DML operations can be sped up using column statistics for data skipping and usin
 For e.g. the following helps speed up the `DELETE` operation on a Hudi table, by using the record level index.
 
 ```sql
-SET hoodie.enable.data.skipping=true;
 SET hoodie.metadata.record.index.enable=true;
-SET hoodie.metadata.enable=true;
 
 DELETE from hudi_table where uuid = 'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa';
 ```
