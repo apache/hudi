@@ -125,7 +125,7 @@ LOCATION 'file:///tmp/hudi_table_merge_mode/';
 ```
 
 With `EVENT_TIME_ORDERING`, the record with the larger event time (`precombineField`) overwrites the record with the
-smaller event time on the same key, regardless of transaction time. Users can set `CUSTOM` mode to provide their own
+smaller event time on the same key, regardless of transaction's commit time. Users can set `CUSTOM` mode to provide their own
 merge logic. With `CUSTOM` merge mode, you also need to provide your payload class that implements the merge logic. For 
 example, you can use `PartialUpdateAvroPayload` to merge the records as below.
 
@@ -235,12 +235,17 @@ AS SELECT * FROM parquet_table;
 
 ### Create Index
 
-Hudi supports creating and dropping indexes, including expression indexes, on a table. For more information on different
-type of indexes please refer [metadata section](/docs/next/metadata/#types-of-table-metadata). Secondary 
-index, expression index and record index can be created using SQL create index command.
+Hudi supports creating and dropping different types of indexes on a table. For more information on different
+type of indexes please refer [multi-modal indexing](docs/next/indexes#multi-modal-indexing). Secondary 
+index, expression index and record indexes can be created using SQL create index command.
 
-**Syntax**
 ```sql
+-- Create Index
+CREATE INDEX [IF NOT EXISTS] index_name ON [TABLE] table_name 
+[USING index_type] 
+(column_name1 [OPTIONS(key1=value1, key2=value2, ...)], column_name2 [OPTIONS(key1=value1, key2=value2, ...)], ...) 
+[OPTIONS (key1=value1, key2=value2, ...)]
+
 -- Record index syntax
 CREATE INDEX indexName ON tableIdentifier (primaryKey1 [, primayKey2 ...]);
 
@@ -250,7 +255,18 @@ CREATE INDEX indexName ON tableIdentifier (nonPrimaryKey);
 -- Expression Index Syntax
 CREATE INDEX indexName ON tableIdentifier USING column_stats(col) OPTIONS(expr='expr_val', format='format_val');
 CREATE INDEX indexName ON tableIdentifier USING bloom_filters(col) OPTIONS(expr='expr_val');
+
+-- Drop Index
+DROP INDEX [IF EXISTS] index_name ON [TABLE] table_name
 ```
+
+- `index_name` is the name of the index to be created or dropped.
+- `table_name` is the name of the table on which the index is created or dropped.
+- `index_type` is the type of the index to be created. Currently, only `column_stats` and `bloom_filters` is supported. 
+   If the `using ..` clause is omitted, a secondary record index is created.
+- `column_name` is the name of the column on which the index is created.
+
+Both index and column on which the index is created can be qualified with some options in the form of key-value pairs.
 
 **Examples**
 ```sql
@@ -269,16 +285,10 @@ options(
 )
 PARTITIONED BY (city);
 
+-- Add some data.
 INSERT INTO hudi_indexed_table
 VALUES
-(1695159649,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco'),
-(1695091554,'e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70 ,'san_francisco'),
-(1695046462,'9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90 ,'san_francisco'),
-(1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco'),
-(1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo'    ),
-(1695376420,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40 ,'sao_paulo'    ),
-(1695173887,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai'      ),
-(1695115999,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
+ ...
 
 -- Create bloom filter expression index on driver column
 CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
@@ -303,44 +313,32 @@ SHOW INDEXES FROM hudi_indexed_table;
 -- Query on rider column would leverage the secondary index idx_rider
 SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E';
 
-SET hoodie.metadata.record.index.enable=false;
 ```
 
-```sql
--- Create Index
-CREATE INDEX [IF NOT EXISTS] index_name ON [TABLE] table_name 
-[USING index_type] 
-(column_name1 [OPTIONS(key1=value1, key2=value2, ...)], column_name2 [OPTIONS(key1=value1, key2=value2, ...)], ...) 
-[OPTIONS (key1=value1, key2=value2, ...)]
+### Create Expression Index
 
--- Drop Index
-DROP INDEX [IF EXISTS] index_name ON [TABLE] table_name
-```
-
-- `index_name` is the name of the index to be created or dropped.
-- `table_name` is the name of the table on which the index is created or dropped.
-- `index_type` is the type of the index to be created. Currently, only `files`, `column_stats` and `bloom_filters` is supported.
-- `column_name` is the name of the column on which the index is created.
-- Both index and column on which the index is created can be qualified with some options in the form of key-value pairs.
-  We will see this with an example of expression index below. 
-
-#### Create Expression Index
-
-A [expression index](https://github.com/apache/hudi/blob/00ece7bce0a4a8d0019721a28049723821e01842/rfc/rfc-63/rfc-63.md) 
-is an index on a function of a column. It is a new addition to Hudi's [multi-modal indexing](https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi) 
-subsystem which provides faster access method and also absorb partitioning as part of the indexing system. Let us see 
-some examples of creating an expression index.
+A [expression index](https://github.com/apache/hudi/blob/00ece7bce0a4a8d0019721a28049723821e01842/rfc/rfc-63/rfc-63.md) is an index on a function of a column. It is a new addition to Hudi's [multi-modal indexing](https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi) 
+subsystem. Expression indexes can be used to implement logical partitioning of a table, by creating `column_stats` indexes 
+on an expression of a column. For e.g. an expression index extracting a date from a timestamp field, can effectively implement 
+date based partitioning, provide same benefits to queries, even if the physical layout is different.
 
 ```sql
 -- Create an expression index on the column `ts` (unix epoch) of the table `hudi_table` using the function `from_unixtime` with the format `yyyy-MM-dd`
-CREATE INDEX IF NOT EXISTS ts_datestr ON hudi_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format='yyyy-MM-dd');
+CREATE INDEX IF NOT EXISTS ts_datestr ON hudi_table 
+  USING column_stats(ts) 
+  OPTIONS(expr='from_unixtime', format='yyyy-MM-dd');
 -- Create a expression index on the column `ts` (timestamp in yyyy-MM-dd HH:mm:ss) of the table `hudi_table` using the function `hour`
-CREATE INDEX ts_hour ON hudi_table USING column_stats(ts) options(expr='hour');
+CREATE INDEX ts_hour ON hudi_table 
+  USING column_stats(ts) 
+  options(expr='hour');
 ```
 
-Few things to note:
-- The `expr` option is required for creating expression index, and it should be a valid Spark SQL function. Currently, 
-  only the functions that take a single column as input are supported. Some useful functions that are supported are listed below.
+The `expr` option is required for creating expression index, and it should be a valid Spark SQL function. Please check the syntax 
+for the above functions in the [Spark SQL documentation](https://spark.apache.org/docs/latest/sql-ref-functions.html) and provide the options accordingly. For example, 
+the `format` option is required for `from_unixtime` function.
+
+Some useful functions that are supported are listed below.
+
   - `identity`
   - `from_unixtime`
   - `date_format`
@@ -357,16 +355,13 @@ Few things to note:
   - `regexp_replace`
   - `concat`
   - `length`
-- Please check the syntax for the above functions in
-  the [Spark SQL documentation](https://spark.apache.org/docs/latest/sql-ref-functions.html) and provide the options
-  accordingly. For example, the `format` option is required for `from_unixtime` function.
-- UDFs are not supported.
+
+Note that, only functions that take a single column as input are supported currently and UDFs are not supported.
 
 <details>
-  <summary>Example of creating and using expression index</summary>
+  <summary>Full example of creating and using expression index</summary>
 
 ```sql
--- create a Hudi table
 CREATE TABLE hudi_table_expr_index (
     ts STRING,
     uuid STRING,
@@ -378,18 +373,6 @@ CREATE TABLE hudi_table_expr_index (
 tblproperties (primaryKey = 'uuid')
 PARTITIONED BY (city)
 location 'file:///tmp/hudi_table_expr_index';
-
--- disable small file handling so the each insert creates new file --
-set hoodie.parquet.small.file.limit=0;
-
-INSERT INTO hudi_table_expr_index VALUES ('2023-09-20 03:58:59','334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco');
-INSERT INTO hudi_table_expr_index VALUES ('2023-09-19 08:46:34','e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70 ,'san_francisco');
-INSERT INTO hudi_table_expr_index VALUES ('2023-09-18 17:45:31','9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90 ,'san_francisco');
-INSERT INTO hudi_table_expr_index VALUES ('2023-09-22 13:12:56','1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco');
-INSERT INTO hudi_table_expr_index VALUES ('2023-09-24 06:15:45','e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo');
-INSERT INTO hudi_table_expr_index VALUES ('2023-09-22 15:21:36','7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40 ,'sao_paulo');
-INSERT INTO hudi_table_expr_index VALUES ('2023-09-20 12:35:45','3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai');
-INSERT INTO hudi_table_expr_index VALUES ('2023-09-19 05:34:56','c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
 
 -- Query with hour function filter but no index yet --
 spark-sql> SELECT city, fare, rider, driver FROM  hudi_table_expr_index WHERE  city NOT IN ('chennai') AND hour(ts) > 12;
@@ -435,9 +418,21 @@ Project [city#2970, fare#2969, rider#2967, driver#2968], Statistics(sizeInBytes=
 ```
 </details>
 
-#### Create Partition Stats and Secondary Index
+### Create Partition Stats Index
 
-Hudi supports various [indexes](/docs/next/metadata#metadata-table-indices). Let us see how we can use them in the following example.
+Partition stats index is similar to column stats, in the sense that it tracks - `min, max, null, count, ..` statistics on columns in the 
+table, useful in query planning. The key difference being, while `column_stats` tracks statistics about files, the partition_stats index 
+tracks aggregated statistics at the storage partition path level, to help more efficiently skip entire folder paths during query planning
+and execution. 
+
+To enable partition stats index, simply set `hoodie.metadata.index.partition.stats.enable = 'true'` in create table options.
+
+### Create Secondary Index
+
+Secondary indexes are record level indexes built on any column in the table. It supports multiple records having the same
+secondary column value efficiently and is built on top of the existing record level index built on the table's record key.
+Secondary indexes are hash based indexes that offer horizontally scalable write performance by splitting key space into shards 
+by hashing, as well as fast lookups by employing row-based file formats.
 
 ```sql
 DROP TABLE IF EXISTS hudi_table;
@@ -455,7 +450,7 @@ CREATE TABLE hudi_table (
     primaryKey ='id',
     hoodie.metadata.record.index.enable = 'true', -- enable record index
     hoodie.metadata.index.partition.stats.enable = 'true', -- enable partition stats index
-    hoodie.metadata.index.column.stats.column.list = 'rider' -- create partition stats index on rider column
+    hoodie.metadata.index.column.stats.column.list = 'rider' -- create column stats index on rider column
 )
 PARTITIONED BY (city, state)
 LOCATION 'file:///tmp/hudi_test_table';
@@ -501,7 +496,18 @@ trip2	driver-M	sunnyvale	california
 Time taken: 0.83 seconds, Fetched 2 row(s)
 ```
 
-**Limitations of using these indexes:**
+### Create Bloom Filter Index
+
+Bloom filter indexes store a bloom filter per file, on the column or column expression being index. It can be very 
+effective in skipping files that don't contain a high cardinality column value e.g. uuids.
+
+```sql
+CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
+CREATE INDEX idx_bloom_rider ON hudi_indexed_table USING bloom_filters(rider) OPTIONS(expr='lower');
+```
+
+
+### Limitations 
 
 - Unlike column stats, partition stats index is not created automatically for all columns. Users must specify list of
   columns for which they want to create partition stats index.
@@ -513,9 +519,6 @@ Time taken: 0.83 seconds, Fetched 2 row(s)
 - Column stats Expression Index can not be created using `identity` expression with SQL. Users can leverage column stat index using Datasource instead.
 - Index update can fail with schema evolution.
 - Only one index can be created at a time using [async indexer](/docs/next/metadata_indexing).
-- Ensure native HFile reader is disabled (`_hoodie.hfile.use.native.reader`) to leverage the secondary index. Default value for this config is `false`.
-
-Limitations will be addressed before 1.0.0 is made generally available.
 
 ### Setting Hudi configs 
 

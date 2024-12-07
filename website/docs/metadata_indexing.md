@@ -15,20 +15,17 @@ can take hours to index. This is where Hudi's novel concurrent indexing comes in
 
 ## Concurrent Indexing
 
-Indexes in Hudi are created in two phases and uses a mix of optimistic concurrency control and log-based concurrency control models. The two
+Indexes in Hudi are created in two phases and uses a mix of optimistic concurrency control and multi-version concurrency control techniques. The two
 phase approach ensures that the other writers are unblocked.
 
-- Scheduling - This is the first phase which schedules an indexing plan and is protected by a lock. Indexing plan considers all the completed commits upto indexing instant.
-- Execution - This phase creates the index files as mentioned in the index plan. At the end of the phase Hudi ensures the completed commits after indexing instant used already created index plan to add corresponding index metadata. This check is protected by a metadata table lock and in case of failures indexing is aborted.
+- **Scheduling & Planning** : This is the first phase which schedules an indexing plan and is protected by a lock. Indexing plan considers all the completed commits upto indexing instant.
+- **Execution** : This phase creates the index files as mentioned in the index plan. At the end of the phase Hudi ensures the completed commits after indexing instant used already created index plan to add corresponding index metadata. This check is protected by a metadata table lock and in case of failures indexing is aborted.
 
-We can now create different metadata indices, including `files`, `bloom_filters`, `column_stats`, `partition_stats`, `record_index`, `secondary_index`
-and `expression_index` asynchronously in Hudi, which are then used by readers and writers to improve performance. Being able to index without blocking 
-writing has two benefits,
+We can now create different indexes and metadata, including `bloom_filters`, `column_stats`, `partition_stats`, `record_index`, `secondary_index`
+and `expression_index` asynchronously in Hudi. Being able to index without blocking writing ensures write performance is unaffected and no 
+additional manual maintenance is necessary to add/remove indexes. It also reduces resource wastage by avoiding contention between writing and indexing.
 
-- improved write latency
-- reduced resource wastage due to contention between writing and indexing.
-
-Please refer section [Setup Async Indexing](https://hudi.apache.org/docs/metadata_indexing/#setup-async-indexing) to get more details on how to setup
+Please refer section [Setup Async Indexing](#setup-async-indexing) to get more details on how to setup
 asynchronous indexing. To learn more about the design of asynchronous indexing feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi).
 
 ## Index Creation Using SQL
@@ -79,7 +76,7 @@ hoodie.metadata.index.bloom.filter.enable=true
 
 ## Setup Async Indexing
 
-In the example we will have a continuous workload using Hudi Streamer and also create index in parallel. The index creation
+In the example we will have continuous writing using Hudi Streamer and also create index in parallel. The index creation
 in example is done using HoodieIndexer so that schedule and execute phases are clearly visible for indexing. The asynchronous
 configurations can be used with Datasource and SQL based configs to create index as well.
 

@@ -167,10 +167,10 @@ For a Hudi table with user configured primary keys, the join condition in `Merge
 For a Table where Hudi auto generates primary keys, the join condition in MIT can be on any arbitrary data columns.
 :::
 
-#### Merge Into with Partial Updates {#merge-into-partial-update}
+### Merge Into with Partial Updates {#merge-into-partial-update}
 
-Partial updates only write updated columns instead of full update record. This is useful when you have hundreds of
-columns and only a few columns are updated. It reduces the write amplification as well as helps in lowering the query
+Partial updates only write updated columns instead of full change records. This is useful when you have wide tables (typical for ML feature stores) 
+with hundreds of columns and only a few columns are updated. It reduces the write amplification as well as helps in lowering the query
 latency. `MERGE INTO` statement above can be modified to use partial updates as shown below.
 
 ```sql

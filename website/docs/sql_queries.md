@@ -38,7 +38,7 @@ using path filters. We expect that native integration with Spark's optimized tab
 management will yield great performance benefits in those versions.
 :::
 
-### Snapshot Query with Index Acceleration
+### Snapshot Query without Index Acceleration
 
 In this section we would go over the various indexes and how they help in data skipping in Hudi. We will first create
 a hudi table without any index.
@@ -72,8 +72,6 @@ VALUES
 UPDATE hudi_indexed_table SET rider = 'rider-B', driver = 'driver-N', ts = '1697516137' WHERE rider = 'rider-A';
 ```
 
-#### Secondary Index Based Acceleration
-
 With the query run below, we will see no data skipping or pruning since there is no index created yet in the table as can
 be seen in the image below. All the files are scanned in the table to fetch the data. Let's create a secondary index on the rider column.
 
@@ -84,6 +82,8 @@ SELECT * FROM hudi_indexed_table WHERE rider = 'rider-B';
 
 ![Secondary Index Without Pruning Image](/assets/images/secondary-index-without-pruning.png)
 <p align = "left">Figure: Query pruning without secondary index</p>
+
+###  Query using Secondary Index 
 
 We will run the query again after creating secondary index on rider column. The query would now
 show the files scanned as 1 compared to 3 files scanned without index.
@@ -102,10 +102,10 @@ DROP INDEX secondary_index_idx_rider on hudi_indexed_table;
 ![Secondary Index With Pruning Image](/assets/images/secondary-index-with-pruning.png)
 <p align = "left">Figure: Query pruning with secondary index</p>
 
-#### Bloom Filter Expression Index Based Acceleration
+###  Query using Bloom Filter Expression Index
 
-With the query run below, we will see no data skipping or pruning since there is no index created yet in the table as can
-be seen in the image below. All the files are scanned in the table to fetch the data.
+With the query run below, we will see no data skipping or pruning since there is no index created yet on the `driver` column. 
+All the files are scanned in the table to fetch the data.
 
 ```sql
 SHOW INDEXES FROM hudi_indexed_table;
@@ -129,7 +129,7 @@ DROP INDEX expr_index_idx_bloom_driver on hudi_indexed_table;
 ![Bloom Filter Expression Index With Pruning Image](/assets/images/bloom-filter-expression-index-with-pruning.png)
 <p align = "left">Figure: Query pruning with bloom filter expression index</p>
 
-#### Column Stats Expression Index Based Acceleration
+###  Query using Column Stats Expression Index
 
 With the query run below, we will see no data skipping or pruning since there is no index created yet in the table as can
 be seen in the image below. All the files are scanned in the table to fetch the data.
@@ -156,7 +156,7 @@ DROP INDEX expr_index_idx_column_ts on hudi_indexed_table;
 ![Column Stats Expression Index With Pruning Image](/assets/images/column-stat-expression-index-with-pruning.png)
 <p align = "left">Figure: Query pruning with column stat expression index</p>
 
-#### Partition Stats Index Based Acceleration
+###  Query using Partition Stats Index
 
 With the query run below, we will see no data skipping or pruning since there is no partition stats index created yet in the table as can
 be seen in the image below. All the partitions are scanned in the table to fetch the data.
@@ -222,7 +222,7 @@ SELECT id, name, ts, price FROM hudi_table_merge_mode;
 With `EVENT_TIME_ORDERING`, the record with the larger event time (`precombineField`) overwrites the record with the
 smaller event time on the same key, regardless of transaction time. 
 
-### Snapshot Query with Custom merge mode
+### Snapshot Query with Custom Merge Mode
 
 Users can set `CUSTOM` mode to provide their own merge logic. With `CUSTOM` merge mode, you also need to provide your
 payload class that implements the merge logic. For example, you can use `PartialUpdateAvroPayload` to merge the records
@@ -287,10 +287,10 @@ FROM hudi_table_changes(
 
 # add note on checkpoint translation from 0.x to 1.x. same for incremental query below
 :::note CDC Query Checkpointing between Hudi 0.x and 1.x
-In Hudi 1.0, we switch the incremental and CDC query to used completion time, instead of instant time, to determine the
+In Hudi 1.0, we switch the incremental and CDC queries to used completion time, instead of requested instant time, to determine the
 range of commits to incrementally pull from. The checkpoint stored for Hudi incremental source and related sources is
-also changed to use completion time. To support compatiblity, Hudi does a checkpoint translation from requested instant
-time to completion time depending on the source table version. 
+also changed to use completion time. To seamless migration without downtime or data duplication, Hudi does an automatic checkpoint 
+translation from requested instant time to completion time depending on the source table version. 
 :::
 
 ### Incremental Query

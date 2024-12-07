@@ -415,92 +415,6 @@ spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 </Tabs
 >
 
-## Index data {#indexing}
-
-<Tabs
-groupId="programming-language"
-defaultValue="sparksql"
-values={[
-{ label: 'Spark SQL', value: 'sparksql', },
-]}
->
-
-<TabItem value="sparksql">
-
-```sql
--- Create a table with primary key
-CREATE TABLE hudi_indexed_table (
-    ts BIGINT,
-    uuid STRING,
-    rider STRING,
-    driver STRING,
-    fare DOUBLE,
-    city STRING
-) USING HUDI
-options(
-    primaryKey ='uuid',
-    hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
-)
-PARTITIONED BY (city);
-
-INSERT INTO hudi_indexed_table
-VALUES
-(1695159649,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco'),
-(1695091554,'e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70 ,'san_francisco'),
-(1695046462,'9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90 ,'san_francisco'),
-(1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco'),
-(1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo'    ),
-(1695376420,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40 ,'sao_paulo'    ),
-(1695173887,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai'      ),
-(1695115999,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
-
--- Create bloom filter expression index on driver column
-CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
--- It would show bloom filter expression index
-SHOW INDEXES FROM hudi_indexed_table;
--- Query on driver column would prune the data using the idx_bloom_driver index
-SELECT uuid, rider FROM hudi_indexed_table WHERE driver = 'driver-S';
-
--- Create column stat expression index on ts column
-CREATE INDEX idx_column_ts ON hudi_indexed_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format = 'yyyy-MM-dd');
--- Shows both expression indexes
-SHOW INDEXES FROM hudi_indexed_table;
--- Query on ts column would prune the data using the idx_column_ts index
-SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-24';
-
--- Create secondary index on rider column
-CREATE INDEX record_index ON hudi_indexed_table (uuid);
-CREATE INDEX idx_rider ON hudi_indexed_table (rider);
-SET hoodie.metadata.record.index.enable=true;
--- Expression index and secondary index should show up
-SHOW INDEXES FROM hudi_indexed_table;
--- Query on rider column would leverage the secondary index idx_rider
-SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E';
-
--- Update a record and query the table based on indexed columns
-UPDATE hudi_indexed_table SET rider = 'rider-B', driver = 'driver-N', ts = '1697516137' WHERE rider = 'rider-A';
--- Data skipping would be performed using column stat expression index
-SELECT uuid, rider FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-10-17';
--- Data skipping would be performed using bloom filter expression index
-SELECT * FROM hudi_indexed_table WHERE driver = 'driver-N';
--- Data skipping would be performed using secondary index
-SELECT * FROM hudi_indexed_table WHERE rider = 'rider-B';
-
--- Drop all the indexes
-DROP INDEX record_index on hudi_indexed_table;
-DROP INDEX secondary_index_idx_rider on hudi_indexed_table;
-DROP INDEX expr_index_idx_bloom_driver on hudi_indexed_table;
-DROP INDEX expr_index_idx_column_ts on hudi_indexed_table;
--- No indexes should show up for the table
-SHOW INDEXES FROM hudi_indexed_table;
-
-SET hoodie.metadata.record.index.enable=false;
-```
-</TabItem>
-
-</Tabs
->
-
 ## Update data {#upserts}
 
 Hudi tables can be updated by streaming in a DataFrame or using a standard UPDATE statement.
@@ -652,11 +566,11 @@ For a Hudi table with Hudi generated primary keys, the join condition can be on 
 </TabItem>
 </Tabs>
 
-### Merging Data with Partial Updates {#merge-partial-update}
+## Merging Data (Partial Updates) {#merge-partial-update}
 
 Partial updates only write updated columns instead of full update record. This is useful when you have hundreds of
-columns and only a few columns are updated. It reduces the write amplification as well as helps in lowering the query
-latency. `MERGE INTO` statement above can be modified to use partial updates as shown below.
+columns and only a few columns are updated. It reduces the write costs as well as storage costs. 
+`MERGE INTO` statement above can be modified to use partial updates as shown below.
 
 ```sql
 MERGE INTO hudi_table AS target
@@ -746,6 +660,91 @@ Notice that the save mode is again `Append`.
 </Tabs
 >
 
+## Index data {#indexing}
+
+<Tabs
+groupId="programming-language"
+defaultValue="sparksql"
+values={[
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
+<TabItem value="sparksql">
+
+```sql
+-- Create a table with primary key
+CREATE TABLE hudi_indexed_table (
+    ts BIGINT,
+    uuid STRING,
+    rider STRING,
+    driver STRING,
+    fare DOUBLE,
+    city STRING
+) USING HUDI
+options(
+    primaryKey ='uuid',
+    hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+)
+PARTITIONED BY (city);
+
+INSERT INTO hudi_indexed_table
+VALUES
+(1695159649,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco'),
+(1695091554,'e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70 ,'san_francisco'),
+(1695046462,'9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90 ,'san_francisco'),
+(1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco'),
+(1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo'    ),
+(1695376420,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40 ,'sao_paulo'    ),
+(1695173887,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai'      ),
+(1695115999,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
+
+-- Create bloom filter expression index on driver column
+CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
+-- It would show bloom filter expression index
+SHOW INDEXES FROM hudi_indexed_table;
+-- Query on driver column would prune the data using the idx_bloom_driver index
+SELECT uuid, rider FROM hudi_indexed_table WHERE driver = 'driver-S';
+
+-- Create column stat expression index on ts column
+CREATE INDEX idx_column_ts ON hudi_indexed_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format = 'yyyy-MM-dd');
+-- Shows both expression indexes
+SHOW INDEXES FROM hudi_indexed_table;
+-- Query on ts column would prune the data using the idx_column_ts index
+SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-24';
+
+-- Create secondary index on rider column
+CREATE INDEX record_index ON hudi_indexed_table (uuid);
+CREATE INDEX idx_rider ON hudi_indexed_table (rider);
+SET hoodie.metadata.record.index.enable=true;
+-- Expression index and secondary index should show up
+SHOW INDEXES FROM hudi_indexed_table;
+-- Query on rider column would leverage the secondary index idx_rider
+SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E';
+
+-- Update a record and query the table based on indexed columns
+UPDATE hudi_indexed_table SET rider = 'rider-B', driver = 'driver-N', ts = '1697516137' WHERE rider = 'rider-A';
+-- Data skipping would be performed using column stat expression index
+SELECT uuid, rider FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-10-17';
+-- Data skipping would be performed using bloom filter expression index
+SELECT * FROM hudi_indexed_table WHERE driver = 'driver-N';
+-- Data skipping would be performed using secondary index
+SELECT * FROM hudi_indexed_table WHERE rider = 'rider-B';
+
+-- Drop all the indexes
+DROP INDEX record_index on hudi_indexed_table;
+DROP INDEX secondary_index_idx_rider on hudi_indexed_table;
+DROP INDEX expr_index_idx_bloom_driver on hudi_indexed_table;
+DROP INDEX expr_index_idx_column_ts on hudi_indexed_table;
+-- No indexes should show up for the table
+SHOW INDEXES FROM hudi_indexed_table;
+
+SET hoodie.metadata.record.index.enable=false;
+```
+</TabItem>
+
+</Tabs
+>
 
 ## Time Travel Query {#timetravel}
 
@@ -1173,17 +1172,14 @@ Also if a record key is configured, then it's also advisable to specify a precom
 multiple records with the same key. See section below. 
 :::
 
-## Ordering Field
+## Merge Modes
 Hudi also allows users to specify a _precombine_ field, which will be used to order and resolve conflicts between multiple versions of the same record. This is very important for 
 use-cases like applying database CDC logs to a Hudi table, where a given record may appear multiple times in the source data due to repeated upstream updates. 
 Hudi also uses this mechanism to support out-of-order data arrival into a table, where records may need to be resolved in a different order than their commit time. 
 For e.g. using a _created_at_ timestamp field as the precombine field will prevent older versions of a record from overwriting newer ones or being exposed to queries, even 
 if they are written at a later commit time to the table. This is one of the key features, that makes Hudi, best suited for dealing with streaming data.
 
-To enable different merge semantics, Hudi supports merge modes, which define how the base and log files are ordered in a
-file slice and further how different records with the same record key within that file slice are merged consistently to
-produce the same deterministic results for snapshot queries, writers and table services. For more details on the merge
-modes, see [here](/docs/next/record_merger). Commit time and event time based merge modes are supported out of the box.
+To enable different merge semantics, Hudi supports [merge modes](/docs/next/record_merger). Commit time and event time based merge modes are supported out of the box.
 Users can also define their own custom merge strategies, see [here](/docs/next/sql_ddl#create-table-with-record-merge-mode).
 
 <Tabs
