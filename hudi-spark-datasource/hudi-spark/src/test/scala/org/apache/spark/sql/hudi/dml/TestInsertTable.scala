@@ -2997,4 +2997,44 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test SparkKeyGenerator When Bulk Insert") {
+    withSQLConf("hoodie.sql.bulk.insert.enable" -> "true", "hoodie.sql.insert.mode" -> "non-strict") {
+      withRecordType()(withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a multi-level partitioned table
+        // Specify wrong keygenarator by setting hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator'
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string,
+             |  pt string
+             |) using hudi
+             |tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator',
+             |  hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator'
+             |)
+             | partitioned by (dt, pt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+        //Insert data and check the same
+        spark.sql(
+          s"""insert into $tableName  values
+             |(1, 'a', 31, 1000, '2021-01-05', 'A'),
+             |(2, 'b', 18, 1000, '2021-01-05', 'A')
+             |""".stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt, pt from $tableName order by dt")(
+          Seq(1, "a", 31, 1000, "2021-01-05", "A"),
+          Seq(2, "b", 18, 1000, "2021-01-05", "A")
+        )
+      })
+    }
+  }
 }
