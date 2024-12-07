@@ -83,7 +83,7 @@
             <import>${basedir}/src/main/avro/HoodiePath.avsc</import>
             <import>${basedir}/src/main/avro/HoodieFSPermission.avsc</import>
             <import>${basedir}/src/main/avro/HoodieFileStatus.avsc</import>
-            <import>${basedir}/src/main/avro/HoodieBootstrapFilePartitionInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBootstrapSourceFilePartitionInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieBootstrapIndexInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieBootstrapPartitionMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieSliceInfo.avsc</import>
