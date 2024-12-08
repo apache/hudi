@@ -860,11 +860,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           }
         });
       } else {
-        // Iterate over all provided log-records, merging them into existing records
-        logRecordsMap.forEach((key1, value1) -> baseFileRecords.merge(key1, value1, (oldRecord, newRecord) -> {
-          Option<HoodieRecord<HoodieMetadataPayload>> mergedRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldRecord, newRecord);
-          return mergedRecord.orElse(null);
-        }));
+        // Return non-deleted records from the log files.
+        logRecordsMap.forEach((key, value) -> {
+          if (!value.getData().isDeleted()) {
+            recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
+          }
+        });
+        // Return non-deleted records from the base file.
         baseFileRecords.forEach((key, value) -> {
           if (!deletedRecordsFromLogs.contains(key)) {
             recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
