@@ -1443,8 +1443,12 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   def testSecondaryIndexWithPrimitiveDataTypes(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false")
     tableName += "test_secondary_index_with_primitive_data_types"
+
+    spark.sql("set hoodie.metadata.index.partition.stats.enable=false")
+    // HUDI-8620 tracks fixing BYTES and FIXED type for col stats and partition stats.
 
     // Create table with different data types
     spark.sql(
@@ -1529,6 +1533,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         verifyQueryPredicate(hudiOpts, col)
       }
     }
+    spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.partition.stats.enable")
   }
 
   @Test
@@ -1765,7 +1770,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   }
 
   private def getTableFileSystemView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
-    new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+    new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline,
+      new HoodieBackedTableMetadata(context(), metaClient.getStorage, getWriteConfig(opts).getMetadataConfig, metaClient.getBasePath.toString, true))
   }
 
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
@@ -1775,9 +1781,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       .withPath(basePath)
       .build()
   }
-
-  private def metadataWriter(clientConfig: HoodieWriteConfig): HoodieBackedTableMetadataWriter[_] = SparkHoodieBackedTableMetadataWriter.create(
-    storageConf, clientConfig, new HoodieSparkEngineContext(jsc)).asInstanceOf[HoodieBackedTableMetadataWriter[_]]
 }
 
 object TestSecondaryIndexPruning {

@@ -406,8 +406,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-      HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
-      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "1"
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "true",
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1"
     ) ++ metadataOpts
     setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
 

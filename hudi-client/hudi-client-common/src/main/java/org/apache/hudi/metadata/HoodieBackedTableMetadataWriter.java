@@ -535,7 +535,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private Pair<List<String>, Pair<Integer, HoodieData<HoodieRecord>>> initializeColumnStatsPartition(Map<String, Map<String, Long>> partitionToFilesMap) {
     // Find the columns to index
     final List<String> columnsToIndex = HoodieTableMetadataUtil.getColumnsToIndex(dataMetaClient.getTableConfig(),
-        dataWriteConfig.getMetadataConfig(), Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient)));
+        dataWriteConfig.getMetadataConfig(), Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient)), true);
     if (columnsToIndex.isEmpty()) {
       // atleast meta fields will be chosen for indexing. So, we should not reach this state unless virtual keys are enabled and
       // all col types are unsupported among the ones configured.

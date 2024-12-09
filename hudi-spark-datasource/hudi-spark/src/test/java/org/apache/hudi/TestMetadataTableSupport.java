@@ -81,13 +81,15 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
           .setBasePath(mdtBasePath).build();
       HoodieActiveTimeline timeline = mdtMetaClient.getActiveTimeline();
       List<HoodieInstant> instants = timeline.getInstants();
-      assertEquals(3, instants.size());
+      assertEquals(4, instants.size());
       // For MDT bootstrap instant.
       assertEquals("00000000000000000", instants.get(0).requestedTime());
-      // For RLI bootstrap instant.
+      // For col stats bootstrap instant.
       assertEquals("00000000000000001", instants.get(1).requestedTime());
+      // For RLI bootstrap instant.
+      assertEquals("00000000000000002", instants.get(3).requestedTime());
       // For the insert instant.
-      assertEquals(timestamp0, instants.get(2).requestedTime());
+      assertEquals(timestamp0, instants.get(3).requestedTime());
 
       // Insert second batch.
       String timestamp1 = "20241015000000001";
@@ -101,13 +103,15 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
       mdtMetaClient = HoodieTableMetaClient.reload(mdtMetaClient);
       timeline = mdtMetaClient.getActiveTimeline();
       instants = timeline.getInstants();
-      assertEquals(3, timeline.getInstants().size());
+      assertEquals(5, timeline.getInstants().size());
       // For MDT bootstrap instant.
       assertEquals("00000000000000000", instants.get(0).requestedTime());
-      // For RLI bootstrap instant.
+      // For col stats bootstrap instant.
       assertEquals("00000000000000001", instants.get(1).requestedTime());
+      // For RLI bootstrap instant.
+      assertEquals("00000000000000002", instants.get(3).requestedTime());
       // For the insert_overwrite_table instant.
-      assertEquals(timestamp1, instants.get(2).requestedTime());
+      assertEquals(timestamp1, instants.get(3).requestedTime());
     }
   }
 }
