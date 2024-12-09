@@ -28,7 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
@@ -95,12 +95,20 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     )
 
   @ParameterizedTest
-  @CsvSource(Array("AVRO, AVRO, avro", "AVRO, SPARK, parquet", "SPARK, AVRO, parquet", "SPARK, SPARK, parquet"))
-  def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String) {
+  @CsvSource(Array("AVRO, AVRO, avro, false", "AVRO, SPARK, parquet, false",
+    "SPARK, AVRO, parquet, false", "SPARK, SPARK, parquet, false",
+    "AVRO, AVRO, avro, true", "AVRO, SPARK, parquet, true",
+    "SPARK, AVRO, parquet, true", "SPARK, SPARK, parquet, true"))
+  def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String,
+                hasPreCombineField: Boolean) {
     var (_, readOpts) = getWriterReaderOpts(readType)
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
     writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
+    if (!hasPreCombineField) {
+      readOpts = readOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
+      writeOpts = writeOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
+    }
 
     // First Operation:
     // Producing parquet files to three default partitions.
@@ -115,6 +123,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Overwrite)
       .save(basePath)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
+    val metaClient = HoodieTableMetaClient.builder
+      .setConf(storage.getConf.newInstance).setBasePath(basePath).build
+    assertEquals(hasPreCombineField, !StringUtils.isNullOrEmpty(metaClient.getTableConfig.getPreCombineField))
     val commit1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
