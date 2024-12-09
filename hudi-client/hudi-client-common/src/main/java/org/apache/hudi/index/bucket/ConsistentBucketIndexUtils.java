@@ -209,6 +209,7 @@ public class ConsistentBucketIndexUtils {
       byte[] bytes = metadata.toBytes();
       out.write(bytes);
       out.close();
+      LOG.info("Saved hash metadata to file: " + fullPath);
       return true;
     } catch (IOException e) {
       LOG.warn("Failed to update bucket metadata: " + metadata, e);
@@ -235,6 +236,7 @@ public class ConsistentBucketIndexUtils {
     // check for the marker after catching the exception and we don't need to fail if the file exists
     try {
       FileIOUtils.createFileInPath(storage, fullPath, Option.of(getUTF8Bytes(StringUtils.EMPTY_STRING)));
+      LOG.info("Created commit marker: {} for metadata file: {}", fullPath.getName(), path.getName());
     } catch (HoodieIOException e) {
       if (!storage.exists(fullPath)) {
         throw e;
@@ -301,6 +303,7 @@ public class ConsistentBucketIndexUtils {
         .map(fileIdPrefix -> FSUtils.getFileIdPfxFromFileId(fileIdPrefix.getFileId())).anyMatch(hoodieFileGroupIdPredicate)) {
       try {
         createCommitMarker(table, metaFile.getPath(), metadataPath);
+        LOG.info("Recommit metadata file: {} in partition: {}", metaFile.getPath().getName(), partition);
         return true;
       } catch (IOException e) {
         throw new HoodieIOException("Exception while creating marker file " + metaFile.getPath().getName() + " for partition " + partition, e);
