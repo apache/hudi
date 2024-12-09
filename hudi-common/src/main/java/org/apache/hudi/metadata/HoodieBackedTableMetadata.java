@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -826,7 +827,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private Map<String, String> reverseLookupSecondaryKeys(String partitionName, List<String> recordKeys, FileSlice fileSlice) {
-    Map<String, String> recordKeyMap = new HashMap<>();
     Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers = getOrCreateReaders(partitionName, fileSlice);
     try {
       HoodieSeekingFileReader<?> baseFileReader = readers.getKey();
@@ -834,45 +834,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       if (baseFileReader == null && logRecordScanner == null) {
         return Collections.emptyMap();
       }
-
       Set<String> keySet = new TreeSet<>(recordKeys);
-      Set<String> deletedRecordsFromLogs = new HashSet<>();
-      // Map of recordKey (primaryKey) -> log record that is not deleted for all input recordKeys
-      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
-      logRecordScanner.getRecords().forEach(record -> {
-        String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
-        HoodieMetadataPayload payload = record.getData();
-        if (!payload.isDeleted()) { // process only valid records.
-          if (keySet.contains(recordKey)) {
-            logRecordsMap.put(recordKey, record);
-          }
-        } else {
-          deletedRecordsFromLogs.add(recordKey);
-        }
-      });
+      Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords =
+          fetchBaseFileAllRecordsByPayloadForSecIndex(baseFileReader, keySet, partitionName);
 
-      // Map of (record-key, secondary-index-record)
-      Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords = fetchBaseFileAllRecordsByPayloadForSecIndex(baseFileReader, keySet, partitionName);
-      if (baseFileRecords == null || baseFileRecords.isEmpty()) {
-        logRecordsMap.forEach((key1, value1) -> {
-          if (!value1.getData().isDeleted()) {
-            recordKeyMap.put(key1, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value1.getRecordKey()));
-          }
-        });
-      } else {
-        // Return non-deleted records from the log files.
-        logRecordsMap.forEach((key, value) -> {
-          if (!value.getData().isDeleted()) {
-            recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
-          }
-        });
-        // Return non-deleted records from the base file.
-        baseFileRecords.forEach((key, value) -> {
-          if (!deletedRecordsFromLogs.contains(key)) {
-            recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
-          }
-        });
-      }
+      return reverseLookupSecondaryKeysInternal(recordKeys, baseFileRecords, logRecordScanner);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for  " + recordKeys.size() + " key : ", ioe);
     } finally {
@@ -880,7 +846,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         closeReader(readers);
       }
     }
-    return recordKeyMap;
   }
 
   @Override
@@ -920,5 +885,43 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }).collect(Collectors.toMap(record -> {
       return SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
     }, record -> record));
+  }
+
+  @VisibleForTesting
+  public static Map<String, String> reverseLookupSecondaryKeysInternal(List<String> recordKeys,
+                                                                       Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords,
+                                                                       HoodieMetadataLogRecordReader logRecordScanner) {
+    Map<String, String> recordKeyMap = new HashMap<>();
+    Set<String> keySet = new TreeSet<>(recordKeys);
+    Set<String> deletedRecordsFromLogs = new HashSet<>();
+    // Map of recordKey (primaryKey) -> log record that is not deleted for all input recordKeys
+    Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
+    logRecordScanner.getRecords().forEach(record -> {
+      String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
+      HoodieMetadataPayload payload = record.getData();
+      if (!payload.isDeleted()) { // process only valid records.
+        if (keySet.contains(recordKey)) {
+          logRecordsMap.put(recordKey, record);
+        }
+      } else {
+        // Only when the latest log record is non-tombstone, logRecordMap can contain the recordKey.
+        logRecordsMap.remove(recordKey);
+        deletedRecordsFromLogs.add(recordKey);
+      }
+    });
+
+    // Return non-deleted records from the log files.
+    logRecordsMap.forEach((key, value) -> {
+      recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
+    });
+    // Return non-deleted records from the base file.
+    if (baseFileRecords != null) {
+      baseFileRecords.forEach((key, value) -> {
+        if (!deletedRecordsFromLogs.contains(key)) {
+          recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
+        }
+      });
+    }
+    return recordKeyMap;
   }
 }
