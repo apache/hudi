@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CommitUtils;
@@ -56,7 +55,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -183,9 +181,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
   public void testRecordGenerationAPIsForMOR() throws IOException {
     HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     cleanupClients();
-    Properties props = new Properties();
-    props.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
-    initMetaClient(tableType, props);
+    initMetaClient(tableType);
     cleanupTimelineService();
     initTimelineService();
 
