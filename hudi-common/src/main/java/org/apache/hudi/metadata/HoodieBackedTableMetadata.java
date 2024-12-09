@@ -894,8 +894,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Map<String, String> recordKeyMap = new HashMap<>();
     Set<String> keySet = new TreeSet<>(recordKeys);
     Set<String> deletedRecordsFromLogs = new HashSet<>();
-    // Map of recordKey (primaryKey) -> log record that is not deleted for all input recordKeys
     Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
+    // Note that: we read the log records from the oldest to the latest!!!
+    // If we change the read order, we need update the following logic accordingly.
     logRecordScanner.getRecords().forEach(record -> {
       String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
       HoodieMetadataPayload payload = record.getData();
@@ -904,17 +905,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           logRecordsMap.put(recordKey, record);
         }
       } else {
-        // Only when the latest log record is non-tombstone, logRecordMap can contain the recordKey.
+        // When and Only when the latest log record is non-tombstone, logRecordMap contains its recordKey.
         logRecordsMap.remove(recordKey);
         deletedRecordsFromLogs.add(recordKey);
       }
     });
 
-    // Return non-deleted records from the log files.
-    logRecordsMap.forEach((key, value) -> {
-      recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
-    });
-    // Return non-deleted records from the base file.
+    // Return non-tombstone records from the log files.
+    logRecordsMap.forEach((key, value) -> recordKeyMap.put(
+        key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey())));
+    // Return non-tombstone records from the base file.
     if (baseFileRecords != null) {
       baseFileRecords.forEach((key, value) -> {
         if (!deletedRecordsFromLogs.contains(key)) {
