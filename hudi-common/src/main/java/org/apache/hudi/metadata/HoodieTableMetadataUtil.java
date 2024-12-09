@@ -1688,7 +1688,8 @@ public class HoodieTableMetadataUtil {
       return schema.getType() != Schema.Type.MAP;
     }*/
     // if record Type is not set or if recordType is SPARK then we cannot compare RECORD and ARRAY types in addition to MAP type
-    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
+    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
+        && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
