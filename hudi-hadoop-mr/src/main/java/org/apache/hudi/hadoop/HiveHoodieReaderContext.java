@@ -53,7 +53,6 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -261,15 +260,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       throw new IllegalStateException("Schema evolution is not supported in the filegroup reader for Hive currently");
     }
     return HoodieArrayWritableAvroUtils.projectRecord(from, to);
-  }
-
-  @Override
-  public Comparable castValue(Comparable value, Schema.Type newType) {
-    //TODO: [HUDI-8261] actually do casting here
-    if (value instanceof WritableComparable) {
-      return value;
-    }
-    return (WritableComparable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(value, Schema.create(newType));
   }
 
   public UnaryOperator<ArrayWritable> reverseProjectRecord(Schema from, Schema to) {

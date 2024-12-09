@@ -249,7 +249,7 @@ public abstract class HoodieReaderContext<T> implements Closeable {
     }
 
     Object value = getValue(recordOption.get(), schema, orderingFieldName.get());
-    Comparable finalOrderingVal = value != null ? (Comparable) value : COMMIT_TIME_ORDERING_VALUE;
+    Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : COMMIT_TIME_ORDERING_VALUE;
     metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;
   }
@@ -285,7 +285,7 @@ public abstract class HoodieReaderContext<T> implements Closeable {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, recordKey);
     meta.put(INTERNAL_META_PARTITION_PATH, partitionPath);
-    meta.put(INTERNAL_META_ORDERING_FIELD, orderingVal);
+    meta.put(INTERNAL_META_ORDERING_FIELD, convertValueToEngineType(orderingVal));
     return meta;
   }
 
@@ -356,7 +356,21 @@ public abstract class HoodieReaderContext<T> implements Closeable {
     return projectRecord(from, to, Collections.emptyMap());
   }
 
-  public abstract Comparable castValue(Comparable value, Schema.Type newType);
+  /**
+   * Returns the value to a type representation in a specific engine.
+   * <p>
+   * This is overridden by the reader context implementation on a specific engine to handle
+   * engine-specific field type system.  For example, Spark uses {@code UTF8String} to represent
+   * {@link String} field values, so we need to convert the values to {@code UTF8String} type
+   * in Spark for proper value comparison.
+   *
+   * @param value {@link Comparable} value to be converted.
+   *
+   * @return the converted value in a type representation in a specific engine.
+   */
+  public Comparable convertValueToEngineType(Comparable value) {
+    return value;
+  }
 
   /**
    * Extracts the record position value from the record itself.
