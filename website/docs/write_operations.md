@@ -134,7 +134,7 @@ The following is an inside look on the Hudi write path and the sequence of event
 Here is a diagramatic representation of the flow.
 
 <figure>
-    <img className="docimage" src={require("/assets/images/hudi_write_path.png").default} alt="hudi_write_path.png" />
+    <img className="docimage" src={require("/assets/images/write_path_cluster.png").default} alt="hudi_write_path_cluster.png" />
 </figure>
 
 ## Related Resources
