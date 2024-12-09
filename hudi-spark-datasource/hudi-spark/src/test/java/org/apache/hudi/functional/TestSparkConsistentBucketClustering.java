@@ -31,9 +31,11 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -46,6 +48,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -74,6 +77,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -166,8 +170,8 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
    * @throws IOException
    */
   @ParameterizedTest
-  @MethodSource("configParams")
-  public void testLoadMetadata(boolean isCommitFilePresent, boolean rowWriterEnable, boolean single) throws IOException {
+  @MethodSource("configParams2")
+  public void testLoadMetadata(boolean rowWriterEnable, boolean single) throws IOException {
     final int maxFileSize = 5120;
     final int targetBucketNum = 14;
     setup(maxFileSize, Collections.emptyMap(), single);
@@ -185,36 +189,136 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     writeData(writeClient.createNewInstantTime(), 10, true);
     writeData(writeClient.createNewInstantTime(), 10, true);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     writeClient.clean();
-    HoodieTimelineArchiver hoodieTimelineArchiver = new TimelineArchiverV2(writeClient.getConfig(), table);
+    HoodieTimelineArchiver hoodieTimelineArchiver =
+        new TimelineArchiverV2(writeClient.getConfig(), HoodieSparkTable.create(config, context, metaClient));
     hoodieTimelineArchiver.archiveIfRequired(context);
-    Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
-      if (!isCommitFilePresent) {
-        StoragePath metadataPath =
-            FSUtils.constructAbsolutePath(table.getMetaClient().getHashingMetadataPath(), p);
+    loadConsistentHashRelatedFiles().entrySet().forEach(e -> {
+      // there are two hash metadata file and two commit file for each partition
+      // first: initial instant
+      // second: cluster instant
+      Assertions.assertEquals(2, e.getValue().getLeft().size());
+      Assertions.assertEquals(2, e.getValue().getRight().size());
+
+      // load latest committed metadata
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(table, e.getKey());
+      Assertions.assertTrue(metadata.isPresent());
+      Assertions.assertEquals(clusteringTime, metadata.get().getInstant());
+      Assertions.assertEquals(targetBucketNum, metadata.get().getNodes().size());
+
+      // test recovery from not exist commit file
+      // delete all commit file
+      e.getValue().getRight().forEach(file -> {
         try {
-          table.getStorage().listDirectEntries(metadataPath).forEach(fl -> {
-            if (fl.getPath().getName()
-                .contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX)) {
-              try {
-                // delete commit marker to test recovery job
-                table.getStorage().deleteDirectory(fl.getPath());
-              } catch (IOException e) {
-                throw new RuntimeException(e);
-              }
-            }
-          });
-        } catch (IOException e) {
-          throw new RuntimeException(e);
+          table.getStorage().deleteFile(file.getPath());
+        } catch (IOException ex) {
+          Assertions.fail(ex);
         }
-      }
-      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadMetadata(table, p).get();
-      Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
+      });
     });
+
+    loadConsistentHashRelatedFiles().entrySet().forEach(e -> {
+      // after deleting the committed file
+      Assertions.assertEquals(2, e.getValue().getLeft().size());
+      Assertions.assertEquals(0, e.getValue().getRight().size());
+
+      // load latest committed metadata, should recover the commit file
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(table, e.getKey());
+      Assertions.assertTrue(metadata.isPresent());
+      Assertions.assertEquals(clusteringTime, metadata.get().getInstant());
+      Assertions.assertEquals(targetBucketNum, metadata.get().getNodes().size());
+    });
+
+    loadConsistentHashRelatedFiles().entrySet().forEach(e -> {
+      // after recovering the committed file
+      Assertions.assertEquals(2, e.getValue().getLeft().size());
+      Assertions.assertEquals(2, e.getValue().getRight().size());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(table, e.getKey());
+      Assertions.assertTrue(metadata.isPresent());
+      Assertions.assertEquals(clusteringTime, metadata.get().getInstant());
+      Assertions.assertEquals(targetBucketNum, metadata.get().getNodes().size());
+    });
+
     writeData(writeClient.createNewInstantTime(), 10, true);
     writeData(writeClient.createNewInstantTime(), 10, true);
     Assertions.assertEquals(2080, readRecords().size());
+  }
+
+  private Map<String/*partition*/, Pair<Set<StoragePathInfo>/*hash metadata files*/, Set<StoragePathInfo>/*hash commit files*/>> loadConsistentHashRelatedFiles() {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    final HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    return Arrays.stream(dataGen.getPartitionPaths()).map(partition -> {
+      StoragePath hashMetadataPath = FSUtils.constructAbsolutePath(table.getMetaClient().getHashingMetadataPath(), partition);
+      try {
+        Set<StoragePathInfo> hashMetadataFiles =
+            table.getStorage().listDirectEntries(hashMetadataPath).stream().filter(f -> f.getPath().getName().contains(HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX))
+                .collect(Collectors.toSet());
+        Set<StoragePathInfo> commitFiles =
+            table.getStorage().listDirectEntries(hashMetadataPath).stream().filter(f -> f.getPath().getName().contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX))
+                .collect(Collectors.toSet());
+        return Pair.of(partition, Pair.of(hashMetadataFiles, commitFiles));
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    }).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testLoadMetadataForPendingClustering(boolean rowWriterEnable) throws IOException {
+    final int maxFileSize = 5120;
+    final int targetBucketNum = 14;
+    setup(maxFileSize);
+    writeClient.getConfig().setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
+    writeData(writeClient.createNewInstantTime(), 2000, true);
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+
+    // should be 1 committed initial hash metadata for each partition
+    loadConsistentHashRelatedFiles().entrySet().forEach(e -> {
+      Assertions.assertEquals(1, e.getValue().getLeft().size());
+      Assertions.assertEquals(1, e.getValue().getRight().size());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(table, e.getKey());
+      Assertions.assertTrue(metadata.isPresent());
+      Assertions.assertEquals(HoodieActiveTimeline.INIT_INSTANT_TS, metadata.get().getInstant());
+    });
+
+    // run cluster
+    writeClient.cluster(clusteringTime, true);
+    loadConsistentHashRelatedFiles().entrySet().forEach(e -> {
+      // should be 1 committed initial hash metadata and 1 uncommited cluster hash metadata for each partition
+      Assertions.assertEquals(2, e.getValue().getLeft().size());
+      Assertions.assertEquals(1, e.getValue().getRight().size());
+      // after load, cluster hash metadata file should also be committed since the operation is completed
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(table, e.getKey());
+      Assertions.assertTrue(metadata.isPresent());
+      Assertions.assertEquals(clusteringTime, metadata.get().getInstant());
+      Assertions.assertEquals(targetBucketNum, metadata.get().getNodes().size());
+    });
+    // after commit, should be 2 committed hash metadata for each partition
+    loadConsistentHashRelatedFiles().entrySet().forEach(e -> {
+      // should be 1 committed initial hash metadata and 1 uncommited cluster hash metadata for each partition
+      Assertions.assertEquals(2, e.getValue().getLeft().size());
+      Assertions.assertEquals(2, e.getValue().getRight().size());
+      // after load, cluster hash metadata file should also be committed since the operation is completed
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(table, e.getKey());
+      Assertions.assertTrue(metadata.isPresent());
+      Assertions.assertEquals(clusteringTime, metadata.get().getInstant());
+      Assertions.assertEquals(targetBucketNum, metadata.get().getNodes().size());
+    });
+    writeData(writeClient.createNewInstantTime(), 10, true);
+    Assertions.assertEquals(2010, readRecords().size());
   }
 
   /**
@@ -248,7 +352,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     Assertions.assertEquals(1000, rows.size());
 
     StructType schema = rows.get(0).schema();
-    Schema rawSchema = AvroConversionUtils.convertStructTypeToAvroSchema(schema,  "test_struct_name", "test_namespace");
+    Schema rawSchema = AvroConversionUtils.convertStructTypeToAvroSchema(schema, "test_struct_name", "test_namespace");
     Schema.Field field = rawSchema.getField(sortColumn);
     Schema.Field fileNameFiled = rawSchema.getField(FILENAME_METADATA_FIELD);
 
@@ -374,6 +478,15 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         Arguments.of(false, false, false),
         Arguments.of(true, true, false),
         Arguments.of(false, true, false)
+    );
+  }
+
+  private static Stream<Arguments> configParams2() {
+    return Stream.of(
+        Arguments.of(true, false),
+        Arguments.of(false, false),
+        Arguments.of(true, true),
+        Arguments.of(false, true)
     );
   }
 
