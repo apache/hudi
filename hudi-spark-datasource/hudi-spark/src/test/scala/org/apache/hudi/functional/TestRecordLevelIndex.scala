@@ -299,8 +299,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     assertEquals(0, getFileGroupCountForRecordIndex(writeConfig))
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(0, metaClient.getTableConfig.getMetadataPartitionsInflight.size())
-    // only files partition should be present
-    assertEquals(1, metaClient.getTableConfig.getMetadataPartitions.size())
+    // only files, col stats partition should be present.
+    assertEquals(2, metaClient.getTableConfig.getMetadataPartitions.size())
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,

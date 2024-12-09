@@ -156,8 +156,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     return HoodieColumnRangeMetadata.<Comparable>create(
         columnStats.getFileName(),
         columnStats.getColumnName(),
-        unwrapAvroValueWrapper(columnStats.getMinValue()),
-        unwrapAvroValueWrapper(columnStats.getMaxValue()),
+        unwrapAvroValueWrapper(columnStats.getMinValue()), // misses for special handling.
+        unwrapAvroValueWrapper(columnStats.getMaxValue()), // misses for special handling.
         columnStats.getNullCount(),
         columnStats.getValueCount(),
         columnStats.getTotalSize(),

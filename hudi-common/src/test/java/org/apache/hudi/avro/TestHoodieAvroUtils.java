@@ -651,11 +651,11 @@ public class TestHoodieAvroUtils {
       assertEquals((int) ChronoUnit.DAYS.between(
               LocalDate.ofEpochDay(0), ((Date) value).toLocalDate()),
           ((GenericRecord) wrapperValue).get(0));
-      assertEquals(((Date) value).toLocalDate(), unwrapAvroValueWrapper(wrapperValue));
+      assertEquals((value), unwrapAvroValueWrapper(wrapperValue));
     } else if (value instanceof LocalDate) {
       assertEquals((int) ChronoUnit.DAYS.between(LocalDate.ofEpochDay(0), (LocalDate) value),
           ((GenericRecord) wrapperValue).get(0));
-      assertEquals(value, unwrapAvroValueWrapper(wrapperValue));
+      assertEquals(Date.valueOf((LocalDate)value), unwrapAvroValueWrapper(wrapperValue));
     } else {
       assertEquals("0.000000000000000",
           ((BigDecimal) value)
