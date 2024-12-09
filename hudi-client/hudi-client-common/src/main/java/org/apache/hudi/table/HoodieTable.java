@@ -452,11 +452,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param context HoodieEngineContext
    * @param instantTime Instant Time for scheduling compaction
    * @param extraMetadata additional metadata to write into plan
+   * @param specificPartitions specific partitions to do compaction
    * @return
    */
   public abstract Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context,
                                                                   String instantTime,
-                                                                  Option<Map<String, String>> extraMetadata);
+                                                                  Option<Map<String, String>> extraMetadata,
+                                                                  Option<Set<String>> specificPartitions);
 
   /**
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access.

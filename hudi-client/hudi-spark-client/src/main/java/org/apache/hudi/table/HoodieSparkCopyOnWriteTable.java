@@ -89,6 +89,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 
@@ -171,7 +172,8 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+  public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata,
+                                                         Option<Set<String>> specificPartitions) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 

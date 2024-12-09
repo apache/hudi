@@ -75,6 +75,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
@@ -318,7 +319,8 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+  public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata,
+                                                         Option<Set<String>> specificPartitions) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 

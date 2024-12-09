@@ -171,6 +171,20 @@ public class ITTestDataStreamWrite extends TestLogger {
     testWriteToHoodie(conf, "mor_write_with_compact", 1, EXPECTED);
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
+  public void testWriteMergeOnReadWithCompactionIncremental(String indexType) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
+    conf.setString(FlinkOptions.INDEX_TYPE, indexType);
+    conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_INCREMENTAL_PARTITIONS, true);
+    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.setString(FlinkOptions.INDEX_KEY_FIELD, "uuid");
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    testWriteToHoodie(conf, "mor_write_with_compact", 1, EXPECTED);
+  }
+
   @Test
   public void testWriteCopyOnWriteWithClustering() throws Exception {
     testWriteCopyOnWriteWithClustering(false);

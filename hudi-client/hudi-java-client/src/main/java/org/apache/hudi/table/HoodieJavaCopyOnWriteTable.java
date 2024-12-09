@@ -80,6 +80,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class HoodieJavaCopyOnWriteTable<T>
     extends HoodieJavaTable<T> implements HoodieCompactionHandler<T> {
@@ -185,7 +186,8 @@ public class HoodieJavaCopyOnWriteTable<T>
   @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context,
                                                          String instantTime,
-                                                         Option<Map<String, String>> extraMetadata) {
+                                                         Option<Map<String, String>> extraMetadata,
+                                                         Option<Set<String>> specificPartitions) {
     throw new HoodieNotSupportedException("ScheduleCompaction is not supported on a CopyOnWrite table");
   }
 

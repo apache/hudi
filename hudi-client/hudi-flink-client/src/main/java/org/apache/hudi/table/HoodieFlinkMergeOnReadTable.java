@@ -47,6 +47,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Flink MERGE_ON_READ table.
@@ -100,12 +101,12 @@ public class HoodieFlinkMergeOnReadTable<T>
   }
 
   @Override
-  public Option<HoodieCompactionPlan> scheduleCompaction(
-      HoodieEngineContext context,
-      String instantTime,
-      Option<Map<String, String>> extraMetadata) {
+  public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context,
+                                                         String instantTime,
+                                                         Option<Map<String, String>> extraMetadata,
+                                                         Option<Set<String>> specificPartitions) {
     ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor(
-        context, config, this, instantTime, extraMetadata, WriteOperationType.COMPACT);
+        context, config, this, instantTime, extraMetadata, WriteOperationType.COMPACT, specificPartitions);
     return scheduleCompactionExecutor.execute();
   }
 
@@ -121,7 +122,7 @@ public class HoodieFlinkMergeOnReadTable<T>
   @Override
   public Option<HoodieCompactionPlan> scheduleLogCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
     ScheduleCompactionActionExecutor scheduleLogCompactionExecutor = new ScheduleCompactionActionExecutor(
-        context, config, this, instantTime, extraMetadata, WriteOperationType.LOG_COMPACT);
+        context, config, this, instantTime, extraMetadata, WriteOperationType.LOG_COMPACT, Option.empty());
     return scheduleLogCompactionExecutor.execute();
   }
 
