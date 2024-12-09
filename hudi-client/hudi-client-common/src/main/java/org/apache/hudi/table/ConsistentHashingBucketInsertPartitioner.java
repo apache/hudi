@@ -29,5 +29,14 @@ public interface ConsistentHashingBucketInsertPartitioner {
    * @param partition partition to set Consistent Hashing nodes
    * @param nodes     nodes from clustering plan
    */
+  /**
+   * Set pending consistent hashing for partition, only used in executing clustering
+   * When call this method, the bulk insert will directly use the pending metadata as the consistent hash metadata for writing data to after-resizing buckets.
+   * Used in the case of executing bulk insert.
+   * NOTE: This method should be called before the bulk insert operation, and will skip building identifiers from records, just use the pending metadata.
+   * For which not calling this method, the bulk insert will use the committed metadata as the bucket metadata and disallow writing data to the pending-resizing buckets.
+   * @param partition partition to set Consistent Hashing nodes
+   * @param nodes     nodes from clustering plan
+   */
   void addHashingChildrenNodes(String partition, List<ConsistentHashingNode> nodes);
 }
