@@ -53,6 +53,9 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
 
   private final Map<String, List<ConsistentHashingNode>> hashingChildrenNodes;
 
+  // mark if this partitioner is used for writing to uncommitted buckets. Only for case that clustering service executes bucket resizing.
+  private boolean isExecutingClustering = false;
+
   public RDDConsistentBucketBulkInsertPartitioner(HoodieTable table,
                                                   Map<String, String> strategyParams,
                                                   boolean preserveHoodieMetadata) {
@@ -103,6 +106,7 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
   public void addHashingChildrenNodes(String partition, List<ConsistentHashingNode> nodes) {
     ValidationUtils.checkState(nodes.stream().noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL), "children nodes should not be tagged as NORMAL");
     hashingChildrenNodes.put(partition, nodes);
+    this.isExecutingClustering = true;
   }
 
   /**
@@ -111,8 +115,13 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
     HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
-    if (hashingChildrenNodes.containsKey(partition)) {
+    if (isExecutingClustering) {
+      // for executing bucket resizing
+      ValidationUtils.checkState(hashingChildrenNodes.containsKey(partition), "children nodes should be provided for clustering");
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
+    } else {
+      // for normal bulk insert
+      ValidationUtils.checkState(!hashingChildrenNodes.containsKey(partition), "children nodes should not be provided for normal bulk insert");
     }
     return new ConsistentBucketIdentifier(metadata);
   }
@@ -122,6 +131,9 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
    * the mapping from partition to its bucket identifier is constructed.
    */
   private Map<String, ConsistentBucketIdentifier> initializeBucketIdentifier(JavaRDD<HoodieRecord<T>> records) {
+    if (isExecutingClustering) {
+      return hashingChildrenNodes.keySet().stream().collect(Collectors.toMap(p -> p, this::getBucketIdentifier));
+    }
     return records.map(HoodieRecord::getPartitionPath).distinct().collect().stream()
         .collect(Collectors.toMap(p -> p, this::getBucketIdentifier));
   }

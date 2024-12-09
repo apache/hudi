@@ -61,7 +61,10 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
 
   private final List<String> fileIdPfxList = new ArrayList<>();
 
-  private final Map<String, List<ConsistentHashingNode>> hashingChildrenNodes;
+  private final Map<String/*partition*/, List<ConsistentHashingNode>/*child nodes*/> hashingChildrenNodes;
+
+  // mark if this partitioner is used for writing to uncommitted buckets. Only for case that clustering service executes bucket resizing.
+  private boolean isExecutingClustering = false;
 
   private Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
 
@@ -94,8 +97,13 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
     HoodieConsistentHashingMetadata metadata =
         ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
-    if (hashingChildrenNodes.containsKey(partition)) {
+    if (isExecutingClustering) {
+      // for executing bucket resizing
+      ValidationUtils.checkState(hashingChildrenNodes.containsKey(partition), "children nodes should be provided for clustering");
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
+    } else {
+      // for normal bulk insert
+      ValidationUtils.checkState(!hashingChildrenNodes.containsKey(partition), "children nodes should not be provided for normal bulk insert");
     }
     return new ConsistentBucketIdentifier(metadata);
   }
@@ -152,6 +160,9 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
    * the mapping from partition to its bucket identifier is constructed.
    */
   private Map<String, ConsistentBucketIdentifier> initializeBucketIdentifier(JavaRDD<Row> rows) {
+    if (isExecutingClustering) {
+      return hashingChildrenNodes.keySet().stream().collect(Collectors.toMap(p -> p, this::getBucketIdentifier));
+    }
     return rows.map(this.extractor::getPartitionPath).distinct().collect().stream()
         .collect(Collectors.toMap(p -> p, this::getBucketIdentifier));
   }
@@ -161,6 +172,7 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
     ValidationUtils.checkState(nodes.stream().noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL),
         "children nodes should not be tagged as NORMAL");
     hashingChildrenNodes.put(partition, nodes);
+    this.isExecutingClustering = true;
   }
 
   private int getBucketId(Row row) {
