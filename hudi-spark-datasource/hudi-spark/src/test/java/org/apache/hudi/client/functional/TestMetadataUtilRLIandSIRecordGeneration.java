@@ -65,6 +65,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -195,7 +196,9 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
   public void testRecordGenerationAPIsForMOR() throws IOException {
     HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     cleanupClients();
-    initMetaClient(tableType);
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
+    initMetaClient(tableType, props);
     cleanupTimelineService();
     initTimelineService();
 
