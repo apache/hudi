@@ -28,6 +28,7 @@ import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -52,6 +53,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
@@ -285,8 +287,23 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
       Assertions.assertEquals(HoodieActiveTimeline.INIT_INSTANT_TS, metadata.get().getInstant());
     });
 
-    // run cluster
-    writeClient.cluster(clusteringTime, true);
+    // run clustering, but not commit to timeline
+    HoodieWriteMetadata clusteringMetadata = writeClient.cluster(clusteringTime, false);
+    loadConsistentHashRelatedFiles().entrySet().forEach(e -> {
+      // should be 1 committed initial hash metadata and 1 uncommited cluster hash metadata for each partition
+      Assertions.assertEquals(2, e.getValue().getLeft().size());
+      Assertions.assertEquals(1, e.getValue().getRight().size());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      // even if the cluster hash metadata file has been written, it should not be loaded since the operation is not completed in timeline
+      Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(table, e.getKey());
+      Assertions.assertTrue(metadata.isPresent());
+      Assertions.assertEquals(HoodieActiveTimeline.INIT_INSTANT_TS, metadata.get().getInstant());
+    });
+
+    // commit the clustering operation
+    writeClient.commitClustering(clusteringTime, (HoodieCommitMetadata) clusteringMetadata.getCommitMetadata().get(), Option.empty());
+    // after commiting, should be 2 committed hash metadata for each partition
     loadConsistentHashRelatedFiles().entrySet().forEach(e -> {
       // should be 1 committed initial hash metadata and 1 uncommited cluster hash metadata for each partition
       Assertions.assertEquals(2, e.getValue().getLeft().size());
@@ -299,12 +316,12 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
       Assertions.assertEquals(clusteringTime, metadata.get().getInstant());
       Assertions.assertEquals(targetBucketNum, metadata.get().getNodes().size());
     });
-    // after commit, should be 2 committed hash metadata for each partition
+
+    // after loading, commit files should be created
     loadConsistentHashRelatedFiles().entrySet().forEach(e -> {
-      // should be 1 committed initial hash metadata and 1 uncommited cluster hash metadata for each partition
+      // should be 2 committed initial hash metadata for each partition
       Assertions.assertEquals(2, e.getValue().getLeft().size());
       Assertions.assertEquals(2, e.getValue().getRight().size());
-      // after load, cluster hash metadata file should also be committed since the operation is completed
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
       Option<HoodieConsistentHashingMetadata> metadata = ConsistentBucketIndexUtils.loadMetadata(table, e.getKey());

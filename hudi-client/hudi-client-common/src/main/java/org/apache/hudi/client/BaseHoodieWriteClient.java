@@ -1214,6 +1214,27 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Commit a clustering operation. Allow passing additional meta-data to be stored in commit instant file.
+   *
+   * @param clusteringInstantTime Clustering Instant Time
+   * @param metadata All the metadata that gets stored along with a commit
+   * @param extraMetadata Extra Metadata to be stored
+   */
+  public void commitClustering(String clusteringInstantTime, HoodieCommitMetadata metadata,
+                                  Option<Map<String, String>> extraMetadata) {
+    HoodieTable table = createTable(config);
+    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
+    completeClustering(metadata, table, clusteringInstantTime);
+  }
+
+  /**
+   * Commit clustering and track metrics.
+   */
+  protected void completeClustering(HoodieCommitMetadata metadata, HoodieTable table, String clusteringInstantTime) {
+    tableServiceClient.completeClustering(metadata, table, clusteringInstantTime);
+  }
+
+  /**
    * Ensures clustering instant is in expected state and performs clustering for the plan stored in metadata.
    * @param clusteringInstant Clustering Instant Time
    * @return Collection of Write Status
