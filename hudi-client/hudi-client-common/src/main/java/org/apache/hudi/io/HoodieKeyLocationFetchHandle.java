@@ -24,15 +24,14 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
-
-import java.util.List;
-import java.util.stream.Stream;
 
 /**
  * {@link HoodieRecordLocation} fetch handle for all records from {@link HoodieBaseFile} of interest.
@@ -51,28 +50,26 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
     this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
-  private List<HoodieKey> fetchHoodieKeys(HoodieBaseFile baseFile) {
+  private ClosableIterator<HoodieKey> fetchHoodieKeys(HoodieBaseFile baseFile) {
     BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
     if (keyGeneratorOpt.isPresent()) {
-      return baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
+      return baseFileUtils.getHoodieKeyIterator(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
     } else {
-      return baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
+      return baseFileUtils.getHoodieKeyIterator(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
     }
   }
 
-  public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
+  public ClosableIterator<Pair<HoodieKey, HoodieRecordLocation>> locations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
     String commitTime = baseFile.getCommitTime();
     String fileId = baseFile.getFileId();
-    return fetchHoodieKeys(baseFile).stream()
-        .map(entry -> Pair.of(entry,
-            new HoodieRecordLocation(commitTime, fileId)));
+    return new CloseableMappingIterator<>(fetchHoodieKeys(baseFile),
+        entry -> Pair.of(entry, new HoodieRecordLocation(commitTime, fileId)));
   }
 
-  public Stream<Pair<String, HoodieRecordGlobalLocation>> globalLocations() {
+  public ClosableIterator<Pair<String, HoodieRecordGlobalLocation>> globalLocations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
-    return fetchHoodieKeys(baseFile).stream()
-        .map(entry -> Pair.of(entry.getRecordKey(),
-            new HoodieRecordGlobalLocation(entry.getPartitionPath(), baseFile.getCommitTime(), baseFile.getFileId())));
+    return new CloseableMappingIterator<>(fetchHoodieKeys(baseFile),
+        entry -> Pair.of(entry.getRecordKey(), new HoodieRecordGlobalLocation(entry.getPartitionPath(), baseFile.getCommitTime(), baseFile.getFileId())));
   }
 }

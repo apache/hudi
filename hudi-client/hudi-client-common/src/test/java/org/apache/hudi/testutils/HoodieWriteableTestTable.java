@@ -73,7 +73,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteableTestTable.class);
 
   protected final Schema schema;
-  protected final BloomFilter filter;
+  protected final Option<BloomFilter> filter;
   protected final boolean populateMetaFields;
 
   protected HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient,
@@ -86,11 +86,11 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
     this(basePath, fs, metaClient, schema, filter, metadataWriter, Option.empty());
   }
 
-  protected HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema,
+  public HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema,
                                      BloomFilter filter, HoodieTableMetadataWriter metadataWriter, Option<HoodieEngineContext> context) {
     super(basePath, fs, metaClient, metadataWriter, context);
     this.schema = schema;
-    this.filter = filter;
+    this.filter = Option.ofNullable(filter);
     this.populateMetaFields = metaClient.getTableConfig().populateMetaFields();
   }
 
@@ -116,7 +116,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
     if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
       HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-          new AvroSchemaConverter().convert(schema), schema, Option.of(filter), new Properties());
+          new AvroSchemaConverter().convert(schema), schema, filter, new Properties());
       HoodieParquetConfig<HoodieAvroWriteSupport> config = new HoodieParquetConfig<>(writeSupport, CompressionCodecName.GZIP,
           ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
           new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()), true);
@@ -130,7 +130,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
             HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
             HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
             writer.writeAvro(record.getRecordKey(), avroRecord);
-            filter.add(record.getRecordKey());
+            filter.ifPresent(f -> f.add(record.getRecordKey()));
           } else {
             writer.writeAvro(record.getRecordKey(), avroRecord);
           }
@@ -141,7 +141,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
       int orcStripSize = Integer.parseInt(HoodieStorageConfig.ORC_STRIPE_SIZE.defaultValue());
       int orcBlockSize = Integer.parseInt(HoodieStorageConfig.ORC_BLOCK_SIZE.defaultValue());
       int maxFileSize = Integer.parseInt(HoodieStorageConfig.ORC_FILE_MAX_SIZE.defaultValue());
-      HoodieOrcConfig config = new HoodieOrcConfig(conf, CompressionKind.ZLIB, orcStripSize, orcBlockSize, maxFileSize, filter);
+      HoodieOrcConfig config = new HoodieOrcConfig(conf, CompressionKind.ZLIB, orcStripSize, orcBlockSize, maxFileSize, filter.orElse(null));
       try (HoodieAvroOrcWriter writer = new HoodieAvroOrcWriter(
           currentInstantTime,
           new Path(Paths.get(basePath, partition, fileName).toString()),
@@ -152,7 +152,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
           HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
           writer.writeAvro(record.getRecordKey(), avroRecord);
-          filter.add(record.getRecordKey());
+          filter.ifPresent(f -> f.add(record.getRecordKey()));
         }
       }
     }
