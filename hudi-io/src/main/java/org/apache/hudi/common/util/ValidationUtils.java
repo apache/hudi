@@ -47,7 +47,9 @@ public class ValidationUtils {
    * Ensures the truth of an expression, throwing the custom errorMessage otherwise.
    */
   public static void checkArgument(final boolean expression, final Supplier<String> errorMessageSupplier) {
-    checkArgument(expression, errorMessageSupplier.get());
+    if (!expression) {
+      throw new IllegalArgumentException(errorMessageSupplier.get());
+    }
   }
 
   /**

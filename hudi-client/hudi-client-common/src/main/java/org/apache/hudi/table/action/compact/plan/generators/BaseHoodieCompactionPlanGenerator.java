@@ -172,7 +172,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     ValidationUtils.checkArgument(
         compactionPlan.getOperations().stream().noneMatch(
             op -> fgIdsInPendingCompactionAndClustering.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
-        "Bad Compaction Plan. FileId MUST NOT have multiple pending compactions. "
+        () -> "Bad Compaction Plan. FileId MUST NOT have multiple pending compactions. "
             + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactionAndClustering
             + ", Selected workload :" + compactionPlan);
     if (compactionPlan.getOperations().isEmpty()) {
