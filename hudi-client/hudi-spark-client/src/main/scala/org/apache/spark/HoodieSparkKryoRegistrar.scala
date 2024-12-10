@@ -26,6 +26,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import com.esotericsoftware.kryo.io.{Input, Output}
 import com.esotericsoftware.kryo.serializers.JavaSerializer
 import com.esotericsoftware.kryo.{Kryo, Serializer}
+import org.apache.hudi.io.HoodieKeyLookupResult
 import org.apache.hudi.table.{HoodieSparkCopyOnWriteTable, HoodieSparkMergeOnReadTable}
 import org.apache.spark.serializer.KryoRegistrator
 
@@ -61,6 +62,7 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
     kryo.register(classOf[HoodieInternalRow])
     kryo.register(classOf[HoodieSparkCopyOnWriteTable[_]])
     kryo.register(classOf[HoodieSparkMergeOnReadTable[_]])
+    kryo.register(classOf[HoodieKeyLookupResult])
 
     // NOTE: This entry is used for [[SerializableConfiguration]] before since
     //       Hadoop's configuration is not a serializable object by itself, and hence
