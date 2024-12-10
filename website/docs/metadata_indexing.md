@@ -33,6 +33,12 @@ asynchronous indexing. To learn more about the design of asynchronous indexing f
 Currently indexes like secondary index, expression index and record index can be created using SQL create index command.
 For more information on these indexes please refer [metadata section](/docs/next/metadata/#types-of-table-metadata)
 
+:::note
+Please note in order to create secondary index:
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
+:::
+
 **Examples**
 ```sql
 -- Create record index on primary key - uuid
