@@ -92,6 +92,7 @@
     <maven-docker-plugin.version>0.42.1</maven-docker-plugin.version>
 
     <java.version>1.8</java.version>
+    <scala.binary.version>2.12</scala.binary.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.version>2.6.7</fasterxml.version>
     <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
