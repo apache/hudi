@@ -476,3 +476,25 @@ object DefaultSource {
     }
   }
 }
+
+object DefaultSourceMain {
+  case class A(name: String, age: Int, ts: Long)
+
+  val data = Seq(A("Jalpesh", 30, System.currentTimeMillis()), A("JB", 28, System.currentTimeMillis()))
+
+  def main(args: Array[String]): Unit = {
+    val spark = SparkSession.builder()
+      .master("local")
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").getOrCreate()
+    import spark.implicits._
+
+    data.toDF().write.format("org.apache.hudi.DefaultSource")
+      .option("hoodie.datasource.write.partitionpath.field", "age")
+      .option("hoodie.datasource.write.recordkey.field", "name")
+      .option("hoodie.table.name", "hudi-test")
+      .option("hoodie.datasource.write.operation", "insert")
+      .option("hoodie.datasource.write.record.merger.impls", "org.apache.hudi.HoodieSparkRecordMerger")
+      .mode("overwrite")
+      .save("file:///tmp/test/hudi-test/3")
+  }
+}

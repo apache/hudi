@@ -43,6 +43,7 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapDeltaCommitActionExecutor;
+//import org.apache.hudi.table.action.commit.SparkDataFrameInsertCommitActionExecutor;
 import org.apache.hudi.table.action.compact.HoodieSparkMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
@@ -100,6 +101,9 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> insert(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records) {
+    //    if (config.getBooleanOrDefault(HoodieWriteConfig.PREFER_DATAFRAME_API.key(), false)) {
+    //      return new SparkDataFrameInsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, records).execute();
+    //    }
     return new SparkInsertDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, records).execute();
   }
 
