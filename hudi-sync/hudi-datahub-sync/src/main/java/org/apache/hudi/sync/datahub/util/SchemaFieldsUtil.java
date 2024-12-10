@@ -27,30 +27,30 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SchemaFieldsUtil {
-    public static SchemaFieldArray reorderPrefixedFields(SchemaFieldArray fields, String prefix) {
-        if (fields == null || fields.isEmpty()) {
-            return fields;
-        }
-
-        // Split the list into underscore and non-underscore fields while preserving order
-        List<SchemaField> prefixedFields = new ArrayList<>();
-        List<SchemaField> normalFields = new ArrayList<>();
-
-        for (SchemaField field : fields) {
-            FieldPath fieldPath = new FieldPath(field.getFieldPath());
-
-            if (fieldPath.isTopLevel() && fieldPath.leafFieldName().startsWith(prefix)) {
-                prefixedFields.add(field);
-            } else {
-                normalFields.add(field);
-            }
-        }
-
-        // Combine the lists with underscore fields at the end
-        List<SchemaField> result = new ArrayList<>(normalFields.size() + prefixedFields.size());
-        result.addAll(normalFields);
-        result.addAll(prefixedFields);
-
-        return new SchemaFieldArray(result);
+  public static SchemaFieldArray reorderPrefixedFields(SchemaFieldArray fields, String prefix) {
+    if (fields == null || fields.isEmpty()) {
+      return fields;
     }
+
+    // Split the list into underscore and non-underscore fields while preserving order
+    List<SchemaField> prefixedFields = new ArrayList<>();
+    List<SchemaField> normalFields = new ArrayList<>();
+
+    for (SchemaField field : fields) {
+      FieldPath fieldPath = new FieldPath(field.getFieldPath());
+
+      if (fieldPath.isTopLevel() && fieldPath.leafFieldName().startsWith(prefix)) {
+        prefixedFields.add(field);
+      } else {
+        normalFields.add(field);
+      }
+    }
+
+    // Combine the lists with underscore fields at the end
+    List<SchemaField> result = new ArrayList<>(normalFields.size() + prefixedFields.size());
+    result.addAll(normalFields);
+    result.addAll(prefixedFields);
+
+    return new SchemaFieldArray(result);
+  }
 }

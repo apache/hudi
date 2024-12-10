@@ -40,108 +40,108 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieDataHubDatasetIdentifier {
 
-    private Properties props;
+  private Properties props;
 
-    @BeforeEach
-    void setUp() {
-        props = new Properties();
-    }
+  @BeforeEach
+  void setUp() {
+    props = new Properties();
+  }
 
-    @Test
-    @DisplayName("Test constructor with default values")
-    void testConstructorWithDefaultValues() {
-        // Given
-        props.setProperty(META_SYNC_DATABASE_NAME.key(), "test_db");
-        props.setProperty(META_SYNC_TABLE_NAME.key(), "test_table");
+  @Test
+  @DisplayName("Test constructor with default values")
+  void testConstructorWithDefaultValues() {
+    // Given
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "test_db");
+    props.setProperty(META_SYNC_TABLE_NAME.key(), "test_table");
 
-        // When
-        HoodieDataHubDatasetIdentifier identifier = new HoodieDataHubDatasetIdentifier(props);
+    // When
+    HoodieDataHubDatasetIdentifier identifier = new HoodieDataHubDatasetIdentifier(props);
 
-        // Then
-        DatasetUrn datasetUrn = identifier.getDatasetUrn();
-        assertNotNull(datasetUrn);
-        assertEquals(HoodieDataHubDatasetIdentifier.DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME,
-                datasetUrn.getPlatformEntity().getId());
-        assertEquals("test_db.test_table", datasetUrn.getDatasetNameEntity());
-        assertEquals(HoodieDataHubDatasetIdentifier.DEFAULT_DATAHUB_ENV, datasetUrn.getOriginEntity());
-    }
+    // Then
+    DatasetUrn datasetUrn = identifier.getDatasetUrn();
+    assertNotNull(datasetUrn);
+    assertEquals(HoodieDataHubDatasetIdentifier.DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME,
+        datasetUrn.getPlatformEntity().getId());
+    assertEquals("test_db.test_table", datasetUrn.getDatasetNameEntity());
+    assertEquals(HoodieDataHubDatasetIdentifier.DEFAULT_DATAHUB_ENV, datasetUrn.getOriginEntity());
+  }
 
-    @Test
-    @DisplayName("Test constructor with custom values")
-    void testConstructorWithCustomValues() {
-        // Given
-        props.setProperty(META_SYNC_DATABASE_NAME.key(), "custom_db");
-        props.setProperty(META_SYNC_TABLE_NAME.key(), "custom_table");
-        props.setProperty(META_SYNC_DATAHUB_DATAPLATFORM_NAME.key(), "custom_platform");
-        props.setProperty(META_SYNC_DATAHUB_DATASET_ENV.key(), "PROD");
+  @Test
+  @DisplayName("Test constructor with custom values")
+  void testConstructorWithCustomValues() {
+    // Given
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "custom_db");
+    props.setProperty(META_SYNC_TABLE_NAME.key(), "custom_table");
+    props.setProperty(META_SYNC_DATAHUB_DATAPLATFORM_NAME.key(), "custom_platform");
+    props.setProperty(META_SYNC_DATAHUB_DATASET_ENV.key(), "PROD");
 
-        // When
-        HoodieDataHubDatasetIdentifier identifier = new HoodieDataHubDatasetIdentifier(props);
+    // When
+    HoodieDataHubDatasetIdentifier identifier = new HoodieDataHubDatasetIdentifier(props);
 
-        // Then
-        DatasetUrn datasetUrn = identifier.getDatasetUrn();
-        assertNotNull(datasetUrn);
-        assertEquals("custom_platform", datasetUrn.getPlatformEntity().getId());
-        assertEquals("custom_db.custom_table", datasetUrn.getDatasetNameEntity());
-        assertEquals(FabricType.PROD, datasetUrn.getOriginEntity());
-    }
+    // Then
+    DatasetUrn datasetUrn = identifier.getDatasetUrn();
+    assertNotNull(datasetUrn);
+    assertEquals("custom_platform", datasetUrn.getPlatformEntity().getId());
+    assertEquals("custom_db.custom_table", datasetUrn.getDatasetNameEntity());
+    assertEquals(FabricType.PROD, datasetUrn.getOriginEntity());
+  }
 
-    @Test
-    @DisplayName("Test getDatabaseUrn")
-    void testGetDatabaseUrn() {
-        // Given
-        props.setProperty(META_SYNC_DATABASE_NAME.key(), "test_db");
-        props.setProperty(META_SYNC_TABLE_NAME.key(), "test_table");
-        props.setProperty(META_SYNC_DATAHUB_DATASET_ENV.key(), "PROD");
+  @Test
+  @DisplayName("Test getDatabaseUrn")
+  void testGetDatabaseUrn() {
+    // Given
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "test_db");
+    props.setProperty(META_SYNC_TABLE_NAME.key(), "test_table");
+    props.setProperty(META_SYNC_DATAHUB_DATASET_ENV.key(), "PROD");
 
-        // When
-        HoodieDataHubDatasetIdentifier identifier = new HoodieDataHubDatasetIdentifier(props);
+    // When
+    HoodieDataHubDatasetIdentifier identifier = new HoodieDataHubDatasetIdentifier(props);
 
-        // Then
-        Urn databaseUrn = identifier.getDatabaseUrn();
-        assertNotNull(databaseUrn);
-        assertFalse(databaseUrn.toString().contains("test_db"));
-        assertFalse(databaseUrn.toString().contains("PROD"));
-        assertTrue(databaseUrn.toString().startsWith("urn:li:container:"));
-    }
+    // Then
+    Urn databaseUrn = identifier.getDatabaseUrn();
+    assertNotNull(databaseUrn);
+    assertFalse(databaseUrn.toString().contains("test_db"));
+    assertFalse(databaseUrn.toString().contains("PROD"));
+    assertTrue(databaseUrn.toString().startsWith("urn:li:container:"));
+  }
 
-    @Test
-    @DisplayName("Test getTableName")
-    void testGetTableName() {
-        // Given
-        String tableName = "test_table";
-        props.setProperty(META_SYNC_DATABASE_NAME.key(), "test_db");
-        props.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
+  @Test
+  @DisplayName("Test getTableName")
+  void testGetTableName() {
+    // Given
+    String tableName = "test_table";
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "test_db");
+    props.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
 
-        // When
-        HoodieDataHubDatasetIdentifier identifier = new HoodieDataHubDatasetIdentifier(props);
+    // When
+    HoodieDataHubDatasetIdentifier identifier = new HoodieDataHubDatasetIdentifier(props);
 
-        // Then
-        assertEquals(tableName, identifier.getTableName());
-    }
+    // Then
+    assertEquals(tableName, identifier.getTableName());
+  }
 
-    @Test
-    @DisplayName("Test constructor with missing required properties")
-    void testConstructorWithMissingProperties() {
-        // Given empty properties
+  @Test
+  @DisplayName("Test constructor with missing required properties")
+  void testConstructorWithMissingProperties() {
+    // Given empty properties
 
-        // Then
-        assertThrows(IllegalArgumentException.class, () -> {
-            new HoodieDataHubDatasetIdentifier(props);
-        });
-    }
+    // Then
+    assertThrows(IllegalArgumentException.class, () -> {
+      new HoodieDataHubDatasetIdentifier(props);
+    });
+  }
 
-    @Test
-    @DisplayName("Test constructor with invalid environment")
-    void testConstructorWithInvalidEnvironment() {
-        // Given
-        props.setProperty(META_SYNC_DATABASE_NAME.key(), "test_db");
-        props.setProperty(META_SYNC_TABLE_NAME.key(), "test_table");
-        props.setProperty(META_SYNC_DATAHUB_DATASET_ENV.key(), "INVALID_ENV");
+  @Test
+  @DisplayName("Test constructor with invalid environment")
+  void testConstructorWithInvalidEnvironment() {
+    // Given
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "test_db");
+    props.setProperty(META_SYNC_TABLE_NAME.key(), "test_table");
+    props.setProperty(META_SYNC_DATAHUB_DATASET_ENV.key(), "INVALID_ENV");
 
-        // Then
-        assertThrows(IllegalArgumentException.class, () -> {
-            new HoodieDataHubDatasetIdentifier(props);
-        });
-    }
+    // Then
+    assertThrows(IllegalArgumentException.class, () -> {
+      new HoodieDataHubDatasetIdentifier(props);
+    });
+  }
 }
