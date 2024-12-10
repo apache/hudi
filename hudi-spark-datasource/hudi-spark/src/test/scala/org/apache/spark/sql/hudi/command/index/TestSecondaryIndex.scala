@@ -300,7 +300,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
         // Step 1: Initial Insertion of Records
         val dataGen = new HoodieTestDataGenerator()
-        val hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen)
+        var hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen, partitioned = false)
 
         // Verify initial state of secondary index
         val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
@@ -431,7 +431,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         // Step 1: Initial Insertion of Records
         val dataGen = new HoodieTestDataGenerator()
         val numInserts = 5
-        val hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen, numInserts)
+        val hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen, partitioned=true, numInserts)
 
         // Verify initial state of secondary index
         val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
@@ -519,10 +519,18 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     }
   }
 
-  private def loadInitialBatchAndCreateSecondaryIndex(tableName: String, basePath: String, dataGen: HoodieTestDataGenerator, numInserts: Integer = 50) = {
+  private def loadInitialBatchAndCreateSecondaryIndex(tableName: String,
+                                                      basePath: String,
+                                                      dataGen: HoodieTestDataGenerator,
+                                                      partitioned: Boolean = true,
+                                                      numInserts: Integer = 50) = {
     val initialRecords = recordsToStrings(dataGen.generateInserts(getInstantTime, numInserts, true)).asScala
     val initialDf = spark.read.json(spark.sparkContext.parallelize(initialRecords.toSeq, 2))
     val hudiOpts = commonOpts ++ Map(TABLE_TYPE.key -> "MERGE_ON_READ", HoodieWriteConfig.TBL_NAME.key -> tableName)
+    if (!partitioned) {
+      hudiOpts.-(PARTITIONPATH_FIELD.key)
+    }
+
     initialDf.write.format("hudi")
       .options(hudiOpts)
       .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)
