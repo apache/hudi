@@ -103,7 +103,9 @@ public class HoodieSparkConsistentBucketIndex extends HoodieConsistentBucketInde
           .collect(Collectors.toList());
       HoodieConsistentHashingMetadata newMeta = new HoodieConsistentHashingMetadata(meta.getVersion(), meta.getPartitionPath(),
           instantTime, meta.getNumBuckets(), seqNo + 1, newNodes);
-      ConsistentBucketIndexUtils.saveMetadata(hoodieTable, newMeta, true);
+      if (!ConsistentBucketIndexUtils.saveMetadata(hoodieTable, newMeta)) {
+        throw new HoodieIndexException("Failed to save metadata for partition: " + partition);
+      }
     });
 
     return writeStatuses;
