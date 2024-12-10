@@ -260,13 +260,6 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       }.asInstanceOf[ClosableIterator[InternalRow]]
     }
   }
-
-  override def convertValueToEngineType(value: Comparable[_]): Comparable[_] = {
-    value match {
-      case v: String => UTF8String.fromString(v)
-      case v => v
-    }
-  }
 }
 
 object SparkFileFormatInternalRowReaderContext {
