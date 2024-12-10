@@ -48,4 +48,16 @@ class TestHoodieSparkEngineContext extends SparkClientFunctionalTestHarness {
     assertEquals(Arrays.asList(1, 2, 3), context.removeCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)));
     assertTrue(context.getCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)).isEmpty());
   }
+
+  @Test
+  void testSetJobStatus() {
+    // Test data
+    String activeModule = "TestModule";
+    String activityDescription = "Running test operation";
+    String expectedJobDescription = String.format("%s:%s", activeModule, activityDescription);
+
+    // Set the job status
+    context.setJobStatus(activeModule, activityDescription);
+    assertEquals(expectedJobDescription, context.getJavaSparkContext().getLocalProperty("spark.job.description"));
+  }
 }
