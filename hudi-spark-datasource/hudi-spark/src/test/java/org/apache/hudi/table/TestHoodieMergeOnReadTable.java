@@ -426,6 +426,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         .withAvroSchemaValidate(false)
         .withAllowAutoEvolutionColumnDrop(true)
         .withAutoCommit(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).build())
         .build();
 
     setUp(cfg.getProps());
