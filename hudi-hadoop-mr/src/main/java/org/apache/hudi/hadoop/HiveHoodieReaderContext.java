@@ -49,10 +49,17 @@ import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -260,6 +267,30 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       throw new IllegalStateException("Schema evolution is not supported in the filegroup reader for Hive currently");
     }
     return HoodieArrayWritableAvroUtils.projectRecord(from, to);
+  }
+
+  @Override
+  public Comparable convertValueToEngineType(Comparable value) {
+    if (value instanceof WritableComparable) {
+      return value;
+    }
+    //TODO: [HUDI-8261] cover more types
+    if (value == null) {
+      return null;
+    } else if (value instanceof String) {
+      return new Text((String) value);
+    } else if (value instanceof Integer) {
+      return new IntWritable((int) value);
+    } else if (value instanceof Long) {
+      return new LongWritable((long) value);
+    } else if (value instanceof Float) {
+      return new FloatWritable((float) value);
+    } else if (value instanceof Double) {
+      return new DoubleWritable((double) value);
+    } else if (value instanceof Boolean) {
+      return new BooleanWritable((boolean) value);
+    }
+    return value;
   }
 
   public UnaryOperator<ArrayWritable> reverseProjectRecord(Schema from, Schema to) {

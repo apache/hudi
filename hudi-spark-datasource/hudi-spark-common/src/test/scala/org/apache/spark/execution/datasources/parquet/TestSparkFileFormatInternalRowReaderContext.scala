@@ -82,7 +82,7 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
     assertEquals(1, sparkReaderContext.convertValueToEngineType(1))
     assertEquals(1L, sparkReaderContext.convertValueToEngineType(1L))
     assertEquals(1.1f, sparkReaderContext.convertValueToEngineType(1.1f))
-    assertEquals(1.1, sparkReaderContext.convertValueToEngineType(1.1))
+    assertEquals(1.1d, sparkReaderContext.convertValueToEngineType(1.1d))
     assertEquals(UTF8String.fromString(stringValue),
       sparkReaderContext.convertValueToEngineType(stringValue))
     assertEquals(UTF8String.fromString(stringValue),
