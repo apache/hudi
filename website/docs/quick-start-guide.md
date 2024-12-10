@@ -662,6 +662,14 @@ Notice that the save mode is again `Append`.
 
 ## Index data {#indexing}
 
+Hudi supports indexing on columns to speed up queries. Indexes can be created on columns using the `CREATE INDEX` statement.
+
+:::note
+Please note in order to create secondary index:
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
+:::
+
 <Tabs
 groupId="programming-language"
 defaultValue="sparksql"
@@ -713,10 +721,12 @@ SHOW INDEXES FROM hudi_indexed_table;
 -- Query on ts column would prune the data using the idx_column_ts index
 SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-24';
 
--- Create secondary index on rider column
-CREATE INDEX record_index ON hudi_indexed_table (uuid);
-CREATE INDEX idx_rider ON hudi_indexed_table (rider);
+-- To create secondary index, first create the record index
 SET hoodie.metadata.record.index.enable=true;
+CREATE INDEX record_index ON hudi_indexed_table (uuid);
+-- Create secondary index on rider column
+CREATE INDEX idx_rider ON hudi_indexed_table (rider);
+
 -- Expression index and secondary index should show up
 SHOW INDEXES FROM hudi_indexed_table;
 -- Query on rider column would leverage the secondary index idx_rider
