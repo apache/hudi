@@ -51,6 +51,7 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -520,6 +521,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected abstract void validateClusteringCommit(HoodieWriteMetadata<O> clusteringMetadata, String clusteringCommitTime, HoodieTable table);
 
   protected abstract HoodieWriteMetadata<O> convertToOutputMetadata(HoodieWriteMetadata<T> writeMetadata);
+
+  protected void completeClustering(HoodieCommitMetadata metadata, HoodieTable table, String clusteringCommitTime) {
+    ValidationUtils.checkArgument(metadata instanceof HoodieReplaceCommitMetadata, "metadata should be of type HoodieReplaceCommitMetadata");
+    completeClustering((HoodieReplaceCommitMetadata) metadata, table, clusteringCommitTime);
+  }
 
   private void completeClustering(HoodieReplaceCommitMetadata metadata,
                                   HoodieTable table,
