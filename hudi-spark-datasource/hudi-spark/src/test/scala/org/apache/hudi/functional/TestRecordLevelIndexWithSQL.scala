@@ -48,7 +48,9 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts + (
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() -> "false") // some negative test cases in this class assumes
+    // only RLI being enabled. So, disabling col stats for now.
 
     val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
