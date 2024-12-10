@@ -76,13 +76,7 @@ public class HoodieInstantTimeGenerator {
       String newCommitTime;
       do {
         Date d = new Date(timeGenerator.generateTime(!shouldLock) + milliseconds);
-
-        if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
-          newCommitTime = d.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
-              .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
-        } else {
-          newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
-        }
+        newCommitTime = formatDateWitTimeZone(d);
       } while (compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
       return newCommitTime;
     });
@@ -149,6 +143,17 @@ public class HoodieInstantTimeGenerator {
 
   public static String formatDate(Date timestamp) {
     return getInstantFromTemporalAccessor(convertDateToTemporalAccessor(timestamp));
+  }
+
+  public static String formatDateWitTimeZone(Date timestamp) {
+    String newCommitTime;
+    if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
+      newCommitTime = timestamp.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
+          .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
+    } else {
+      newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(timestamp));
+    }
+    return newCommitTime;
   }
 
   public static String getInstantFromTemporalAccessor(TemporalAccessor temporalAccessor) {
