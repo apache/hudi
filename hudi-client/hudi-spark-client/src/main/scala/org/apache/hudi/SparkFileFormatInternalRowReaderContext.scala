@@ -45,7 +45,6 @@ import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
-import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.mutable
 
@@ -258,13 +257,6 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
           dataFileIterator.close()
         }
       }.asInstanceOf[ClosableIterator[InternalRow]]
-    }
-  }
-
-  override def convertValueToEngineType(value: Comparable[_]): Comparable[_] = {
-    value match {
-      case v: String => UTF8String.fromString(v)
-      case v => v
     }
   }
 }
