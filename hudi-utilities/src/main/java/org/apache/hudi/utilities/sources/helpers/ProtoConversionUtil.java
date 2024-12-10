@@ -477,9 +477,10 @@ public class ProtoConversionUtil {
         case RECORD:
           GenericData.Record newRecord = new GenericData.Record(schema);
           Message messageValue = (Message) value;
+          Descriptors.FieldDescriptor[] orderedFields = getOrderedFields(schema, messageValue);
           for (Schema.Field field : schema.getFields()) {
             int position = field.pos();
-            Descriptors.FieldDescriptor fieldDescriptor = getOrderedFields(schema, messageValue)[position];
+            Descriptors.FieldDescriptor fieldDescriptor = orderedFields[position];
             Object convertedValue;
             Schema fieldSchema = field.schema();
             // if incoming message does not contain the field, fieldDescriptor will be null
