@@ -460,3 +460,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-17446][INTERNAL] Expose methods as protected in MultipleSparkJobExecutionStrategy (#1074)
 [AUDIT-1071][ENG-17447] Additional fixes to default trigger variables (#1072)
 [AUDIT-1071]: Changelog for release-v1.52.0 (#1071)
+
+--- [2024-12-10 16:04:00] [release-v1.54.0] ---
+[ENG-17123][HUDI-8673] Simple and Global-Simple Index improvements (#1015)
+[AUDIT-1071]: Changelog for release-v1.53.0 (#1075)
