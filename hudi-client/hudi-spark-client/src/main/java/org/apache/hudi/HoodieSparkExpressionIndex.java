@@ -51,7 +51,10 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
         if (columns.size() != 1) {
           throw new IllegalArgumentException("DATE_FORMAT requires 1 column");
         }
-        return functions.date_format(columns.get(0), options.get("format"));
+        if (!options.containsKey(FORMAT_OPTION)) {
+          throw new IllegalArgumentException("DATE_FORMAT requires format option");
+        }
+        return functions.date_format(columns.get(0), options.get(FORMAT_OPTION));
       }),
       Pair.of(SPARK_DAY, (columns, options) -> {
         if (columns.size() != 1) {
@@ -81,40 +84,57 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
         if (columns.size() != 1) {
           throw new IllegalArgumentException("FROM_UNIXTIME requires 1 column");
         }
-        return functions.from_unixtime(columns.get(0), options.get("format"));
+        if (options.containsKey(FORMAT_OPTION)) {
+          return functions.from_unixtime(columns.get(0), options.get(FORMAT_OPTION));
+        } else {
+          return functions.from_unixtime(columns.get(0));
+        }
       }),
       Pair.of(SPARK_UNIX_TIMESTAMP, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("UNIX_TIMESTAMP requires 1 column");
         }
-        return functions.unix_timestamp(columns.get(0), options.get("format"));
+        if (options.containsKey(FORMAT_OPTION)) {
+          return functions.unix_timestamp(columns.get(0), options.get(FORMAT_OPTION));
+        } else {
+          return functions.unix_timestamp(columns.get(0));
+        }
       }),
       Pair.of(SPARK_TO_DATE, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("TO_DATE requires 1 column");
         }
-        return functions.to_date(columns.get(0));
+        if (options.containsKey(FORMAT_OPTION)) {
+          return functions.to_date(columns.get(0), options.get(FORMAT_OPTION));
+        } else {
+          return functions.to_date(columns.get(0));
+        }
       }),
       Pair.of(SPARK_TO_TIMESTAMP, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("TO_TIMESTAMP requires 1 column");
         }
-        return functions.to_timestamp(columns.get(0));
+        if (options.containsKey(FORMAT_OPTION)) {
+          return functions.to_timestamp(columns.get(0), options.get(FORMAT_OPTION));
+        } else {
+          return functions.to_timestamp(columns.get(0));
+        }
       }),
       Pair.of(SPARK_DATE_ADD, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("DATE_ADD requires 1 column");
         }
-        return functions.date_add(columns.get(0), Integer.parseInt(options.get("days")));
+        return functions.date_add(columns.get(0), Integer.parseInt(options.get(DAYS_OPTION)));
       }),
       Pair.of(SPARK_DATE_SUB, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("DATE_SUB requires 1 column");
         }
-        return functions.date_sub(columns.get(0), Integer.parseInt(options.get("days")));
+        return functions.date_sub(columns.get(0), Integer.parseInt(options.get(DAYS_OPTION)));
       }),
 
       // String functions
+      // TODO: Concat is not yet supported fully since there is a limitation of only one source field within expression index
       Pair.of(SPARK_CONCAT, (columns, options) -> {
         if (columns.size() < 2) {
           throw new IllegalArgumentException("CONCAT requires at least 2 columns");

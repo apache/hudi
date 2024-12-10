@@ -59,7 +59,13 @@ public interface HoodieExpressionIndex<S, T> extends Serializable {
   String IDENTITY_FUNCTION = "identity";
 
   String EXPRESSION_OPTION = "expr";
-
+  String FORMAT_OPTION = "format";
+  String DAYS_OPTION = "days";
+  String POSITION_OPTION = "pos";
+  String LENGTH_OPTION = "len";
+  String PATTERN_OPTION = "pattern";
+  String REPLACEMENT_OPTION = "replacement";
+  String INDEX_OPTION = "idx";
   /**
    * Get the name of the index.
    *

@@ -31,15 +31,15 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.collection
 import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
+import org.apache.hudi.common.util.{StringUtils, collection}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.functional.HoodieExpressionIndex.SPARK_FROM_UNIXTIME
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{EqualTo, Expression, FromUnixTime, In, Literal, UnaryExpression}
+import org.apache.spark.sql.catalyst.expressions.{DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.util.TimestampFormatter
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types._
@@ -334,16 +334,10 @@ class ExpressionIndexSupport(spark: SparkSession,
     metadataConfig.isEnabled && metaClient.getIndexMetadata.isPresent && !metaClient.getIndexMetadata.get().getIndexDefinitions.isEmpty
   }
 
-  private def filterQueriesWithFunctionalFilterKey(queryFilters: Seq[Expression], sourceFieldOpt: Option[String]): List[Tuple2[Expression, List[String]]] = {
+  private def filterQueriesWithFunctionalFilterKey(queryFilters: Seq[Expression], sourceFieldOpt: Option[String],
+                                                   attributeFetcher: Function1[Expression, Expression]): List[Tuple2[Expression, List[String]]] = {
     var expressionIndexQueries: List[Tuple2[Expression, List[String]]] = List.empty
     for (query <- queryFilters) {
-      val attributeFetcher = (expr: Expression) => {
-        expr match {
-          case expression: UnaryExpression => expression.child
-          case expression: FromUnixTime => expression.sec
-          case other => other
-        }
-      }
       filterQueryWithRecordKey(query, sourceFieldOpt, attributeFetcher).foreach({
         case (exp: Expression, literals: List[String]) =>
           expressionIndexQueries = expressionIndexQueries :+ Tuple2.apply(exp, literals)
@@ -395,23 +389,56 @@ class ExpressionIndexSupport(spark: SparkSession,
    * column name.
    */
   private def extractQueryAndLiterals(queryFilters: Seq[Expression], indexDefinition: HoodieIndexDefinition): Option[(Expression, List[String])] = {
-    val expressionIndexQueries = filterQueriesWithFunctionalFilterKey(queryFilters, Option.apply(indexDefinition.getSourceFields.get(0)))
+    val attributeFetcher = (expr: Expression) => {
+      expr match {
+        case expression: UnaryExpression => expression.child
+        case expression: DateFormatClass if expression.right.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption()) =>
+          expression.left
+        case expression: FromUnixTime
+          if expression.format.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption(TimestampFormatter.defaultPattern())) =>
+          expression.sec
+        case expression: UnixTimestamp if expression.right.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption(TimestampFormatter.defaultPattern())) =>
+          expression.timeExp
+        case expression: ParseToDate if (expression.format.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()))
+          || (expression.format.isDefined && expression.format.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption())) =>
+          expression.left
+        case expression: ParseToTimestamp if (expression.format.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexFormatOption()))
+          || (expression.format.isDefined && expression.format.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexFormatOption())) =>
+          expression.left
+        case expression: DateAdd if expression.days.isInstanceOf[Literal] && expression.days.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexDaysOption) =>
+          expression.startDate
+        case expression: DateSub if expression.days.isInstanceOf[Literal] && expression.days.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexDaysOption) =>
+          expression.startDate
+        case expression: Substring if expression.pos.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPositionOption)
+          && expression.len.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexLengthOption)=>
+          expression.str
+        case expression: StringTrim if expression.trimStr.isEmpty => expression.srcStr
+        case expression: StringTrimLeft if expression.trimStr.isEmpty => expression.srcStr
+        case expression: StringTrimRight if expression.trimStr.isEmpty => expression.srcStr
+        case expression: RegExpReplace if expression.pos.asInstanceOf[Literal].value.toString.equals("1")
+          && expression.regexp.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption)
+          && expression.rep.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexReplacementOption) =>
+          expression.subject
+        case expression: RegExpExtract if expression.regexp.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption)
+          && expression.idx.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexIndexOption) =>
+          expression.subject
+        case expression: StringSplit if expression.limit.asInstanceOf[Literal].value.toString.equals("-1")
+          && expression.regex.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption) =>
+          expression.str
+        case other => other
+      }
+    }
+    val expressionIndexQueries = filterQueriesWithFunctionalFilterKey(queryFilters, Option.apply(indexDefinition.getSourceFields.get(0)), attributeFetcher)
     var queryAndLiteralsOpt: Option[(Expression, List[String])] = Option.empty
     expressionIndexQueries.foreach { tuple =>
       val (expr, literals) = (tuple._1, tuple._2)
       val functionNameOption = SPARK_FUNCTION_MAP.asScala.keys.find(expr.toString.contains)
       val functionName = functionNameOption.getOrElse("identity")
       if (indexDefinition.getIndexFunction.equals(functionName)) {
-        val attributeFetcher = (expr: Expression) => {
-          expr match {
-            case expression: UnaryExpression => expression.child
-            case expression: FromUnixTime => expression.sec
-            case other => other
-          }
-        }
         if (functionName.equals(SPARK_FROM_UNIXTIME)) {
           val configuredFormat = indexDefinition.getIndexOptions.getOrDefault("format", TimestampFormatter.defaultPattern)
-          if (expr.toString().contains(configuredFormat)) {
+          if (true) {
+          // TODO: ABCDEFGHI fix this
             val pruningExpr = fetchQueryWithAttribute(expr, Option.apply(indexDefinition.getSourceFields.get(0)), RecordLevelIndexSupport.getSimpleLiteralGenerator(), attributeFetcher)._1.get._1
             queryAndLiteralsOpt = Option.apply(Tuple2.apply(pruningExpr, literals))
           }
