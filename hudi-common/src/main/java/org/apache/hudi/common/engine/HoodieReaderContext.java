@@ -359,7 +359,7 @@ public abstract class HoodieReaderContext<T> implements Closeable {
   /**
    * Returns the value to a type representation in a specific engine.
    * <p>
-   * This is overridden by the reader context implementation on a specific engine to handle
+   * This can be overridden by the reader context implementation on a specific engine to handle
    * engine-specific field type system.  For example, Spark uses {@code UTF8String} to represent
    * {@link String} field values, so we need to convert the values to {@code UTF8String} type
    * in Spark for proper value comparison.

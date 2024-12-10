@@ -37,7 +37,6 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -95,16 +94,19 @@ public class TestHoodieArrayWritableAvroUtils {
     return  (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, record.getSchema(), false);
   }
 
-  // TODO(yihua)
-  @Disabled
   @Test
   public void testCastOrderingField() {
     HiveHoodieReaderContext readerContext = Mockito.mock(HiveHoodieReaderContext.class, Mockito.CALLS_REAL_METHODS);
+    assertEquals(new Text("ASDF"), readerContext.convertValueToEngineType(new Text("ASDF")));
     assertEquals(new Text("ASDF"), readerContext.convertValueToEngineType("ASDF"));
+    assertEquals(new IntWritable(0), readerContext.convertValueToEngineType(new IntWritable(0)));
     assertEquals(new IntWritable(0), readerContext.convertValueToEngineType(0));
-    assertEquals(new LongWritable(1000000000), readerContext.convertValueToEngineType(1000000000));
-    assertEquals(new FloatWritable(20.24f), readerContext.convertValueToEngineType(20.24));
-    assertEquals(new DoubleWritable(21.12d), readerContext.convertValueToEngineType(21.12));
+    assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.convertValueToEngineType(new LongWritable(Long.MAX_VALUE / 2L)));
+    assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.convertValueToEngineType(Long.MAX_VALUE / 2L));
+    assertEquals(new FloatWritable(20.24f), readerContext.convertValueToEngineType(new FloatWritable(20.24f)));
+    assertEquals(new FloatWritable(20.24f), readerContext.convertValueToEngineType(20.24f));
+    assertEquals(new DoubleWritable(21.12d), readerContext.convertValueToEngineType(new DoubleWritable(21.12d)));
+    assertEquals(new DoubleWritable(21.12d), readerContext.convertValueToEngineType(21.12d));
 
     // make sure that if input is a writeable, then it still works
     WritableComparable reflexive = new IntWritable(8675309);
