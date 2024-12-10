@@ -134,7 +134,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   public void testIndexerWithNotAllIndexesEnabled() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
-    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(false);
     upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
@@ -166,7 +166,9 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   public void testIndexerForRecordIndex() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
-    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false);
+    HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withAsyncIndex(false).withMetadataIndexColumnStats(false);
     upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
@@ -185,7 +187,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_with_writer_finishing_first";
     // Enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder =
-        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(false);
     HoodieMetadataConfig metadataConfig = metadataConfigBuilder.build();
     upsertToTable(metadataConfig, tableName);
 
@@ -258,7 +260,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_with_writer_finishing_first";
     // Enable files and bloom_filters on the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder =
-        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(false);
     HoodieMetadataConfig metadataConfig = metadataConfigBuilder.build();
     upsertToTable(metadataConfig, tableName);
     upsertToTable(metadataConfig, tableName);
@@ -448,7 +450,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
     // enable files on the regular write client
-    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(false);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
@@ -502,7 +504,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     String tableName = "indexer_test";
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
     // enable files on the regular write client
-    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false);
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexColumnStats(false);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
