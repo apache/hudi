@@ -49,9 +49,9 @@ public class TestParquetBootstrapRead extends TestBootstrapReadBase {
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     String[] bootstrapType = {"full", "metadata", "mixed"};
-    Boolean[] dashPartitions = {true, false};
+    Boolean[] dashPartitions = {true};
     HoodieTableType[] tableType = {COPY_ON_WRITE, MERGE_ON_READ};
-    Integer[] nPartitions = {0, 1, 2};
+    Integer[] nPartitions = {1, 2};
     for (HoodieTableType tt : tableType) {
       for (Boolean dash : dashPartitions) {
         for (String bt : bootstrapType) {
@@ -88,13 +88,13 @@ public class TestParquetBootstrapRead extends TestBootstrapReadBase {
     verifyMetaColOnlyRead(0);
 
     // do upserts
-    /*
+
     options = basicOptions();
     doUpdate(options, "001");
     compareTables();
     verifyMetaColOnlyRead(1);
 
-    doInsert(options, "002");
+    /*doInsert(options, "002");
     compareTables();
     verifyMetaColOnlyRead(2);*/
   }

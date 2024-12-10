@@ -84,10 +84,9 @@ public class TestOrcBootstrapRead extends TestBootstrapReadBase {
     verifyMetaColOnlyRead(0);
 
     // do upserts
-    /*
     options = basicOptions();
     doUpdate(options, "001");
     compareTables();
-    verifyMetaColOnlyRead(1);*/
+    verifyMetaColOnlyRead(1);
   }
 }
