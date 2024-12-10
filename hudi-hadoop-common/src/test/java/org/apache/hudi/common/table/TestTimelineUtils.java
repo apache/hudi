@@ -311,6 +311,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     String startTs = "010";
     HoodieTableMetaClient mockMetaClient = prepareMetaClient(
         Arrays.asList(
+            new HoodieInstant(INFLIGHT, COMMIT_ACTION, "008", null, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "009", "013", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", "011", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
