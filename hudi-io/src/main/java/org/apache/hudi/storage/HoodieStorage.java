@@ -62,8 +62,8 @@ public abstract class HoodieStorage implements Closeable {
     return ossStorageStrategy.storageLocation(path, configMap);
   }
 
-  public Set<StoragePath> getAllLocations(String partitionPath, boolean checkExist) {
-    return ossStorageStrategy.getAllLocations(partitionPath, checkExist);
+  public Set<StoragePath> getAllLocations(String partitionPath, Map<String, String> configMap) {
+    return ossStorageStrategy.getAllLocations(partitionPath, configMap);
   }
 
   public StoragePath getRelativePath(String path, Map<String, String> configMap) {

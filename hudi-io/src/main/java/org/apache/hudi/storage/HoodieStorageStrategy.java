@@ -39,7 +39,7 @@ public interface HoodieStorageStrategy {
    * @param checkExist check if StoragePath is truly existed or not.
    * @return a st of storage partition path
    */
-  Set<StoragePath> getAllLocations(String partitionPath, boolean checkExist);
+  Set<StoragePath> getAllLocations(String partitionPath, Map<String, String> configMap);
 
   /**
    * Return RelativePath base on path and locations.

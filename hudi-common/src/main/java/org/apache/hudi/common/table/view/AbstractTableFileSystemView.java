@@ -383,11 +383,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         // Not loaded yet
         try {
           LOG.debug("Building file system view for partitions: " + partitionSet);
-
+          HoodieStorage storage = metaClient.getStorage();
+          HashMap<String, String> config = new HashMap<>();
+          config.put(HoodieOSSStorageStrategy.TABLE_BASE_PATH, metaClient.getBasePath().getPathWithoutSchemeAndAuthority().toUri().getPath());
           // Pairs of relative partition path and absolute partition path
           List<Pair<String, StoragePath>> absolutePartitionPathList = partitionSet.stream()
               .map(partition -> Pair.of(
-                  partition, FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition)))
+                  partition, storage.getAllLocations(partition, config).stream().findFirst().get()))
               .collect(Collectors.toList());
           long beginLsTs = System.currentTimeMillis();
           Map<Pair<String, StoragePath>, List<StoragePathInfo>> pathInfoMap =

@@ -47,9 +47,9 @@ public class HoodieOSSStorageStrategy implements HoodieStorageStrategy {
   }
 
   @Override
-  public Set<StoragePath> getAllLocations(String partitionPath, boolean checkExist) {
+  public Set<StoragePath> getAllLocations(String partitionPath, Map<String, String> configMap) {
     HashSet<StoragePath> res = new HashSet<>();
-    res.add( new StoragePath(basePath, partitionPath));
+    res.add(new StoragePath(basePath, partitionPath));
     return res;
   }
 
