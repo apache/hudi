@@ -105,7 +105,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   public void testUpsertPartitioner() throws Exception {
     final String testPartitionPath = "2016/09/26";
     // Inserts + Updates... Check all updates go together & inserts subsplit
-    UpsertPartitioner partitioner = getUpsertPartitioner(0, 200, 100, 1024, testPartitionPath, false);
+    UpsertPartitioner partitioner = getUpsertPartitioner(1, 200, 100, 1024, testPartitionPath, false);
     List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
     assertEquals(2, insertBuckets.size(), "Total of 2 insert buckets");
   }

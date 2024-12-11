@@ -52,11 +52,7 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
 
   private ClosableIterator<HoodieKey> fetchHoodieKeys(HoodieBaseFile baseFile) {
     BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
-    if (keyGeneratorOpt.isPresent()) {
-      return baseFileUtils.getHoodieKeyIterator(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
-    } else {
-      return baseFileUtils.getHoodieKeyIterator(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
-    }
+    return baseFileUtils.getHoodieKeyIterator(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt, Option.of(partitionPathBaseFilePair.getKey()));
   }
 
   public ClosableIterator<Pair<HoodieKey, HoodieRecordLocation>> locations() {

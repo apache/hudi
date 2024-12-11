@@ -116,7 +116,7 @@ public class OrcUtils extends BaseFileUtils {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
     List<HoodieKey> hoodieKeys = new ArrayList<>();
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, Option.empty()))  {
+    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, Option.empty(), Option.empty()))  {
       iterator.forEachRemaining(hoodieKeys::add);
     }
     return hoodieKeys;
@@ -128,7 +128,7 @@ public class OrcUtils extends BaseFileUtils {
   }
 
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     throw new UnsupportedOperationException("Custom key generator is not supported yet");
   }
 

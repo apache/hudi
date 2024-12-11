@@ -151,7 +151,7 @@ public class ParquetUtils extends BaseFileUtils {
 
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath) {
-    return getHoodieKeyIterator(configuration, filePath, Option.empty());
+    return getHoodieKeyIterator(configuration, filePath, Option.empty(), Option.empty());
   }
 
   /**
@@ -164,7 +164,7 @@ public class ParquetUtils extends BaseFileUtils {
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the parquet file
    */
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     try {
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
@@ -173,12 +173,11 @@ public class ParquetUtils extends BaseFileUtils {
         fields.addAll(keyGenerator.getRecordKeyFieldNames());
         fields.addAll(keyGenerator.getPartitionPathFields());
         return HoodieAvroUtils.getSchemaForFields(readAvroSchema(conf, filePath), fields);
-      })
-          .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
+      }).orElse(partitionPath.isPresent() ? HoodieAvroUtils.getRecordKeySchema() : HoodieAvroUtils.getRecordKeyPartitionPathSchema());
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
       ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(filePath).withConf(conf).build();
-      return HoodieKeyIterator.getInstance(new ParquetReaderIterator<>(reader), keyGeneratorOpt);
+      return HoodieKeyIterator.getInstance(new ParquetReaderIterator<>(reader), keyGeneratorOpt, partitionPath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
     }
@@ -195,7 +194,7 @@ public class ParquetUtils extends BaseFileUtils {
   @Override
   public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     List<HoodieKey> hoodieKeys = new ArrayList<>();
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, keyGeneratorOpt)) {
+    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, keyGeneratorOpt, Option.empty())) {
       iterator.forEachRemaining(hoodieKeys::add);
       return hoodieKeys;
     }
@@ -210,7 +209,7 @@ public class ParquetUtils extends BaseFileUtils {
 
   @Override
   public Map<String, String> readFooter(Configuration configuration, boolean required,
-                                                       Path parquetFilePath, String... footerNames) {
+                                        Path parquetFilePath, String... footerNames) {
     Map<String, String> footerVals = new HashMap<>();
     ParquetMetadata footer = readMetadata(configuration, parquetFilePath);
     Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
@@ -459,11 +458,11 @@ public class ParquetUtils extends BaseFileUtils {
     private final ClosableIterator<GenericRecord> nestedItr;
     private final Function<GenericRecord, HoodieKey> func;
 
-    public static HoodieKeyIterator getInstance(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
-      return new HoodieKeyIterator(nestedItr, keyGenerator);
+    public static HoodieKeyIterator getInstance(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator, Option<String> partitionPathOption) {
+      return new HoodieKeyIterator(nestedItr, keyGenerator, partitionPathOption);
     }
 
-    private HoodieKeyIterator(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+    private HoodieKeyIterator(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator, Option<String> partitionPathOption) {
       this.nestedItr = nestedItr;
       if (keyGenerator.isPresent()) {
         this.func = retVal -> {
@@ -473,8 +472,8 @@ public class ParquetUtils extends BaseFileUtils {
         };
       } else {
         this.func = retVal -> {
-          String recordKey = retVal.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-          String partitionPath = retVal.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          String recordKey = retVal.get(0).toString();
+          String partitionPath = partitionPathOption.orElseGet(() -> retVal.get(1).toString());
           return new HoodieKey(recordKey, partitionPath);
         };
       }

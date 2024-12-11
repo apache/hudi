@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -38,9 +37,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.PairFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,8 +102,8 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
         totalBuckets, bucketInfoMap.size(), partitionPathToInsertBucketInfos.size(), updateLocationToBucket.size());
     if (LOG.isDebugEnabled()) {
       LOG.debug("Buckets info => " + bucketInfoMap + ", \n"
-              + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
-              + "UpdateLocations mapped to buckets =>" + updateLocationToBucket);
+          + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
+          + "UpdateLocations mapped to buckets =>" + updateLocationToBucket);
     }
   }
 
@@ -270,20 +266,14 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   }
 
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
-    JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
-    Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
-
-    if (config.getParquetSmallFileLimit() <= 0) {
-      return partitionSmallFilesMap;
+    if (config.getParquetSmallFileLimit() <= 0 || (partitionPaths == null || partitionPaths.isEmpty())) {
+      return Collections.emptyMap();
     }
 
-    if (partitionPaths != null && partitionPaths.size() > 0) {
-      context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
-      JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
-      partitionSmallFilesMap = partitionPathRdds.mapToPair((PairFunction<String, String, List<SmallFile>>)
-          partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath))).collectAsMap();
-    }
-
+    context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
+    long startTimeMs = System.currentTimeMillis();
+    Map<String, List<SmallFile>> partitionSmallFilesMap = context.mapToPair(partitionPaths, paritionPath -> Pair.of(paritionPath, getSmallFiles(paritionPath)), partitionPaths.size());
+    LOG.info("Fetched small files in {}ms", System.currentTimeMillis() - startTimeMs);
     return partitionSmallFilesMap;
   }
 

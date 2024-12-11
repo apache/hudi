@@ -183,9 +183,10 @@ public abstract class BaseFileUtils {
    * @param configuration configuration to build fs object
    * @param filePath      The data file path
    * @param keyGeneratorOpt instance of KeyGenerator.
+   * @param partitionPath optional partition path for the file, if provided only the record key is read from the file
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file
    */
-  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath);
 
   /**
    * Provides a closable iterator for reading the given data file.
