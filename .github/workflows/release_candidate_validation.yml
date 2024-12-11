@@ -15,10 +15,10 @@ env:
 jobs:
   validate-release-candidate-bundles:
     runs-on: ubuntu-latest
-    if: false
+    # if: false
     env:
-      HUDI_VERSION: 0.14.1
-      STAGING_REPO_NUM: 1123
+      HUDI_VERSION: 1.0.0
+      STAGING_REPO_NUM: 1145
     strategy:
       matrix:
         include:
@@ -41,7 +41,7 @@ jobs:
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.3'
-            sparkRuntime: 'spark3.3.1'
+            sparkRuntime: 'spark3.3.4'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
