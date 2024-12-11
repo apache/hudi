@@ -49,7 +49,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     hudiOpts = hudiOpts + (
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false") // some negative test cases in this class assumes
+      "hoodie.metadata.index.column.stats.enable" -> "false") // some negative test cases in this class assumes
     // only RLI being enabled. So, disabling col stats for now.
 
     val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
@@ -279,7 +279,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "record_key_col,name",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_key_col",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() -> "false"
+      "hoodie.metadata.index.column.stats.enable" -> "false"
     ) ++ metadataOpts
 
     spark.sql(
