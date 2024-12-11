@@ -40,14 +40,12 @@ import org.slf4j.LoggerFactory;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -62,8 +60,6 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 public class ConsistentBucketIndexUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketIndexUtils.class);
-
-  private static final String TEMP_DIR = ".tmp";
 
   /**
    * Loads hashing metadata of the given partition, if it does not exist, creates a new one (also persist it into storage).
@@ -187,36 +183,13 @@ public class ConsistentBucketIndexUtils {
     HoodieStorage storage = table.getStorage();
     StoragePath dir = FSUtils.constructAbsolutePath(
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
-    StoragePath tmpDir = FSUtils.constructAbsolutePath(dir, TEMP_DIR);
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
-    StoragePath tmpPath = new StoragePath(tmpDir, UUID.randomUUID() + "-" + metadata.getFilename());
-
     try {
-      // write to temp path
-      OutputStream out = storage.create(tmpPath, true);
-      byte[] bytes = metadata.toBytes();
-      out.write(bytes);
-      out.close();
-      // rename to final path
-      boolean renamed = storage.rename(tmpPath, fullPath);
-      if (!renamed) {
-        LOG.warn("Failed to rename bucket metadata: {} from tmp path: {} to final path: {}", metadata, tmpPath, fullPath);
-        return false;
-      }
-      LOG.info("Updated bucket metadata: {} at path: {}", metadata, fullPath);
+      storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()), true);
       return true;
     } catch (IOException e) {
       LOG.warn("Failed to update bucket metadata: " + metadata, e);
       return false;
-    } finally {
-      try {
-        // delete tmp file
-        if (storage.exists(tmpPath)) {
-          storage.deleteFile(tmpPath);
-        }
-      } catch (IOException e) {
-        LOG.warn("Failed to delete tmp file: " + tmpPath, e);
-      }
     }
   }
 

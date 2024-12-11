@@ -309,10 +309,14 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public final void createImmutableFileInPath(StoragePath path,
                                               Option<byte[]> content) throws HoodieIOException {
+    createImmutableFileInPath(path, content, needCreateTempFile());
+  }
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public final void createImmutableFileInPath(StoragePath path,
+                                              Option<byte[]> content, boolean needTempFile) throws HoodieIOException {
     OutputStream fsout = null;
     StoragePath tmpPath = null;
-
-    boolean needTempFile = needCreateTempFile();
 
     try {
       if (!content.isPresent()) {
