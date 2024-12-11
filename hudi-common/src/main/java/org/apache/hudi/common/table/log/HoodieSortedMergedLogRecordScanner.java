@@ -271,7 +271,7 @@ public class HoodieSortedMergedLogRecordScanner extends HoodieLogRecordScanner {
     return new HoodieSortedMergedLogRecordScanner.Builder();
   }
 
-  public static class Builder extends AbstractHoodieLogRecordReader.Builder {
+  public static class Builder extends AbstractHoodieLogRecordScanner.Builder {
     private HoodieStorage storage;
     private String basePath;
     private List<String> logFilePaths;

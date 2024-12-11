@@ -32,7 +32,7 @@ import org.apache.avro.Schema;
 import java.io.Closeable;
 import java.util.List;
 
-public abstract class HoodieLogRecordScanner extends AbstractHoodieLogRecordReader implements Iterable<HoodieRecord>, Closeable {
+public abstract class HoodieLogRecordScanner extends AbstractHoodieLogRecordScanner implements Iterable<HoodieRecord>, Closeable {
 
   // A timer for calculating elapsed time in millis
   private final HoodieTimer timer = HoodieTimer.create();
