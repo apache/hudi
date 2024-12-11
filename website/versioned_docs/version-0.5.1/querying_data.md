@@ -154,7 +154,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ```
 
 For examples, refer to [Setup spark-shell in quickstart](/docs/quick-start-guide#setup-spark-shell). 
-Please refer to [configurations](/docs/configurations#spark-datasource) section, to view all datasource options.
+Please refer to [configurations](/docs/configurations#spark-datasource-configs) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
 

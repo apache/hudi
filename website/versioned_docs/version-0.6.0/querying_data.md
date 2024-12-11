@@ -166,8 +166,8 @@ hudiIncQueryDF.createOrReplaceTempView("hudi_trips_incremental")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
 ```
 
-For examples, refer to [Setup spark-shell in quickstart](/docs/quick-start-guide#setup-spark-shell). 
-Please refer to [configurations](/docs/configurations#spark-datasource) section, to view all datasource options.
+For examples, refer to [Setup spark-shell in quickstart](quick-start-guide#setup). 
+Please refer to [configurations](/docs/configurations#spark-datasource-configs) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
 

@@ -12,12 +12,12 @@ In this section, we will cover ways to ingest new changes from external sources 
 Currently Hudi supports following ways to write the data.
 - [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer)
 - [Spark Hudi Datasource](#spark-datasource-writer)
-- [Spark Structured Streaming](/docs/hoodie_streaming_ingestion#structured-streaming)
-- [Spark SQL](/docs/next/sql_ddl#spark-sql)
-- [Flink Writer](/docs/next/hoodie_streaming_ingestion#flink-ingestion)
-- [Flink SQL](/docs/next/sql_ddl#flink)
+- [Spark Structured Streaming](hoodie_streaming_ingestion#structured-streaming)
+- [Spark SQL](sql_ddl#spark-sql)
+- [Flink Writer](hoodie_streaming_ingestion#flink-ingestion)
+- [Flink SQL](sql_ddl#flink)
 - [Java Writer](#java-writer)
-- [Kafka Connect](/docs/next/hoodie_streaming_ingestion#kafka-connect-sink)
+- [Kafka Connect](hoodie_streaming_ingestion#kafka-connect-sink)
 
 ## Spark Datasource Writer
 
@@ -98,7 +98,7 @@ df.write.format("hudi").
 You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key
 (`uuid` in [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
-[Modeling data stored in Hudi](/docs/next/faq_general/#how-do-i-model-the-data-stored-in-hudi)
+[Modeling data stored in Hudi](faq_general/#how-do-i-model-the-data-stored-in-hudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
@@ -134,7 +134,7 @@ df.write.format("hudi").
 You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key
 (`uuid` in [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
-[Modeling data stored in Hudi](/docs/next/faq_general/#how-do-i-model-the-data-stored-in-hudi)
+[Modeling data stored in Hudi](faq_general/#how-do-i-model-the-data-stored-in-hudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
@@ -547,7 +547,7 @@ INSERT INTO hudi_table select ... from ...;
 
 Hudi Flink supports a new non-blocking concurrency control mode, where multiple writer tasks can be executed
 concurrently without blocking each other. One can read more about this mode in
-the [concurrency control](/docs/next/concurrency_control#model-c-multi-writer) docs. Let us see it in action here.
+the [concurrency control](concurrency_control#model-c-multi-writer) docs. Let us see it in action here.
 
 In the below example, we have two streaming ingestion pipelines that concurrently update the same table. One of the
 pipeline is responsible for the compaction and cleaning table services, while the other pipeline is just for data

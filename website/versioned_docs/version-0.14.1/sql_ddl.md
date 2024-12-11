@@ -104,7 +104,7 @@ TBLPROPERTIES (
 ```
 
 ### Create table from an external location
-Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/next/hoodie_streaming_ingestion#hudi-streamer), which
+Often, Hudi tables are created from streaming writers like the [streamer tool](hoodie_streaming_ingestion#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
 
 ```sql
@@ -389,7 +389,7 @@ Users can set table properties while creating a table. The important table prope
 #### Passing Lock Providers for Concurrent Writers
 
 Hudi requires a lock provider to support concurrent writers or asynchronous table services when using OCC
-and [NBCC](/docs/next/concurrency_control#non-blocking-concurrency-control-mode-experimental) (Non-Blocking Concurrency Control)
+and [NBCC](concurrency_control#non-blocking-concurrency-control) (Non-Blocking Concurrency Control)
 concurrency mode. For NBCC mode, locking is only used to write the commit metadata file in the timeline. Writes are
 serialized by completion time. Users can pass these table properties into *TBLPROPERTIES* as well. Below is an example
 for a Zookeeper based configuration.
@@ -612,7 +612,7 @@ ALTER TABLE tableA RENAME TO tableB;
 ### Setting Hudi configs
 
 #### Using table options
-You can configure hoodie configs in table options when creating a table. You can refer Flink specific hoodie configs [here](/docs/next/configurations#FLINK_SQL)
+You can configure hoodie configs in table options when creating a table. You can refer Flink specific hoodie configs [here](configurations#FLINK_SQL)
 These configs will be applied to all the operations on that table.
 
 ```sql

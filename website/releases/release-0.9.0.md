@@ -45,7 +45,7 @@ Hudi tables are now registered with Hive as spark datasource tables, meaning Spa
 instead of relying on the Hive fallbacks within Spark, which are ill-maintained/cumbersome. This unlocks many optimizations such as the
 use of Hudi's own [FileIndex](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-spark-datasource/hudi-spark/src/main/scala/org/apache/hudi/HoodieFileIndex.scala#L46)
 implementation for optimized caching and the use of the Hudi metadata table, for faster listing of large tables. We have also added support for
-[timetravel query](/docs/quick-start-guide#time-travel-query), for spark datasource.
+[timetravel query](/docs/0.9.0/quick-start-guide#time-travel-query), for spark datasource.
 
 ### Writer side improvements
 

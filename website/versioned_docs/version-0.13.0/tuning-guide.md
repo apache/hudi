@@ -17,7 +17,7 @@ Writing data via Hudi happens as a Spark job and thus general rules of spark deb
 
 **Spark Memory** : Typically, hudi needs to be able to read a single file into memory to perform merges or compactions and thus the executor memory should be sufficient to accomodate this. In addition, Hoodie caches the input to be able to intelligently place data and thus leaving some `spark.memory.storageFraction` will generally help boost performance.
 
-**Sizing files**: Set `limitFileSize` above judiciously, to balance ingest/write latency vs number of files & consequently metadata overhead associated with it.
+**Sizing files**: Set `hoodie.parquet.small.file.limit` above judiciously, to balance ingest/write latency vs number of files & consequently metadata overhead associated with it.
 
 **Timeseries/Log data** : Default configs are tuned for database/nosql changelogs where individual record sizes are large. Another very popular class of data is timeseries/event/log data that tends to be more volumnious with lot more records per partition. In such cases consider tuning the bloom filter accuracy via `.bloomFilterFPP()/bloomFilterNumEntries()` to achieve your target index look up time. Also, consider making a key that is prefixed with time of the event, which will enable range pruning & significantly speeding up index lookup.
 

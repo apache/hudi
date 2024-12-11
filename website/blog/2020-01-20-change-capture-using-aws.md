@@ -20,7 +20,7 @@ In this blog, we will build an end-end solution for capturing changes from a MyS
 We can break up the problem into two pieces.
 
 1.  **Extracting change logs from MySQL**  : Surprisingly, this is still a pretty tricky problem to solve and often Hudi users get stuck here. Thankfully, at-least for AWS users, there is a  [Database Migration service](https://aws.amazon.com/dms/)  (DMS for short), that does this change capture and uploads them as parquet files on S3
-2.  **Applying these change logs to your data lake table**  : Once there are change logs in some form, the next step is to apply them incrementally to your table. This mundane task can be fully automated using the Hudi  [DeltaStreamer](http://hudi.apache.org/docs/writing_data#deltastreamer)  tool.
+2.  **Applying these change logs to your data lake table**  : Once there are change logs in some form, the next step is to apply them incrementally to your table. This mundane task can be fully automated using the Hudi  [DeltaStreamer](http://hudi.apache.org/docs/hoodie_streaming_ingestion#hudi-streamer)  tool.
 
   
 

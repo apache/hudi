@@ -62,7 +62,7 @@ Following are the different types of metadata currently supported.
   ```
 
 
-To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-and-secondary-index-experimental).
+To try out these features, refer to the [SQL guide](sql_ddl#create-partition-stats-index).
 
 ## Metadata Tracking on Writers
 
@@ -153,7 +153,7 @@ process which cannot rely on the in-process lock provider.
 
 ### Deployment Model C: Multi-writer
 
-If your current deployment model is [multi-writer](/docs/concurrency_control#model-c-multi-writer) along with a lock 
+If your current deployment model is [multi-writer](concurrency_control#full-on-multi-writer--async-table-services) along with a lock 
 provider and other required configs set for every writer as follows, there is no additional configuration required. You 
 can bring up the writers sequentially after stopping the writers for enabling metadata table. Applying the proper 
 configurations to only partial writers leads to loss of data from the inconsistent writer. So, ensure you enable 

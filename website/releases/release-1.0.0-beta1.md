@@ -45,7 +45,7 @@ changes in this release:
 - Completed actions, their plans and completion metadata are stored in a more
   scalable [LSM tree](https://en.wikipedia.org/wiki/Log-structured_merge-tree) based timeline organized in an *
   *_archived_** storage location under the .hoodie metadata path. It consists of Apache Parquet files with action
-  instant data and bookkeeping metadata files, in the following manner. Checkout [timeline](/docs/next/timeline#lsm-timeline) docs for more details.
+  instant data and bookkeeping metadata files, in the following manner. Checkout [timeline](/docs/next/timeline#lsm-timeline-history) docs for more details.
 
 #### Log File Format
 
@@ -68,7 +68,7 @@ A new concurrency control mode called `NON_BLOCKING_CONCURRENCY_CONTROL` is intr
 OCC, multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the
 same file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency
 mode is currently available for preview in version 1.0.0-beta only. You can read more about it under
-section [Model C: Multi-writer](/docs/next/concurrency_control#non-blocking-concurrency-control-mode-experimental). A complete example with multiple 
+section [Model C: Multi-writer](/docs/next/concurrency_control#non-blocking-concurrency-control). A complete example with multiple 
 Flink streaming writers is available [here](/docs/next/sql_dml#non-blocking-concurrency-control-experimental). You
 can follow the [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md) and
 the [JIRA](https://issues.apache.org/jira/browse/HUDI-6640) for more details.

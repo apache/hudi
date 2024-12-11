@@ -79,7 +79,7 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 [Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](writing_data#write-operations)
 \{: .notice--info}
 
 ## Query data 
@@ -285,7 +285,7 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 [Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](writing_data#write-operations)
 \{: .notice--info}
 
 ## Query data 

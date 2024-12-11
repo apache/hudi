@@ -6,7 +6,7 @@ keywords: [hudi, writing, reading]
 
 ### What are some ways to write a Hudi table?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](/docs/write_operations/) against a Hudi table. If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](/docs/next/writing_data#spark-datasource-api) to write into Hudi.
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](/docs/write_operations/) against a Hudi table. If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](writing_data#spark-datasource-api) to write into Hudi.
 
 ### How is a Hudi writer job deployed?
 
@@ -68,7 +68,7 @@ As you could see, ([combineAndGetUpdateValue(), getInsertValue()](https://github
 
 ### How do I delete records in the dataset using Hudi?
 
-GDPR has made deletes a must-have tool in everyone's data management toolbox. Hudi supports both soft and hard deletes. For details on how to actually perform them, see [here](/docs/next/writing_data#deletes).
+GDPR has made deletes a must-have tool in everyone's data management toolbox. Hudi supports both soft and hard deletes. For details on how to actually perform them, see [here](writing_data#deletes).
 
 ### Should I need to worry about deleting all copies of the records in case of duplicates?
 
@@ -147,7 +147,7 @@ a) **Auto Size small files during ingestion**: This solution trades ingest/writi
 
 Hudi has the ability to maintain a configured target file size, when performing **upsert/insert** operations. (Note: **bulk_insert** operation does not provide this functionality and is designed as a simpler replacement for normal `spark.write.parquet` )
 
-For **copy-on-write**, this is as simple as configuring the [maximum size for a base/parquet file](/docs/configurations#hoodieparquetmaxfilesize) and the [soft limit](/docs/configurations#hoodieparquetsmallfilelimit) below which a file should be considered a small file. For the initial bootstrap to Hudi table, tuning record size estimate is also important to ensure sufficient records are bin-packed in a parquet file. For subsequent writes, Hudi automatically uses average record size based on previous commit. Hudi will try to add enough records to a small file at write time to get it to the configured maximum limit. For e.g , with `compactionSmallFileSize=100MB` and limitFileSize=120MB, Hudi will pick all files < 100MB and try to get them upto 120MB.
+For **copy-on-write**, this is as simple as configuring the [maximum size for a base/parquet file](/docs/configurations#hoodieparquetmaxfilesize) and the [soft limit](/docs/configurations#hoodieparquetsmallfilelimit) below which a file should be considered a small file. For the initial bootstrap to Hudi table, tuning record size estimate is also important to ensure sufficient records are bin-packed in a parquet file. For subsequent writes, Hudi automatically uses average record size based on previous commit. Hudi will try to add enough records to a small file at write time to get it to the configured maximum limit. For e.g , with `hoodie.parquet.max.file.size=100MB` and hoodie.parquet.small.file.limit=120MB, Hudi will pick all files < 100MB and try to get them upto 120MB.
 
 For **merge-on-read**, there are few more configs to set. MergeOnRead works differently for different INDEX choices.
 
@@ -183,7 +183,7 @@ No, Hudi does not expose uncommitted files/blocks to the readers. Further, Hudi 
 
 ### How are conflicts detected in Hudi between multiple writers?
 
-Hudi employs [optimistic concurrency control](/docs/concurrency_control#supported-concurrency-controls) between writers, while implementing MVCC based concurrency control between writers and the table services. Concurrent writers to the same table need to be configured with the same lock provider configuration, to safely perform writes. By default (implemented in “[SimpleConcurrentFileWritesConflictResolutionStrategy](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/SimpleConcurrentFileWritesConflictResolutionStrategy.java)”), Hudi allows multiple writers to concurrently write data and commit to the timeline if there is no conflicting writes to the same underlying file group IDs. This is achieved by holding a lock, checking for changes that modified the same file IDs. Hudi then supports a pluggable interface “[ConflictResolutionStrategy](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/ConflictResolutionStrategy.java)” that determines how conflicts are handled. By default, the later conflicting write is aborted. Hudi also support eager conflict detection to help speed up conflict detection and release cluster resources back early to reduce costs.
+Hudi employs [optimistic concurrency control](concurrency_control) between writers, while implementing MVCC based concurrency control between writers and the table services. Concurrent writers to the same table need to be configured with the same lock provider configuration, to safely perform writes. By default (implemented in “[SimpleConcurrentFileWritesConflictResolutionStrategy](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/SimpleConcurrentFileWritesConflictResolutionStrategy.java)”), Hudi allows multiple writers to concurrently write data and commit to the timeline if there is no conflicting writes to the same underlying file group IDs. This is achieved by holding a lock, checking for changes that modified the same file IDs. Hudi then supports a pluggable interface “[ConflictResolutionStrategy](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/ConflictResolutionStrategy.java)” that determines how conflicts are handled. By default, the later conflicting write is aborted. Hudi also support eager conflict detection to help speed up conflict detection and release cluster resources back early to reduce costs.
 
 ### Can single-writer inserts have duplicates?
 

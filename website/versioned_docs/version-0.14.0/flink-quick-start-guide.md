@@ -11,11 +11,11 @@ This guide helps you quickly start using Flink on Hudi, and learn different mode
 
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
 - **Configuration** : For [Global Configuration](/docs/flink_tuning#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](/docs/flink_tuning#table-options).
-- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/hoodie_streaming_ingestion#cdc-ingestion), [Bulk Insert](/docs/hoodie_streaming_ingestion#bulk-insert), [Index Bootstrap](/docs/hoodie_streaming_ingestion#index-bootstrap), [Changelog Mode](/docs/hoodie_streaming_ingestion#changelog-mode) and [Append Mode](/docs/hoodie_streaming_ingestion#append-mode).
-- **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](/docs/querying_data#streaming-query) and [Incremental Query](/docs/querying_data#incremental-query).
+- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](hoodie_streaming_ingestion#cdc-ingestion), [Bulk Insert](hoodie_streaming_ingestion#bulk-insert), [Index Bootstrap](hoodie_streaming_ingestion#index-bootstrap), [Changelog Mode](hoodie_streaming_ingestion#changelog-mode) and [Append Mode](hoodie_streaming_ingestion#append-mode).
+- **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](sql_queries#streaming-query) and [Incremental Query](/docs/querying_data#incremental-query).
 - **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/flink_tuning#memory-optimization) and [Write Rate Limit](/docs/flink_tuning#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).
-- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](/docs/querying_data#prestodb).
+- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](sql_queries#presto).
 - **Catalog**: A Hudi specific catalog is supported: [Hudi Catalog](/docs/sql_ddl/#create-catalog).
 
 ## Quick Start
