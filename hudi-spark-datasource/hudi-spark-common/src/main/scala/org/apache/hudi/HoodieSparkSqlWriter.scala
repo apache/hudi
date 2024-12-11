@@ -266,6 +266,7 @@ class HoodieSparkSqlWriterInternal {
     val preppedSparkSqlMergeInto = parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean
     val preppedSparkSqlWrites = parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
     val preppedWriteOperation = canDoPreppedWrites(hoodieConfig, parameters, operation, sourceDf)
+    val isDFEnabled = hoodieConfig.getBooleanOrDefault(HoodieWriteConfig.PREFER_DATAFRAME_API.key(), false)
 
     val jsc = new JavaSparkContext(sparkContext)
     if (streamingWritesParamsOpt.map(_.asyncCompactionTriggerFn.isDefined).orElse(Some(false)).get) {
@@ -462,6 +463,7 @@ class HoodieSparkSqlWriterInternal {
             } else {
               writerSchema
             }
+            log.warn(dataFileSchema.toString(true))
 
             // Remove meta columns from writerSchema if isPrepped is true.
             val processedDataSchema = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
@@ -491,6 +493,7 @@ class HoodieSparkSqlWriterInternal {
               return bulkInsertAsRow(client, parameters, hoodieConfig, df, mode, tblName, basePath, writerSchema, tableConfig)
             }
             // scalastyle:on
+            log.warn("Bypassed Row writer")
 
             val writeConfig = client.getConfig
             if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
@@ -498,30 +501,58 @@ class HoodieSparkSqlWriterInternal {
             }
             instantTime = client.createNewInstantTime()
             // Convert to RDD[HoodieRecord]
-            val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
-              HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
-                avroRecordNamespace, writerSchema, processedDataSchema, operation, instantTime, preppedSparkSqlWrites,
-                preppedSparkSqlMergeInto, preppedWriteOperation))) match {
-              case Success(recs) => recs
-              case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
-            }
-
-            val dedupedHoodieRecords =
-              if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) && operation != WriteOperationType.INSERT_OVERWRITE_TABLE && operation != WriteOperationType.INSERT_OVERWRITE) {
-                DataSourceUtils.dropDuplicates(jsc, hoodieRecords, parameters.asJava)
-              } else {
-                hoodieRecords
+            if (isDFEnabled) {
+              val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordDF(
+                HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
+                  avroRecordNamespace, writerSchema, processedDataSchema, operation, instantTime, preppedSparkSqlWrites,
+                  preppedSparkSqlMergeInto, preppedWriteOperation))) match {
+                case Success(recs) => recs
+                case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
               }
-            client.startCommitWithTime(instantTime, commitActionType)
-            try {
-              val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
-                preppedSparkSqlWrites || preppedWriteOperation)
-              (writeResult, client)
-            } catch {
-              case e: HoodieException =>
-                // close the write client in all cases
-                handleWriteClientClosure(client, tableConfig, parameters, jsc.hadoopConfiguration())
-                throw e
+
+              val dedupedHoodieRecords =
+                if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) && operation != WriteOperationType.INSERT_OVERWRITE_TABLE && operation != WriteOperationType.INSERT_OVERWRITE) {
+                  DataSourceUtils.dropDuplicates(jsc, hoodieRecords, parameters.asJava)
+                } else {
+                  hoodieRecords
+                }
+              client.startCommitWithTime(instantTime, commitActionType)
+              try {
+                val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
+                  preppedSparkSqlWrites || preppedWriteOperation)
+                (writeResult, client)
+              } catch {
+                case e: HoodieException =>
+                  // close the write client in all cases
+                  handleWriteClientClosure(client, tableConfig, parameters, jsc.hadoopConfiguration())
+                  throw e
+              }
+            } else {
+              val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
+                HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
+                  avroRecordNamespace, writerSchema, processedDataSchema, operation, instantTime, preppedSparkSqlWrites,
+                  preppedSparkSqlMergeInto, preppedWriteOperation))) match {
+                case Success(recs) => recs
+                case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
+              }
+
+              val dedupedHoodieRecords =
+                if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) && operation != WriteOperationType.INSERT_OVERWRITE_TABLE && operation != WriteOperationType.INSERT_OVERWRITE) {
+                  DataSourceUtils.dropDuplicates(jsc, hoodieRecords, parameters.asJava)
+                } else {
+                  hoodieRecords
+                }
+              client.startCommitWithTime(instantTime, commitActionType)
+              try {
+                val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
+                  preppedSparkSqlWrites || preppedWriteOperation)
+                (writeResult, client)
+              } catch {
+                case e: HoodieException =>
+                  // close the write client in all cases
+                  handleWriteClientClosure(client, tableConfig, parameters, jsc.hadoopConfiguration())
+                  throw e
+              }
             }
         }
 
@@ -893,10 +924,6 @@ class HoodieSparkSqlWriterInternal {
     // for backward compatibility
     if (hiveSyncEnabled) metaSyncEnabled = true
 
-    // for AWS glue compatibility
-    if (hoodieConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE) == HiveSyncMode.GLUE.name()) {
-      syncClientToolClassSet += "org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool"
-    }
 
     if (metaSyncEnabled) {
       val fs = basePath.getFileSystem(spark.sessionState.newHadoopConf())
@@ -980,7 +1007,13 @@ class HoodieSparkSqlWriterInternal {
                                              tableInstantInfo: TableInstantInfo,
                                              extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]]
                                             ): (Boolean, HOption[java.lang.String], HOption[java.lang.String]) = {
-    if (writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors).count() == 0) {
+    val writeStatuses = if (writeResult.getWriteStatuses != null) {
+      writeResult.getWriteStatuses.rdd
+    } else {
+      writeResult.getWriteStatusesDataFrame.rdd
+    }
+
+    if (writeStatuses.filter(ws => ws.hasErrors).count() == 0) {
       log.info("Proceeding to commit the write.")
       val metaMap = parameters.filter(kv =>
         kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX.key)))
@@ -1037,7 +1070,7 @@ class HoodieSparkSqlWriterInternal {
             }
           })
       }
-      (false, common.util.Option.empty(), common.util.Option.empty())
+      (true, common.util.Option.empty(), common.util.Option.empty())
     }
   }
 
