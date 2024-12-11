@@ -114,7 +114,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     throw new UnsupportedOperationException("HFileUtils does not support getHoodieKeyIterator");
   }
 
@@ -124,7 +124,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     throw new UnsupportedOperationException("HFileUtils does not support fetchRecordKeysWithPositions");
   }
 
