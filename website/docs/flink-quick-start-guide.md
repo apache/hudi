@@ -14,13 +14,14 @@ This page introduces Flink-Hudi integration. We can feel the unique charm of how
 ### Flink Support Matrix
 
 
-| Hudi            | Supported Flink version                 |
-|:----------------|:----------------------------------------|
-| 0.15.x          | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x  |
-| 0.14.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x  |
-| 0.13.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x          |
-| 0.12.x          | 1.13.x, 1.14.x, 1.15.x                  |
-| 0.11.x          | 1.13.x, 1.14.x                          |
+| Hudi   | Supported Flink version                                                |
+|:-------|:-----------------------------------------------------------------------|
+| 1.0.x  | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build) |
+| 0.15.x | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x                                 |
+| 0.14.x | 1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x                                 |
+| 0.13.x | 1.13.x, 1.14.x, 1.15.x, 1.16.x                                         |
+| 0.12.x | 1.13.x, 1.14.x, 1.15.x                                                 |
+| 0.11.x | 1.13.x, 1.14.x                                                         |
 
 
 ### Download Flink and Start Flink cluster
