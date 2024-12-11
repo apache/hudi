@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.90997b88.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6da41ced.js" defer="defer"></script>
 <script src="/assets/js/main.746914d1.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -27,8 +27,8 @@
 <p>Cleaning is a table service employed by Hudi to reclaim space occupied by older versions of data and keep storage costs
 in check. Apache Hudi provides snapshot isolation between writers and readers by managing multiple versioned files with <strong>MVCC</strong>
 concurrency. These file versions provide history and enable time travel and rollbacks, but it is important to manage
-how much history you keep to balance your costs. Cleaning service plays a crucial role in manging the tradeoff between
-retaining long history of data and the associated storage costs.</p>
+how much history you keep to balance your costs. Cleaning service plays a crucial role in managing the tradeoff between
+retaining the long history of data and the associated storage costs.</p>
 <p>Hudi enables <a href="/docs/configurations/#hoodiecleanautomatic">Automatic Hudi cleaning</a> by default. Cleaning is invoked
 immediately after each commit, to delete older file slices. It&#x27;s recommended to leave this enabled to ensure metadata
 and data storage growth is bounded. Cleaner can also be scheduled after every few commits instead of after every commit by
@@ -44,7 +44,7 @@ configuring <a href="https://hudi.apache.org/docs/configurations#hoodiecleanmaxc
 <p><strong>KEEP_LATEST_COMMITS</strong>: This is the default policy. This is a temporal cleaning policy that ensures the effect of
 having lookback into all the changes that happened in the last X commits. Suppose a writer is ingesting data
 into a Hudi dataset every 30 minutes and the longest running query can take 5 hours to finish, then the user should
-retain atleast the last 10 commits. With such a configuration, we ensure that the oldest version of a file is kept on
+retain at least the last 10 commits. With such a configuration, we ensure that the oldest version of a file is kept on
 disk for at least 5 hours, thereby preventing the longest running query from failing at any point in time. Incremental
 cleaning is also possible using this policy.
 Number of commits to retain can be configured by <a href="https://analytics.google.com/analytics/web/#/p300324801/reports/intelligenthome" target="_blank" rel="noopener noreferrer"><code>hoodie.cleaner.commits.retained</code></a>.
@@ -96,7 +96,7 @@ to keep this enabled, to ensure metadata and data storage growth is bounded. To 
 <li><code>clean showpartitions</code></li>
 <li><code>cleans run</code></li>
 </ul>
-<p>Example of cleaner keeping the latest 10 commits</p>
+<p>Example of cleaner keeping the latest 3 commits</p>
 <div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">cleans run --sparkMaster local --hoodieConfigs hoodie.cleaner.policy=KEEP_LATEST_COMMITS hoodie.cleaner.commits.retained=3 hoodie.cleaner.parallelism=200</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>
 <p>You can find more details and the relevant code for these commands in <a href="https://github.com/apache/hudi/blob/master/hudi-cli/src/main/java/org/apache/hudi/cli/commands/CleansCommand.java" target="_blank" rel="noopener noreferrer"><code>org.apache.hudi.cli.commands.CleansCommand</code></a> class.</p>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="related-resources">Related Resources<a href="#related-resources" class="hash-link" aria-label="Direct link to Related Resources" title="Direct link to Related Resources">​</a></h2>
