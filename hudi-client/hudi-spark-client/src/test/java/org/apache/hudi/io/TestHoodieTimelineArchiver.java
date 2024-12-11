@@ -249,7 +249,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata)
-            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable).withMetadataIndexColumnStats(false).build())
         .withWriteConcurrencyMode(writeConcurrencyMode)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .build())
@@ -1652,6 +1652,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .withMaxNumDeltaCommitsBeforeCompaction(8)
+            .withMetadataIndexColumnStats(false)
             .build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
