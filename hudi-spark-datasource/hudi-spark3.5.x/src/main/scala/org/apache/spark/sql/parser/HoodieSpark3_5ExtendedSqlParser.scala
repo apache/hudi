@@ -39,7 +39,7 @@ class HoodieSpark3_5ExtendedSqlParser(session: SparkSession, delegate: ParserInt
   extends HoodieExtendedParserInterface with Logging {
 
   private lazy val conf = session.sqlContext.conf
-  private lazy val builder = new HoodieSpark3_5ExtendedSqlAstBuilder(conf, delegate)
+  private lazy val builder = new HoodieSpark3_5ExtendedSqlAstBuilder()
   private val substitutor = new VariableSubstitution
 
   override def parsePlan(sqlText: String): LogicalPlan = {
@@ -120,10 +120,6 @@ class HoodieSpark3_5ExtendedSqlParser(session: SparkSession, delegate: ParserInt
 
   private def isHoodieCommand(sqlText: String): Boolean = {
     val normalized = sqlText.toLowerCase(Locale.ROOT).trim().replaceAll("\\s+", " ")
-    normalized.contains("system_time as of") ||
-      normalized.contains("timestamp as of") ||
-      normalized.contains("system_version as of") ||
-      normalized.contains("version as of") ||
       normalized.contains("create index") ||
       normalized.contains("drop index") ||
       normalized.contains("show indexes") ||

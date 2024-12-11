@@ -22,6 +22,10 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.concurrent.TimeUnit
+
 class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   test("Test Insert and Update Record with time travel") {
     Seq("cow", "mor").foreach { tableType =>
@@ -47,6 +51,12 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
           // 1st commit instant
           spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
 
+          // diff time format
+          val instance1Millis = System.currentTimeMillis()
+          val timestampInSeconds = TimeUnit.MILLISECONDS.toSeconds(instance1Millis)
+          val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+          val formattedDate = sdf.format(new Date(instance1Millis))
+
           val metaClient1 = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName1")
           val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
             .lastInstant().get().requestedTime
@@ -58,10 +68,29 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
             Seq(1, "a2", 20.0, 2000)
           )
 
+          spark.sessionState.catalog.invalidateAllCachedTables()
           // time travel as of instant 1
           checkAnswer(
-            s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF '$instant1'")(
+            s"select id, name, price, ts from $tableName1 VERSION AS OF $instant1")(
             Seq(1, "a1", 10.0, 1000)
+          )
+
+          spark.sessionState.catalog.invalidateAllCachedTables()
+          checkAnswer(
+            s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF $timestampInSeconds")(
+            Seq(1, "a1", 10.0, 1000)
+          )
+
+          spark.sessionState.catalog.invalidateAllCachedTables()
+          checkAnswer(
+            s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF '$formattedDate'")(
+            Seq(1, "a1", 10.0, 1000)
+          )
+
+          spark.sessionState.catalog.invalidateAllCachedTables()
+          checkAnswer(
+            s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF now()")(
+            Seq(1, "a2", 20.0, 2000)
           )
         })
       }
@@ -119,7 +148,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
             s"""
                | insert into $tableName2
                | select id, name, price, ts, '2022-02-14' as dt
-               | from $tableName1 TIMESTAMP AS OF '$instant1'
+               | from $tableName1 VERSION AS OF '$instant1'
         """.stripMargin)
           checkAnswer(s"select id, name, price, ts, dt from $tableName2")(
             Seq(1, "a1", 10.0, 1000, "2022-02-14")
@@ -130,7 +159,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
             s"""
                | insert into $tableName2 partition(dt = '2022-02-15')
                | select 2 as id, 'a2' as name, price, ts
-               | from $tableName1 TIMESTAMP AS OF '$instant1'
+               | from $tableName1 VERSION AS OF '$instant1'
         """.stripMargin)
           checkAnswer(
             s"select id, name, price, ts, dt from $tableName2")(
@@ -213,9 +242,9 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
 
           val sql =
             s"""
-               |select id, name, price, ts from $tableName1 TIMESTAMP AS OF '$instant1' where id=1
+               |select id, name, price, ts from $tableName1 VERSION AS OF '$instant1' where id=1
                |union
-               |select id, name, price, ts from $tableName2 TIMESTAMP AS OF '$instant2' where id>1
+               |select id, name, price, ts from $tableName2 VERSION AS OF '$instant2' where id>1
                |""".stripMargin
 
           checkAnswer(sql)(
@@ -276,8 +305,9 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
           )
 
           // time travel as of instant 1
+          spark.sessionState.catalog.invalidateAllCachedTables()
           checkAnswer(
-            s"select id, name, price, ts from $tableName TIMESTAMP AS OF '$instant1' distribute by cast(rand() * 2 as int)")(
+            s"select id, name, price, ts from $tableName VERSION AS OF '$instant1' distribute by cast(rand() * 2 as int)")(
             Seq(1, "a1", 10.0, 1000)
           )
         }
@@ -320,11 +350,12 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
         // drop column
         spark.sql(s"alter table $tableName drop column price")
 
-        val result1 = spark.sql(s"select * from ${tableName} timestamp as of $instant1 order by id")
+        val result1 = spark.sql(s"select * from ${tableName} VERSION as of $instant1 order by id")
           .drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collect()
         checkAnswer(result1)(Seq(1, "a1", 10.0, 1000))
 
-        val result2 = spark.sql(s"select * from ${tableName} timestamp as of $instant2 order by id")
+        spark.sessionState.catalog.invalidateAllCachedTables()
+        val result2 = spark.sql(s"select * from ${tableName} VERSION as of $instant2 order by id")
           .drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collect()
         checkAnswer(result2)(
           Seq(1, "a1", 10.0, 1000, null),
