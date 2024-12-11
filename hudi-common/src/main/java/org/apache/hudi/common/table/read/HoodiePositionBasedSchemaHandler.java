@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
@@ -50,10 +51,18 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
     super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig, properties);
   }
 
+  private boolean morMergeNeedsPositionCol() {
+    return readerContext.supportsParquetRowIndex() && readerContext.getShouldMergeUseRecordPosition();
+  }
+
+  private boolean bootstrapMergeNeedsPositionCol() {
+    return readerContext.supportsParquetRowIndex() && readerContext.getNeedsBootstrapMerge();
+  }
+
   @Override
   protected Schema prepareRequiredSchema() {
     Schema preMergeSchema = super.prepareRequiredSchema();
-    return readerContext.getShouldMergeUseRecordPosition() && readerContext.getHasLogFiles()
+    return morMergeNeedsPositionCol()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;
   }
@@ -65,7 +74,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
 
   @Override
   protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
-    if (!(readerContext.getShouldMergeUseRecordPosition() && readerContext.getHasLogFiles())) {
+    if (!morMergeNeedsPositionCol()) {
       return super.doPruneInternalSchema(requiredSchema, internalSchema);
     }
 
@@ -82,20 +91,24 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
   @Override
   public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
     Pair<List<Schema.Field>,List<Schema.Field>> dataAndMetaCols = super.getBootstrapRequiredFields();
-    if (readerContext.supportsParquetRowIndex()) {
-      if (!dataAndMetaCols.getLeft().isEmpty() && !dataAndMetaCols.getRight().isEmpty()) {
+    if (bootstrapMergeNeedsPositionCol() || morMergeNeedsPositionCol()) {
+      if (!dataAndMetaCols.getLeft().isEmpty()) {
         dataAndMetaCols.getLeft().add(getPositionalMergeField());
+      }
+      if (!dataAndMetaCols.getRight().isEmpty()) {
         dataAndMetaCols.getRight().add(getPositionalMergeField());
       }
     }
     return dataAndMetaCols;
   }
 
-  private static Schema addPositionalMergeCol(Schema input) {
+  @VisibleForTesting
+  static Schema addPositionalMergeCol(Schema input) {
     return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField()));
   }
 
-  private static Schema.Field getPositionalMergeField() {
+  @VisibleForTesting
+  static Schema.Field getPositionalMergeField() {
     return new Schema.Field(ROW_INDEX_TEMPORARY_COLUMN_NAME,
         Schema.create(Schema.Type.LONG), "", -1L);
   }
