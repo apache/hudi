@@ -44,6 +44,7 @@ Here is the list of PMC and Committers who have contributed to the project. For 
 | Jonathan Vexler      | jonvex           | [jonvex](https://people.apache.org/committer-index.html#jonvex)                     |
 | Jing Zhang           | beyond1920       | [beyond1920](https://people.apache.org/committer-index.html#beyond1920)             |
 | lamberken            | lamberken        | [lamberken](https://people.apache.org/committer-index.html#lamberken)               |
+| Lingqi Wu            | KnightChess      | [knightchess](https://people.apache.org/committer-index.html#knightchess)           |
 | Pratyaksh Sharma     | pratyakshsharma  | [pratyakshsharma](https://people.apache.org/committer-index.html#pratyakshsharma)   |
 | Qijun Fu             | stream2000       | [stream2000](https://people.apache.org/committer-index.html#stream2000)             |
 | Satish Kotha         | satishkotha      | [satishkotha](https://people.apache.org/committer-index.html#satishkotha)           |

@@ -31,8 +31,8 @@ module.exports = {
       suffix: " to data lakes!",
       content: [
         "transactions",
-        "record-level updates/deletes",
-        "change streams",
+        "row-level updates/deletes",
+        "CDC and indexes"
       ],
     },
     slackUrl: slackUrl,
@@ -127,6 +127,14 @@ module.exports = {
           {
             from: ["/contribute/team"],
             to: "/community/team",
+          },
+          {
+            from: ["/docs/next/hoodie_cleaner"],
+            to: "/docs/next/cleaning",
+          },
+          {
+            from: ["/docs/next/indexing"],
+            to: "/docs/next/indexes",
           },
           {
             from: ["/docs/releases", "/docs/next/releases"],

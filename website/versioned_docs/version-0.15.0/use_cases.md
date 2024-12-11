@@ -130,9 +130,9 @@ Some examples of the Apache Hudi services that make this performance optimizatio
 - [Auto File Sizing](/docs/next/file_sizing) - to solve the "small files" problem.
 - [Clustering](/docs/next/clustering) - to co-locate data next to each other.
 - [Compaction](/docs/next/compaction) - to allow tuning of low latency ingestion and fast read queries. 
-- [Indexing](/docs/next/indexing) - for efficient upserts and deletes.
+- [Indexing](/docs/next/indexes) - for efficient upserts and deletes.
 - Multi-Dimensional Partitioning (Z-Ordering) - Traditional folder style partitioning on low-cardinality, while also 
 Z-Ordering data within files based on high-cardinality
 - Metadata Table - No more slow S3 file listings or throttling.
-- [Auto Cleaning](/docs/next/hoodie_cleaner) - Keeps your storage costs in check by automatically removing old versions of files.
+- [Auto Cleaning](/docs/next/cleaning) - Keeps your storage costs in check by automatically removing old versions of files.
 

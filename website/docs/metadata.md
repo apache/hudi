@@ -1,70 +1,44 @@
 ---
-title: Metadata Table
-keywords: [ hudi, metadata, S3 file listings]
+title: Table Metadata
+keywords: [ hudi, metadata, S3, GCS, file listings, statistics]
 ---
 
+Hudi tracks metadata about a table to significantly improve read/write performance of the queries by addressing the following key challenges:
+
+- **Avoid list operations to obtain set of files in a table**: When reading and writing data, file listing operations are performed 
+  to get the current view of the file system. When tables are large and partitioned multiple levels deep, listing all the files may be a performance bottleneck,
+  dut to inefficiencies in cloud storage. More importantly large number of API calls to cloud storage systems like AWS S3 sometimes causes throttling based on pre-defined request limits.
+
+- **Expose columns statistics for better query planning and faster queries**:  Query engines rely on techniques such as partitioning and data skipping
+  to cut down on the amount of irrelevant data scanned for query planning and execution. During query planning phase, file footer statistics like column value ranges, 
+  null counts are read from all data files to  determine if a particular file needs to be read to satisfy the query. This approach is expensive since it may  
+  read footers from all files and even be subject to similar throttling issues for larger tables. Hudi enables relevant query predicates to 
+  be efficiently evaluated on operate on column statistics without incurring these costs.
+  
 ## Metadata Table
 
-Database indices contain auxiliary data structures to quickly locate records needed, without reading unnecessary data 
-from storage. Given that Hudi’s design has been heavily optimized for handling mutable change streams, with different 
-write patterns, Hudi considers [indexing](#indexing) as an integral part of its design and has uniquely supported 
-[indexing capabilities](https://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/) from its inception, to speed 
-up upserts on the [Data Lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/). While Hudi's indices has benefited writers for fast upserts and deletes, Hudi's metadata table 
-aims to tap these benefits more generally for both the readers and writers. The metadata table implemented as a single 
-internal Hudi Merge-On-Read table hosts different types of indices containing table metadata and is designed to be
-serverless and independent of compute and query engines. This is similar to common practices in databases where metadata
-is stored as internal views.
+Hudi employs a special **_metadata table_**, within each table to provide these capabilities. The metadata table implemented as a single 
+internal Hudi Merge-On-Read table that hosts different types of table metadata in each partition. This is similar to common practices in databases where metadata
+is tracked using internal tables. This approach provides the following advantages. 
 
-The metadata table aims to significantly improve read/write performance of the queries by addressing the following key challenges:
-- **Eliminate the requirement of `list files` operation**:<br />
-  When reading and writing data, file listing operations are performed to get the current view of the file system.
-  When data sets are large, listing all the files may be a performance bottleneck, but more importantly in the case of cloud storage systems
-  like AWS S3, the large number of file listing requests sometimes causes throttling due to certain request limits.
-  The metadata table will instead proactively maintain the list of files and remove the need for recursive file listing operations
-- **Expose columns stats through indices for better query planning and faster lookups by readers**:<br />
-  Query engines rely on techniques such as partitioning and file pruning to cut down on the amount of irrelevant data 
-  scanned for query planning and execution. During query planning phase all data files are read for metadata on range 
-  information of columns for further pruning data files based on query predicates and available range information. This
-  approach is expensive and does not scale if there are large number of partitions and data files to be scanned. In
-  addition to storage optimizations such as automatic file sizing, clustering, etc that helps data organization in a query
-  optimized way, Hudi's metadata table improves query planning further by supporting multiple types of indices that aid 
-  in efficiently looking up data files based on relevant query predicates instead of reading the column stats from every 
-  individual data file and then pruning. 
-   
-## Supporting Multi-Modal Index in Hudi
+- **Scalable**: The table metadata must scale to large sizes as well (see [Big Metadata paper](https://vldb.org/pvldb/vol14/p3083-edara.pdf) from Google). 
+  Different types of indexes should be easily integrated to support various use cases with consistent management of metadata. By implementing metadata using the 
+  same storage format and engine used for data, Hudi is able to scale to even TBs of metadata with built-in table services for managing metadata. 
+ 
+- **Flexible**: The foundational framework for multi-modal indexing is built to enable and disable new indexes as needed. The
+  [async indexing](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi) protocol index building alongside regular writers without impacting the write latency.
 
-[Multi-modal indexing](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi), 
-introduced in [0.11.0 Hudi release](https://hudi.apache.org/releases/release-0.11.0/#multi-modal-index), 
-is a re-imagination of what a general purpose indexing subsystem should look like for the lake. Multi-modal indexing is 
-implemented by enhancing Hudi's metadata table with the flexibility to extend to new index types as new partitions,
-along with an [asynchronous index](https://hudi.apache.org/docs/metadata_indexing/#setup-async-indexing) building 
-mechanism and is built on the following core principles:
-- **Scalable metadata**: The table metadata, i.e., the auxiliary data about the table, must be scalable to extremely 
-  large size, e.g., Terabytes (TB).  Different types of indices should be easily integrated to support various use cases 
-  without having to worry about managing the same. To realize this, all indices in Hudi's metadata table are stored as 
-  partitions in a single internal MOR table. The MOR table layout enables lightning-fast writes by avoiding synchronous 
-  merge of data with reduced write amplification. This is extremely important for large datasets as the size of updates to the 
-  metadata table can grow to be unmanageable otherwise. This helps Hudi to scale metadata to TBs of sizes. The 
-  foundational framework for multi-modal indexing is built to enable and disable new indices as needed. The 
-  [async indexing](https://www.onehouse.ai/blog/asynchronous-indexing-using-hudi) supports index building alongside 
-  regular writers without impacting the write latency.
-- **ACID transactional updates**: The index and table metadata must be always up-to-date and in sync with the data table. 
-  This is designed via multi-table transaction within Hudi and ensures atomicity of writes and resiliency to failures so that 
-  partial writes to either the data or metadata table are never exposed to other read or write transactions. The metadata 
-  table is built to be self-managed so users don’t need to spend operational cycles on any table services including 
-  compaction and cleaning    
-- **Fast lookup**: The needle-in-a-haystack type of lookups must be fast and efficient without having to scan the entire 
-  index, as index size can be TBs for large datasets. Since most access to the metadata table are point and range lookups,
-  the HFile format is chosen as the base file format for the internal metadata table. Since the metadata table stores 
-  the auxiliary data at the partition level (files index) or the file level (column_stats index), the lookup based on a 
-  single partition path and a file group is going to be very efficient with the HFile format. Both the base and log files 
-  in Hudi’s metadata table uses the HFile format and are meticulously designed to reduce remote GET calls on cloud storages.
-  Further, these metadata table indices are served via a centralized timeline server which caches the metadata, further 
-  reducing the latency of the lookup from executors.
+- **transactional updates**: Tables data, metadata and indexes must be upto-date and consistent with each other as writes happen or table services are performed. and table metadata must be always up-to-date and in sync with the data table.
+  The data and metadata table's timelines share a parent-child relationship, to ensure they are always in sync with each other. Furthermore, the MoR table storage helps absorb fast changes to metadata from streaming writes without requiring 
+  rewriting of all table metadata on each write.
 
-### Metadata table indices
+- **Fast lookups**: By employing a SSTable like base file format (HFile) in the metadata table, query engines are able to efficiently perform lookup scans for only specific parts of 
+  metadata needed. For e.g. query accessing only 10 out of 100 columns in a table can read stats about only the 10 columns it's interested in, during down planning time and costs.
+  Further, these metadata can also be served via a centralized/embedded timeline server which caches the metadata, further reducing the latency of the lookup from executors.
 
-Following are the different indices currently available under the metadata table.
+## Types of table metadata
+
+Following are the different types of metadata currently supported.
 
 - ***[files index](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+Improvements)***: 
   Stored as *files* partition in the metadata table. Contains file information such as file name, size, and active state
@@ -75,29 +49,7 @@ Following are the different indices currently available under the metadata table
   partition in the metadata table. Contains the statistics of interested columns, such as min and max values, total values, 
   null counts, size, etc., for all data files and are used while serving queries with predicates matching interested 
   columns. This index is used along with the [data skipping](https://www.onehouse.ai/blog/hudis-column-stats-index-and-data-skipping-feature-help-speed-up-queries-by-an-orders-of-magnitude) 
-  to speed up queries by orders of magnitude. 
-
-- ***[bloom_filter index](https://github.com/apache/hudi/blob/46f41d186c6c84a6af2c54a907ff2736b6013e15/rfc/rfc-37/rfc-37.md)***: 
-  Stored as *bloom_filter* partition in the metadata table. This index employs range-based pruning on the minimum and 
-  maximum values of the record keys and bloom-filter-based lookups to tag incoming records. For large tables, this 
-  involves reading the footers of all matching data files for bloom filters, which can be expensive in the case of random 
-  updates across the entire dataset. This index stores bloom filters of all data files centrally to avoid scanning the 
-  footers directly from all data files.
-
-- ***[record_index](https://cwiki.apache.org/confluence/display/HUDI/RFC-08++Record+level+indexing+mechanisms+for+Hudi+datasets)***: 
-  Stored as *record_index* partition in the metadata table. Contains the mapping of the record key to location. Record 
-  index is a global index, enforcing key uniqueness across all partitions in the table. Most recently added in 0.14.0 
-  Hudi release, this index aids in locating records faster than other existing indices and can provide a speedup orders of magnitude 
-  faster in large deployments where index lookup dominates write latencies.
-
-#### New Indexes in 1.0.0
-
-- ***Functional Index***:
-  A [functional index](https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md)
-  is an index on a function of a column. If a query has a predicate on a function of a column, the functional index can
-  be used to speed up the query. Functional index is stored in *func_index_* prefixed partitions (one for each
-  function) under metadata table. Functional index can be created using SQL syntax. Please checkout SQL DDL
-  docs [here](/docs/next/sql_ddl#create-functional-index-experimental) for more details.
+  to speed up queries by orders of magnitude.
 
 - ***Partition Stats Index***
   Partition stats index aggregates statistics at the partition level for the columns for which it is enabled. This helps
@@ -108,17 +60,13 @@ Following are the different indices currently available under the metadata table
     hoodie.metadata.index.partition.stats.enable=true
     hoodie.metadata.index.column.stats.columns=<comma-separated-column-names>
   ```
-  
-- ***Secondary Index***:
-  Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for
-  record key fields, Hudi supports [Record-level Index](/blog/2023/11/01/record-level-index). Secondary indexes
-  can be used to speed up queries with predicate on columns other than record key columns. 
+
 
 To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-and-secondary-index-experimental).
 
-## Enable Hudi Metadata Table and Multi-Modal Index in write side
+## Metadata Tracking on Writers
 
-Following are the Spark based basic configs that are needed to enable metadata and multi-modal indices. For advanced configs please refer 
+Following are the Spark based basic configs that are needed to enable metadata tracking. For advanced configs please refer 
 [here](https://hudi.apache.org/docs/next/configurations#Metadata-Configs-advanced-configs).
 
 | Config Name                               | Default                                   | Description                                                                                                                                                                                                                                                                                                              |
@@ -136,13 +84,13 @@ safely use this feature.  The metadata table and related file listing functional
 [multi-modal index](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi) are 
 disabled by default and can be enabled in write side explicitly using the above configs.
 
-For flink, following are the basic configs of interest to enable metadata based indices. Please refer 
+For flink, following are the basic configs of interest to enable metadata based indexes. Please refer 
 [here](https://hudi.apache.org/docs/next/configurations#Flink-Options) for advanced configs
 
-| Config Name                               | Default                                   | Description                                                                                                                                                                                                                                                                                                        |
-|-------------------------------------------|-------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| metadata.enabled                          | false (Optional)                          | Enable the internal metadata table which serves table metadata like level file listings, default disabled<br /><br /> `Config Param: METADATA_ENABLED`                                                                                                                                                             |
-| hoodie.metadata.index.column.stats.enable | false (Optional)                          | Enable indexing column ranges of user data files under metadata table key lookups. When enabled, metadata table will have a partition to store the column ranges and will be used for pruning files during the index lookups.<br /> |
+| Config Name                               | Default          | Description                                                                                                                                                                                                                         |
+|-------------------------------------------|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| metadata.enabled                          | true (Optional)  | Enable the internal metadata table which serves table metadata like level file listings, default enabled<br /><br /> `Config Param: METADATA_ENABLED`                                                                               |
+| hoodie.metadata.index.column.stats.enable | false (Optional) | Enable indexing column ranges of user data files under metadata table key lookups. When enabled, metadata table will have a partition to store the column ranges and will be used for pruning files during the index lookups.<br /> |
 
 
 :::note
@@ -150,7 +98,7 @@ If you turn off the metadata table after enabling, be sure to wait for a few com
 cleaned up, before re-enabling the metadata table again.
 :::
 
-## Use metadata indices for query side improvements
+## Leveraging metadata during queries
 
 ### files index
 Metadata based listing using *files_index* can be leveraged on the read side by setting appropriate configs/session properties
@@ -170,8 +118,8 @@ corresponding configs across Spark and Flink readers.
 
 | Readers                                                                                            | Config                                                                           | Description                                                                                                                                                                                                                                                                                                                                                      |
 |----------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| <ul><li>Spark DataSource</li><li>Spark SQL</li><li>Strucured Streaming</li></ul>                   | <ul><li>`hoodie.metadata.enable`</li><li>`hoodie.enable.data.skipping`</li></ul> | <ul><li>When set to `true` enables use of the spark file index implementation for Hudi, that speeds up listing of large tables.</li><li>When set to `true` enables data-skipping allowing queries to leverage indices to reduce the search space by skipping over files <br />`Config Param: ENABLE_DATA_SKIPPING`<br />`Since Version: 0.10.0` <br /></li></ul> |
-|<ul><li>Flink DataStream</li><li>Flink SQL</li></ul> |<ul><li>`metadata.enabled`</li><li>`read.data.skipping.enabled`</li></ul> | <ul><li> When set to `true` from DDL uses the internal metadata table to serves table metadata like level file listings</li><li>When set to `true` enables data-skipping allowing queries to leverage indices to reduce the search space byskipping over files</li></ul>                                                                                         |
+| <ul><li>Spark DataSource</li><li>Spark SQL</li><li>Strucured Streaming</li></ul>                   | <ul><li>`hoodie.metadata.enable`</li><li>`hoodie.enable.data.skipping`</li></ul> | <ul><li>When set to `true` enables use of the spark file index implementation for Hudi, that speeds up listing of large tables.</li><li>When set to `true` enables data-skipping allowing queries to leverage indexes to reduce the search space by skipping over files <br />`Config Param: ENABLE_DATA_SKIPPING`<br />`Since Version: 0.10.0` <br /></li></ul> |
+|<ul><li>Flink DataStream</li><li>Flink SQL</li></ul> |<ul><li>`metadata.enabled`</li><li>`read.data.skipping.enabled`</li></ul> | <ul><li> When set to `true` from DDL uses the internal metadata table to serves table metadata like level file listings</li><li>When set to `true` enables data-skipping allowing queries to leverage indexes to reduce the search space byskipping over files</li></ul>                                                                                         |
 
 
 ## Deployment considerations for metadata Table
@@ -222,5 +170,4 @@ to choose from.
 ## Related Resources
 <h3>Blogs</h3>
 
-* [Multi-Modal Index for the Lakehouse in Apache Hudi](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi)
 * [Table service deployment models in Apache Hudi](https://medium.com/@simpsons/table-service-deployment-models-in-apache-hudi-9cfa5a44addf)

@@ -8,8 +8,8 @@ toc_max_heading_level: 4
 Cleaning is a table service employed by Hudi to reclaim space occupied by older versions of data and keep storage costs 
 in check. Apache Hudi provides snapshot isolation between writers and readers by managing multiple versioned files with **MVCC** 
 concurrency. These file versions provide history and enable time travel and rollbacks, but it is important to manage 
-how much history you keep to balance your costs. Cleaning service plays a crucial role in manging the tradeoff between 
-retaining long history of data and the associated storage costs.  
+how much history you keep to balance your costs. Cleaning service plays a crucial role in managing the tradeoff between 
+retaining the long history of data and the associated storage costs.  
 
 Hudi enables [Automatic Hudi cleaning](/docs/configurations/#hoodiecleanautomatic) by default. Cleaning is invoked 
 immediately after each commit, to delete older file slices. It's recommended to leave this enabled to ensure metadata 
@@ -32,7 +32,7 @@ Hudi cleaner currently supports the below cleaning policies to keep a certain nu
 - **KEEP_LATEST_COMMITS**: This is the default policy. This is a temporal cleaning policy that ensures the effect of
   having lookback into all the changes that happened in the last X commits. Suppose a writer is ingesting data
   into a Hudi dataset every 30 minutes and the longest running query can take 5 hours to finish, then the user should
-  retain atleast the last 10 commits. With such a configuration, we ensure that the oldest version of a file is kept on
+  retain at least the last 10 commits. With such a configuration, we ensure that the oldest version of a file is kept on
   disk for at least 5 hours, thereby preventing the longest running query from failing at any point in time. Incremental
   cleaning is also possible using this policy.
   Number of commits to retain can be configured by [`hoodie.cleaner.commits.retained`](https://analytics.google.com/analytics/web/#/p300324801/reports/intelligenthome). 
@@ -133,7 +133,7 @@ CLI provides the below commands for cleaner service:
 - `clean showpartitions`
 - `cleans run`
 
-Example of cleaner keeping the latest 10 commits
+Example of cleaner keeping the latest 3 commits
 ```
 cleans run --sparkMaster local --hoodieConfigs hoodie.cleaner.policy=KEEP_LATEST_COMMITS hoodie.cleaner.commits.retained=3 hoodie.cleaner.parallelism=200
 ```

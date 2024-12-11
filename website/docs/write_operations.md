@@ -5,26 +5,54 @@ toc: true
 last_modified_at:
 ---
 
-It may be helpful to understand the different write operations of Hudi and how best to leverage them. These operations
-can be chosen/changed across each commit/deltacommit issued against the table.
+It may be helpful to understand the different write operations supported by Hudi and how best to leverage them. These operations 
+can be chosen/changed across writes issued against the table. Each write operation maps to an action type on the
+timeline.
+
+At its core, Hudi provides a high-performance storage engine that efficiently implements these operations, on top of the timeline and 
+the storage format. Write operations can be classified into two types, for ease of understanding. 
+
+ - **Batch/Bulk operations**: Without functionality provided by Hudi, the most common way for writing data relies on overwriting entire 
+   tables and/or partitions entirely every few hours. For e.g. a job computing aggregates for the given week, will scan the entire data
+   periodically and recompute the results from scratch and publish output by an `insert_overwrite` operation. Hudi supports all such 
+   bulk or typical "batch processing" write operations, while providing atomicity and other storage features discussed here.
+
+ - **Incremental operations**: However, Hudi is purpose built to change this processing model into a more incremental approach, as illustrated
+   below. To do so, the storage engine implements incremental write operations that excel at applying incremental changes to a table. For e.g.
+   the same processing can be now performed by just obtaining changed records from upstream system or a Hudi incremental query, and then directly
+   updating the aggregates on the target table only for specific records that changed.
+
+
+<figure>
+    <img className="docimage" src={require("/assets/images/incr-vs-batch-writes.png").default} alt="incr-vs-batch-writes.png"  />
+</figure>
+
 
 ## Operation Types
 ### UPSERT 
+**Type**: _Incremental_, **Action**: _COMMIT (CoW), DELTA_COMMIT (MoR)_
+
 This is the default operation where the input records are first tagged as inserts or updates by looking up the index.
 The records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing.
 This operation is recommended for use-cases like database change capture where the input almost certainly contains updates. The target table will never show duplicates. 
 
 ### INSERT
+**Type**: _Incremental_, **Action**: _COMMIT (CoW), DELTA_COMMIT (MoR)_
+
 This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts
-for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the table can tolerate duplicates, but just
-need the transactional writes/incremental pull/storage management capabilities of Hudi.
+for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below) by skipping the index tagging step. This is also suitable 
+for use-cases where the table can tolerate duplicates, but just need the transactional writes/incremental query/storage management capabilities of Hudi.
 
 ### BULK_INSERT
+**Type**: _Batch_, **Action**: _COMMIT (CoW), DELTA_COMMIT (MoR)_
+
 Both upsert and insert operations keep input records in memory to speed up storage heuristics computations faster (among other things) and thus can be cumbersome for
-initial loading/bootstrapping a Hudi table at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs
+initial loading/bootstrapping large amount of data at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs
 of initial load. However, this just does a best-effort job at sizing files vs guaranteeing file sizes like inserts/upserts do.
 
 ### DELETE
+**Type**: _Incremental_, **Action**: _COMMIT (CoW), DELTA_COMMIT (MoR)_
+
 Hudi supports implementing two types of deletes on data stored in Hudi tables, by enabling the user to specify a different record payload implementation.
 - **Soft Deletes** : Retain the record key and just null out the values for all the other fields.
   This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
@@ -38,17 +66,23 @@ Hudi supports migrating your existing large tables into a Hudi table using the `
 [bootstrapping page](https://hudi.apache.org/docs/migration_guide) for more details. 
 
 ### INSERT_OVERWRITE
+**Type**: _Batch_, **Action**: _REPLACE_COMMIT (CoW + MoR)_
+
 This operation is used to rerwrite the all the partitions that are present in the input. This operation can be faster 
 than `upsert` for batch ETL jobs, that are recomputing entire target partitions at once (as opposed to incrementally 
 updating the target tables). This is because, we are able to bypass indexing, precombining and other repartitioning 
 steps in the upsert write path completely. This comes in handy if you are doing any backfill or any such type of use-cases.
 
 ### INSERT_OVERWRITE_TABLE
+**Type**: _Batch_, **Action**: _REPLACE_COMMIT (CoW + MoR)_
+
 This operation can be used to overwrite the entire table for whatever reason. The Hudi cleaner will eventually clean up 
 the previous table snapshot's file groups asynchronously based on the configured cleaning policy. This operation is much 
 faster than issuing explicit deletes. 
 
 ### DELETE_PARTITION
+**Type**: _Batch_, **Action**: _REPLACE_COMMIT (CoW + MoR)_
+
 In addition to deleting individual records, Hudi supports deleting entire partitions in bulk using this operation. 
 Deletion of specific partitions can be done using the config 
 [`hoodie.datasource.write.partitions.to.delete`](https://hudi.apache.org/docs/configurations#hoodiedatasourcewritepartitionstodelete). 
@@ -82,30 +116,20 @@ Here are the basic configs relevant to the write operations types mentioned abov
 | write.bulk_insert.sort_input.by_record_key     | false (Optional)     | Whether to sort the inputs by record keys for bulk insert tasks, default false<br /><br /> `Config Param: WRITE_BULK_INSERT_SORT_INPUT_BY_RECORD_KEY`                                                                                                                 |
 
 
-## Writing path
+## Write path
 The following is an inside look on the Hudi write path and the sequence of events that occur during a write.
 
-1. [Deduping](/docs/configurations#hoodiecombinebeforeinsert)
-   1. First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
-2. [Index Lookup](/docs/next/indexing)
-   1. Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
-3. [File Sizing](/docs/next/file_sizing)
-   1. Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
-4. [Partitioning](/docs/next/file_layouts)
-   1. We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created
-5. Write I/O
-   1. Now we actually do the write operations which is either creating a new base file, appending to the log file,
+1. [Deduping](/docs/configurations#hoodiecombinebeforeinsert) : First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
+2. [Index Lookup](/docs/next/indexes) : Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
+3. [File Sizing](/docs/next/file_sizing): Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
+4. [Partitioning](/docs/next/storage_layouts): We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created
+5. Write I/O :Now we actually do the write operations which is either creating a new base file, appending to the log file,
    or versioning an existing base file.
-6. Update [Index](/docs/next/indexing)
-   1. Now that the write is performed, we will go back and update the index.
-7. Commit
-   1. Finally we commit all of these changes atomically. ([Post-commit callback](/docs/next/platform_services_post_commit_callback) can be configured.)
-8. [Clean](/docs/next/hoodie_cleaner) (if needed)
-   1. Following the commit, cleaning is invoked if needed.
-9. [Compaction](/docs/next/compaction)
-   1. If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously
-10. Archive
-    1. Lastly, we perform an archival step which moves old [timeline](/docs/next/timeline) items to an archive folder.
+6. Update [Index](/docs/next/indexes): Now that the write is performed, we will go back and update the index.
+7. Commit: Finally we commit all of these changes atomically. ([Post-commit callback](/docs/next/platform_services_post_commit_callback) can be configured.)
+8. [Clean](/docs/next/cleaning) (if needed): Following the commit, cleaning is invoked if needed.
+9. [Compaction](/docs/next/compaction): If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously
+10. Archive : Lastly, we perform an archival step which moves old [timeline](/docs/next/timeline) items to an archive folder.
 
 Here is a diagramatic representation of the flow.
 

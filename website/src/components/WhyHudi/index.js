@@ -24,9 +24,9 @@ const WhyHudi = () => {
     },
     {
       icon: DerivedTablesIcon,
-      title: "Derived tables",
+      title: "High Performance",
       subtitle:
-        "Seamlessly create and manage SQL tables on your data lake to build multi-stage incremental pipelines.",
+        "Hudi's storage format is purpose-built to continuously deliver performance as data scales.",
     },
     {
       icon: DataStreamIcon,
@@ -45,9 +45,7 @@ const WhyHudi = () => {
           </div>
           <div className={styles.textWrapper}>
             <div className="text--center text--semibold">
-              Take advantage of Hudi’s platform with rich services and tools to
-              make your data lake actionable for applications like personalization,
-              machine learning, customer 360 and more!
+              The most innovative and completely open data lakehouse platform in the industry!
             </div>
           </div>
         </div>
