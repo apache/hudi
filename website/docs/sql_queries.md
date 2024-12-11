@@ -88,6 +88,12 @@ SELECT * FROM hudi_indexed_table WHERE rider = 'rider-B';
 We will run the query again after creating secondary index on rider column. The query would now
 show the files scanned as 1 compared to 3 files scanned without index.
 
+:::note
+Please note in order to create secondary index:
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
+:::
+
 ```sql
 -- We will first create a record index since secondary index is dependent upon it
 CREATE INDEX record_index ON hudi_indexed_table (uuid);

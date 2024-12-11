@@ -662,13 +662,106 @@ Notice that the save mode is again `Append`.
 
 ## Index data {#indexing}
 
+Hudi supports indexing on columns to speed up queries. Indexes can be created on columns using the `CREATE INDEX` statement.
+
+:::note
+Please note in order to create secondary index:
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
+:::
+
 <Tabs
 groupId="programming-language"
 defaultValue="sparksql"
 values={[
+{ label: 'Scala', value: 'scala', },
 { label: 'Spark SQL', value: 'sparksql', },
 ]}
 >
+
+<TabItem value="scala">
+
+Here is an example which shows how to create indexes for a table created using Datasource API.
+
+```scala
+import scala.collection.JavaConversions._
+import org.apache.spark.sql.SaveMode._
+import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.table.HoodieTableConfig._
+import org.apache.hudi.config.HoodieWriteConfig._
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions._
+import org.apache.hudi.common.model.HoodieRecord
+import spark.implicits._
+
+val tableName = "trips_table_index"
+val basePath = "file:///tmp/hudi_indexed_table"
+
+val columns = Seq("ts","uuid","rider","driver","fare","city")
+val data =
+  Seq((1695159649087L,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K",19.10,"san_francisco"),
+    (1695091554788L,"e96c4396-3fad-413a-a942-4cb36106d721","rider-C","driver-M",27.70 ,"san_francisco"),
+    (1695046462179L,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-D","driver-L",33.90 ,"san_francisco"),
+    (1695516137016L,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-F","driver-P",34.15,"sao_paulo"    ),
+    (1695115999911L,"c8abbe79-8d89-47ea-b4ce-4d224bae5bfa","rider-J","driver-T",17.85,"chennai"));
+
+var inserts = spark.createDataFrame(data).toDF(columns:_*)
+inserts.write.format("hudi").
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.name", tableName).
+  option("hoodie.write.record.merge.mode", "COMMIT_TIME_ORDERING").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  mode(Overwrite).
+  save(basePath)
+
+// Create record index and secondary index for the table
+spark.sql(s"CREATE TABLE hudi_indexed_table USING hudi LOCATION '$basePath'")
+// Create bloom filter expression index on driver column
+spark.sql(s"CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity')");
+// It would show bloom filter expression index 
+spark.sql(s"SHOW INDEXES FROM hudi_indexed_table");
+// Query on driver column would prune the data using the idx_bloom_driver index
+spark.sql(s"SELECT uuid, rider FROM hudi_indexed_table WHERE driver = 'driver-S'");
+
+// Create column stat expression index on ts column
+spark.sql(s"CREATE INDEX idx_column_ts ON hudi_indexed_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format = 'yyyy-MM-dd')");
+// Shows both expression indexes 
+spark.sql(s"SHOW INDEXES FROM hudi_indexed_table");
+// Query on ts column would prune the data using the idx_column_ts index
+spark.sql(s"SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-24'");
+
+// To create secondary index, first create the record index
+spark.sql(s"SET hoodie.metadata.record.index.enable=true");
+spark.sql(s"CREATE INDEX record_index ON hudi_indexed_table (uuid)");
+// Create secondary index on rider column
+spark.sql(s"CREATE INDEX idx_rider ON hudi_indexed_table (rider)");
+
+// Expression index and secondary index should show up
+spark.sql(s"SHOW INDEXES FROM hudi_indexed_table");
+// Query on rider column would leverage the secondary index idx_rider
+spark.sql(s"SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E'");
+
+// Update a record and query the table based on indexed columns
+spark.sql(s"UPDATE hudi_indexed_table SET rider = 'rider-B', driver = 'driver-N', ts = '1697516137' WHERE rider = 'rider-A'");
+// Data skipping would be performed using column stat expression index
+spark.sql(s"SELECT uuid, rider FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-10-17'");
+// Data skipping would be performed using bloom filter expression index
+spark.sql(s"SELECT * FROM hudi_indexed_table WHERE driver = 'driver-N'");
+// Data skipping would be performed using secondary index
+spark.sql(s"SELECT * FROM hudi_indexed_table WHERE rider = 'rider-B'");
+
+// Drop all the indexes
+spark.sql(s"DROP INDEX secondary_index_idx_rider on hudi_indexed_table");
+spark.sql(s"DROP INDEX record_index on hudi_indexed_table");
+spark.sql(s"DROP INDEX expr_index_idx_bloom_driver on hudi_indexed_table");
+spark.sql(s"DROP INDEX expr_index_idx_column_ts on hudi_indexed_table");
+// No indexes should show up for the table
+spark.sql(s"SHOW INDEXES FROM hudi_indexed_table");
+
+spark.sql(s"SET hoodie.metadata.record.index.enable=false");
+```
+
+</TabItem>
 
 <TabItem value="sparksql">
 
@@ -713,10 +806,12 @@ SHOW INDEXES FROM hudi_indexed_table;
 -- Query on ts column would prune the data using the idx_column_ts index
 SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-24';
 
--- Create secondary index on rider column
-CREATE INDEX record_index ON hudi_indexed_table (uuid);
-CREATE INDEX idx_rider ON hudi_indexed_table (rider);
+-- To create secondary index, first create the record index
 SET hoodie.metadata.record.index.enable=true;
+CREATE INDEX record_index ON hudi_indexed_table (uuid);
+-- Create secondary index on rider column
+CREATE INDEX idx_rider ON hudi_indexed_table (rider);
+
 -- Expression index and secondary index should show up
 SHOW INDEXES FROM hudi_indexed_table;
 -- Query on rider column would leverage the secondary index idx_rider

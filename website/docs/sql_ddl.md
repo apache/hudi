@@ -268,6 +268,12 @@ DROP INDEX [IF EXISTS] index_name ON [TABLE] table_name
 
 Both index and column on which the index is created can be qualified with some options in the form of key-value pairs.
 
+:::note
+Please note in order to create secondary index:
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
+:::
+
 **Examples**
 ```sql
 -- Create a table with primary key
@@ -434,6 +440,12 @@ Secondary indexes are record level indexes built on any column in the table. It 
 secondary column value efficiently and is built on top of the existing record level index built on the table's record key.
 Secondary indexes are hash based indexes that offer horizontally scalable write performance by splitting key space into shards 
 by hashing, as well as fast lookups by employing row-based file formats.
+
+:::note
+Please note in order to create secondary index:
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
+:::
 
 ```sql
 DROP TABLE IF EXISTS hudi_table;
