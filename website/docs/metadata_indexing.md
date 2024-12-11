@@ -80,6 +80,49 @@ hoodie.metadata.record.index.enable=true
 hoodie.metadata.index.bloom.filter.enable=true
 ```
 
+Here is an example which shows how to create indexes for a table created using Datasource API.
+
+**Examples**
+```scala
+import scala.collection.JavaConversions._
+import org.apache.spark.sql.SaveMode._
+import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.table.HoodieTableConfig._
+import org.apache.hudi.config.HoodieWriteConfig._
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions._
+import org.apache.hudi.common.model.HoodieRecord
+import spark.implicits._
+
+val tableName = "trips_table_index"
+val basePath = "file:///tmp/trips_table_index"
+
+val columns = Seq("ts","uuid","rider","driver","fare","city")
+val data =
+  Seq((1695159649087L,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K",19.10,"san_francisco"),
+    (1695091554788L,"e96c4396-3fad-413a-a942-4cb36106d721","rider-C","driver-M",27.70 ,"san_francisco"),
+    (1695046462179L,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-D","driver-L",33.90 ,"san_francisco"),
+    (1695516137016L,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-F","driver-P",34.15,"sao_paulo"    ),
+    (1695115999911L,"c8abbe79-8d89-47ea-b4ce-4d224bae5bfa","rider-J","driver-T",17.85,"chennai"));
+
+var inserts = spark.createDataFrame(data).toDF(columns:_*)
+inserts.write.format("hudi").
+  option("hoodie.datasource.write.partitionpath.field", "city").
+  option("hoodie.table.name", tableName).
+  option("hoodie.write.record.merge.mode", "COMMIT_TIME_ORDERING").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  mode(Overwrite).
+  save(basePath)
+  
+// Create record index and secondary index for the table
+spark.sql(s"CREATE TABLE test_table_external USING hudi LOCATION '$basePath'")
+spark.sql(s"SET hoodie.metadata.record.index.enable=true")
+spark.sql(s"CREATE INDEX record_index ON test_table_external (uuid)")
+spark.sql(s"CREATE INDEX idx_rider ON test_table_external (rider)")
+spark.sql(s"SHOW INDEXES FROM hudi_indexed_table").show(false)
+spark.sql(s"SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E'").show(false)  
+```
+
 ## Setup Async Indexing
 
 In the example we will have continuous writing using Hudi Streamer and also create index in parallel. The index creation
