@@ -145,7 +145,7 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
         if (columns.size() != 1) {
           throw new IllegalArgumentException("SUBSTRING requires 1 column");
         }
-        return functions.substring(columns.get(0), Integer.parseInt(options.get("pos")), Integer.parseInt(options.get("len")));
+        return functions.substring(columns.get(0), Integer.parseInt(options.get(POSITION_OPTION)), Integer.parseInt(options.get(LENGTH_OPTION)));
       }),
       Pair.of(SPARK_LOWER, (columns, options) -> {
         if (columns.size() != 1) {
@@ -163,19 +163,31 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
         if (columns.size() != 1) {
           throw new IllegalArgumentException("TRIM requires 1 column");
         }
-        return functions.trim(columns.get(0));
+        if (options.containsKey(TRIM_STRING_OPTION)) {
+          return functions.trim(columns.get(0), options.get(TRIM_STRING_OPTION));
+        } else {
+          return functions.trim(columns.get(0));
+        }
       }),
       Pair.of(SPARK_LTRIM, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("LTRIM requires 1 column");
         }
-        return functions.ltrim(columns.get(0));
+        if (options.containsKey(TRIM_STRING_OPTION)) {
+          return functions.ltrim(columns.get(0), options.get(TRIM_STRING_OPTION));
+        } else {
+          return functions.ltrim(columns.get(0));
+        }
       }),
       Pair.of(SPARK_RTRIM, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("RTRIM requires 1 column");
         }
-        return functions.rtrim(columns.get(0));
+        if (options.containsKey(TRIM_STRING_OPTION)) {
+          return functions.rtrim(columns.get(0), options.get(TRIM_STRING_OPTION));
+        } else {
+          return functions.rtrim(columns.get(0));
+        }
       }),
       Pair.of(SPARK_LENGTH, (columns, options) -> {
         if (columns.size() != 1) {
@@ -187,19 +199,20 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
         if (columns.size() != 1) {
           throw new IllegalArgumentException("REGEXP_REPLACE requires 1 column");
         }
-        return functions.regexp_replace(columns.get(0), options.get("pattern"), options.get("replacement"));
+        return functions.regexp_replace(columns.get(0), options.get(PATTERN_OPTION), options.get(REPLACEMENT_OPTION));
       }),
       Pair.of(SPARK_REGEXP_EXTRACT, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("REGEXP_EXTRACT requires 1 column");
         }
-        return functions.regexp_extract(columns.get(0), options.get("pattern"), Integer.parseInt(options.get("idx")));
+        return functions.regexp_extract(columns.get(0), options.get(PATTERN_OPTION), Integer.parseInt(options.get(REGEX_GROUP_INDEX_OPTION)));
       }),
+      // TODO: Split is not supported since the array returned by function is not supported by column stats
       Pair.of(SPARK_SPLIT, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("SPLIT requires 1 column");
         }
-        return functions.split(columns.get(0), options.get("pattern"));
+        return functions.split(columns.get(0), options.get(PATTERN_OPTION));
       }),
       Pair.of(IDENTITY_FUNCTION, (columns, options) -> {
         if (columns.size() != 1) {

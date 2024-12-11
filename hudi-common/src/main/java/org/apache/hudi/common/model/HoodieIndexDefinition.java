@@ -30,11 +30,12 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.index.functional.HoodieExpressionIndex.DAYS_OPTION;
 import static org.apache.hudi.index.functional.HoodieExpressionIndex.FORMAT_OPTION;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.INDEX_OPTION;
+import static org.apache.hudi.index.functional.HoodieExpressionIndex.REGEX_GROUP_INDEX_OPTION;
 import static org.apache.hudi.index.functional.HoodieExpressionIndex.LENGTH_OPTION;
 import static org.apache.hudi.index.functional.HoodieExpressionIndex.PATTERN_OPTION;
 import static org.apache.hudi.index.functional.HoodieExpressionIndex.POSITION_OPTION;
 import static org.apache.hudi.index.functional.HoodieExpressionIndex.REPLACEMENT_OPTION;
+import static org.apache.hudi.index.functional.HoodieExpressionIndex.TRIM_STRING_OPTION;
 
 /**
  * Class representing the metadata for a functional or secondary index in Hudi.
@@ -109,7 +110,11 @@ public class HoodieIndexDefinition implements Serializable {
   }
 
   public String getExpressionIndexIndexOption() {
-    return indexOptions.get(INDEX_OPTION);
+    return indexOptions.get(REGEX_GROUP_INDEX_OPTION);
+  }
+
+  public String getExpressionIndexTrimStringOption() {
+    return indexOptions.get(TRIM_STRING_OPTION);
   }
 
   public String getIndexName() {

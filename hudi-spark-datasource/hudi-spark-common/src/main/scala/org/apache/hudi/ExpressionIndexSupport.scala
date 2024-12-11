@@ -412,9 +412,12 @@ class ExpressionIndexSupport(spark: SparkSession,
         case expression: Substring if expression.pos.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPositionOption)
           && expression.len.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexLengthOption)=>
           expression.str
-        case expression: StringTrim if expression.trimStr.isEmpty => expression.srcStr
-        case expression: StringTrimLeft if expression.trimStr.isEmpty => expression.srcStr
-        case expression: StringTrimRight if expression.trimStr.isEmpty => expression.srcStr
+        case expression: StringTrim if (expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
+          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption))  => expression.srcStr
+        case expression: StringTrimLeft if (expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
+          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption))  => expression.srcStr
+        case expression: StringTrimRight if (expression.trimStr.isEmpty && StringUtils.isNullOrEmpty(indexDefinition.getExpressionIndexTrimStringOption))
+          || (expression.trimStr.isDefined && expression.trimStr.get.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexTrimStringOption)) => expression.srcStr
         case expression: RegExpReplace if expression.pos.asInstanceOf[Literal].value.toString.equals("1")
           && expression.regexp.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexPatternOption)
           && expression.rep.asInstanceOf[Literal].value.toString.equals(indexDefinition.getExpressionIndexReplacementOption) =>
@@ -435,17 +438,8 @@ class ExpressionIndexSupport(spark: SparkSession,
       val functionNameOption = SPARK_FUNCTION_MAP.asScala.keys.find(expr.toString.contains)
       val functionName = functionNameOption.getOrElse("identity")
       if (indexDefinition.getIndexFunction.equals(functionName)) {
-        if (functionName.equals(SPARK_FROM_UNIXTIME)) {
-          val configuredFormat = indexDefinition.getIndexOptions.getOrDefault("format", TimestampFormatter.defaultPattern)
-          if (true) {
-          // TODO: ABCDEFGHI fix this
-            val pruningExpr = fetchQueryWithAttribute(expr, Option.apply(indexDefinition.getSourceFields.get(0)), RecordLevelIndexSupport.getSimpleLiteralGenerator(), attributeFetcher)._1.get._1
-            queryAndLiteralsOpt = Option.apply(Tuple2.apply(pruningExpr, literals))
-          }
-        } else {
-          val pruningExpr = fetchQueryWithAttribute(expr, Option.apply(indexDefinition.getSourceFields.get(0)), RecordLevelIndexSupport.getSimpleLiteralGenerator(), attributeFetcher)._1.get._1
-          queryAndLiteralsOpt = Option.apply(Tuple2.apply(pruningExpr, literals))
-        }
+        val pruningExpr = fetchQueryWithAttribute(expr, Option.apply(indexDefinition.getSourceFields.get(0)), RecordLevelIndexSupport.getSimpleLiteralGenerator(), attributeFetcher)._1.get._1
+        queryAndLiteralsOpt = Option.apply(Tuple2.apply(pruningExpr, literals))
       }
     }
     queryAndLiteralsOpt
