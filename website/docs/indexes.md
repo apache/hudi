@@ -68,7 +68,13 @@ the [metadata table](/docs/next/metadata#metadata-table), significantly improvin
   An [expression index](https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md) is an index on a function of a column. If a query has a predicate on a function of a column, the expression index can
   be used to speed up the query. Expression index is stored in *expr_index_* prefixed partitions (one for each
   expression index) under metadata table. Expression index can be created using SQL syntax. Please checkout SQL DDL
-  docs [here](/docs/next/sql_ddl#create-functional-index-experimental) for more details.
+  docs [here](/docs/next/sql_ddl#create-expression-index) for more details.
+
+:::note
+1. Expression index can only be created for Spark engine using SQL. It is not supported yet with Spark DataSource API.
+2. Expression index is not yet supported for [complex types](https://avro.apache.org/docs/1.11.1/specification/#complex-types).
+3. Expression index is supported for unary and certain binary expressions. Please check [SQL DDL docs](/docs/next/sql_ddl#create-expression-index) for more details.
+:::
 
 ### Secondary Index
 
@@ -76,6 +82,11 @@ the [metadata table](/docs/next/metadata#metadata-table), significantly improvin
   record key fields, Hudi supports [Record-level Index](/blog/2023/11/01/record-level-index). Secondary indexes
   can be used to speed up queries with predicate on columns other than record key columns.
 
+:::note
+1. Secondary index can only be created for Spark engine using SQL. 
+2. Record index is required for creating secondary index. Please check [SQL DDL docs](/docs/next/sql_ddl#create-index) for more details.
+3. Secondary index is not supported for [complex types](https://avro.apache.org/docs/1.11.1/specification/#complex-types).
+:::
 
 ## Additional writer-side indexes
 

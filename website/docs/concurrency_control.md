@@ -201,10 +201,13 @@ With multiple writers using OCC, these are the write guarantees to expect:
 explicit locks for serializing the writes. Lock is only needed for writing the commit metadata to the Hudi timeline. The
 completion time for the commits reflects the serialization order and file slicing is done based on completion time.
 Multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the same
-file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is
-currently available for preview in version 1.0.0-beta only with the caveat that conflict resolution is not supported yet
-between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with Flink
+file group with the conflicts resolved automatically by the query reader and the compactor. We can see an example of that with Flink
 writers [here](/docs/next/sql_dml#non-blocking-concurrency-control-experimental).
+
+:::note
+`NON_BLOCKING_CONCURRENCY_CONTROL` between ingestion writer and table service writer is not yet supported for clustering. 
+Please use `OPTIMISTIC_CONCURRENCY_CONTROL` for clustering.
+:::
 
 ## Early conflict Detection
 
