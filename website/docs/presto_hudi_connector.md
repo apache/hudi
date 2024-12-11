@@ -13,7 +13,7 @@ To use Hudi, we need:
 * Network access from the Presto coordinator to the HMS. Hive metastore access with the Thrift protocol defaults to using port 9083.
 
 ##Configuration
-Hudi supports the same metastore configuration properties as the Hive connector. At a minimum, following connector properties must be set in the hudi.properties file inside <presto_install_dir> /etc/catalog directory:
+Hudi supports the same metastore configuration properties as the Hive connector. At a minimum, following connector properties must be set in the `hudi.properties` file inside `<presto_install_dir> /etc/catalog` directory:
 
 ```
 connector.name=hudi
@@ -40,9 +40,9 @@ Currently, the connector only provides read access to data in the Hudi table tha
 
 
 ##Examples Queries
-stock_ticks_cow is a Hudi cow table that we refer in the Hudi quickstart document to create.
+`trips_table` is a Hudi table that we refer to in the [Hudi quickstart documentation](https://hudi.apache.org/docs/quick-start-guide).
 
-Here are some sample queries:
+Here is a sample query:
 
 ``` 
 USE hudi.default;
@@ -79,12 +79,3 @@ Output:
 connector. However, it is in our roadmap, and you can track the development
 under [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210).
  
-To use the Hudi connector, please configure hudi catalog in ` /presto-server-0.2xxx/etc/catalog/hudi.properties` as follows:
-
-```properties
-connector.name=hudi
-hive.metastore.uri=thrift://xxx.xxx.xxx.xxx:9083
-hive.config.resources=.../hadoop-2.x/etc/hadoop/core-site.xml,.../hadoop-2.x/etc/hadoop/hdfs-site.xml
-```
-
-To learn more about the usage of Hudi connector, please read [prestodb documentation](https://prestodb.io/docs/current/connector/hudi.html).
