@@ -392,7 +392,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           HoodieMetadataPayload metadataPayload = record.getData();
           checkForSpuriousDeletes(metadataPayload, recordKey);
           try {
-            return metadataPayload.getFileList(dataMetaClient.getStorage(), partitionPath);
+            return metadataPayload.getFileList(dataMetaClient, partitionPath);
           } catch (Exception e) {
             throw new HoodieException("Failed to extract file-pathInfoList from the payload", e);
           }
@@ -404,6 +404,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   Map<String, List<StoragePathInfo>> fetchAllFilesInPartitionPaths(List<StoragePath> partitionPaths) {
+    // file:/private/var/folders/ww/dc150vl50815wqgbsx_98w9w0000gp/T/spark-a496632e-e844-4103-9fde-cc98e1afdca2/h1/dt=2021-01-06
     Map<String, StoragePath> partitionIdToPathMap =
         partitionPaths.parallelStream()
             .collect(
@@ -415,6 +416,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
             );
 
     HoodieTimer timer = HoodieTimer.start();
+    // dt=2021-01-05 -> {StoragePath@24246} "file:/private/var/folders/ww/dc150vl50815wqgbsx_98w9w0000gp/T/spark-a496632e-e844-4103-9fde-cc98e1afdca2/h1/dt=2021-01-05"
     Map<String, HoodieRecord<HoodieMetadataPayload>> partitionIdRecordPairs =
         getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()),
             MetadataPartitionType.FILES.getPartitionPath());
@@ -430,7 +432,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
               HoodieMetadataPayload metadataPayload = e.getValue().getData();
               checkForSpuriousDeletes(metadataPayload, partitionId);
 
-              List<StoragePathInfo> files = metadataPayload.getFileList(dataMetaClient.getStorage(), partitionPath);
+              List<StoragePathInfo> files = metadataPayload.getFileList(dataMetaClient, partitionPath);
               return Pair.of(partitionPath.toString(), files);
             })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
