@@ -1,9 +1,11 @@
 # Presto Hudi Connector
 
 ##Overview
-The **Presto Hudi Connector** enables querying Hudi tables synced to Hive metastore. The connector usesthe metastore only to track partition locations. It makes use of the underlying Hudi filesystem and input formats to list data files. To learn more about the design of the connector, please check out [RFC-40](https://github.com/apache/hudi/blob/master/rfc/rfc-44/rfc-44.md).
+
+The **Presto Hudi Connector** enables querying Hudi tables synced to a Hive metastore. The connector uses the metastore only to track partition locations. It makes use of the underlying Hudi filesystem and input formats to list data files. To learn more about the design of the connector, please check out [RFC-40](https://github.com/apache/hudi/blob/master/rfc/rfc-44/rfc-44.md).
 
 ##Requirements
+
 To use Hudi, we need:
 
 * Network access from the Presto coordinator and workers to the distributed object storage.
@@ -13,6 +15,7 @@ To use Hudi, we need:
 * Network access from the Presto coordinator to the HMS. Hive metastore access with the Thrift protocol defaults to using port 9083.
 
 ##Configuration
+
 Hudi supports the same metastore configuration properties as the Hive connector. At a minimum, following connector properties must be set in the `hudi.properties` file inside `<presto_install_dir> /etc/catalog` directory:
 
 ```
@@ -28,6 +31,7 @@ Additionally, following session properties can be set depending on the use-case.
  hudi.metadata-table-enabled   | Fetch the list of file names and sizes from Hudi’s metadata table rather than storage.  | false |
  
 ##SQL Support
+
 Currently, the connector only provides read access to data in the Hudi table that has been synced to Hive metastore. Once the catalog has been configured as mentioned above, users can query the tables as usual like Hive tables.
 
 ##Supported Query Types
@@ -40,6 +44,7 @@ Currently, the connector only provides read access to data in the Hudi table tha
 
 
 ##Examples Queries
+
 `trips_table` is a Hudi table that we refer to in the [Hudi quickstart documentation](https://hudi.apache.org/docs/quick-start-guide).
 
 Here is a sample query:
