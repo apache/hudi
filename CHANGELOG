@@ -464,3 +464,9 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2024-12-10 16:04:00] [release-v1.54.0] ---
 [ENG-17123][HUDI-8673] Simple and Global-Simple Index improvements (#1015)
 [AUDIT-1071]: Changelog for release-v1.53.0 (#1075)
+
+--- [2024-12-11 16:04:12] [release-v1.55.0] ---
+[ENG-18575][HUDI-8135] Limit number of meta clients created in StreamSync (#1081)
+[ENG-18520][INTERNAL] Fix Hoodie Hive Sync Tool to Throw Exceptions on Sync Failures (#1077)
+[ENG-18495][HUDI-8378] Fix Avro schema deserializer failing with schema evolution (#1076)
+[AUDIT-1071]: Changelog for release-v1.54.0 (#1080)
