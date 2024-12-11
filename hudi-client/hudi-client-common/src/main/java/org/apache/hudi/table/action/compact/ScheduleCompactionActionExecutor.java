@@ -46,7 +46,6 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Set;
 
 import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -57,26 +56,26 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
   private WriteOperationType operationType;
   private final Option<Map<String, String>> extraMetadata;
   private BaseHoodieCompactionPlanGenerator planGenerator;
+
   public ScheduleCompactionActionExecutor(HoodieEngineContext context,
                                           HoodieWriteConfig config,
                                           HoodieTable<T, I, K, O> table,
                                           String instantTime,
                                           Option<Map<String, String>> extraMetadata,
-                                          WriteOperationType operationType,
-                                          Option<Set<String>> specificPartitions) {
+                                          WriteOperationType operationType) {
     super(context, config, table, instantTime);
     this.extraMetadata = extraMetadata;
     this.operationType = operationType;
     checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
         "Only COMPACT and LOG_COMPACT is supported");
-    initPlanGenerator(context, config, table, specificPartitions);
+    initPlanGenerator(context, config, table);
   }
 
-  private void initPlanGenerator(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, Option<Set<String>> specificPartitions) {
+  private void initPlanGenerator(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     if (WriteOperationType.COMPACT.equals(operationType)) {
-      planGenerator = new HoodieCompactionPlanGenerator(table, context, config, specificPartitions);
+      planGenerator = new HoodieCompactionPlanGenerator(table, context, config);
     } else {
-      planGenerator = new HoodieLogCompactionPlanGenerator(table, context, config, specificPartitions);
+      planGenerator = new HoodieLogCompactionPlanGenerator(table, context, config);
     }
   }
 

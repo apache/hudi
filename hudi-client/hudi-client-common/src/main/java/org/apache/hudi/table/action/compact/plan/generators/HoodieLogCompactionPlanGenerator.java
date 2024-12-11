@@ -46,8 +46,8 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogCompactionPlanGenerator.class);
 
-  public HoodieLogCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig, Option<Set<String>> specificPartitions) {
-    super(table, engineContext, writeConfig, specificPartitions);
+  public HoodieLogCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
+    super(table, engineContext, writeConfig);
   }
 
   @Override

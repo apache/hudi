@@ -50,7 +50,6 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -65,14 +64,11 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
   protected final HoodieTable<T, I, K, O> hoodieTable;
   protected final HoodieWriteConfig writeConfig;
   protected final transient HoodieEngineContext engineContext;
-  private final Option<Set<String>> specificPartitions;
 
-  public BaseHoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig,
-                                           Option<Set<String>> specificPartitions) {
+  public BaseHoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     this.hoodieTable = table;
     this.writeConfig = writeConfig;
     this.engineContext = engineContext;
-    this.specificPartitions = specificPartitions;
   }
 
   @Nullable
@@ -86,14 +82,8 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     // TODO - rollback any compactions in flight
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
-    List<String> partitionPaths;
-    if (specificPartitions != null && specificPartitions.isPresent() && !specificPartitions.get().isEmpty()) {
-      LOG.info("Schedule compaction based on specific partitions " + specificPartitions.get());
-      partitionPaths = new ArrayList<>(specificPartitions.get());
-    } else {
-      LOG.info("Get all table partitions.");
-      partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
-    }
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(
+        engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
 
     int allPartitionSize = partitionPaths.size();
 

@@ -37,7 +37,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
-import java.util.Set;
 
 /**
  * Utilities for flink hudi compaction.
@@ -53,22 +52,17 @@ public class CompactionUtil {
    * @param deltaTimeCompaction Whether the compaction is trigger by elapsed delta time
    * @param committed           Whether the last instant was committed successfully
    */
-  public static boolean scheduleCompaction(
+  public static void scheduleCompaction(
       HoodieFlinkWriteClient<?> writeClient,
       boolean deltaTimeCompaction,
-      boolean committed,
-      Option<Set<String>> specificPartitions) {
-    if (specificPartitions.isPresent() && !specificPartitions.get().isEmpty()) {
-      writeClient.getTableServiceClient().setSpecificPartitions(specificPartitions);
-    }
+      boolean committed) {
     if (committed) {
-      return writeClient.scheduleCompaction(Option.empty()).isPresent();
+      writeClient.scheduleCompaction(Option.empty());
     } else if (deltaTimeCompaction) {
       // if there are no new commits and the compaction trigger strategy is based on elapsed delta time,
       // schedules the compaction anyway.
-      return writeClient.scheduleCompaction(Option.empty()).isPresent();
+      writeClient.scheduleCompaction(Option.empty());
     }
-    return false;
   }
 
   /**

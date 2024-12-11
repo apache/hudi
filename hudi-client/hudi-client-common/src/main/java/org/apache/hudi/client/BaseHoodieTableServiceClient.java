@@ -116,7 +116,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected transient AsyncArchiveService asyncArchiveService;
 
   protected Set<String> pendingInflightAndRequestedInstants;
-  protected Option<Set<String>> specificPartitions = Option.empty();
 
   protected BaseHoodieTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
@@ -161,10 +160,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         break;
       default:
     }
-  }
-
-  public void setSpecificPartitions(Option<Set<String>> specificPartitions) {
-    this.specificPartitions = specificPartitions;
   }
 
   protected void setPendingInflightAndRequestedInstants(Set<String> pendingInflightAndRequestedInstants) {
@@ -668,8 +663,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         break;
       case COMPACT:
         LOG.info("Scheduling compaction at instant time: {}", instantTime);
-        Option<HoodieCompactionPlan> compactionPlan =
-            table.scheduleCompaction(context, instantTime, extraMetadata, specificPartitions);
+        Option<HoodieCompactionPlan> compactionPlan = table
+            .scheduleCompaction(context, instantTime, extraMetadata);
         option = compactionPlan.isPresent() ? Option.of(instantTime) : Option.empty();
         break;
       case LOG_COMPACT:

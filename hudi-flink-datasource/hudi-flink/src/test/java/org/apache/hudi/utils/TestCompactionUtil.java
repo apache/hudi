@@ -142,7 +142,7 @@ public class TestCompactionUtil {
     TestData.writeDataAsBatch(TestData.DATA_SET_SINGLE_INSERT, conf);
 
     try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
-      CompactionUtil.scheduleCompaction(writeClient, true, true, Option.empty());
+      CompactionUtil.scheduleCompaction(writeClient, true, true);
 
       Option<HoodieInstant> pendingCompactionInstant = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().lastInstant();
       assertTrue(pendingCompactionInstant.isPresent(), "A compaction plan expects to be scheduled");
@@ -152,7 +152,7 @@ public class TestCompactionUtil {
       TimeUnit.SECONDS.sleep(3); // in case the instant time interval is too close
       writeClient.startCommit();
 
-      CompactionUtil.scheduleCompaction(writeClient, true, false, Option.empty());
+      CompactionUtil.scheduleCompaction(writeClient, true, false);
       int numCompactionCommits = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants();
       assertThat("Two compaction plan expects to be scheduled", numCompactionCommits, is(2));
     }

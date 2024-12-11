@@ -42,7 +42,6 @@ import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T> {
   protected HoodieJavaMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
@@ -73,10 +72,9 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata,
-                                                         Option<Set<String>> specificPartitions) {
+  public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
     ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor(
-        context, config, this, instantTime, extraMetadata, WriteOperationType.COMPACT, specificPartitions);
+        context, config, this, instantTime, extraMetadata, WriteOperationType.COMPACT);
     return scheduleCompactionExecutor.execute();
   }
 
@@ -92,7 +90,7 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
   @Override
   public Option<HoodieCompactionPlan> scheduleLogCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
     ScheduleCompactionActionExecutor scheduleLogCompactionExecutor = new ScheduleCompactionActionExecutor(
-        context, config, this, instantTime, extraMetadata, WriteOperationType.LOG_COMPACT, Option.empty());
+        context, config, this, instantTime, extraMetadata, WriteOperationType.LOG_COMPACT);
     return scheduleLogCompactionExecutor.execute();
   }
 

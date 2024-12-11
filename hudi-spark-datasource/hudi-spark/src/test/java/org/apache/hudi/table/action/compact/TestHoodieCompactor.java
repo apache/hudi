@@ -135,7 +135,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
       String compactionInstantTime = writeClient.createNewInstantTime();
       assertThrows(HoodieNotSupportedException.class, () -> {
-        table.scheduleCompaction(context, compactionInstantTime, Option.empty(), Option.empty());
+        table.scheduleCompaction(context, compactionInstantTime, Option.empty());
         table.compact(context, compactionInstantTime);
       });
 
@@ -158,7 +158,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       writeClient.insert(recordsRDD, newCommitTime).collect();
 
       String compactionInstantTime = writeClient.createNewInstantTime();
-      Option<HoodieCompactionPlan> plan = table.scheduleCompaction(context, compactionInstantTime, Option.empty(), Option.empty());
+      Option<HoodieCompactionPlan> plan = table.scheduleCompaction(context, compactionInstantTime, Option.empty());
       assertFalse(plan.isPresent(), "If there is nothing to compact, result will be empty");
 
       // Verify compaction.requested, compaction.completed metrics counts.

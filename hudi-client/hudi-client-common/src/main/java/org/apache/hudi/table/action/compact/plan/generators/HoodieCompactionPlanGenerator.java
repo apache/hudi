@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -34,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.Set;
 
 import static java.util.stream.Collectors.toList;
 
@@ -45,9 +43,8 @@ public class HoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, 
 
   private final CompactionStrategy compactionStrategy;
 
-  public HoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig,
-                                       Option<Set<String>> specificPartitions) {
-    super(table, engineContext, writeConfig, specificPartitions);
+  public HoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
+    super(table, engineContext, writeConfig);
     this.compactionStrategy = writeConfig.getCompactionStrategy();
     LOG.info("Compaction Strategy used is: " + compactionStrategy.toString());
   }
