@@ -31,6 +31,7 @@ Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [
 The *default build* Spark version indicates how we build `hudi-spark3-bundle`.
 
 :::note Change summary
+In 1.0.0, we dropped the support for Spark 3.2.x and lower Spark 3 versions.
 In 0.15.0, we introduced the support for Spark 3.5.x.
 In 0.14.0, we introduced the support for Spark 3.4.x and bring back the support for Spark 3.0.x.
 In 0.12.0, we introduced the experimental support for Spark 3.3.0.
