@@ -54,4 +54,9 @@ public class ContextAdapter implements OperatorCoordinator.Context {
   public CoordinatorStore getCoordinatorStore() {
     return this.context.getCoordinatorStore();
   }
+
+  @Override
+  public boolean isConcurrentExecutionAttemptsSupported() {
+    return this.context.isConcurrentExecutionAttemptsSupported();
+  }
 }

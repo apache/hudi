@@ -19,7 +19,6 @@
 package org.apache.hudi.adapter;
 
 import org.apache.flink.metrics.groups.OperatorCoordinatorMetricGroup;
-import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 
