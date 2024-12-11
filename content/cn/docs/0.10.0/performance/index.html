@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.0e0faa8c.css">
-<script src="/cn/assets/js/runtime~main.48d16f51.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.cfd7444c.js" defer="defer"></script>
 <script src="/cn/assets/js/main.2d77e5f0.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -30,10 +30,10 @@ the entire cluster. In general, query engines provide much better performance on
 column statistics etc. Even on some cloud data stores, there is often cost to listing directories with large number of small files.</p>
 <p>Here are some ways to efficiently manage the storage of your Hudi tables.</p>
 <ul>
-<li>The <a href="/cn/docs/configurations#compactionSmallFileSize">small file handling feature</a> in Hudi, profiles incoming workload
+<li>The <a href="/cn/docs/configurations#hoodieparquetsmallfilelimit">small file handling feature</a> in Hudi, profiles incoming workload
 and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files.</li>
-<li>Cleaner can be <a href="/cn/docs/configurations#retainCommits">configured</a> to clean up older file slices, more or less aggressively depending on maximum time for queries to run &amp; lookback needed for incremental pull</li>
-<li>User can also tune the size of the <a href="/cn/docs/configurations#limitFileSize">base/parquet file</a>, <a href="/cn/docs/configurations#logFileMaxSize">log files</a> &amp; expected <a href="/cn/docs/configurations#parquetCompressionRatio">compression ratio</a>,
+<li>Cleaner can be <a href="/cn/docs/configurations#hoodiecleanercommitsretained">configured</a> to clean up older file slices, more or less aggressively depending on maximum time for queries to run &amp; lookback needed for incremental pull</li>
+<li>User can also tune the size of the <a href="/cn/docs/configurations#hoodieparquetmaxfilesize">base/parquet file</a>, <a href="/cn/docs/0.10.0/configurations/#hoodielogfilemaxsize">log files</a> &amp; expected <a href="/cn/docs/configurations#parquetCompressionRatio">compression ratio</a>,
 such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.</li>
 <li>Intelligently tuning the <a href="/cn/docs/configurations#withBulkInsertParallelism">bulk insert parallelism</a>, can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
 once created cannot be deleted, but simply expanded as explained before.</li>

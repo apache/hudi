@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -76,20 +76,20 @@ feature is that it now lets you author streaming pipelines on streaming or batch
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="where-to-go-from-here">Where To Go From Here?<a href="#where-to-go-from-here" class="hash-link" aria-label="Direct link to Where To Go From Here?" title="Direct link to Where To Go From Here?">​</a></h2>
 <ul>
 <li><strong>Quick Start</strong> : Read <a href="#quick-start">Quick Start</a> to get started quickly Flink sql client to write to(read from) Hudi.</li>
-<li><strong>Configuration</strong> : For <a href="/docs/next/flink_tuning#global-configurations">Global Configuration</a>, sets up through <code>$FLINK_HOME/conf/flink-conf.yaml</code>. For per job configuration, sets up through <a href="/docs/next/flink_tuning#table-options">Table Option</a>.</li>
-<li><strong>Writing Data</strong> : Flink supports different modes for writing, such as <a href="/docs/next/ingestion_flink#cdc-ingestion">CDC Ingestion</a>, <a href="/docs/next/ingestion_flink#bulk-insert">Bulk Insert</a>, <a href="/docs/next/ingestion_flink#index-bootstrap">Index Bootstrap</a>, <a href="/docs/next/ingestion_flink#changelog-mode">Changelog Mode</a> and <a href="/docs/next/ingestion_flink#append-mode">Append Mode</a>. Flink also supports multiple streaming writers with <a href="/docs/next/sql_dml#non-blocking-concurrency-control-experimental">non-blocking concurrency control</a>.</li>
+<li><strong>Configuration</strong> : For <a href="/docs/flink_tuning#global-configurations">Global Configuration</a>, sets up through <code>$FLINK_HOME/conf/flink-conf.yaml</code>. For per job configuration, sets up through <a href="/docs/flink_tuning#table-options">Table Option</a>.</li>
+<li><strong>Writing Data</strong> : Flink supports different modes for writing, such as <a href="/docs/ingestion_flink#cdc-ingestion">CDC Ingestion</a>, <a href="/docs/ingestion_flink#bulk-insert">Bulk Insert</a>, <a href="/docs/ingestion_flink#index-bootstrap">Index Bootstrap</a>, <a href="/docs/ingestion_flink#changelog-mode">Changelog Mode</a> and <a href="/docs/ingestion_flink#append-mode">Append Mode</a>. Flink also supports multiple streaming writers with <a href="/docs/sql_dml#non-blocking-concurrency-control-experimental">non-blocking concurrency control</a>.</li>
 <li><strong>Reading Data</strong> : Flink supports different modes for reading, such as <a href="/docs/sql_queries#streaming-query">Streaming Query</a> and <a href="/docs/sql_queries#incremental-query">Incremental Query</a>.</li>
-<li><strong>Tuning</strong> : For write/read tasks, this guide gives some tuning suggestions, such as <a href="/docs/next/flink_tuning#memory-optimization">Memory Optimization</a> and <a href="/docs/next/flink_tuning#write-rate-limit">Write Rate Limit</a>.</li>
+<li><strong>Tuning</strong> : For write/read tasks, this guide gives some tuning suggestions, such as <a href="/docs/flink_tuning#memory-optimization">Memory Optimization</a> and <a href="/docs/flink_tuning#write-rate-limit">Write Rate Limit</a>.</li>
 <li><strong>Optimization</strong>: Offline compaction is supported <a href="/docs/compaction#flink-offline-compaction">Offline Compaction</a>.</li>
-<li><strong>Query Engines</strong>: Besides Flink, many other engines are integrated: <a href="/docs/syncing_metastore#flink-setup">Hive Query</a>, <a href="/docs/querying_data#prestodb">Presto Query</a>.</li>
+<li><strong>Query Engines</strong>: Besides Flink, many other engines are integrated: <a href="/docs/syncing_metastore#flink-setup">Hive Query</a>, <a href="/docs/sql_queries#presto">Presto Query</a>.</li>
 <li><strong>Catalog</strong>: A Hudi specific catalog is supported: <a href="/docs/sql_ddl/#create-catalog">Hudi Catalog</a>.</li>
 </ul>
 <p>If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:</p>
 <ul>
-<li><a href="/docs/next/timeline">Hudi Timeline</a> – How Hudi manages transactions and other table services</li>
-<li><a href="/docs/next/storage_layouts">Hudi File Layout</a> - How the files are laid out on storage</li>
-<li><a href="/docs/next/table_types">Hudi Table Types</a> – <code>COPY_ON_WRITE</code> and <code>MERGE_ON_READ</code></li>
-<li><a href="/docs/next/table_types#query-types">Hudi Query Types</a> – Snapshot Queries, Incremental Queries, Read-Optimized Queries</li>
+<li><a href="/docs/timeline">Hudi Timeline</a> – How Hudi manages transactions and other table services</li>
+<li><a href="/docs/file_layouts">Hudi File Layout</a> - How the files are laid out on storage</li>
+<li><a href="/docs/table_types">Hudi Table Types</a> – <code>COPY_ON_WRITE</code> and <code>MERGE_ON_READ</code></li>
+<li><a href="/docs/table_types#query-types">Hudi Query Types</a> – Snapshot Queries, Incremental Queries, Read-Optimized Queries</li>
 </ul>
 <p>See more in the &quot;Concepts&quot; section of the docs.</p>
 <p>Take a look at recent <a href="/blog">blog posts</a> that go in depth on certain topics or use cases.</p>

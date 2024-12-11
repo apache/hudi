@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -73,7 +73,7 @@ Multiple writers can operate on the table with non-blocking conflict resolution.
 file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is
 currently available for preview in version 1.0.0-beta only with the caveat that conflict resolution is not supported yet
 between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with Flink
-writers <a href="/docs/next/sql_dml#non-blocking-concurrency-control-experimental">here</a>.</p>
+writers <a href="/docs/sql_dml#non-blocking-concurrency-control-experimental">here</a>.</p>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="enabling-multi-writing">Enabling Multi Writing<a href="#enabling-multi-writing" class="hash-link" aria-label="Direct link to Enabling Multi Writing" title="Direct link to Enabling Multi Writing">​</a></h2>
 <p>The following properties are needed to be set appropriately to turn on optimistic concurrency control to achieve multi writing.</p>
 <div class="codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">hoodie.write.concurrency.mode=optimistic_concurrency_control</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">hoodie.write.lock.provider=&lt;lock-provider-classname&gt;</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">hoodie.cleaner.policy.failed.writes=LAZY</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>

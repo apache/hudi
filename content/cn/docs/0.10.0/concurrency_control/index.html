@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.0e0faa8c.css">
-<script src="/cn/assets/js/runtime~main.48d16f51.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.cfd7444c.js" defer="defer"></script>
 <script src="/cn/assets/js/main.2d77e5f0.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -39,20 +39,20 @@ the same Hudi Table. Hudi supports <code>file level OCC</code>, i.e., for any 2 
 This feature is currently <em>experimental</em> and requires either Zookeeper or HiveMetastore to acquire locks.</p>
 </li>
 </ul>
-<p>It may be helpful to understand the different guarantees provided by <a href="/cn/docs/writing_data#write-operations">write operations</a> via Hudi datasource or the delta streamer.</p>
+<p>It may be helpful to understand the different guarantees provided by <a href="/cn/docs/write_operations">write operations</a> via Hudi datasource or the delta streamer.</p>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="single-writer-guarantees">Single Writer Guarantees<a href="#single-writer-guarantees" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
 <ul>
 <li><em>UPSERT Guarantee</em>: The target table will NEVER show duplicates.</li>
-<li><em>INSERT Guarantee</em>: The target table wilL NEVER have duplicates if <a href="/cn/docs/configurations#INSERT_DROP_DUPS_OPT_KEY">dedup</a> is enabled.</li>
-<li><em>BULK_INSERT Guarantee</em>: The target table will NEVER have duplicates if <a href="/cn/docs/configurations#INSERT_DROP_DUPS_OPT_KEY">dedup</a> is enabled.</li>
+<li><em>INSERT Guarantee</em>: The target table wilL NEVER have duplicates if <a href="/cn/docs/0.10.0/configurations#hoodiedatasourcewriteinsertdropduplicates">dedup</a> is enabled.</li>
+<li><em>BULK_INSERT Guarantee</em>: The target table will NEVER have duplicates if <a href="/cn/docs/0.10.0/configurations#hoodiedatasourcewriteinsertdropduplicates">dedup</a> is enabled.</li>
 <li><em>INCREMENTAL PULL Guarantee</em>: Data consumption and checkpoints are NEVER out of order.</li>
 </ul>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="multi-writer-guarantees">Multi Writer Guarantees<a href="#multi-writer-guarantees" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
 <p>With multiple writers using OCC, some of the above guarantees change as follows</p>
 <ul>
 <li><em>UPSERT Guarantee</em>: The target table will NEVER show duplicates.</li>
-<li><em>INSERT Guarantee</em>: The target table MIGHT have duplicates even if <a href="/cn/docs/configurations#INSERT_DROP_DUPS_OPT_KEY">dedup</a> is enabled.</li>
-<li><em>BULK_INSERT Guarantee</em>: The target table MIGHT have duplicates even if <a href="/cn/docs/configurations#INSERT_DROP_DUPS_OPT_KEY">dedup</a> is enabled.</li>
+<li><em>INSERT Guarantee</em>: The target table MIGHT have duplicates even if <a href="/cn/docs/0.10.0/configurations#hoodiedatasourcewriteinsertdropduplicates">dedup</a> is enabled.</li>
+<li><em>BULK_INSERT Guarantee</em>: The target table MIGHT have duplicates even if <a href="/cn/docs/0.10.0/configurations#hoodiedatasourcewriteinsertdropduplicates">dedup</a> is enabled.</li>
 <li><em>INCREMENTAL PULL Guarantee</em>: Data consumption and checkpoints MIGHT be out of order due to multiple writer jobs finishing at different times.</li>
 </ul>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="enabling-multi-writing">Enabling Multi Writing<a href="#enabling-multi-writing" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>

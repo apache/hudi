@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -27,9 +27,9 @@
 <p>Hudi provides efficient upserts, by mapping a given hoodie key (record key + partition path) consistently to a file id, via an indexing mechanism.
 This mapping between record key and file group/file id, never changes once the first version of a record has been written to a file. In short, the
 mapped file group contains all versions of a group of records.</p>
-<p>For <a href="/docs/next/table_types#copy-on-write-table">Copy-On-Write tables</a>, this enables fast upsert/delete operations, by
+<p>For <a href="/docs/0.14.1/table_types#copy-on-write-table">Copy-On-Write tables</a>, this enables fast upsert/delete operations, by
 avoiding the need to join against the entire dataset to determine which files to rewrite.
-For <a href="/docs/next/table_types#merge-on-read-table">Merge-On-Read tables</a>, this design allows Hudi to bound the amount of
+For <a href="/docs/0.14.1/table_types#merge-on-read-table">Merge-On-Read tables</a>, this design allows Hudi to bound the amount of
 records any given base file needs to be merged against.
 Specifically, a given base file needs to merged only against updates for records that are part of that base file. In contrast,
 designs without an indexing component (e.g: <a href="https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions" target="_blank" rel="noopener noreferrer">Apache Hive ACID</a>),
@@ -98,7 +98,7 @@ for more details. All these, support the index types mentioned <a href="#index-t
 Following are the basic configs that control the indexing behavior. Please refer <a href="https://hudi.apache.org/docs/next/configurations#Flink-Options-advanced-configs" target="_blank" rel="noopener noreferrer">here</a>
 for advanced configs.</p>
 <table><thead><tr><th>Config Name</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td>index.type</td><td>FLINK_STATE (Optional)</td><td>Index type of Flink write job, default is using state backed index. Possible values:<br> <ul><li>FLINK_STATE</li><li>BUCKET</li></ul><br>  <code>Config Param: INDEX_TYPE</code></td></tr><tr><td>hoodie.index.bucket.engine</td><td>SIMPLE (Optional)</td><td>org.apache.hudi.index.HoodieIndex$BucketIndexEngineType: Determines the type of bucketing or hashing to use when <code>hoodie.index.type</code> is set to <code>BUCKET</code>.    Possible Values: <br> <ul><li>SIMPLE</li><li>CONSISTENT_HASHING</li></ul></td></tr></tbody></table>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="indexing-strategies">Indexing Strategies<a href="#indexing-strategies" class="hash-link" aria-label="Direct link to Indexing Strategies" title="Direct link to Indexing Strategies">​</a></h2>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="indexing-strategies">Indexing Strategies<a href="#indexing-strategies" class="hash-link" aria-label="Direct link to Indexing Strategies" title="Direct link to Indexing Strategies"> ​</a></h2>
 <p>Since data comes in at different volumes, velocity and has different access patterns, different indices could be used for different workload types.
 Let’s walk through some typical workload types and see how to leverage the right Hudi index for such use-cases.
 This is based on our experience and you should diligently decide if the same strategies are best for your workloads.</p>

@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -65,7 +65,7 @@
 <p>A typical database has a bunch of long running storage servers always running, which takes writes and reads. Hudi&#x27;s architecture is very different and for good reasons. It&#x27;s highly decoupled where writes and queries/reads can be scaled independently to be able to handle the scale challenges. So, it may not always seems like a database.</p>
 <p>Nonetheless, Hudi is designed very much like a database and provides similar functionality (upserts, change capture) and semantics (transactional writes, snapshot isolated reads).</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="how-do-i-model-the-data-stored-in-hudi">How do I model the data stored in Hudi?<a href="#how-do-i-model-the-data-stored-in-hudi" class="hash-link" aria-label="Direct link to How do I model the data stored in Hudi?" title="Direct link to How do I model the data stored in Hudi?">​</a></h3>
-<p>When writing data into Hudi, you model the records like how you would on a key-value store - specify a key field (unique for a single partition/across table), a partition field (denotes partition to place key into) and preCombine/combine logic that specifies how to handle duplicates in a batch of records written. This model enables Hudi to enforce primary key constraints like you would get on a database table. See <a href="/docs/next/writing_data">here</a> for an example.</p>
+<p>When writing data into Hudi, you model the records like how you would on a key-value store - specify a key field (unique for a single partition/across table), a partition field (denotes partition to place key into) and preCombine/combine logic that specifies how to handle duplicates in a batch of records written. This model enables Hudi to enforce primary key constraints like you would get on a database table. See <a href="/docs/writing_data">here</a> for an example.</p>
 <p>When querying/reading data, Hudi just presents itself as a json-like hierarchical table, everyone is used to querying using Hive/Spark/Presto over Parquet/Json/Avro.</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="why-does-hudi-require-a-key-field-to-be-configured">Why does Hudi require a key field to be configured?<a href="#why-does-hudi-require-a-key-field-to-be-configured" class="hash-link" aria-label="Direct link to Why does Hudi require a key field to be configured?" title="Direct link to Why does Hudi require a key field to be configured?">​</a></h3>
 <p>Hudi was designed to support fast record level Upserts and thus requires a key to identify whether an incoming record is

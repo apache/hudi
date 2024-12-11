@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -42,9 +42,9 @@ normal <code>spark.write.parquet</code>).</p>
 <p>For illustration purposes, we are going to consider only COPY_ON_WRITE table.</p>
 <p>Configs of interest before we dive into the algorithm:</p>
 <ul>
-<li><a href="/docs/configurations#limitFileSize">Max file size</a>: Max size for a given data file. Hudi will try to maintain file sizes to this configured value <br></li>
-<li><a href="/docs/configurations#compactionSmallFileSize">Soft file limit</a>: Max file size below which a given data file is considered to a small file <br></li>
-<li><a href="/docs/configurations#insertSplitSize">Insert split size</a>: Number of inserts grouped for a single partition. This value should match
+<li><a href="/docs/configurations#hoodieparquetmaxfilesize">Max file size</a>: Max size for a given data file. Hudi will try to maintain file sizes to this configured value <br></li>
+<li><a href="/docs/configurations#hoodieparquetsmallfilelimit">Soft file limit</a>: Max file size below which a given data file is considered to a small file <br></li>
+<li><a href="/docs/configurations#hoodiecopyonwriteinsertsplitsize">Insert split size</a>: Number of inserts grouped for a single partition. This value should match
 the number of records in a single file (you can determine based on max file size and per record size)</li>
 </ul>
 <p>For instance, if your first config value is 120MB and 2nd config value is set to 100MB, any file whose size is &lt; 100MB

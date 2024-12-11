@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -81,17 +81,17 @@ Deletion of specific partitions can be done using the config
 <li>First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.</li>
 </ol>
 </li>
-<li><a href="/docs/next/indexes">Index Lookup</a>
+<li><a href="/docs/indexing">Index Lookup</a>
 <ol>
 <li>Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.</li>
 </ol>
 </li>
-<li><a href="/docs/next/file_sizing">File Sizing</a>
+<li><a href="/docs/file_sizing">File Sizing</a>
 <ol>
 <li>Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.</li>
 </ol>
 </li>
-<li><a href="/docs/next/storage_layouts">Partitioning</a>
+<li><a href="/docs/file_layouts">Partitioning</a>
 <ol>
 <li>We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created</li>
 </ol>
@@ -102,29 +102,29 @@ Deletion of specific partitions can be done using the config
 or versioning an existing base file.</li>
 </ol>
 </li>
-<li>Update <a href="/docs/next/indexes">Index</a>
+<li>Update <a href="/docs/indexing">Index</a>
 <ol>
 <li>Now that the write is performed, we will go back and update the index.</li>
 </ol>
 </li>
 <li>Commit<!-- -->
 <ol>
-<li>Finally we commit all of these changes atomically. (<a href="/docs/next/platform_services_post_commit_callback">Post-commit callback</a> can be configured.)</li>
+<li>Finally we commit all of these changes atomically. (<a href="/docs/platform_services_post_commit_callback">Post-commit callback</a> can be configured.)</li>
 </ol>
 </li>
-<li><a href="/docs/next/cleaning">Clean</a> (if needed)<!-- -->
+<li><a href="/docs/hoodie_cleaner">Clean</a> (if needed)<!-- -->
 <ol>
 <li>Following the commit, cleaning is invoked if needed.</li>
 </ol>
 </li>
-<li><a href="/docs/next/compaction">Compaction</a>
+<li><a href="/docs/compaction">Compaction</a>
 <ol>
 <li>If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously</li>
 </ol>
 </li>
 <li>Archive<!-- -->
 <ol>
-<li>Lastly, we perform an archival step which moves old <a href="/docs/next/timeline">timeline</a> items to an archive folder.</li>
+<li>Lastly, we perform an archival step which moves old <a href="/docs/timeline">timeline</a> items to an archive folder.</li>
 </ol>
 </li>
 </ol>

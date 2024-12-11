@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -30,7 +30,7 @@ bundle has been installed, the table can be queried by popular query engines lik
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="spark-datasource">Spark Datasource<a href="#spark-datasource" class="hash-link" aria-label="Direct link to Spark Datasource" title="Direct link to Spark Datasource">​</a></h2>
 <p>The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi tables can be queried via the Spark datasource with a simple <code>spark.read.parquet</code>.
 See the <a href="/docs/quick-start-guide">Spark Quick Start</a> for more examples of Spark datasource reading queries.</p>
-<p>To setup Spark for querying Hudi, see the <a href="/docs/0.12.3/query_engine_setup#Spark-DataSource">Query Engine Setup</a> page.</p>
+<p>To setup Spark for querying Hudi, see the <a href="/docs/0.12.3/query_engine_setup#spark">Query Engine Setup</a> page.</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="spark-snap-query">Snapshot query<a href="#spark-snap-query" class="hash-link" aria-label="Direct link to Snapshot query" title="Direct link to Snapshot query">​</a></h3>
 <p>Retrieve the data table at the present point in time.</p>
 <div class="language-scala codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-scala codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">val hudiIncQueryDF = spark</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">     .read()</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">     .format(&quot;hudi&quot;)</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">     .load(tablePath) </span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>

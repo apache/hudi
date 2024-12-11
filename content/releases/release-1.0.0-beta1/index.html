@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -50,7 +50,7 @@ concurrecy control.</li>
 <li>Completed actions, their plans and completion metadata are stored in a more
 scalable <a href="https://en.wikipedia.org/wiki/Log-structured_merge-tree" target="_blank" rel="noopener noreferrer">LSM tree</a> based timeline organized in an *
 <em><em>archived</em></em>* storage location under the .hoodie metadata path. It consists of Apache Parquet files with action
-instant data and bookkeeping metadata files, in the following manner. Checkout <a href="/docs/next/timeline#lsm-timeline">timeline</a> docs for more details.</li>
+instant data and bookkeeping metadata files, in the following manner. Checkout <a href="/docs/next/timeline#lsm-timeline-history">timeline</a> docs for more details.</li>
 </ul>
 <h4 class="anchor anchorWithStickyNavbar_LWe7" id="log-file-format">Log File Format<a href="#log-file-format" class="hash-link" aria-label="Direct link to Log File Format" title="Direct link to Log File Format">​</a></h4>
 <ul>
@@ -70,7 +70,7 @@ suitable to index, and supporting emerging formats for ML/AI.</p>
 OCC, multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the
 same file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency
 mode is currently available for preview in version 1.0.0-beta only. You can read more about it under
-section <a href="/docs/next/concurrency_control#non-blocking-concurrency-control-mode-experimental">Model C: Multi-writer</a>. A complete example with multiple
+section <a href="/docs/next/concurrency_control#non-blocking-concurrency-control">Model C: Multi-writer</a>. A complete example with multiple
 Flink streaming writers is available <a href="/docs/next/sql_dml#non-blocking-concurrency-control-experimental">here</a>. You
 can follow the <a href="https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md" target="_blank" rel="noopener noreferrer">RFC</a> and
 the <a href="https://issues.apache.org/jira/browse/HUDI-6640" target="_blank" rel="noopener noreferrer">JIRA</a> for more details.</p>

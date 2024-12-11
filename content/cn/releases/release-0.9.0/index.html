@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.0e0faa8c.css">
-<script src="/cn/assets/js/runtime~main.48d16f51.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.cfd7444c.js" defer="defer"></script>
 <script src="/cn/assets/js/main.2d77e5f0.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -57,7 +57,7 @@ for more implementation details.</p>
 instead of relying on the Hive fallbacks within Spark, which are ill-maintained/cumbersome. This unlocks many optimizations such as the
 use of Hudi&#x27;s own <a href="https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-spark-datasource/hudi-spark/src/main/scala/org/apache/hudi/HoodieFileIndex.scala#L46" target="_blank" rel="noopener noreferrer">FileIndex</a>
 implementation for optimized caching and the use of the Hudi metadata table, for faster listing of large tables. We have also added support for
-<a href="/cn/docs/quick-start-guide#time-travel-query">timetravel query</a>, for spark datasource.</p>
+<a href="/cn/docs/0.9.0/quick-start-guide#time-travel-query">timetravel query</a>, for spark datasource.</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="writer-side-improvements">Writer side improvements<a href="#writer-side-improvements" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
 <p>Virtual keys support has been added where users can avoid adding meta fields to hudi table and leverage existing fields to populate record keys and partition paths.
 One needs to disable <a href="/cn/docs/configurations#hoodiepopulatemetafields">this</a> config to enable virtual keys.</p>

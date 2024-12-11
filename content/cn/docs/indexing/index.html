@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.0e0faa8c.css">
-<script src="/cn/assets/js/runtime~main.48d16f51.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.cfd7444c.js" defer="defer"></script>
 <script src="/cn/assets/js/main.2d77e5f0.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -27,9 +27,9 @@
 <p>Hudi provides efficient upserts, by mapping a given hoodie key (record key + partition path) consistently to a file id, via an indexing mechanism.
 This mapping between record key and file group/file id, never changes once the first version of a record has been written to a file. In short, the
 mapped file group contains all versions of a group of records.</p>
-<p>For <a href="/cn/docs/next/table_types#copy-on-write-table">Copy-On-Write tables</a>, this enables fast upsert/delete operations, by
+<p>For <a href="/cn/docs/table_types#copy-on-write-table">Copy-On-Write tables</a>, this enables fast upsert/delete operations, by
 avoiding the need to join against the entire dataset to determine which files to rewrite.
-For <a href="/cn/docs/next/table_types#merge-on-read-table">Merge-On-Read tables</a>, this design allows Hudi to bound the amount of
+For <a href="/cn/docs/table_types#merge-on-read-table">Merge-On-Read tables</a>, this design allows Hudi to bound the amount of
 records any given base file needs to be merged against.
 Specifically, a given base file needs to merged only against updates for records that are part of that base file. In contrast,
 designs without an indexing component (e.g: <a href="https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions" target="_blank" rel="noopener noreferrer">Apache Hive ACID</a>),

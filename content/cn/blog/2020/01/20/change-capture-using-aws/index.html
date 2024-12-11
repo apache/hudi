@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.0e0faa8c.css">
-<script src="/cn/assets/js/runtime~main.48d16f51.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.cfd7444c.js" defer="defer"></script>
 <script src="/cn/assets/js/main.2d77e5f0.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -31,7 +31,7 @@
 <p><strong>Extracting change logs from MySQL</strong>  : Surprisingly, this is still a pretty tricky problem to solve and often Hudi users get stuck here. Thankfully, at-least for AWS users, there is a  <a href="https://aws.amazon.com/dms/" target="_blank" rel="noopener noreferrer">Database Migration service</a>  (DMS for short), that does this change capture and uploads them as parquet files on S3</p>
 </li>
 <li>
-<p><strong>Applying these change logs to your data lake table</strong>  : Once there are change logs in some form, the next step is to apply them incrementally to your table. This mundane task can be fully automated using the Hudi  <a href="http://hudi.apache.org/docs/writing_data#deltastreamer" target="_blank" rel="noopener noreferrer">DeltaStreamer</a>  tool.</p>
+<p><strong>Applying these change logs to your data lake table</strong>  : Once there are change logs in some form, the next step is to apply them incrementally to your table. This mundane task can be fully automated using the Hudi  <a href="http://hudi.apache.org/docs/hoodie_streaming_ingestion#hudi-streamer" target="_blank" rel="noopener noreferrer">DeltaStreamer</a>  tool.</p>
 </li>
 </ol>
 <p>The actual end-end architecture looks something like this.

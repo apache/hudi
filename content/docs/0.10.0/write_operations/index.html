@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -55,7 +55,7 @@ This can be achieved by ensuring the appropriate fields are nullable in the tabl
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="writing-path">Writing path<a href="#writing-path" class="hash-link" aria-label="Direct link to Writing path" title="Direct link to Writing path">​</a></h2>
 <p>The following is an inside look on the Hudi write path and the sequence of events that occur during a write.</p>
 <ol>
-<li><a href="/docs/configurations/#writeinsertdeduplicate">Deduping</a>
+<li><a href="/docs/0.10.0/configurations#hoodiecombinebeforeinsert">Deduping</a>
 <ol>
 <li>First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.</li>
 </ol>
@@ -88,7 +88,7 @@ or versioning an existing base file.</li>
 </li>
 <li>Commit<!-- -->
 <ol>
-<li>Finally we commit all of these changes atomically. (A <a href="/docs/writing_data#commit-notifications">callback notification</a> is exposed)</li>
+<li>Finally we commit all of these changes atomically. (A <a href="/docs/0.10.0/writing_data#commit-notifications">callback notification</a> is exposed)</li>
 </ol>
 </li>
 <li><a href="/docs/hoodie_cleaner">Clean</a> (if needed)<!-- -->

@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.0e0faa8c.css">
-<script src="/cn/assets/js/runtime~main.48d16f51.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.cfd7444c.js" defer="defer"></script>
 <script src="/cn/assets/js/main.2d77e5f0.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -37,7 +37,7 @@ and the <a href="/cn/docs/configurations#hoodieparquetsmallfilelimit">soft limit
 be considered a small file. For the initial bootstrap of a Hudi table, tuning record size estimate is also important to
 ensure sufficient records are bin-packed in a parquet file. For subsequent writes, Hudi automatically uses average
 record size based on previous commit. Hudi will try to add enough records to a small file at write time to get it to the
-configured maximum limit. For e.g , with <code>compactionSmallFileSize=100MB</code> and limitFileSize=120MB, Hudi will pick all
+configured maximum limit. For e.g , with <code>hoodie.parquet.max.file.size=100MB</code> and hoodie.parquet.small.file.limit=120MB, Hudi will pick all
 files &lt; 100MB and try to get them upto 120MB.</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="for-merge-on-read">For Merge-On-Read<a href="#for-merge-on-read" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
 <p>MergeOnRead works differently for different INDEX choices so there are few more configs to set:</p>

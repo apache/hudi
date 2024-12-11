@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -74,7 +74,7 @@ sharding of the key space. Additionally, when it comes to reading data, the inde
 <p>An <a href="https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md" target="_blank" rel="noopener noreferrer">expression index</a> is an index on a function of a column. If a query has a predicate on a function of a column, the expression index can
 be used to speed up the query. Expression index is stored in <em>expr_index_</em> prefixed partitions (one for each
 expression index) under metadata table. Expression index can be created using SQL syntax. Please checkout SQL DDL
-docs <a href="/docs/next/sql_ddl#create-functional-index-experimental">here</a> for more details.</p>
+docs <a href="/docs/next/sql_ddl#create-expression-index">here</a> for more details.</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="secondary-index">Secondary Index<a href="#secondary-index" class="hash-link" aria-label="Direct link to Secondary Index" title="Direct link to Secondary Index">​</a></h3>
 <p>Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for
 record key fields, Hudi supports <a href="/blog/2023/11/01/record-level-index">Record-level Index</a>. Secondary indexes

@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.58284a4e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.6d151a0d.js" defer="defer"></script>
 <script src="/assets/js/main.70c2c1e6.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -88,7 +88,7 @@ to specify the columns for which stats should be aggregated):</p>
 <div class="language-properties codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-properties codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">  hoodie.metadata.index.partition.stats.enable=true</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  hoodie.metadata.index.column.stats.columns=&lt;comma-separated-column-names&gt;</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>
 </li>
 </ul>
-<p>To try out these features, refer to the <a href="/docs/next/sql_ddl#create-partition-stats-and-secondary-index-experimental">SQL guide</a>.</p>
+<p>To try out these features, refer to the <a href="/docs/next/sql_ddl#create-partition-stats-index">SQL guide</a>.</p>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="metadata-tracking-on-writers">Metadata Tracking on Writers<a href="#metadata-tracking-on-writers" class="hash-link" aria-label="Direct link to Metadata Tracking on Writers" title="Direct link to Metadata Tracking on Writers">​</a></h2>
 <p>Following are the Spark based basic configs that are needed to enable metadata tracking. For advanced configs please refer
 <a href="https://hudi.apache.org/docs/next/configurations#Metadata-Configs-advanced-configs" target="_blank" rel="noopener noreferrer">here</a>.</p>
@@ -132,7 +132,7 @@ distributed lock provider.  Note that running a separate compaction (<code>Hoodi
 job apart from the ingestion writer is considered as multi-writer deployment, as they are not running in the same
 process which cannot rely on the in-process lock provider.</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="deployment-model-c-multi-writer">Deployment Model C: Multi-writer<a href="#deployment-model-c-multi-writer" class="hash-link" aria-label="Direct link to Deployment Model C: Multi-writer" title="Direct link to Deployment Model C: Multi-writer">​</a></h3>
-<p>If your current deployment model is <a href="/docs/concurrency_control#model-c-multi-writer">multi-writer</a> along with a lock
+<p>If your current deployment model is <a href="/docs/next/concurrency_control#full-on-multi-writer--async-table-services">multi-writer</a> along with a lock
 provider and other required configs set for every writer as follows, there is no additional configuration required. You
 can bring up the writers sequentially after stopping the writers for enabling metadata table. Applying the proper
 configurations to only partial writers leads to loss of data from the inconsistent writer. So, ensure you enable
