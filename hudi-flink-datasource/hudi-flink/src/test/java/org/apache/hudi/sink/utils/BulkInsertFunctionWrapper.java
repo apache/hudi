@@ -19,11 +19,11 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.adapter.CollectOutputAdapter;
+import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.adapter.TestStreamConfigs;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.ContextAdapter;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.BulkInsertWriteFunction;

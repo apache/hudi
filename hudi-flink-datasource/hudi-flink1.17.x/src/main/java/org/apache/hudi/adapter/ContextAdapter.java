@@ -16,10 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink;
+package org.apache.hudi.adapter;
 
 import org.apache.flink.metrics.groups.OperatorCoordinatorMetricGroup;
-import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.CoordinatorStore;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
@@ -41,7 +40,7 @@ public class ContextAdapter implements OperatorCoordinator.Context {
   }
 
   public void failJob(Throwable throwable) {
-
+    this.context.failJob(throwable);
   }
 
   public int currentParallelism() {
@@ -58,9 +57,5 @@ public class ContextAdapter implements OperatorCoordinator.Context {
 
   public boolean isConcurrentExecutionAttemptsSupported() {
     return this.context.isConcurrentExecutionAttemptsSupported();
-  }
-
-  public CheckpointCoordinator getCheckpointCoordinator() {
-    return null;
   }
 }

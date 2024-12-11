@@ -28,9 +28,7 @@ import org.apache.flink.metrics.MetricGroup;
 
 import java.util.Set;
 
-public class FlinkTimeLineMetrics {
-
-  protected MetricGroup metricGroup;
+public class FlinkTimeLineMetrics extends HoodieFlinkMetrics {
 
   public static final String EARLIEST_INFLIGHT_CLUSTERING_INSTANT = "earliest_inflight_clustering_instant";
   public static final String LATEST_COMPLETED_CLUSTERING_INSTANT = "latest_completed_clustering_instant";
@@ -43,7 +41,7 @@ public class FlinkTimeLineMetrics {
   private static final String CLUSTERTING_ACTION = "replacecommit";
 
   public FlinkTimeLineMetrics(MetricGroup metricGroup) {
-    this.metricGroup = metricGroup;
+    super(metricGroup);
   }
 
   public void registerMetrics() {

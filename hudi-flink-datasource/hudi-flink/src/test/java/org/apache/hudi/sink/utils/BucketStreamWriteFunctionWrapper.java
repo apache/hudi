@@ -18,10 +18,10 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.ContextAdapter;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketStreamWriteFunction;

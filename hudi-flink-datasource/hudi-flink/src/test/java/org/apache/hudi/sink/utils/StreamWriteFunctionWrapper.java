@@ -19,12 +19,12 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.adapter.CollectOutputAdapter;
+import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.ContextAdapter;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
@@ -53,6 +53,7 @@ import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
+import org.testcontainers.shaded.org.checkerframework.checker.units.qual.C;
 
 import java.util.HashSet;
 import java.util.List;

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;

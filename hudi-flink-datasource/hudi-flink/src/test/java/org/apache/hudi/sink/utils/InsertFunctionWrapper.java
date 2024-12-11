@@ -18,9 +18,9 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.ContextAdapter;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.append.AppendWriteFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
@@ -45,6 +45,7 @@ import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+import org.testcontainers.shaded.org.checkerframework.checker.units.qual.C;
 
 import java.util.concurrent.CompletableFuture;
 
