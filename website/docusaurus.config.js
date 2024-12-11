@@ -59,6 +59,8 @@ module.exports = {
         path: "videoBlog",
         routeBasePath: "videos",
         blogSidebarCount: 0,
+        onUntruncatedBlogPosts: "ignore",
+        onInlineAuthors: "ignore",
       },
     ],
     [
@@ -537,6 +539,8 @@ module.exports = {
             title: "Apache Hudi: User-Facing Analytics",
           },
           showReadingTime: true,
+          onUntruncatedBlogPosts: "ignore",
+          onInlineAuthors: "ignore",
         },
         theme: {
           customCss: require.resolve("./src/css/custom.css"),
