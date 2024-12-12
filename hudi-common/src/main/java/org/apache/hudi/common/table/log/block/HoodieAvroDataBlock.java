@@ -167,9 +167,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
           HoodieRecordType type,
           int bufferSize
   ) throws IOException {
-    checkState(this.readerSchema != null, "Reader's schema has to be non-null");
-    checkArgument(type != HoodieRecordType.SPARK, "Not support read avro to spark record");
-    // TODO AvroSparkReader need
     StreamingRecordIterator iterator = StreamingRecordIterator.getInstance(this, inputStream, contentLocation, bufferSize);
     return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
   }
@@ -250,10 +247,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   /**
-   * StreamingRecordIterator is an iterator for reading records from a Hoodie log block in a streaming manner.
-   * It reads data from a given input stream, decodes Avro records, and supports schema promotion.
+   * {@code StreamingRecordIterator} is an iterator for reading records from a Hoodie log block in streaming manner.
+   * It decodes the given input stream into Avro records with optional schema promotion.
    *
-   * This iterator ensures that the buffer has enough data for each record and handles buffer management,
+   * <p>This iterator ensures that the buffer has enough data for each record and handles buffer setup,
    * including compaction and resizing when necessary.
    */
   private static class StreamingRecordIterator implements ClosableIterator<IndexedRecord> {
@@ -348,7 +345,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     /**
      * Ensures that the buffer contains at least the specified amount of data.
      *
-     * This method checks if the buffer has the required amount of data. If not, it attempts to fill the buffer
+     * <p>This method checks if the buffer has the required amount of data. If not, it attempts to fill the buffer
      * by reading more data from the input stream. If the buffer's capacity is insufficient, it allocates a larger buffer.
      * If the end of the input stream is reached before the required amount of data is available, an exception is thrown.
      *
@@ -384,7 +381,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     /**
      * Attempts to fill the buffer with more data from the input stream.
      *
-     * This method reads data from the input stream into the buffer, starting at the current limit
+     * <p>This method reads data from the input stream into the buffer, starting at the current limit
      * and reading up to the capacity of the buffer. If the end of the input stream is reached,
      * it returns false. Otherwise, it updates the buffer's limit to reflect the new data and returns true.
      *
