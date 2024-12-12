@@ -47,7 +47,7 @@ class TestDataHubSyncConfig {
     Properties props = new Properties();
     props.setProperty(META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS.key(), DummyIdentifier.class.getName());
     DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
-    DatasetUrn datasetUrn = syncConfig.datasetIdentifier.getDatasetUrn();
+    DatasetUrn datasetUrn = syncConfig.getDatasetIdentifier().getDatasetUrn();
     assertEquals("foo", datasetUrn.getPlatformEntity().getPlatformNameEntity());
     assertEquals("project.database.table", datasetUrn.getDatasetNameEntity());
     assertEquals(FabricType.PROD, datasetUrn.getOriginEntity());
