@@ -8,7 +8,7 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0) ([docs](quick-start-guide))
+## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0) ([docs](/docs/quick-start-guide))
 
 Apache Hudi 1.0.0 is a major milestone release of Apache Hudi. This release contains significant format changes and new exciting features 
 as we will see below.
@@ -19,10 +19,17 @@ We encourage users to try the **1.0.0** features on new tables first. The 1.0 ge
 support automatic table upgrades from 0.x versions while also ensuring full backward compatibility when reading 0.x
 Hudi tables using 1.0, ensuring a seamless migration experience. 
 
+This release comes with **backward compatible writes** i.e. 1.0.0 can write in both the table version 8 (latest) and older
+table version 6 (corresponds to 0.14 & above) formats. Automatic upgrades for tables from 0.x versions are fully
+supported, minimizing migration challenges. Until all the readers are upgraded, users can still deploy 1.0.0 binaries 
+for the writers and leverage backward compatible writes to continue writing the tables in the older format. Once the readers
+are fully upgraded, users can switch to the latest format through a config change. We recommend users to follow the upgrade 
+steps mentioned in the [migration guide](/docs/deployment#upgrading-to-100) to ensure a smooth transition.
+
 :::caution
 Most things are seamlessly handled by the auto upgrade process, but there are some limitations. Please read through the 
-limitations of the upgrade downgrade process before proceeding to migrate. Please check the [migration guide](deployment#upgrading) 
-and [RFC-78](https://github.com/apache/hudi/tree/master/rfc/rfc-78) for more details.
+limitations of the upgrade downgrade process before proceeding to migrate. Please check the [migration guide](/docs/deployment#upgrading-to-100) 
+and [RFC-78](https://github.com/apache/hudi/blob/master/rfc/rfc-78/rfc-78.md#support-matrix-for-different-readers-and-writers) for more details.
 :::
 
 ## Bundle Updates
@@ -36,7 +43,7 @@ and [RFC-78](https://github.com/apache/hudi/tree/master/rfc/rfc-78) for more det
 ### Format changes
 
 The main epic covering all the format changes is [HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242), which is also 
-covered in the [Hudi 1.0 tech specification](tech-specs-1point0). The following are the main highlights with respect to format changes:
+covered in the [Hudi 1.0 tech specification](/tech-specs-1point0). The following are the main highlights with respect to format changes:
 
 #### Timeline
 
@@ -54,7 +61,7 @@ covered in the [Hudi 1.0 tech specification](tech-specs-1point0). The following 
 #### Log File Format
 
 - In addition to the keys in the log file header, we also store record positions. Refer to the
-  latest [spec](tech-specs-1point0#log-format) for more details. This allows us to do position-based merging (apart
+  latest [spec](/tech-specs-1point0#log-format) for more details. This allows us to do position-based merging (apart
   from key-based merging) and skip pages based on positions.
 - Log file name will now have the deltacommit instant time instead of base commit instant time.
 - The new log file format also enables fast partial updates with low storage overhead.
@@ -98,7 +105,7 @@ The **expression index** enables efficient queries on columns derived from expre
 derived from expressions without materializing them, and can be used to speed up queries with filters containing such
 expressions.
 
-To learn more about these indices, refer to the [SQL queries](sql_queries#snapshot-query-with-index-acceleration) docs.
+To learn more about these indices, refer to the [SQL queries](/docs/sql_queries#snapshot-query-with-index-acceleration) docs.
 
 ### Partial Updates
 
@@ -106,7 +113,7 @@ To learn more about these indices, refer to the [SQL queries](sql_queries#snapsh
 in a record. This feature is useful when users want to update only a few columns in a record without rewriting the
 entire record.
 
-To learn more about partial updates, refer to the [SQL DML](sql_dml#merge-into-partial-update) docs.
+To learn more about partial updates, refer to the [SQL DML](/docs/sql_dml#merge-into-partial-update) docs.
 
 ### Multiple Base File Formats in a single table
 
@@ -116,7 +123,7 @@ To learn more about partial updates, refer to the [SQL DML](sql_dml#merge-into-p
   format to another, e.g. from ORC to Parquet, without rewriting the whole table.
 - **Configuration:** Enable with `hoodie.table.multiple.base.file.formats.enable`.
 
-To learn more about the format changes, refer to the [Hudi 1.0 tech specification](tech-specs-1point0).
+To learn more about the format changes, refer to the [Hudi 1.0 tech specification](/tech-specs-1point0).
 
 ### API Changes
 
@@ -140,8 +147,6 @@ supported as a table-level configuration:
 :::note
 Going forward, we recommend users to migrate and use the record merger APIs and not write new payload implementations.
 :::
-
-To learn more about the record merger API, refer to [this doc](/docs/next/record_merger).
 
 #### Positional Merging with Filegroup Reader
 
