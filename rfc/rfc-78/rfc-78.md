@@ -14,7 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-# RFC-76: [Bridge release for 1.x]
+# RFC-76: [1.0 Migration]
 
 ## Proposers
 
@@ -27,7 +27,7 @@
 
 ## Status
 
-JIRA: https://issues.apache.org/jira/browse/HUDI-7882
+JIRA: [HUDI-7856](https://issues.apache.org/jira/browse/HUDI-7856)
 
 > Please keep the status updated in `rfc/README.md`.
 
@@ -38,62 +38,65 @@ re-imagination of the transactional database layer in Hudi to power continued in
 years. It introduces lot of differentiating features for Apache Hudi. Feel free to checkout the 
 [release page](https://hudi.apache.org/releases/release-1.0.0-beta1) for more info. We had beta1 and beta2 releases which was meant for 
 interested developers/users to give a spin on some of the  advanced features. But as we are working towards 1.0 GA, we are proposing 
-a bridge release (0.16.0) for smoother migration for existing hudi users. 
+in this RFC a strategy for smoother migration for existing Hudi users. 
 
 ## Objectives 
-Goal is to have a smooth migration experience for the users from 0.x to 1.0. We plan to have a 0.16.0 bridge release asking users to first migrate writers (spark, flink, kafka connect sinks) and readers (Spark, Flink, Hive, Presto, Trino, ...) to 0.16.0 before they can upgrade to 1.x. 
 
-A typical organization might have a medallion architecture deployed with 1000s of Hudi pipelines spread across bronze, silver and gold layer, where most pipelines can be both readers and writers and a few reader only pipelines (gold).
-For this layout of pipelines, here are some challenges faced during migration without a bridge release.\
+Goal is to have a smooth migration experience for the users from 0.x to 1.0. A typical organization might have a
+medallion architecture deployed with 1000s of Hudi pipelines spread across bronze, silver and gold layer, where most
+pipelines can be both readers and writers and a few reader only pipelines (gold). For this layout of pipelines, here are
+some challenges faced during migration.\
 
-1. Existing pipelines are in 0.15.x. (bronze, silver, gold) 
+1. Existing pipelines are in 0.15.x. (bronze, silver, gold)
 2. Migrate gold pipelines to 1.x.\
-&emsp; We need to strictly migrate only gold pipelines to 1.x. Because, a 0.15.x reader may not be able to read 1.x Hudi tables. So, if we migrate any of silver pipelines to 
-1.x before migrating entire gold layer, we might end up in a situation, where a 0.15.x reader (gold) might end up reading 1.x table (silver). This might lead to failures. 
-So, we have to follow certain order in which we migrate pipelines. 
-3. Once all of gold is migrated to 1.x, we can move all of silver to 1.x. 
+   &emsp; We need to strictly migrate only gold pipelines to 1.x. Because, a 0.15.x reader may not be able to read 1.x
+   Hudi tables. So, if we migrate any of silver pipelines to
+   1.x before migrating entire gold layer, we might end up in a situation, where a 0.15.x reader (gold) might end up
+   reading 1.x table (silver). This might lead to failures.
+   So, we have to follow certain order in which we migrate pipelines.
+3. Once all of gold is migrated to 1.x, we can move all of silver to 1.x.
 4. Once all of gold and silver pipelines are migrated to 1.x, finally we can move all of bronze to 1.x.
 
-As you could see, we need some coordination with which we need to migrate. And in a very large organization, sometimes we may not have good control over downstream consumers.
-Hence, coordinating entire migration workflow and orchestrating the same might be challenging. And here we just spoke about happy paths. But there are failure scenarios which 
-could make it even more challenging. For instance, after upgrade, if users prefer to downgrade, then downgrade should ensure to completely revert all changes 
-done in 1.x so that a 0.15.x reader and writer can continue without any issues. 
-Hence, the bridge release is a key for smoother migration to 1.x in all aspects. And since this is going to be a major bump from any of 0.x to 1.x, we are meticulously designing this bridge release to ease migrations for our users.  
+As you could see, we need some coordination with which we need to migrate. And in a very large organization, sometimes
+we may not have good control over downstream consumers.
+Hence, coordinating entire migration workflow and orchestrating the same might be challenging. And here we just spoke
+about happy paths. But there are failure scenarios which
+could make it even more challenging. For instance, after upgrade, if users prefer to downgrade, then downgrade should
+ensure to completely revert all changes
+done in 1.x so that a 0.15.x reader and writer can continue without any issues.
+Hence, the migration protocol is key to ensure a smooth migration experience for the users.
 
+#### Here are the objectives with this migration strategy
 
-#### Here are the objectives with this bridge release
-
-- 1.x reader should be able to read 0.14.x to 0.16.x tables w/o any loss in 0.x functionality and guaranteeing no data inconsistencies. By no data inconsistencies, we mean, the queries results ff
-- 0.16.x should have read capability for 1.x tables w/ some limitations. For features ported over from 0.x, no loss in functionality should be guaranteed. 
-But for new features that was introduced in 1.x, we may not be able to support all of them. Will be calling out which new features may not work with 0.16.x reader. 
-- In this case, we explicitly request users to not turn on these features untill all readers are completely migrated to 1.x so as to not break any readers as applicable. 
+- 1.x reader should be able to read 0.14.x or later tables (table version 6) w/o any loss in 0.x functionality and
+  guaranteeing no data inconsistencies. By no data inconsistencies, we mean, the queries results ff
+- 1.x writer should be able to write in both the table versions tables (table version 6 and the current version) w/o any
+  loss in 0.x functionality and guaranteeing no data inconsistencies.
+  But for new features that was introduced in 1.x, we may not be able to support all of them.
+- In this case, we explicitly request users to not turn on these features untill all readers are completely migrated to
+  1.x so as to not break any readers as applicable.
 
 Connecting back to our example above, lets see how the migration might look like for an existing user. 
 
-a. Existing pipelines are in 0.15.x. (bronze, silver, gold)
-b. Migrate pipelines to 0.16.0 (in any order. we do not have any constraints around which pipeline should be migrated first). 
-c. Ensure all pipelines are in 0.16.0 (both readers and writers)
-d. Start migrating pipelines in a rolling fashion to 1.x. At this juncture, we could have few pipelines in 1.x and few pipelines in 0.16.0. but since 0.16.x 
-can read 1.x tables, all readers will be intact. Just that do not enable new features like Non blocking concurrency control yet. 
-e. Migrate all of 0.16.0 to 1.x version. 
-f. Once all readers and writers are in 1.x, we are good to enable any new features (like NBCC) with 1.x tables.
-
-As you could see, company/org wide coordination to migrate gold before migrating silver or bronze is relaxed with the bridge release. Only requirement to keep a tab on, 
-is to ensure to migrate all pipelines completely to 0.16.x before starting to migrate to 1.x.
-
-So, here are the deliverables from this bridge release RFC:
-- 1.x reader should be able to read 0.14.x to 0.16.x tables w/o any loss in functionality and no data inconsistencies.
-- 0.16.x should have read capability for 1.x tables w/ some limitations. For features ported over from 0.x, no loss in functionality should be guaranteed.
-  But for new features that are being introduced in 1.x, we may not be able to support all of them. Will be calling out which new features may not work with 0.16.x reader.
-- Document steps for rolling upgrade from 0.16.x to 1.x with minimal downtime.
-- Downgrade from 1.x to 0.16.x documented with call outs on any functionality loss. 
+1. Stop any async table services in 0.x completely.
+2. Upgrade writers to 1.x with table version 6 (tv=6, this won't auto-upgrade anything); 0.x readers will continue to
+   work; writers can also be readers and will continue to read both tv=6.
+3. Upgrade table services to 1.x with tv=6, and resume operations.
+4. Upgrade all remaining readers to 1.x, with tv=6.
+5. Redeploy writers with tv=8; table services and readers will adapt/pick up tv=8 on the fly.
+6. Once all readers and writers are in 1.x, we are good to enable any new features (like NBCC) with 1.x tables.
 
 ### Considerations when choosing migration strategy
-- While migration is happening, we want to allow readers to continue reading data. This means, we cannot employ a stop-the-world strategy when we are migrating. 
-All the actions that we are performing as part of table upgrade should not have any side-effects of breaking snapshot isolation for readers.
-- Also, users should have migrated to 0.16.x before upgrading to 1.x. We do not want to add read support for very old versions of hudi in 1.x(for eg 0.7.0). 
-- So, in an effort to bring everyone to latest hudi versions, 1.x reader will have full read capabilities for 0.16.x, but for older hudi versions, 1.x reader may not have full reader support. 
-The recommended guideline is to upgrade all readers and writers to 0.16.x. and then slowly start upgrading to 1.x(readers followed by writers). Support matrix for different query types is given below in another section. 
+
+- While migration is happening, we want to allow readers to continue reading data. This means, we cannot employ a
+  stop-the-world strategy when we are migrating.
+  All the actions that we are performing as part of table upgrade should not have any side-effects of breaking snapshot
+  isolation for readers.
+- Also, users should have migrated to 0.14.x or later before upgrading to 1.x. We do not want to add read support for
+  very old versions of hudi in 1.x (for eg 0.7.0).
+
+The recommended guideline is to upgrade all readers and writers to 0.14.x or later. and then slowly start upgrading to
+1.x(readers followed by writers). Support matrix for different query types is given below in another section. 
 
 Before we dive in further, lets understand the format changes:
 
@@ -113,103 +116,38 @@ Before we dive in further, lets understand the format changes:
 - We are switching the action type for pending clustering from “replace commit” to “cluster”.
 - [storage changes] Timeline ➝ LSM timeline. There is an archived timeline in 1.x, but its been redesigned for scalable access.
 - [In-memory changes] HoodieInstant changes due to presence of completion time for completed HoodieInstants.
-
-### Filegroup/FileSlice changes:
-- Log file names contain delta commit time instead of base instant time.
-- Log appends are disabled in 1.x. In other words, each log block is already appended to a new log file. There is 1-1 mapping from a log block to log file.
-- File Slice determination logic for log files changed. In 0.x, we have base instant time in log files and its straight forward. 
-In 1.x, we find completion time for a log file and find the base instant time (parsed from base files) for a given HoodieFileGroup, 
-- which has the highest value lesser than the completion time of the log file) of interest. 
-- Log file ordering within a file slice. (in 0.x, we use base instant time ➝ log file versions ➝ write token) to order diff log files. in 1.x, we will be using completion time to order).
-- Rollbacks in 0.x appends a new rollback block (new log file). While in 1.x, rollback will remove the partially failed log files. 
-
-### Log format changes:
-- We have added a new header type, IS_PARTIAL in 1.x.
-
-## Changes to be ported over to 0.16.x to support reading 1.x tables
-
-### What will be supported
-- For features introduced in 0.x, and tables written in 1.x, 0.16.0 reader should be able to provide consistent reads w/o any breakage. Check below table for compatibility matrix.
-
-| Features present Table written by 1.x writer     |  Reader type               | 1.x reader              | 0.16.x Reader |
-|-----------------------------------------------------------------|------------------|-------------------------|-------|
-| COW, partitioned                                 | SNAPSHOT, time travel, incr query | supported               | supported. no change in behavior compared to 1.x reader.|
-| COW, non-partitioned                                 | SNAPSHOT, time travel, incr query  | supported               | supported. no change in behavior compared to 1.x reader.|
-| MOR, partitioned                                 | READ_OPTIMIZED | supported               | supported. no change in behavior compared to 1.x reader.|
-| MOR, partitioned                                 | time travel, incr query  | supported               | supported. no change in behavior compared to 1.x reader.|
-| MOR, partitioned                                 | SNAPSHOT  | supported               | supported but only if NBCC is not enabled.|
-| MOR, non-partitioned                                 | READ_OPTIMIZED | supported               | supported. no change in behavior compared to 1.x reader.|
-| MOR, non-partitioned                                 | time travel, incr query  | supported               | supported. no change in behavior compared to 1.x reader.|
-| MOR, non-partitioned                                 | SNAPSHOT  | supported               | supported but only if NBCC is not enabled.|
-
-### What will not be supported
-- A 0.16 writer cannot write to a table that has been upgraded-to/created using 1.x without downgrading to 0.16. Might be obvious, but calling it out nevertheless.
-- For new features introduced in 1.x, we may or may not have full support with 0.16.x reader.
-
-Diving into some of the new features introduced in 1.x, and how 0.16.0 reader functions in comparison to 1.x reader.
-
-| 1.x Features written by 1.x writer        | 1.x reader   | 0.16.x Reader | 
-|----------------|-------------------------------------------|-------|
-| Deletion vector | supported | Falls back to key based merges giving up on perf optimization
-| Partial merges/updates  | supported | Fails with clear error message stating that partial merging |
-| Functional indexes | supported | Not supported. Perf optimization may not kick in|
-| Secondary indexes | supported | Not supported. Perf optimization may not kick in|
-| NBCC OR Completion time based log file ordering in a file slice | supported | Not supported. Will be using log file version and write token based ordering.|  
-
-
-### Timeline
+- Timeline is under `.hoodie/timeline` and LSM timeline is under `.hoodie/timeline/history` in 1.x.
 - Commit instants w/ completion time should be parsed and deduced.
 - Commit metadata in avro instead of json should be readable.
-   - More details on this under Implementation section.
-- Pending Clustering commits using “cluster” action should be readable in 0.16.0 reader.
+    - More details on this under Implementation section.
+- Pending Clustering commits using “cluster” action.
 - HoodieDefaultTimeline should be able to support both 0.x timeline and 1.x timeline.
-   - More details on this under Implementation section.
-- Should we port LSM reader as well to 0.16.x? Our goal here is to support snapshot, time travel and incremental queries for 1.x tables. Strictly speaking we can only do all these 3 queries in uncleaned 
-instants i.e. over instant ranges where cleaner has not been executed. So, if we guarantee that 1.x active timeline will definitely contain all the uncleaned instants, we could get away by not even porting over 
-LSM timeline reader logic to 0.16.0. 
+    - More details on this under Implementation section.
+
+### Filegroup/FileSlice changes:
+
+- Log file names contain delta commit time instead of base instant time.
+- Log appends are disabled in 1.x. In other words, each log block is already appended to a new log file. There is 1-1
+  mapping from a log block to log file.
+- File Slice determination logic for log files changed. In 0.x, we have base instant time in log files and its straight
+  forward.
+  In 1.x, we find completion time for a log file and find the base instant time (parsed from base files) for a given
+  HoodieFileGroup,
+- which has the highest value lesser than the completion time of the log file) of interest.
+- Log file ordering within a file slice. (in 0.x, we use base instant time ➝ log file versions ➝ write token) to order
+  diff log files. in 1.x, we will be using completion time to order).
+- Rollbacks in 0.x appends a new rollback block (new log file). While in 1.x, rollback will remove the partially failed
+  log files.
+
+### Log format changes:
+- We have added a new header type, `IS_PARTIAL` in 1.x.
 
 #### Completion time based read in FileGroup/FileSlice grouping and log block reads
-- As of this write up, we are not supporting completion time based log file ordering in in 0.16. Punting it as called out earlier.
-- What's the impact if not for this support:
-    - For users having single writer mode or OCC in 1.x, 0.16.0 reader not supporting completion time based read(log file ordering) should behave the same way as a 1.x reader. 
-    - But only if someone has NBCC writes and have log files in different ordering written compared to the log file versions, 0.16.0 reader might result in data consistency issues. but since we are calling out that 0.16.0 is a bridge release and recommend users to migrate all the readers to 1.x fully before starting to enable any new features for 1.x tables.
-    - Example scenarios. say, we have lf1_10_25, lf2_15_20(format "logfile[index]_[starttime]_[completiontime]") for a file slice. In 1.x reader, we will order and read it as lf2 followed by lf1. w/o this support in 0.16.0, we might read lf1 followed by lf2. Just to re-iterate this might only impact users who have enabled NBCC and having multi writers writing log files in different ordering. Even if they were using OCC, one of the writers is expected to have failed (on the writer side) since data is overlapping for two writers in 1.x writer.
+- 1.0 reader will have the capability to read log files written in table version 6. But we may not need to port over the
+  completion time based read support to 1.0.
 
 ### FileSystemView:
-- Support ignoring partially failed log files from FSV. In 0.16.0, from FSV standpoint, all log files(including partially failed) written are valid. We rely on log record reader to filter out the partially failed log files. But
-  in 1.x, log files could be rolledback (deleted) by a concurrent rollback. So, the FSV should ensure it ignores the uncommitted log files. 
-- We don't need the completion time logic ported over either for file slice determination nor for log file ordering.\
-    - So, here is how file slice determination will happen using 0.16.0 reader.\
-      a. Read base files and assign to resp file groups. \
-      b. Read log files. Parse instant time from log file name (it could refer to base instant time for a file written in 0.16.x, or it could refer to delta commit in case of 1.x writer). Find largest base instant times in the file group, less than or equal to the instant time of interest
-      and assign the log file to it. \
-      d. Log files within a file slice are ordered based on log version and write tokens.\
-      The same logic will be used whether we are reading a 0.16.x table or its a 1.x table. Only difference wrt how a 1.x reader will behave in comparison to 0.16.x reader while reading a 1.x table is when NBCC is involved w/ multi-writers. But as of this writing, 
-  we are not supporting that in 0.16.x. 
-    - Lets see with an illustrative example.\
-      i. Table written in 0.16.x. Say total files are bf1_t10, lf1_t10, lf2_t10, bf2_t100, lf3_100, lf4_100.\
-      If we run through above algo, lf1 and lf2 will be assigned to file slice with base instant time t10,\
-  and lf3 and lf4 will be assigned to file slice with base instant time t100.\
-      ii. Table written in 1.x.   Say total files are bf1_t10, lf1_t15_{t50}, lf2_t60_{t90}, bf2_t100, lf3_t110_{t140}, lf4_t150_{t200}. Time within braces are completion times which is not really part of log file name, but showing it just for illustration.\
-      If we run through above algo, lf1 and lf2 will be assigned to file slice with base instant time t10 (since the max base instant time which is less than instant times of the log files (start time/delta commit time) is t10\
-      and lf3 and lf4 will be assigned to file slice with base instant time t100 using similar logic.\
-- FSV building/reading should account for commit instants in both 0.x and 1.x formats. Since completion time log file ordering is not supported in 0.16.0 (that’s our current assumption), we may not need to support exactly how a FSV in 1.x reader supports. But below items should be supported.
-    - File slicing should be intact. For a single writer and OCC based writer in 1.x, the mapping of log files to base instant time or file slice should be same across 1.x reader and 0.16.0 reader.
-    - Log file ordering will follow 0.16.0 logic. I.e. log version followed by write token based comparator. Even if there are log files which completed in different order using 1.x writer, since we don’t plan to support that feature in 0.16.0 reader, we can try to maintain parity with 0.16.0 reader or log file ordering.
-    - We might have to revisit this if we plan to make NBCC default with MDT in 1.x.
-- If not for completion time based read support, what will break, check [here](#Completion time based read in FileGroup/FileSlice initialization and log block reads) 
-
-Bringing this altogether, lets see how different reader behaves in some of the scenarios.
-
-| Table state in 1.x                                                                                                                                    | 1.x reader                                                                                                                     | 0.16.x Reader                                                                                                                            | 
-|-------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| base file + 2 log files written sequentially -> snapshot read                                                                                         | reads 2 log files in order and merges w/ base file records                                                                     | reads 2 log files in order and merges w/ base file records                                                                               |
-| base file + 2 log files written concurrently w/ OCC and so one of the writer aborted (rollback yet to kick in) -> snapshot read                       | reads just 1 log file and 1 base file, as uncommitted log files will be filtered out.                                          | reads just 1 log file and 1 base file, as uncommitted log files will be filtered out.                                                    |
-| base file + 2 log files written concurrently w/ NBCC and based on completion time log file 2 completed earlier compared to log file1 -> snapshot read | merges all log records. log file2 followed by log file 1 is the order.                                                         | merges all log records. log file1 will be followed by log file 1. We anyway do not support this in 0.16.x reader                         |
-| FG1 having 3rd file slice in pending compaction and few log files added to latest file slice                                                          | latest file slice should be merged w/ log files from last but one file slice. log files are ordered based on completion times. | latest file slice should be merged w/ log files from last but one file slice. log files are ordered based on log version and write token |                                                                |
-| Time travel Query                                                                                                                                     | works as expected                                                                                                              | Assuming commit time is in active timeline, we are good. Else, LSM timeline read support needs to be ported over.                        |
-| Incremental Query                                                                                                                                     | works as expected                                                                                                              | Assuming commit time is in active timeline, we are good. Else, LSM timeline read support needs to be ported over.                        |                                                                                       |
-
+- 1.0 can do file slicing based on completion time as well as base instant time.
 
 ### Table properties
 - payload type inference from payload class need to be ported.
@@ -220,133 +158,310 @@ Bringing this altogether, lets see how different reader behaves in some of the s
 
 ### Log reader/format changes:
 - New log header type need to be ported.
-- For unsupported features, meaningful errors should be thrown. For eg, partial update has been enabled and if those log files are read using 0.16.0 reader, we should fail and throw a meaningful error.
-- For deletion vector, we should add the fallback option to 0.16.0 so that we give up on perf optimization, but still support reads w/o any failures. 
+- For unsupported features, meaningful errors should be thrown.  
 
 ### Read optimized query:
 - No explicit changes required (apart from timeline, and FSV) to support read optimized query.  
 
 ### Incremental reads and time travel query: 
-- Incremental reads in 1.x is expected to have some changes and design is not fully out. So, until then we have to wait to design 0.16.x read support for 1.x tables for incremental queries. 
-- Time travel query: There aren't notable changes in 1.x wrt time travel query. So, as per master, we are still using commit time(i.e not completed time) to serve time travel query. Until we make any changes to that, we do not need to add any additional support to 0.16.x reader. But if we plan to make changes in 1.x, we might have to revisit this. 
+
+- Incremental reads in 1.x is expected to have some changes and design is not fully out.
+- Time travel query: There aren't notable changes in 1.x wrt time travel query. So, as per master, we are still using
+  commit time (i.e not completed time) to serve time travel query.
 
 ### CDC reads:
-- There has not been a lot of changes in 1.x wrt CDC. Only minor change was done in HoodieAppendHandle. but that affects only the writer side logic. So, we are good wrt CDC. i.e we do not need to port 
-any additional logic to 0.16.x reader just for the purpose of CDC in addition to changes covered in this RFC. 
-
-## 0.16.0 ➝ 1.0 upgrade steps
-This will be an automatic upgrade for users when they start using 1.x hudi library. Listing the changes we might need to do with the upgrade.
-- Rewrite archival timeline to LSM based timeline.
-- Do not touch active timeline, since there could be concurrent readers reading the table. So, 1.x reader should be capable of handling timeline w/ a mix of 0.x commit files and 1.x commit files.
-- But we need to trigger rollback of any failed writes using 0.16.x rollback logic. Since with 1.x, rollback will delete the log files based on delta commit times in log file naming, this rollback logic may not work for 
-log files written in 0.16.0, since we have log appends. So, we need to trigger rollbacks of failed writes using 0.16.x rollback flow and not 1.x flow. 
-- No changes to log reader.
-- Check custom payload class and hoodie.record.merge.mode in table properties and switch to respective 0.16.x properties.
-- Trigger compaction for latest file slices. We do not want a single file slice having a mix of log files from 0.x and log files from 1.x. So, we will trigger a full compaction 
-of the table to ensure all latest file slices has just the base files. 
-
-Lets walk through an example:
-Say we have a file group and latest file slice is fs3. and it has 2 log files in 0.x. 
-  fs3(t3):
-     lf1_(3_10) lf2_(3_10)
-here format is lf[log version]_([committime]_[completiontime])
-base file instant time is 3 and so all log files (in memory) has same begin and completion time.(Remember completion time is only applicable for commits and not for data files). and so, from 1.x reader standpoint,
-lf1 and lf2 has delta commit time as t3 (which matches the base file's instant time) and its completion time is t10. 
-
-lets trigger an upgrade and add 2 new files. 
-
-fs3(t3):
-lf1_(3_10) lf2_(3_10) [upgrade] lf3_15_20, lf4_40_100.
-
-With this layout, 1.x reader should be able to read this file slice correctly w/o any issues. So, we should not require a full compaction during upgrade. But need to consult w/ authors to ensure we are not missing anything.
-
-## 1.0 ➝ 0.16.0 downgrade
-Any new features that was introduced in 1.x may not work after downgrade.
-Here are the ones that might see behavior change: 
-- If deletion vector is enabled, after downgrade we might fallback to key based merges, giving up on the performance optimization.
-- If partial updates are enabled, after downgrade we might fallback to key based merges, giving up on the performance optimization.
-- Any functional indexes built in 1.x might be deleted during downgrade. 
-- Any secondary indexes built in 1.x might be deleted during downgrade. 
-- Completion time based log file ordering within a file slice may not be honored.
-
-### Users will have to use hudi-cli to do the downgrade. Here are the steps we might need to do during downgrade
-- Similar to our upgrade, lets trigger full compaction to latest file slice so that all latest file slices only has base files. We do not want to have any file slices w/ a mix of 1.x log files and 0.x log files. 
-We could afford to take some downtime during downgrade, but upgrade path should be kept to as minimum as possible. So, during upgrade, we are not enforcing this.   
-- Rewrite LSM based timeline to archived timeline. we have to deduce writer properties and introduce boundaries based on that (i.e. until which commit to archive).
-- We have two options wrt handling active timeline instants(for eg, pending clustering instants):
-   A: No changes to active instants. In order to support 1.x tables w/ 0.16.0 reader, already these changes might have been ported to 0.16.0 reader. But we might have to ensure downgrade from 0.16.0 to any older version of hudi does take care of rewriting the active timeline instants.
-   B: While downgrading from 1.x to 0.16.0, let’s rewrite the active timeline instants too. So that after downgrade, we can't differentiate whether table was natively created in 0.16.0 or was it upgraded to 1.x and then later downgraded. The con in Option A is not an issue here since we take care of active timeline instants during 1.x to 0.16.0 downgrade only. So, downgrade from 0.16.0 to any lower hudi version does not need to do any special handling if table was native to 0.16.0 or was it downgraded from 1.x to 0.16.0
-   Our proposal is to go with Option B to ensure 0.16.0 table will be intact and not have any residues from 1.x writes. While the rewrite of active instants are happening, we could see some read failures. But 
-   we do not want to have a 0.16.0 (post upgrade) table to deal w/ 1.x timeline intricacies. 
-- If there are new MDT partitions (functional index, sec index), remove them. Update table properties.
-- Check latest snapshot files for log files w/ new features enabled. For eg, deletion vector, partial update. If any log files are found in latest snapshot, we have to trigger compaction for those file groups. This calls for a custom compaction strategy as well which compacts only for certain file groups.
-   - In order to reduce downtime to downgrade, we are inclining to do this only for snapshot reads. If there are older file slices and users are issuing time travel or incremental reads, and if they have any of the new features enabled (deletion vector, partial update), readers could break after downgrade.
+- There has not been a lot of changes in 1.x wrt CDC. Only minor change was done in HoodieAppendHandle. but that affects
+  only the writer side logic. So, we are good wrt CDC.
 
 ## Implementation details
 
-To ensure read capability of 1.x tables in 0.16.0, documenting the changes required at class level. Other two sections (0.16.0 upgrade to 1.x or 1.x downgrade to 0.16.0) should be fairly straightforward and so not calling out the obvious.
+### 1.0 Writer changes:
 
-### Timeline changes:
-Let’s reiterate what we need to support w/ 0.16.0 reader.
+- Add new write config `hoodie.write.table.version` to specify the table version to be created and produced by the
+  writer.
+- Add new write config `hoodie.write.auto.upgrade` to control whether or not writer can auto-upgrade a table when
+  attempting to write to a table with lower version.
+- Wiring in the table version in all write paths and validate that write and table versions match, on all write
+  operations and tooling.
+- Only table versions 6,8 are supported as valid value for hoodie.write.table.version
+- Handle rollback done in startCommit* methods and as part of upgrade, w.r.t table version mismatches
 
-### Timeline read of 1.x need to be supported
-- Commit instants w/ completion time should be parsed and deduced.
-- We could ignore the completion time log file ordering semantics since we don’t plan to support it yet in 0.16.0. But reading should not break.
-- Pending Clustering commits using “cluster” action should be readable in 0.16.0 reader.
-- HoodieDefaultTimeline should be able to support both 0.x timeline and 1.x timeline. 
-- Commit metadata in both avro and json should be supported. The challenging part here is, for every commit metadata, we might have to deserialize to avro and on exception try json. We could deduce the format using completion file name, but as per current code layering, deserialization methods does not know the file name( method takes byte[]). Similarly for clustering commits, unless we have some kind of watermark, we have to keep considering replace commits as well in the FSV building logic to ensure we do not miss any pending clustering commits.
-- LSM timeline reader might need to be ported over. 
+### Timeline changes
 
-Actual code changes:
-- We need to port any changes we have done in HoodieDefaultTimeline in 1.x to 0.16.0 as well. \
-a. Commit metadata parsing logic will have to support both avro and json. We will be using table version to assist us here. \
-If table version is 8 (1.x), we will favor avro over json and on exception, we will fallback to json deser. If table version is 7(i.e 0.16.x), 
-we will favor json. And on exception we might deser using avro.\ 
-b. Some of the methods were renamed in 1.x compared to 0.16.0.\
-findInstantsInRangeByStateTransitionTime -> findInstantsInRangeByCompletionTime\
-findInstantsModifiedAfterByStateTransitionTime -> findInstantsModifiedAfterByCompletionTime\
-getInstantsOrderedByStateTransitionTime -> getInstantsOrderedByCompletionTime\
-We need to add back these older methods to HoodieDefaultTimeline, so that we do not need to fix all the callers in 0.16.0. We could certainly introduce private methods and avoid code duplication.\
-c. HoodieInstant changes from 1.x need to be ported over so that completion time is accounted for. If completion time is present, we should account for that, if not, we can fallback to last mod time of the completed commit meta file.\
-d. We need to port code changes which accounts for uncommitted log files. In 0.16.0, from FSV standpoint, all log files(including partially failed) written are valid. We rely on the log record reader ignore the partially failed log files. But
-  in 1.x, log files could be rolledback (deleted) by a concurrent rollback. So, the FSV should ensure it ignores the uncommitted log files.\
-e. full LSM based read capability needs to be ported back to 0.16.x timeline reader. \
-f. Given the requirement to port over above changes, we have two options to go about HoodieDefaultTimeline. But one option to consider: we could introduce Hoodie016xDefaultTimeline and Hoodie1xDefaultTimeline and use delegate pattern to delegate to either of the timelines. Using hoodie table version we could instantiate (internally to HoodieDefaultTimeline) to either of Hoodie016xDefaultTimeline or Hoodie1xDefaultTimeline. 
-Or we need to make pointed fixes to entire HoodieDefaultTimeline to account for some of these backwards compatible logic. But given that 1.x reader should anyway support most of these backwards compatible ones, our proposal is to just have one HoodieDefaultTimeline(ported over from 1.x) and make pointed fixes to ensure its backwards compatible.  
+Support 0.x and 1.x implementation for timeline and related classes. Major changes (as part
+of [HUDI-8076](https://issues.apache.org/jira/browse/HUDI-8076) proposal):
 
-### FileSystemView changes
-Even though completion time based read might seen critical, we could get away w/ it by not needing to port over these changes to 0.16.x reader.\
-Here is how the file slice determination will happen in 0.16.x reader.\
-a. Read base files and assign to respective file groups. \
-b. Read log files. Parse instant time from log file name (it could refer to base instant time for a file written in 0.16.x, or it could refer to delta commit in case of 1.x writer). 
-Find largest base instant time less than or equal to this instant time in the corresponding file group and assign the log file to it. \
-c. File slice determination logic is complete.\
-d. Log files within a file slice are ordered based on log version and write tokens.\
-\
-Assuming 1.x reader and 1.x FSV should be able to read data written in older hudi versions, we also have a potential option here for avoid making nit-picky changes similar to the option called out earlier.\
-We could instantiate two different FSV depending on the table version. If table version is 7 (0.16.0), we could instantiate FSV_V0 may be and if table version is 8 (1.0.0), we could instantiate FSV_V1. Proposing this option just to have a super cautious approach, so that we don’t break/regress any of 0.16.0 read functionality in the interest of supporting 1.x table reads.\
-We should strive to cover all scenarios and not let any bugs creep in, but trying to see if we can keep the changes isolated so that battle tested code (0.x FSV) is not touched or changed for the purpose of supporting 1.x table reads. If we run into any bugs with 1.x reads, we could ask users to not upgrade any of the writers to 1.x and stick with 0.16.0 unless we have say 1.0.1 or something. But it would be really bad if we break 0.16.0 table reads in some edge case.  Just calling out as one of the safe option to upgrade.\
-- Support ignoring partially failed log files from FSV. In 0.16.0, from FSV standpoint, all log files(including partially failed) are valid. We let the log record reader ignore the partially failed log files. But
-    in 1.x, log files could be rolledback (deleted) by a concurrent rollback. So, the FSV should ensure it ignores the uncommitted log files. But we can only ignore the log files written in 1.x. Because in 0.x, we have log appends. And the log file naming does not contain 
-delta commit times. So, based on table upgrade commit time, we have to only ignore uncommitted log files whose instant times are > table upgrade commit time. For older log files, we can let FSV expose it and let the log record reader take care of ignoring partially failed log files. or if we go with FSV0 and FSV1, FSV0 can still be same as 0.15.0 and FSV1 (if table is deduced to be 1.x) can be used 
-to read 1.x tables and filtering out uncommitted log files will only be applicable for FSV1.
+1. Create Factory Interface for instantiating HoodieInstant and Hoodie Timelines.
+2. Use TimelineLayout to determine what version to use for Timeline and instant specific logic.
+3. HoodieInstant has following new interfaces:
+   (a) InstantFactory : Construct HoodieInstant
+   (b)InstantFileNameFactory : Construct filenames from HoodieInstant
+   (c) InstantFileNameParser : Encapsulates logic to extract timestamp
+   (d) InstantComparator : Encapsulates logic to compare instants (e:g completion time based) - Each of these interfaces
+   has implementation for 0.15 and 1.x release versions.
+4. Make Timeline classes such as HoodieActiveTImeline, HoodieArchiveTImeline and DefaultTImeline as interfaces.
+6. Port 0.x timeline and HoodieInstant logic as one implementations of the above factory and timeline interfaces.
+7. Refactor existing timeline classes as 1.x implementation for the new timeline interfaces.
+8. Handle 0.x commit and other metadata
+9. Create new interface for ArchiveTimelineWriter and migrate 0.x code.
 
-## Flink
-Most of the timeline, FSV are shared b/w spark and flink. Only additional changes we did to Flink that is not in spark (yet) is the incremental read. We have introduced completion time based incremental query capabilities in 1.x Flink reads. 
-So, we might have to port over the changes to 0.16.x reader. Depending on table version, we could go with either of the two implementations(0.x Incremental read, or 1.x Incremental reads). So, both implementations will reside in 0.16.0 depending on which table is being read. 
-We do not want to make nit-picky changes and will keep two implementations separate.
+### Log file handling and FileSystemView changes
 
-#### Pending exploration:
-1. We removed special suffixes to MDT operations in 1x. By skimming the code changes, we should be ok, i.e. no additional changes required. But we need to test the flow and flush out details if anything to be added to 0.16.x reader. 
-2. Just during upgrade, if there are pending commits in timeline, if we trigger rollback, since rollback will follow 1.x flow, our rollback may not work (since we expect delta commit times in file names). But for log files written in 0.x,
-we may not have delta commit times in 1.x So, we need to flush this out in finer detail. 
+- Annotate log headers, blocks with table version (tv)
+- Handle both tv=6, and tv=8 for log naming
+- Eliminate notion of rolloverWriteToken
+- Simplify/make efficient log writer building across code paths
+- Handle both tv=6 & 8 for log version, handling
+- Prevent tv=8 headers from being written with tv=6.
+- Bring back tv=6 rollback behavior.
+
+### Flink
+
+Most of the timeline, FSV are shared b/w spark and flink. Only additional changes we did to Flink that is not in spark (
+yet) is the incremental read. We have introduced completion time based incremental query capabilities in 1.x Flink
+reads. 
+
+### Upgrade Implementation
+
+The following steps outline the upgrade process for transitioning an Apache Hudi table to a newer version. The upgrade
+ensures that the table metadata, configurations, and timelines are updated to align with the new version requirements.
+
+---
+
+#### **Step-by-Step Upgrade Process**
+
+1. **Check for Auto-Upgrade Configuration**:
+    - If auto-upgrade is disabled:
+        - Ensure that metadata tables are either disabled or already compatible.
+        - Set the table version to the legacy version (e.g., version 6).
+        - Exit the upgrade process without making further changes.
+
+2. **Synchronize Metadata Table**:
+    - If the table is a data table and metadata table functionality is enabled:
+        - Check if the metadata table is behind the data table version.
+        - If so, delete the outdated metadata table to ensure compatibility.
+
+3. **Rollback and Compact Table**:
+    - Perform rollback operations to address any failed writes.
+    - Run a compaction operation to clean up the table and optimize file organization.
+    - Ensure these operations align with the new table version's expectations.
+
+4. **Upgrade Timeline Layout**:
+    - Create a new table layout on storage, specifying the updated timeline layout version.
+
+5. **Upgrade Table Properties**:
+    - Add or modify key table properties to align with the new version:
+        - Set the timeline path property to its default value.
+        - Upgrade partition fields to match the new table schema.
+        - Update merge mode configurations.
+        - Set the initial version of the table.
+        - Update key generator type for record generation.
+        - Upgrade bootstrap index type for handling new table structures.
+
+6. **Handle Active Timeline Instants**:
+    - Retrieve all timeline instants from the active timeline.
+    - Rewrite each instant into the new timeline format:
+        - Generate the original instant file name.
+        - Apply serialization updates using appropriate serializers for the old and new formats.
+        - Update the active timeline with the new instant format.
+
+7. **Upgrade Archived Timeline to LSM Timeline Format**:
+    - Convert the archived timeline into an LSM (Log-Structured Merge) timeline format for efficient time-range queries
+      and improved performance.
+
+---
+
+This process ensures that the table structure, metadata, and timelines are fully aligned with the newer version while
+maintaining data integrity and compatibility. It also accounts for incremental upgrades, rollback safety, and
+optimization of metadata management.
+
+### Downgrade Implementation
+
+The following steps outline the downgrade process for transitioning an Apache Hudi table to an earlier version. The
+downgrade ensures that the table metadata, configurations, and timelines are reverted to match the requirements of the
+older version.
+
+---
+
+#### **Step-by-Step Downgrade Process**
+
+1. **Rollback and Compact Table**:
+    - Address any failed writes through rollback operations.
+    - Perform compaction to clean up the table and ensure it is in a stable state.
+    - Align these operations with the expectations of the older table version.
+
+2. **Handle Timeline Downgrade**:
+    - Retrieve all timeline instants from the active timeline, including incomplete ones.
+    - Rewrite each instant to match the format used in the older table version:
+        - Use the appropriate serializers for the current and target table versions.
+        - Update the active timeline with the downgraded instants.
+    - Convert the LSM (Log-Structured Merge) timeline format back to the archived timeline format used in the older
+      version.
+
+3. **Downgrade Table Properties**:
+    - Modify table properties to match the older version:
+        - Downgrade partition fields to align with the schema requirements of the older version.
+        - Remove the initial version setting added in the newer version.
+        - Reset the record merge mode to its previous configuration.
+        - Downgrade the key generator type to the format used in the older version.
+        - Downgrade the bootstrap index type to the format supported in the target version.
+
+4. **Handle Metadata Table**:
+    - If a metadata table is available:
+        - Remove any metadata partitions that are unsupported in the target version.
+        - Update the metadata table version to match the target table version.
+
+5. **Handle LSM Timeline Downgrade**:
+    - Attempt to revert the LSM timeline format back to the archived timeline format.
+    - Log warnings if any issues occur but continue the downgrade process.
+
+---
+
+This process ensures that the table structure, metadata, and timelines are reverted to a compatible state for the older
+version while maintaining data integrity. It also accounts for handling metadata partitions, ensuring compatibility with
+archived timelines, and rolling back any incompatible features.
+
+## Support Matrix for different readers and writers
+
+|                         | Reader 0.x | Reader 1.x tv=6/8 | Table Services 0.x | Table Services 1.x tv=6 | Table Services 1.x tv=8 |
+|-------------------------|------------|-------------------|--------------------|-------------------------|-------------------------|
+| Writer 1.x tv=6         | Y          | Y                 | N                  | Y                       | N                       |
+| Writer 1.x tv=8         | N          | Y                 | N                  | N                       | Y                       |
+| Table Services 1.x tv=6 | Y          | Y                 | N                  | Y                       | N                       |
+| Table Services 1.x tv=8 | N          | Y                 | N                  | N                       | Y                       |
+
+### Limitations
+
+When performing an upgrade or downgrade between Apache Hudi versions, the following limitations must be taken into
+account to ensure a smooth transition and maintain data integrity:
+
+1. **Metadata Table Writes**:
+    - Metadata table writes are **not allowed** during the upgrade or downgrade process.
+    - Both writers and readers must have metadata explicitly disabled (`hoodie.metadata.enable=false`) until the upgrade
+      or downgrade process is complete.
+    - Metadata table will only synchronize with the data table once all writers have been upgraded to the final target
+      version.
+
+2. **Async Table Services**:
+    - All asynchronous table services (e.g., compaction, clustering) must be stopped before initiating an upgrade or
+      downgrade.
+    - Failing to stop table services may result in inconsistencies or compatibility issues.
+
+3. **Reader and Writer Compatibility**:
+    - During the rolling upgrade or downgrade, readers and writers must operate with the same table version (`tv=6`).
+    - Mixing readers or writers across incompatible table versions (e.g., `tv=6` and `tv=8`) is not supported and will
+      lead to failures.
+
+4. **Timeline Format Changes**:
+    - Timeline format changes between versions require careful migration. Instants in the timeline are rewritten during
+      the process, and incomplete migrations may cause data access issues.
+    - Ensure the migration process is fully completed before resuming normal operations.
+
+5. **Metadata Partitions**:
+    - Metadata partitions that are unsupported in the target table version must be explicitly removed during downgrade.
+    - Automatic handling of unsupported partitions is not provided, requiring manual intervention or pre-configured
+      steps.
+
+6. **Auto-Upgrade and Auto-Downgrade**:
+    - Auto-upgrade or auto-downgrade is **not supported** during the rolling process.
+    - Users must manually set `hoodie.write.auto.upgrade=false` to prevent unintended version transitions.
+
+7. **Backward Compatibility for Table Services**:
+    - Some features introduced in later versions may not be available in earlier versions (e.g., advanced clustering
+      strategies).
+    - Table services need to be reconfigured for compatibility when downgrading.
+
+8. **Rollback and Compaction**:
+    - Rollback and compaction operations are mandatory during both upgrade and downgrade to ensure table consistency.
+    - These operations may introduce additional processing overhead and should be planned during low-traffic periods.
+
+9. **New Features Activation**:
+    - New features available in the upgraded version cannot be activated until all components (readers, writers, and
+      table services) have been fully upgraded to the final target version.
+
+10. **Safe Recovery from Failures**:
+
+- The upgrade and downgrade processes are designed to be idempotent; however, users must ensure table locking mechanisms
+  are in place to prevent concurrent writes or reads during incomplete migrations.
+- Mid-process failures require restarting the operation from a stable state to avoid data corruption.
+
+11. **CDC and Incremental Queries**:
+
+- Change Data Capture (CDC) and incremental queries may be temporarily disrupted during the upgrade or downgrade.
+- Ensure compatibility for such queries by verifying the data pipeline end-to-end after the process.
+
+By adhering to these limitations, users can avoid common pitfalls and ensure a seamless transition between Apache Hudi
+versions.
 
 ## Rollout/Adoption Plan
 
- <- What impact (if any) will there be on existing users? 
- - If we are changing behavior how will we phase out the older behavior?
- - If we need special migration tools, describe them here.
- - When will we remove the existing behavior>
+### 0.14.x (or later) ➝ 1.0 upgrade steps
+
+1. Stop any async table services in 0.x completely.
+2. Upgrade writers to 1.x with table version 6, `autoUpgrade` and metadata disabled (this won't auto-upgrade anything);
+   0.x readers will continue to work; writers can also be readers and will continue to read both tv=6.
+   a. Set `hoodie.write.auto.upgrade` to false.
+   b. Set `hoodie.metadata.enable` to false.
+3. Upgrade table services to 1.x with tv=6, and resume operations.
+4. Upgrade all remaining readers to 1.x, with tv=6.
+5. Redeploy writers with tv=8; table services and readers will adapt/pick up tv=8 on the fly.
+6. Once all readers and writers are in 1.x, we are good to enable any new features, including metadata, with 1.x tables.
+
+During the upgrade, metadata table will not be updated and it will be behind the data table. It is important to note
+that metadata table will be updated only when the writer is upgraded to tv=8. So, even the readers should keep metadata
+disabled during rolling upgrade until all writers are upgraded to tv=8.
+
+### 1.0 ➝ 0.14.0 (or later) downgrade
+
+The downgrade protocol is more or less similar to upgrade protocol with some differences.
+
+1. Stop any async table services in 1.x completely.
+    - Ensure no active table services (compaction, clustering) are running to avoid inconsistencies during the
+      downgrade.
+
+2. Downgrade writers to 1.x with table version 6, `autoUpgrade` and metadata disabled.
+    - Ensure writers stop writing in table version 8 and switch to table version 6 for compatibility with older readers
+      and table services.
+    - Configure the following settings:
+      a. Set `hoodie.write.auto.upgrade` to false.
+      b. Set `hoodie.metadata.enable` to false.
+    - Writers will now only write to table version 6, and metadata updates will remain paused.
+
+3. Downgrade table services to 0.x and resume operations.
+    - Replace the table services binary with the compatible 0.x version.
+    - Resume compaction and clustering services after ensuring they align with table version 6.
+
+4. Downgrade all readers to 0.x.
+    - Replace reader binaries with the compatible 0.x version.
+    - Verify that the readers are compatible with the downgraded table version and can read table version 6.
+
+5. Redeploy writers with 0.x configuration.
+    - Switch to 0.x writers to complete the downgrade.
+    - Ensure that writers and table services operate with full compatibility in the 0.x environment.
+
+6. Re-enable metadata for the 0.x environment, if required.
+    - Once all writers and readers are downgraded to 0.x and operating normally, re-enable metadata updates if necessary
+      for 0.x table version compatibility.
+
+To recover from any failures, we will provide additional tooling through hudi-cli to rollback the table to a previous
+state if necessary.
+
+### Additional Considerations During Upgrade/Downgrade
+
+- **Metadata Table Compatibility**:
+    - Metadata table updates will remain paused during the downgrade to avoid inconsistencies. Metadata tables should
+      only be re-enabled after all components are upgraded/downgraded and synchronized with corresponding table version.
+
+- **Reader-Writer Compatibility**:
+    - Ensure 1.x writers and 0.x readers do not operate concurrently, as this may result in compatibility issues.
+
+- **Safe Upgrade/Downgrade Protocol**:
+    - The upgrade/downgrade process should be idempotent. In case of failures, it should be safe to retry without
+      corrupting the table state.
+
+- **Testing and Validation**:
+    - After each upgrade/downgrade step, test the functionality of the system to ensure no regressions or data
+      inconsistencies.
 
 ## Test Plan
 
