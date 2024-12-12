@@ -313,7 +313,6 @@ public abstract class HoodieStorage implements Closeable {
     StoragePath tmpPath = null;
 
     boolean needTempFile = needCreateTempFile();
-
     try {
       if (!content.isPresent()) {
         fsout = create(path, false);
