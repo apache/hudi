@@ -95,6 +95,7 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType.name());
     options.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), "true");
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "false");
     if (nPartitions == 0) {
       options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName());
     } else {

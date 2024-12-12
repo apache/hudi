@@ -48,8 +48,9 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts + (
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-      "hoodie.metadata.index.column.stats.enable" -> "false")
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+
+    //  "hoodie.metadata.index.column.stats.enable" -> "false")
     // some negative test cases in this class assumes
     // only RLI being enabled. So, disabling col stats for now.
 

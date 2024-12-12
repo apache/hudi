@@ -461,8 +461,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
   }
 
-  //@ParameterizedTest
-  //@MethodSource("providerClassResolutionStrategyAndTableType")
+  @ParameterizedTest
+  @MethodSource("providerClassResolutionStrategyAndTableType")
   public void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType, Class<? extends LockProvider<?>> providerClass,
                                                                 ConflictResolutionStrategy resolutionStrategy) throws Exception {
     // create inserts X 1
@@ -493,6 +493,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(providerClass)
             .withConflictResolutionStrategy(resolutionStrategy)
             .build()).withAutoCommit(false).withProperties(lockProperties)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build())
         .withProperties(properties);
 
     Set<String> validInstants = new HashSet<>();
