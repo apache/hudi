@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.0e0faa8c.css">
-<script src="/cn/assets/js/runtime~main.cfd7444c.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.14f411d6.js" defer="defer"></script>
 <script src="/cn/assets/js/main.2d77e5f0.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -79,6 +79,8 @@ docs <a href="/cn/docs/next/sql_ddl#create-expression-index">here</a> for more d
 <p>Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for
 record key fields, Hudi supports <a href="/cn/blog/2023/11/01/record-level-index">Record-level Index</a>. Secondary indexes
 can be used to speed up queries with predicate on columns other than record key columns.</p>
+<p>Following are configurations that control enabling index building and maintenance on the writer.</p>
+<table><thead><tr><th>Config Name</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td>hoodie.metadata.index.bloom.filter.enable</td><td>false (Optional)</td><td>Enable indexing bloom filters of user data files under metadata table. When enabled, metadata table will have a partition to store the bloom filter index and will be used during the index lookups.<br><br><code>Config Param: ENABLE_METADATA_INDEX_BLOOM_FILTER</code><br><code>Since Version: 0.11.0</code></td></tr><tr><td>hoodie.metadata.record.index.enable</td><td>false (Optional)</td><td>Create the record Index within the metadata table<br><br><code>Config Param: RECORD_INDEX_ENABLE_PROP</code><br><code>Since Version: 0.14.0</code>. This is a pre-requisite for secondary indexes or expression indexes on them.</td></tr></tbody></table>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="additional-writer-side-indexes">Additional writer-side indexes<a href="#additional-writer-side-indexes" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
 <p>All the indexes discussed above are available both readers/writers using integration with metadata table. There are also indexing mechanisms
 implemented by the storage engine, by efficiently reading/joining/processing incoming input records against information stored in base/log
