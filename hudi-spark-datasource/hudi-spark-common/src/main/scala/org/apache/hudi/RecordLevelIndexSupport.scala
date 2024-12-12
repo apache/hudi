@@ -31,7 +31,7 @@ import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, In, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Cast, EqualTo, Expression, In, Literal}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 import scala.collection.JavaConverters._
@@ -351,6 +351,14 @@ object RecordLevelIndexSupport {
       case literal: Literal => expression2 match {
         case attr: AttributeReference =>
           Option.apply(attr, literal)
+        case cast: Cast if cast.child.isInstanceOf[AttributeReference] =>
+          Option.apply(cast.child.asInstanceOf[AttributeReference], literal)
+        case _ =>
+          Option.empty
+      }
+      case cast: Cast if cast.child.isInstanceOf[AttributeReference] => expression2 match {
+        case literal: Literal =>
+          Option.apply(cast.child.asInstanceOf[AttributeReference], literal)
         case _ =>
           Option.empty
       }
