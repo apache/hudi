@@ -108,11 +108,11 @@ public class ConsistentBucketIndexUtils {
     try {
       Predicate<StoragePathInfo> hashingMetaCommitFilePredicate = pathInfo -> {
         String filename = pathInfo.getPath().getName();
-        return filename.contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX);
+        return filename.endsWith(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX);
       };
       Predicate<StoragePathInfo> hashingMetadataFilePredicate = pathInfo -> {
         String filename = pathInfo.getPath().getName();
-        return filename.contains(HASHING_METADATA_FILE_SUFFIX);
+        return filename.endsWith(HASHING_METADATA_FILE_SUFFIX);
       };
       final List<StoragePathInfo> metaFiles = metaClient.getStorage().listDirectEntries(metadataPath);
       final TreeSet<String> commitMetaTss = metaFiles.stream().filter(hashingMetaCommitFilePredicate)
@@ -184,12 +184,31 @@ public class ConsistentBucketIndexUtils {
     StoragePath dir = FSUtils.constructAbsolutePath(
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
+    byte[] bytes;
     try {
-      storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()));
-      return true;
+      bytes = metadata.toBytes();
     } catch (IOException e) {
+      LOG.error("Error when converting hashing metadata: {} to bytes", metadata.getPartitionPath(), e);
+      throw new HoodieIndexException("Error while converting hashing metadata to bytes", e);
+    }
+    try {
+      storage.createImmutableFileInPath(fullPath, Option.of(bytes));
+      return true;
+    } catch (HoodieIOException e) {
       LOG.warn("Failed to update bucket metadata: " + metadata, e);
-      return false;
+      boolean exist;
+      try {
+        exist = storage.exists(fullPath);
+      } catch (IOException e2) {
+        LOG.error("Error when checking metadata file: {} existence", metadata, e2);
+        throw new HoodieIndexException("Error while checking metadata file existence", e2);
+      }
+      if (!exist) {
+        LOG.error("Error when saving hashing metadata: {} and it isn't exist",  metadata, e);
+        throw new HoodieIndexException("Error while saving hashing metadata", e);
+      }
+      // still return true if the metadata file exists
+      return true;
     }
   }
 
