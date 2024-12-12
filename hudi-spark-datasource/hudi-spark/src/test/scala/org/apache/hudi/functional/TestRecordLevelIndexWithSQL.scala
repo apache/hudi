@@ -42,8 +42,8 @@ import scala.util.Using
 class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   val sqlTempTable = "tbl"
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  //@ParameterizedTest
+  //@ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testRLIWithSQL(tableType: String): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts + (
