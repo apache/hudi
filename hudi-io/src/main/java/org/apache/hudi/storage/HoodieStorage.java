@@ -370,7 +370,7 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public final boolean needCreateTempFile() {
-    return !StorageSchemes.isWriteTransactional(getScheme());
+    return StorageSchemes.HDFS.getScheme().equals(getScheme()) || StorageSchemes.FILE.getScheme().equals(getScheme());
   }
 
   /**
