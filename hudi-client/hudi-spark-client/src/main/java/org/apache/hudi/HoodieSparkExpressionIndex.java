@@ -134,13 +134,6 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
       }),
 
       // String functions
-      // TODO: Concat is not yet supported fully since there is a limitation of only one source field within expression index
-      Pair.of(SPARK_CONCAT, (columns, options) -> {
-        if (columns.size() < 2) {
-          throw new IllegalArgumentException("CONCAT requires at least 2 columns");
-        }
-        return functions.concat(columns.toArray(new Column[0]));
-      }),
       Pair.of(SPARK_SUBSTRING, (columns, options) -> {
         if (columns.size() != 1) {
           throw new IllegalArgumentException("SUBSTRING requires 1 column");

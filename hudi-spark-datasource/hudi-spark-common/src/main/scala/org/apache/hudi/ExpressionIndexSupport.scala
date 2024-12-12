@@ -435,12 +435,7 @@ class ExpressionIndexSupport(spark: SparkSession,
     var queryAndLiteralsOpt: Option[(Expression, List[String])] = Option.empty
     expressionIndexQueries.foreach { tuple =>
       val (expr, literals) = (tuple._1, tuple._2)
-      val functionNameOption = SPARK_FUNCTION_MAP.asScala.keys.find(expr.toString.contains)
-      val functionName = functionNameOption.getOrElse("identity")
-      if (indexDefinition.getIndexFunction.equals(functionName)) {
-        val pruningExpr = fetchQueryWithAttribute(expr, Option.apply(indexDefinition.getSourceFields.get(0)), RecordLevelIndexSupport.getSimpleLiteralGenerator(), attributeFetcher)._1.get._1
-        queryAndLiteralsOpt = Option.apply(Tuple2.apply(pruningExpr, literals))
-      }
+      queryAndLiteralsOpt = Option.apply(Tuple2.apply(expr, literals))
     }
     queryAndLiteralsOpt
   }

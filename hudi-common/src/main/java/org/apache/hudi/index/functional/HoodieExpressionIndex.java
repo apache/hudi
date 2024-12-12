@@ -45,7 +45,6 @@ public interface HoodieExpressionIndex<S, T> extends Serializable {
   String SPARK_TO_TIMESTAMP = "to_timestamp";
   String SPARK_DATE_ADD = "date_add";
   String SPARK_DATE_SUB = "date_sub";
-  String SPARK_CONCAT = "concat";
   String SPARK_SUBSTRING = "substring";
   String SPARK_UPPER = "upper";
   String SPARK_LOWER = "lower";

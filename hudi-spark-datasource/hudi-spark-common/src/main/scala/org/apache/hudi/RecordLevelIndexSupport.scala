@@ -165,7 +165,7 @@ object RecordLevelIndexSupport {
           val literal = attributeLiteralTuple._2
           if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
             val recordKeyLiteral = literalGenerator.apply(attribute, literal)
-            (Option.apply(equalToQuery, List.apply(recordKeyLiteral)), true)
+            (Option.apply(EqualTo(attribute, literal), List.apply(recordKeyLiteral)), true)
           } else {
             (Option.empty, true)
           }
@@ -196,7 +196,7 @@ object RecordLevelIndexSupport {
           case _ => validINQuery = false
         }
         if (validINQuery) {
-          (Option.apply(inQuery, literals), true)
+          (Option.apply(In(attributeOpt.get, inQuery.list), literals), true)
         } else {
           (Option.empty, true)
         }
