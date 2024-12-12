@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -35,6 +36,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.metrics.FlinkTimeLineMetrics;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
@@ -103,7 +105,7 @@ public class StreamWriteOperatorCoordinator
   /**
    * Coordinator context.
    */
-  private final Context context;
+  private final ContextAdapter context;
 
   /**
    * Gateways for sending events to sub tasks.
@@ -161,6 +163,8 @@ public class StreamWriteOperatorCoordinator
    */
   private CkpMetadata ckpMetadata;
 
+  private FlinkTimeLineMetrics flinkTimeLineMetrics;
+
   /**
    * The client id heartbeats.
    */
@@ -174,7 +178,7 @@ public class StreamWriteOperatorCoordinator
    */
   public StreamWriteOperatorCoordinator(
       Configuration conf,
-      Context context) {
+      ContextAdapter context) {
     this.conf = conf;
     this.context = context;
     this.parallelism = context.currentParallelism();
@@ -661,7 +665,7 @@ public class StreamWriteOperatorCoordinator
 
     @Override
     public OperatorCoordinator create(Context context) {
-      return new StreamWriteOperatorCoordinator(this.conf, context);
+      return new StreamWriteOperatorCoordinator(this.conf, new ContextAdapter(context));
     }
   }
 
@@ -695,5 +699,10 @@ public class StreamWriteOperatorCoordinator
     public static TableState create(Configuration conf) {
       return new TableState(conf);
     }
+  }
+
+  public void registerMetrics() {
+    this.flinkTimeLineMetrics = new FlinkTimeLineMetrics(context.metricGroup());
+    this.flinkTimeLineMetrics.registerMetrics();
   }
 }
