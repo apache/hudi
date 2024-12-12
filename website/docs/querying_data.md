@@ -25,7 +25,7 @@ See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark 
 
 If your Spark environment does not have the Hudi jars installed, add [hudi-spark-bundle](https://mvnrepository.com/artifact/org.apache.hudi/hudi-spark-bundle) jar to the
 classpath of drivers and executors using `--jars` option. Alternatively, hudi-spark-bundle can also fetched via the
---packages options (e.g: --packages org.apache.hudi:hudi-spark-bundle_2.11:0.13.0).
+--packages options (e.g: --packages org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0).
 
 ### Snapshot query {#spark-snap-query}
 Retrieve the data table at the present point in time.

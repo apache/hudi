@@ -79,7 +79,9 @@ For Flink based writing, this is the default mode of cleaning. Please refer to [
 #### Run independently
 Hoodie Cleaner can also be run as a separate process. Following is the command for running the cleaner independently:
 ```
-spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
+spark-submit --master local \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+  --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` --help
         Usage: <main class> [options]
         Options:
         --help, -h
@@ -101,7 +103,9 @@ spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls 
 Some examples to run the cleaner.    
 Keep the latest 10 commits
 ```
-spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar`\
+spark-submit --master local \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+  --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --target-base-path /path/to/hoodie_table \
   --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_COMMITS \
   --hoodie-conf hoodie.cleaner.commits.retained=10 \
@@ -109,15 +113,18 @@ spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls 
 ```
 Keep the latest 3 file versions
 ```
-spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar`\
-  --target-base-path /path/to/hoodie_table \
+spark-submit --master local \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+  --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS \
   --hoodie-conf hoodie.cleaner.fileversions.retained=3 \
   --hoodie-conf hoodie.cleaner.parallelism=200
 ```
 Clean commits older than 24 hours
 ```
-spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar`\
+spark-submit --master local \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+  --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --target-base-path /path/to/hoodie_table \
   --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_BY_HOURS \
   --hoodie-conf hoodie.cleaner.hours.retained=24 \

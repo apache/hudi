@@ -31,14 +31,15 @@ the URN creation.
 
 The following shows an example configuration to run `HoodieStreamer` with `DataHubSyncTool`.
 
-In addition to `hudi-utilities-bundle` that contains `HoodieStreamer`, you also add `hudi-datahub-sync-bundle` to
+In addition to `hudi-utilities-slim-bundle` that contains `HoodieStreamer`, you also add `hudi-datahub-sync-bundle` to
 the classpath.
 
 ```shell
 spark-submit --master yarn \
---jars /opt/hudi-datahub-sync-bundle-0.13.0.jar \
+--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+--jars /opt/hudi-datahub-sync-bundle-1.0.0.jar \
 --class org.apache.hudi.utilities.streamer.HoodieStreamer \
-/opt/hudi-utilities-bundle_2.12-0.13.0.jar \
+/opt/hudi-utilities-slim-bundle_2.12-1.0.0.jar \
 --target-table mytable \
 # ... other HoodieStreamer's configs
 --enable-sync \

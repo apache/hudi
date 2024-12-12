@@ -31,10 +31,10 @@ query, perform any repartitioning if required and will write the data as Hudi, p
 Exporter scans the source dataset and then makes a copy of it to the target output path.
 ```bash
 spark-submit \
-  --jars "packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-0.15.0.jar" \
+  --jars "packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0.jar" \
   --deploy-mode "client" \
   --class "org.apache.hudi.utilities.HoodieSnapshotExporter" \
-      packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.15.0.jar \
+      packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0.jar \
   --source-base-path "/tmp/" \
   --target-output-path "/tmp/exported/hudi/" \
   --output-format "hudi"
@@ -45,10 +45,10 @@ The Exporter can also convert the source dataset into other formats. Currently o
 
 ```bash
 spark-submit \
-  --jars "packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-0.15.0.jar" \
+  --jars "packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0.jar" \
   --deploy-mode "client" \
   --class "org.apache.hudi.utilities.HoodieSnapshotExporter" \
-      packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.15.0.jar \
+      packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0.jar \
   --source-base-path "/tmp/" \
   --target-output-path "/tmp/exported/json/" \
   --output-format "json"  # or "parquet"
@@ -60,10 +60,10 @@ implementation of `org.apache.hudi.utilities.transform.Transformer` via `--trans
 
 ```bash
 spark-submit \
-  --jars "packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-0.15.0.jar" \
+  --jars "packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0.jar" \
   --deploy-mode "client" \
   --class "org.apache.hudi.utilities.HoodieSnapshotExporter" \
-      packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.15.0.jar \
+      packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0.jar \
   --source-base-path "/tmp/" \
   --target-output-path "/tmp/exported/json/" \
   --transformer-class "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer" \
@@ -80,10 +80,10 @@ By default, if no partitioning parameters are given, the output dataset will hav
 Example:
 ```bash
 spark-submit \
-  --jars "packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-0.15.0.jar" \
+  --jars "packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0.jar" \
   --deploy-mode "client" \
   --class "org.apache.hudi.utilities.HoodieSnapshotExporter" \
-      packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.15.0.jar \  
+      packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0.jar \  
   --source-base-path "/tmp/" \
   --target-output-path "/tmp/exported/json/" \
   --output-format "json" \
@@ -125,10 +125,10 @@ After putting this class in `my-custom.jar`, which is then placed on the job cla
 
 ```bash
 spark-submit \
-  --jars "packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-0.15.0.jar,my-custom.jar" \
+  --jars "packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0.jar,my-custom.jar" \
   --deploy-mode "client" \
   --class "org.apache.hudi.utilities.HoodieSnapshotExporter" \
-      packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.15.0.jar \
+      packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0.jar \
   --source-base-path "/tmp/" \
   --target-output-path "/tmp/exported/json/" \
   --output-format "json" \
