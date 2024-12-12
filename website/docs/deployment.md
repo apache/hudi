@@ -29,7 +29,7 @@ With Merge_On_Read Table, Hudi ingestion needs to also take care of compacting d
 [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) is the standalone utility to incrementally pull upstream changes 
 from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi tables.  It runs as a spark application in two modes.
 
-To use Hudi Streamer in Spark, the `hudi-utilities-slim-bundle` and Hudi spark bundle are required, by adding
+To use Hudi Streamer in Spark, the `hudi-utilities-slim-bundle` and Hudi Spark bundle are required, by adding
 `--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0` to the `spark-submit` command.
 
  - **Run Once Mode** : In this mode, Hudi Streamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](/docs/hoodie_streaming_ingestion#hudi-streamer) for running the spark application.
