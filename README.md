@@ -94,9 +94,9 @@ Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 Prerequisites for building Apache Hudi:
 
 * Unix-like system (like Linux, Mac OS X)
-* Java 8 (Java 9 or 11 may work)
+* Java 8, 11 or 17
 * Git
-* Maven (>=3.3.1)
+* Maven (>=3.6.0)
 
 ```
 # Checkout code and build
