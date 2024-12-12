@@ -189,7 +189,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     List<Pair<HoodieKey, Long>> fetchedRows = new ArrayList<>();
     try (ClosableIterator<Pair<HoodieKey, Long>> iter = parquetUtils.fetchRecordKeysWithPositions(
         HoodieTestUtils.getStorage(filePath), new StoragePath(filePath),
-        Option.of(new TestBaseKeyGen("abc", "def")))) {
+        Option.of(new TestBaseKeyGen("abc", "def")), Option.empty())) {
       while (iter.hasNext()) {
         fetchedRows.add(iter.next());
       }

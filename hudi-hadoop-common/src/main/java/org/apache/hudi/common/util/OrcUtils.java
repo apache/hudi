@@ -80,7 +80,7 @@ public class OrcUtils extends FileFormatUtils {
    */
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
-    return getHoodieKeyIterator(storage, filePath, Option.empty());
+    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
   }
 
   /**
@@ -92,11 +92,11 @@ public class OrcUtils extends FileFormatUtils {
    */
   @Override
   public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
-    return fetchRecordKeysWithPositions(storage, filePath, Option.empty());
+    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
   }
 
   @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     try {
       if (!storage.exists(filePath)) {
         return ClosableIterator.wrap(Collections.emptyIterator());
@@ -105,11 +105,11 @@ public class OrcUtils extends FileFormatUtils {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
     AtomicLong position = new AtomicLong(0);
-    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt), key -> Pair.of(key, position.getAndIncrement()));
+    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt, partitionPath), key -> Pair.of(key, position.getAndIncrement()));
   }
 
   @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     try {
       Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
@@ -135,7 +135,7 @@ public class OrcUtils extends FileFormatUtils {
         throw new HoodieException(String.format("Couldn't find row keys or partition path in %s.", filePath));
       }
       return HoodieKeyIterator.getInstance(
-          new OrcReaderIterator<>(recordReader, readSchema, orcSchema), keyGeneratorOpt);
+          new OrcReaderIterator<>(recordReader, readSchema, orcSchema), keyGeneratorOpt, partitionPath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to open reader from ORC file:" + filePath, e);
     }
