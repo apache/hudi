@@ -493,7 +493,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
-  // @Test fix me. siva.
+  @Test
   public void testPartitionPruningInHoodieIncrSource()
       throws IOException {
     this.tableType = MERGE_ON_READ;
@@ -506,7 +506,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
                 .withScheduleInlineCompaction(true)
                 .withMaxNumDeltaCommitsBeforeCompaction(1)
                 .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).build())
         .build();
     List<WriteResult> inserts = new ArrayList<>();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
