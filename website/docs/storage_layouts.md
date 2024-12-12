@@ -20,6 +20,17 @@ The following describes the general organization of files in storage for a Hudi 
 
 Please refer the **[tech spec](https://hudi.apache.org/tech-specs#file-layout-hierarchy)** for a more detailed description of the file layouts.
 
+### Base Files
+
+Base files store full records, against which change records are stored in delta log files below. Hudi currently supports following 
+base file formats. 
+
+* columnar formats for vectorized reads, columnar compression and efficient column based access for analytics/data science.
+* row-oriented avro files for fast scans for reading whole records.
+* random access optimized HFiles for efficient searching for indexed records (based on [SSTable](https://github.com/facebook/rocksdb/wiki/A-Tutorial-of-RocksDB-SST-formats) format)
+
+![Row vs Columnar File Format](/assets/images/row-col-based-base-file-formats.png)
+
 ### Log Files 
 
 Log files store incremental changes (partial or full) to a base file, such as updates, inserts, and deletes, after the base file was created. 
