@@ -8,73 +8,63 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0) ([docs](/docs/next/quick-start-guide))
+## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0) ([docs](quick-start-guide))
 
-Apache Hudi 1.0.0 is a major GA release of Apache Hudi. This release contains major format changes as we will see in
-highlights below.
+Apache Hudi 1.0.0 is a major milestone release of Apache Hudi. This release contains significant format changes and new exciting features 
+as we will see below.
 
 ## Migration Guide
 
-We encourage users to try out the **1.0.0** features on new tables. The 1.0 general availability (GA) release will
-support automatic table upgrades from 0.x versions, while also ensuring full backward compatibility when reading 0.x
-Hudi tables using 1.0, ensuring a seamless migration experience.
+We encourage users to try the **1.0.0** features on new tables first. The 1.0 general availability (GA) release will
+support automatic table upgrades from 0.x versions while also ensuring full backward compatibility when reading 0.x
+Hudi tables using 1.0, ensuring a seamless migration experience. 
 
 :::caution
-Given that timeline format and log file format has changed in this **GA release**, it is recommended to follow the
-migration protocol as prescribed in RFC-78. Most things are seamlessly handled by the upgrade process, but there are
-some limitations. Please read through the limitations of the upgrade downgrade process before proceeding to migrate.
-Please check the [migration guide](/docs/next/deployment) for more details.
+Most things are seamlessly handled by the auto upgrade process, but there are some limitations. Please read through the 
+limitations of the upgrade downgrade process before proceeding to migrate. Please check the [migration guide](deployment#upgrading) 
+and [RFC-78](https://github.com/apache/hudi/tree/master/rfc/rfc-78) for more details.
 :::
 
 ## Bundle Updates
 
-### New Spark Bundles
-
-Same as the [0.15.0 release](/docs/releases/release-0.15.0#new-spark-bundles)
-
-### New Flink Bundles
-
-In addition to 0.15.0, this release extends Hudi support to Flink 1.19 and Flink 1.20.
-
-### Deprecated Bundles
-
-In this release, we have deprecated support for Spark 3.2 or lower version in Spark 3.
+ - Same bundles supported in the [0.15.0 release](release-0.15.0#new-spark-bundles) are still supported.
+ - New Flink Bundles to support Flink 1.19 and Flink 1.20.
+ - In this release, we have deprecated support for Spark 3.2 or lower version in Spark 3.
 
 ## Highlights
 
 ### Format changes
 
-1.0.0 is a major release that introduces several format changes. The main epic covering all the format changes proposals
-is [HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242), which are also covered in the [Hudi 1.0 tech specification](/tech-specs-1point0).
-The following are the main highlights with respect to format changes:
+The main epic covering all the format changes is [HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242), which is also 
+covered in the [Hudi 1.0 tech specification](tech-specs-1point0). The following are the main highlights with respect to format changes:
 
 #### Timeline
 
-- The active and archived timeline dichotomy has been done away with the innovative and more scalable LSM tree based
-  timeline.
+- The active and archived timeline dichotomy has been done away with a more scalable LSM tree based
+  timeline. The timeline layout is now more organized and efficient for time-range queries and scaling to infinite history.
 - As a result, timeline layout has been changed, and it has been moved to `.hoodie/timeline` directory under the base
   path of the table.
-- The timeline layout is now more organized and efficient for time-range queries and scaling to infinite history.
 - There are changes to the timeline instant files as well:
     - All commit metadata is serialized to Avro, allowing for future compatibility and uniformity in metadata across all
       actions.
-    - Completed commit metadata files now include completion time.
+    - Instant files for completed actions now include a completion time.
     - Action for the pending clustering instant is now renamed to `clustering` to make it distinct from other
       `replacecommit` actions.
 
 #### Log File Format
 
-- In addition to the fields in the log file header, we also store record positions. Refer to the
-  latest [spec](/tech-specs-1point0#log-format) for more details. This allows us to do position-based merging (apart
+- In addition to the keys in the log file header, we also store record positions. Refer to the
+  latest [spec](tech-specs-1point0#log-format) for more details. This allows us to do position-based merging (apart
   from key-based merging) and skip pages based on positions.
 - Log file name will now have the deltacommit instant time instead of base commit instant time.
 - The new log file format also enables fast partial updates with low storage overhead.
 
 ### Compatibility with Old Formats
 
-- **Backward Compatibility:** Hudi 1.0 writes now support writing in both the new and old formats, ensuring seamless
+- **Backward Compatible writes:** Hudi 1.0 writes now support writing in both the table version 8 (latest) and older table version 6 (corresponds to 0.14 & above) formats, ensuring seamless
   integration with existing setups.
-- Automatic upgrades for tables from 0.x versions are fully supported, minimizing migration challenges.
+- **Automatic upgrades**: for tables from 0.x versions are fully supported, minimizing migration challenges. We also recommend users first try migrating to 0.14 &
+  above, if you have advanced setups with multiple readers/writers/table services.
 
 ### Concurrency Control
 
@@ -108,7 +98,7 @@ The **expression index** enables efficient queries on columns derived from expre
 derived from expressions without materializing them, and can be used to speed up queries with filters containing such
 expressions.
 
-To learn more about these indices, refer to the [SQL queries](/docs/next/sql_queries#snapshot-query-with-index-acceleration) docs.
+To learn more about these indices, refer to the [SQL queries](sql_queries#snapshot-query-with-index-acceleration) docs.
 
 ### Partial Updates
 
@@ -116,9 +106,9 @@ To learn more about these indices, refer to the [SQL queries](/docs/next/sql_que
 in a record. This feature is useful when users want to update only a few columns in a record without rewriting the
 entire record.
 
-To learn more about partial updates, refer to the [SQL DML](/docs/next/sql_dml#merge-into-partial-update) docs.
+To learn more about partial updates, refer to the [SQL DML](sql_dml#merge-into-partial-update) docs.
 
-### Multiple Base File Formats
+### Multiple Base File Formats in a single table
 
 - Support for multiple base file formats (e.g., **Parquet**, **ORC**, **HFile**) within a single Hudi table, allowing
   tailored formats for specific use cases like indexing and ML applications.
@@ -126,7 +116,7 @@ To learn more about partial updates, refer to the [SQL DML](/docs/next/sql_dml#m
   format to another, e.g. from ORC to Parquet, without rewriting the whole table.
 - **Configuration:** Enable with `hoodie.table.multiple.base.file.formats.enable`.
 
-To learn more about the format changes, refer to the [Hudi 1.0 tech specification](/tech-specs-1point0).
+To learn more about the format changes, refer to the [Hudi 1.0 tech specification](tech-specs-1point0).
 
 ### API Changes
 
