@@ -185,7 +185,7 @@ public class ConsistentBucketIndexUtils {
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
     try {
-      storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()), true);
+      storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()));
       return true;
     } catch (IOException e) {
       LOG.warn("Failed to update bucket metadata: " + metadata, e);
