@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,33 +18,27 @@
 
 package org.apache.hudi.common.util.collection;
 
-import java.util.Iterator;
-import java.util.function.Function;
+import java.util.function.Consumer;
 
-/**
- * Iterator mapping elements of the provided source {@link Iterator} from {@code I} to {@code O}
- */
-public class MappingIterator<I, O> implements Iterator<O> {
+public class CompletedCallback<T> {
+  T val;
+  Consumer<Boolean> done;
 
-  protected final Iterator<I> source;
-  private final Function<I, O> mapper;
-
-  public MappingIterator(Iterator<I> source, Function<I, O> mapper) {
-    this.source = source;
-    this.mapper = mapper;
+  private CompletedCallback(T val, Consumer<Boolean> done) {
+    this.val = val;
+    this.done = done;
   }
 
-  @Override
-  public boolean hasNext() {
-    return source.hasNext();
+  public T get() {
+    return val;
   }
 
-  @Override
-  public O next() {
-    return mapper.apply(source.next());
+  public void done(boolean success) {
+    done.accept(success);
   }
 
-  public static <I, O> MappingIterator<I, O> wrap(Iterator source, Function mapper) {
-    return new MappingIterator(source, mapper);
+  public static <T> CompletedCallback<T> of(T val, Consumer<Boolean> done) {
+    CompletedCallback<T> callback = new CompletedCallback<>(val, done);
+    return callback;
   }
 }
