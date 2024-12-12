@@ -625,7 +625,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   @VisibleForTesting
-  public Context getContext() {
+  public ContextAdapter getContext() {
     return context;
   }
 

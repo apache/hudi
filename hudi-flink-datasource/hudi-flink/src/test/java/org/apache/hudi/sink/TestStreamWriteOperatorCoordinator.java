@@ -92,7 +92,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator = new StreamWriteOperatorCoordinator(
         TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), new ContextAdapter(context));
     coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    coordinator.setExecutor(new MockCoordinatorExecutor(new ContextAdapter(context)));
 
     coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
     coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
@@ -642,8 +642,8 @@ public class TestStreamWriteOperatorCoordinator {
   private void assertError(Runnable runnable, String message) {
     runnable.run();
     // wait a little while for the task to finish
-    assertThat(coordinator.getContext(), instanceOf(MockOperatorCoordinatorContext.class));
-    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
+    assertThat(coordinator.getContext(), instanceOf(ContextAdapter.class));
+    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext().context;
     assertTrue(context.isJobFailed(), message);
   }
 }
