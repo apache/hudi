@@ -470,3 +470,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-18520][INTERNAL] Fix Hoodie Hive Sync Tool to Throw Exceptions on Sync Failures (#1077)
 [ENG-18495][HUDI-8378] Fix Avro schema deserializer failing with schema evolution (#1076)
 [AUDIT-1071]: Changelog for release-v1.54.0 (#1080)
+
+--- [2024-12-11 23:02:23] [release-v1.56.0] ---
+[ENG-18575][HUDI-8706] Avoid reading partition path from records if not required (#1083)
+[AUDIT-1071]: Changelog for release-v1.55.0 (#1084)
