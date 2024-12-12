@@ -76,6 +76,12 @@ the [metadata table](metadata#metadata-table), significantly improving the effic
   record key fields, Hudi supports [Record-level Index](/blog/2023/11/01/record-level-index). Secondary indexes
   can be used to speed up queries with predicate on columns other than record key columns.
 
+Following are configurations that control enabling index building and maintenance on the writer.
+
+| Config Name                                  | Default                                   | Description                                                                                                                                                                                                                                                                                     |
+|----------------------------------------------|-------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.metadata.index.bloom.filter.enable    | false (Optional)                          | Enable indexing bloom filters of user data files under metadata table. When enabled, metadata table will have a partition to store the bloom filter index and will be used during the index lookups.<br /><br />`Config Param: ENABLE_METADATA_INDEX_BLOOM_FILTER`<br />`Since Version: 0.11.0` |
+| hoodie.metadata.record.index.enable          | false (Optional)                          | Create the record Index within the metadata table<br /><br />`Config Param: RECORD_INDEX_ENABLE_PROP`<br />`Since Version: 0.14.0`. This is a pre-requisite for secondary indexes or expression indexes on them.                                                                                |
 
 ## Additional writer-side indexes
 

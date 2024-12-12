@@ -20,6 +20,14 @@ Hudi provides
 In this section, we will discuss the different concurrency controls supported by Hudi and how they are leveraged to provide flexible deployment models for single and multiple writer scenarios. 
 We’ll also describe ways to ingest data into a Hudi Table from multiple writers using different writers, like  Hudi Streamer, Hudi datasource, Spark Structured Streaming and Spark SQL.
 
+:::note
+If there is only one process performing writing AND async/inline table services on the table, you can
+avoid the overhead of a distributed lock requirement by configuring the in process lock provider.
+
+```properties
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.InProcessLockProvider
+```
+:::
 
 ## Distributed Locking 
 A pre-requisite for distributed co-ordination in Hudi, like many other distributed database systems is a distributed lock provider, that different processes can use to plan, schedule and 
@@ -321,3 +329,4 @@ It is **NOT** recommended to use the same instance of the write client to perfor
 <h3>Videos</h3>
 
 * [Hands on Lab with using DynamoDB as lock table for Apache Hudi Data Lakes](https://youtu.be/JP0orl9_0yQ)
+* [Non Blocking Concurrency Control Flink Demo](/blog/2024/12/06/non-blocking-concurrency-control)
