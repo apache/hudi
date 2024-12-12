@@ -493,10 +493,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("distance_in_meters");
     expected.add("seconds_since_epoch");
     expected.add("weight");
-    expected.add("nation");
     expected.add("current_date");
     expected.add("current_ts");
-    expected.add("height");
     expected.add("_hoodie_is_deleted");
     assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA))));
     //test with avro schema with meta cols
