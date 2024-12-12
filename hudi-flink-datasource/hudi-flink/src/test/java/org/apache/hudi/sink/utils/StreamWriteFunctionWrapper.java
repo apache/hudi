@@ -53,7 +53,6 @@ import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
-import org.testcontainers.shaded.org.checkerframework.checker.units.qual.C;
 
 import java.util.HashSet;
 import java.util.List;
