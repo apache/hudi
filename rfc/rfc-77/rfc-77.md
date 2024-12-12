@@ -19,7 +19,6 @@
 
 ## Proposers
 
-- @bhat-vinay
 - @codope
 
 ## Approvers
@@ -36,7 +35,7 @@ JIRA: https://issues.apache.org/jira/browse/HUDI-7146
 
 In this RFC, we propose implementing Secondary Indexes (SI), a new capability in Hudi's metadata table (MDT) based indexing 
 system.  SI are indexes defined on user specified columns of the table. Similar to record level indexes,
-SI will improve query performance when the query predicate contains secondary keys. The number of files
+SI will improve query performance when the query predicate involves those secondary columns. The number of files
 that a query needs to scan can be pruned down using secondary indexes.
 
 ## Background
@@ -60,6 +59,7 @@ not in the scope of this RFC.
 ## Design and Implementation
 This section discusses briefly the goals, design, implementation details of supporting SI in Hudi. At a high level,
 the design principle and goals are as follows:
+
 1. User specifies SI to be built on a given column of a table. A given SI can be built on only one column of the table
 (i.e composite keys are not allowed). Any number of SI can be built on a Hudi table. The indexes to be built are 
 specified using regular SQL statements.
@@ -72,9 +72,10 @@ indexes.
 SI can be created using the regular `CREATE INDEX` SQL statement.
 ```
 -- PROPOSED SYNTAX WITH `secondary_index` as the index type --
-CREATE INDEX [IF NOT EXISTS] index_name ON [TABLE] table_name [USING secondary_index](index_column)
+CREATE INDEX [IF NOT EXISTS] index_name ON [TABLE] table_name [USING index_type](index_column)
 -- Examples --
-CREATE INDEX idx_city on hudi_table USING secondary_index(city)
+CREATE INDEX idx_city on hudi_table USING bloom_filters(city)
+-- Default is to create a hash based record level index mapping secondary column to RLI entries.
 CREATE INDEX idx_last_name on hudi_table (last_name)
 
 -- NO CHANGE IN DROP INDEX --
@@ -88,7 +89,7 @@ in MDT by prefixing `secondary_index_`. If the `index_name` is `idx_city`, then 
 The index_type will be `secondary_index`. This will be used to distinguish SI from other Functional Indexes.
 
 ### Secondary Index Metadata
-Secondary index metadata will be managed the same way as Functional Index metadata. Since SI will not have any function
+Secondary index metadata will be managed the same way as Expression Index metadata. If the SI does not have any function
 to be applied on each row, the `function_name` will be NULL.
 
 ### Index in Metadata Table (MDT)
@@ -97,7 +98,7 @@ prefixing `secondary_index_`. Each entry in the SI partition will be a mapping o
 `secondary_key -> record_key`. `secondary_key` will form the "record key" for the record of the SI partition. Note that
 an important design consideration here is that users may choose to build SI on a non-unique column of the table.
 
-#### Index Initialisation
+#### Index Initialization
 Initial build of the secondary index will scan all file slices (of the base table) to extract 
 `secondary-key -> record-key` tuple and write it into the secondary index partition in the metadata table. 
 This is similar to how RLI is initialised.
@@ -107,10 +108,9 @@ The index needs to be updated on inserts, updates and deletes to the base table.
 the base table could be non-unique, this process differs significantly compared to RLI.
 
 ##### Inserts (on the base table)
-Newly inserted row's record-key and secondary-key is required to build the secondary-index entry. The record key is 
-already stored in the `WriteStatus` and commit metadata has the files touched by that commit. `WriteStatus` will be enhanced to store the secondary-key values (for all
-those columns on which secondary index is defined). The metadata writer will extract this information and write it out 
-to the secondary index partition. [1]
+Newly inserted row's record-key and secondary-key is required to build the secondary-index entry. The commit metadata has the files affected by that commit. 
+The metadata writer will extract the newly written records based on the commit metadata and generate the secondary-key values (for all
+those columns on which secondary index is defined) to the secondary index partition. [1]
 
 ##### Updates (on the base table)
 Similar to inserts, the `secondary-key -> record-key` tuples are extracted from the WriteStatus. However, additional 
@@ -131,7 +131,7 @@ Another key observation here is that `old-secondary-key` is required to construc
 data systems, Hudi does not read the old-image of a row on updates until a merge is executed. It detects that a row is getting updated by simply 
 reading the index and appending the updates in log files. Hence, there needs to be a mechanism to extract `old-secondary-key`. We propose
 `old-secondary-key` to be extracted by scanning the MDT partition (hosting the SI) and doing a reverse lookup based 
-on the `record-key` of the row being updated. It should be noted that this is going to be expensive operation as the 
+on the `record-key` of the row being updated. It should be noted that this might be an expensive operation as the 
 base table grows in size (which inherently means that SI will grow in size) in terms of number of rows. One way to 
 optimize this is to build a reverse mapping `record-key -> secondary-key` in a different MDT partition. This is 
 left as a TBD (as of this writing).
@@ -153,8 +153,8 @@ records is used to identify candidate records that need to be merged. The 'key' 
 `record-key` and by definition it is unique. But, the keys for secondary index entries are the `secondary-keys` which 
 can be non-unique. Hence, the merging of SI entries will make use of the  payload i.e `record-key` in the
 `secondary-key -> record-key` tuple to identify candidate records that need to be merged. It will also be guided by the 
-tombstone record emitted during update or deletes. An example is provided here on how the different log files are merged and how the merged log 
-records are finally merged with the base file to obtain the merged records (of the MDT partition hosting SI).
+tombstone record emitted during update or deletes. An example is provided here on how the different log files are merged 
+and how the merged log records are finally merged with the base file to obtain the merged records (of the MDT partition hosting SI).
 
 Consider the following table, `trips_table`. Note that this table is only used to illustrate the merging logic and not 
 to be used as a definitive table for other considertaion (for example, the performance aspect of some of the algorithm 
@@ -215,98 +215,11 @@ on `secondary-key` and second search will be based on `record-key`. Hence, a sin
 uses a flat array will not be efficient. 
 4. Should allow for efficient insertion of records (for inserting merged record and for buffering fresh records). 
 
-The [initial POC](https://github.com/apache/hudi/pull/10625) makes use of an in-memory nested maps - with the first level keyed by `secondary-key`  
-and the second level keyed by`record-key`. However, the final design should allow spilling to disk.
-
-Considering the above requirements, the proposal is to introduce a new class hierarchy for handling merge keys in a more
-flexible and decoupled manner. It adds the `HoodieMergeKey` interface, along with two
-implementations: `HoodieSimpleMergeKey` and `HoodieCompositeMergeKey`.
-```java
-public interface HoodieMergeKey extends Serializable {
-
-   /**
-    * Get the partition path.
-    */
-   String getPartitionPath();
-
-
-   /**
-    * Get the record key.
-    */
-   Serializable getRecordKey();
-
-   /**
-    * Get the hoodie key.
-    * For simple merge keys, this is used to directly fetch the HoodieKey, which is a combination of record key and partition path.
-    */
-   default HoodieKey getHoodieKey() {
-      return new HoodieKey(getRecordKey().toString(), getPartitionPath());
-   }
-}
-```
-
-`HoodieSimpleMergeKey` simply wraps `HoodieKey` for existing scenarios where the key is a
-string. `HoodieCompositeMergeKey` allows for complex types as keys, enhancing flexibility for scenarios where a simple
-string key is not sufficient.
-
-```java
-public class HoodieSimpleMergeKey implements HoodieMergeKey {
-
-  private final HoodieKey simpleKey;
-
-  public HoodieSimpleMergeKey(HoodieKey simpleKey) {
-    this.simpleKey = simpleKey;
-  }
-
-  @Override
-  public String getPartitionPath() {
-    return simpleKey.getPartitionPath();
-  }
-
-  @Override
-  public Serializable getRecordKey() {
-    return simpleKey.getRecordKey();
-  }
-
-  public HoodieKey getHoodieKey() {
-    return simpleKey;
-  }
-}
-
-public class HoodieCompositeMergeKey<K extends Serializable> implements HoodieMergeKey {
-
-  private final K compositeKey;
-  private final String partitionPath;
-
-  public HoodieCompositeMergeKey(K compositeKey, String partitionPath) {
-    this.compositeKey = compositeKey;
-    this.partitionPath = partitionPath;
-  }
-
-  @Override
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  @Override
-  public Serializable getRecordKey() {
-    return compositeKey;
-  }
-}
-```
-
-We also introduce a new `HoodieRecordMerger` implementation based on `HoodieMergeKey`. For other keys, it falls back to
-merge method of parent class. The new record merger will be used in `HoodieMergedLogRecordScanner` to merge records from
-MDT partition hosting SI.
-
-The primary advantage of this approach is that we do not leak any details to the upper layers such as merge handle.
-However, `HoodieMetadataLogRecordReader` should create the `HoodieMergedLogRecordScanner` with the
-correct `HoodieRecordMerger` implementation, instead of
-the [current record merger](https://github.com/apache/hudi/blob/cb6eb6785fdeb88e66016a2b8c0c6e6fa184b309/hudi-common/src/main/java/org/apache/hudi/metadata/HoodieMetadataLogRecordReader.java#L156).
-
-These changes do not affect existing functionalities that do not rely on merge keys. It introduces additional classes
-that are used explicitly for new functionalities involving various key types in merging operations. This ensures minimal
-to no risk for existing processes.
+This is achieved by the following efficient encoding of the reverse mapping of secondary values to record keys in the 
+MDT partition. We exploit a key observation that its enough to merge SI entries and tombstones with a tuple key 
+`{secondaryKey, recordKey}` through the existing spillable/merge map implementation. We store a flattened version of the 
+logical multimap as a key-value format with key : `secondaryKey+recordKey` and value `isDeleted: false|true` indicating
+whether this is a tombstone or an insert of the SI entry.
 
 ### Comparing alternate design proposals
 
@@ -315,8 +228,7 @@ Here are some alternate options that we considered:
 1. Extend Hudi's `ExternalSpillableMap` to support multi-map. More signicant refactoring is required and it would have
    leaked implementation details to the write handle layer, as the records held by `ExternalSpillableMap` is exposed to
    write handle via `HoodieMeredLogRecordScanner::getRecords`.
-2. Write spillable version
-   of [Guava's multi-map](https://github.com/google/guava/wiki/NewCollectionTypesExplained#multimap). Apart from reason
+2. Write spillable version of [Guava's multi-map](https://github.com/google/guava/wiki/NewCollectionTypesExplained#multimap). Apart from reason
    mentioned above, we did not want to add a third-party dependency on Guava.
 3. Use [Chronicle map](https://github.com/OpenHFT/Chronicle-Map). Same reasons as above.
 4. Use two different spillable data structures - one is a set of `secondary-key` and the other is map of
@@ -331,6 +243,28 @@ same data set twice - once using data-skipping (based on SI) and the other based
 result set. 
 3. Indexing strategy should be accompanied by performance test results showing its benefits on the query path (and optionally 
 overhead on the index maintenance (write) path)
+
+### SparkSQL Benchmark
+
+Benchmarks of the implementation shows some impressive gains. 
+
+Table used - web\_sales (from 10 TB tpc-ds dataset)
+Total File groups - 286,603
+Total Records - 7,198,162,544
+Cardinality of Secondary index column ~ 1:150 (not too high or not too low)
+
+| Run | Query latency w/o data skipping (secs) | Query latency w/ Data Skipping (leveraging SI) (secs) | Improvement |
+| ---| ---| ---| --- |
+| 1 | 252 | 31 | ~88% |
+| 2 | 214 | 10 | ~95% |
+| 3 | 204 | 9 | ~95% |
+
+|  | Stats w/o data skipping | Stats w/ Data Skipping (leveraging SI) |
+| ---| ---| --- |
+| Number of Files read | 286,603 | 150 |
+| size of files read | 759 GB | 593 MB |
+| Total Number of Rows read | 7,198,162,544 | 5,811,187 |
+
 
 ## Future enhancements and roadmap
 
