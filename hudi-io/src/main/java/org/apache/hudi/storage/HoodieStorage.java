@@ -37,6 +37,8 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -48,9 +50,24 @@ public abstract class HoodieStorage implements Closeable {
   public static final Logger LOG = LoggerFactory.getLogger(HoodieStorage.class);
 
   protected final StorageConfiguration<?> storageConf;
+  protected final HoodieOSSStorageStrategy ossStorageStrategy;
 
   public HoodieStorage(StorageConfiguration<?> storageConf) {
     this.storageConf = storageConf;
+    this.ossStorageStrategy = new HoodieOSSStorageStrategy(storageConf);
+
+  }
+
+  public StoragePath  storageLocation(String path, Map<String, String> configMap) {
+    return ossStorageStrategy.storageLocation(path, configMap);
+  }
+
+  public Set<StoragePath> getAllLocations(String partitionPath, Map<String, String> configMap) {
+    return ossStorageStrategy.getAllLocations(partitionPath, configMap);
+  }
+
+  public StoragePath getRelativePath(String path, Map<String, String> configMap) {
+    return ossStorageStrategy.getRelativePath(path, configMap);
   }
 
   /**
