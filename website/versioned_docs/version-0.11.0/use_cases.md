@@ -130,9 +130,9 @@ Some examples of the Apache Hudi services that make this performance optimizatio
 - [Auto File Sizing](/docs/file_sizing) - to solve the "small files" problem.
 - [Clustering](/docs/clustering) - to co-locate data next to each other.
 - [Compaction](/docs/compaction) - to allow tuning of low latency ingestion and fast read queries. 
-- [Indexing](/docs/indexing) - for efficient upserts and deletes.
+- [Indexing](indexing) - for efficient upserts and deletes.
 - Multi-Dimensional Partitioning (Z-Ordering) - Traditional folder style partitioning on low-cardinality, while also 
 Z-Ordering data within files based on high-cardinality
 - Metadata Table - No more slow S3 file listings or throttling.
-- [Auto Cleaning](/docs/hoodie_cleaner) - Keeps your storage costs in check by automatically removing old versions of files.
+- [Auto Cleaning](hoodie_cleaner) - Keeps your storage costs in check by automatically removing old versions of files.
 
