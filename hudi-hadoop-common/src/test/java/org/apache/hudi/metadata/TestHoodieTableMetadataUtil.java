@@ -65,6 +65,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.computeRevivedAndDeletedKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForPartitionStats;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryIndex;
@@ -600,5 +601,45 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .name("dateField").type(dateFieldSchema).noDefault()
         .endRecord();
     assertFalse(validateDataTypeForPartitionStats("dateField", schema));
+  }
+
+  @Test
+  public void testComputeRevivedAndDeletedKeys() {
+    // Test Input Sets
+    Set<String> validKeysForPreviousLogs = new HashSet<>(Arrays.asList("K1", "K2", "K3"));
+    Set<String> deletedKeysForPreviousLogs = new HashSet<>(Arrays.asList("K4", "K5"));
+    Set<String> validKeysForAllLogs = new HashSet<>(Arrays.asList("K2", "K4", "K6")); // revived: K4, deleted: K1
+    Set<String> deletedKeysForAllLogs = new HashSet<>(Arrays.asList("K1", "K5", "K7"));
+
+    // Expected Results
+    Set<String> expectedRevivedKeys = new HashSet<>(Collections.singletonList("K4")); // Revived: Deleted in previous but now valid
+    Set<String> expectedDeletedKeys = new HashSet<>(Collections.singletonList("K1")); // Deleted: Valid in previous but now deleted
+
+    // Compute Revived and Deleted Keys
+    Pair<Set<String>, Set<String>> result = computeRevivedAndDeletedKeys(validKeysForPreviousLogs, deletedKeysForPreviousLogs, validKeysForAllLogs, deletedKeysForAllLogs);
+    assertEquals(expectedRevivedKeys, result.getKey());
+    assertEquals(expectedDeletedKeys, result.getValue());
+
+    // Case 1: All keys remain valid, just updates, no deletes or revives
+    Set<String> allValidKeys = new HashSet<>(Arrays.asList("K1", "K2", "K3"));
+    Set<String> allEmpty = Collections.emptySet();
+    result = computeRevivedAndDeletedKeys(allValidKeys, allEmpty, allValidKeys, allEmpty);
+    assertEquals(Collections.emptySet(), result.getKey());
+    assertEquals(Collections.emptySet(), result.getValue());
+
+    // Case 2: All keys are deleted
+    result = computeRevivedAndDeletedKeys(allValidKeys, allEmpty, allEmpty, allValidKeys);
+    assertEquals(Collections.emptySet(), result.getKey());
+    assertEquals(allValidKeys, result.getValue());
+
+    // Case 3: Delete K3
+    result = computeRevivedAndDeletedKeys(allValidKeys, allEmpty, new HashSet<>(Arrays.asList("K1", "K2")), new HashSet<>(Collections.singletonList("K3")));
+    assertEquals(Collections.emptySet(), result.getKey());
+    assertEquals(new HashSet<>(Collections.singletonList("K3")), result.getValue());
+
+    // Case 4: Empty input sets
+    result = computeRevivedAndDeletedKeys(Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
+    assertEquals(Collections.emptySet(), result.getKey());
+    assertEquals(Collections.emptySet(), result.getValue());
   }
 }

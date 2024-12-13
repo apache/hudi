@@ -243,6 +243,27 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     validateDataAndRecordIndices(hudiOpts, deleteDf)
   }
 
+  @Test
+  def testRLIWithEmptyPayload(): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
+      HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0")
+    val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+
+    val deleteDf = insertDf.limit(2)
+    deleteDf.cache()
+    deleteDf.write.format("hudi")
+      .options(hudiOpts)
+      .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.EmptyHoodieRecordPayload")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val prevDf = mergedDfList.last
+    mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
+    validateDataAndRecordIndices(hudiOpts, deleteDf)
+  }
+
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIForDeletesWithHoodieIsDeletedColumn(tableType: HoodieTableType): Unit = {

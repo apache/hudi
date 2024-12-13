@@ -22,6 +22,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
 import org.apache.hudi.exception.HoodieException;
@@ -40,6 +42,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
@@ -106,6 +109,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public <T> HoodieData<T> emptyHoodieData() {
     return HoodieJavaRDD.of(javaSparkContext.emptyRDD());
+  }
+
+  @Override
+  public <K, V> HoodiePairData<K, V> emptyHoodiePairData() {
+    return HoodieJavaPairRDD.of(JavaPairRDD.fromJavaRDD(javaSparkContext.emptyRDD()));
   }
 
   public boolean supportsFileGroupReader() {
