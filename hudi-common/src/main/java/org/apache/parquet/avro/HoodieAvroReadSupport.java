@@ -46,8 +46,11 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
   @Override
   public ReadContext init(Configuration configuration, Map<String, String> keyValueMetaData, MessageType fileSchema) {
     boolean legacyMode = checkLegacyMode(fileSchema.getFields());
-    // support non-legacy list
-    if (!legacyMode && configuration.get(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE) == null) {
+    if (legacyMode && !configuration.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE_DEFAULT)) {
+      // override configured default for reading this particular file
+      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "true", "support reading avro from legacy map/list in parquet file");
+    } else if (!legacyMode && configuration.get(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE) == null) {
+      // support non-legacy list
       configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
           "false", "support reading avro from non-legacy map/list in parquet file");
     }
@@ -89,25 +92,23 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
    *      }
    *    }
    */
-  private boolean checkLegacyMode(List<Type> parquetFields) {
-    for (Type type : parquetFields) {
+  private static boolean checkLegacyMode(List<Type> parquetFields) {
+    return parquetFields.stream().anyMatch(type -> {
       if (!type.isPrimitive()) {
         GroupType groupType = type.asGroupType();
         OriginalType originalType = groupType.getOriginalType();
         if (originalType == OriginalType.MAP
-            && groupType.getFields().get(0).getOriginalType() != OriginalType.MAP_KEY_VALUE) {
-          return false;
+            && !groupType.getFields().get(0).getName().equals("key_value")) {
+          return true;
         }
         if (originalType == OriginalType.LIST
-            && !groupType.getType(0).getName().equals("array")) {
-          return false;
+            && !groupType.getType(0).getName().equals("list")) {
+          return true;
         }
-        if (!checkLegacyMode(groupType.getFields())) {
-          return false;
-        }
+        return checkLegacyMode(groupType.getFields());
       }
-    }
-    return true;
+      return false;
+    });
   }
 
   /**
