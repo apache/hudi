@@ -21,7 +21,7 @@ const HomepageFeatures = () => {
       title: "Mutability support for all workload shapes & sizes",
       description:
         "Quickly update & delete data with fast, pluggable indexing. This includes database CDC and high-scale streaming data, with best-in-class support for out-of-order records, bursty traffic & data deduplication.",
-      link: "/docs/indexing",
+      link: "/docs/indexes",
     },
     {
       icon: IncrementalProcessing,

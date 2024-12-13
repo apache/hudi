@@ -374,7 +374,7 @@ Check out the [Flink Setup](/docs/flink_tuning) how-to page for deeper dive into
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
   - [Hudi Timeline](/docs/timeline) – How Hudi manages transactions and other table services
-  - [Hudi File Layout](/docs/file_layouts) - How the files are laid out on storage
+  - [Hudi File Layout](file_layouts) - How the files are laid out on storage
   - [Hudi Table Types](/docs/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
   - [Hudi Query Types](/docs/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
 
