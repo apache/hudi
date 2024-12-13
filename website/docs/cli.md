@@ -8,8 +8,7 @@ last_modified_at: 2021-08-18T15:59:57-04:00
 Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`.
 
 ### Hudi CLI Bundle setup
-In release `0.13.0` we have now added another way of launching the `hudi cli`, which is using the `hudi-cli-bundle`. (Note this is only supported for Spark3,
-for Spark2 please see the above Local setup section)
+In release `0.13.0` we have now added another way of launching the `hudi cli`, which is using the `hudi-cli-bundle`.
 
 There are a couple of requirements when using this approach such as having `spark` installed locally on your machine. 
 It is required to use a spark distribution with hadoop dependencies packaged such as `spark-3.3.1-bin-hadoop2.tgz` from https://archive.apache.org/dist/spark/.

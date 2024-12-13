@@ -245,14 +245,16 @@ hoodie.cleaner.policy.failed.writes=LAZY
 
 ### Multi Writing via Hudi Streamer
 
-The `HoodieStreamer` utility (part of hudi-utilities-bundle) provides ways to ingest from different sources such as DFS or Kafka, with the following capabilities.
+The `HoodieStreamer` utility (part of hudi-utilities-slim-bundle) provides ways to ingest from different sources such as DFS or Kafka, with the following capabilities.
 
 Using optimistic_concurrency_control via Hudi Streamer requires adding the above configs to the properties file that can be passed to the
 job. For example below, adding the configs to kafka-source.properties file and passing them to Hudi Streamer will enable optimistic concurrency.
 A Hudi Streamer job can then be triggered as follows:
 
 ```java
-[hoodie]$ spark-submit --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+[hoodie]$ spark-submit \
+  --jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0.jar" \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \

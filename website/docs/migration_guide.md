@@ -54,8 +54,9 @@ mode to selective partitions based on the regex pattern [hoodie.bootstrap.mode.s
 
 ```
 spark-submit --master local \
+--jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0.jar" \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
 --run-bootstrap \
 --target-base-path /tmp/hoodie/bootstrap_table \
 --target-table bootstrap_table \

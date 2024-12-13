@@ -40,7 +40,9 @@ Expand this to see HoodieStreamer's "--help" output describing its capabilities 
 </summary>
 
 ```shell
-[hoodie]$ spark-submit --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
+[hoodie]$ spark-submit \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` --help
 Usage: <main class> [options]
   Options:
     --allow-commit-on-no-checkpoint-change
@@ -254,7 +256,9 @@ For e.g: once you have Confluent Kafka, Schema registry up & running, produce so
 and then ingest it as follows.
 
 ```java
-[hoodie]$ spark-submit --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+[hoodie]$ spark-submit \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
@@ -266,16 +270,11 @@ and then ingest it as follows.
 
 In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide).
 
-### Using `hudi-utilities` bundle jars
+### Using `hudi-utilities-slim-bundle` bundle jar
 
-From 0.11.0 release, we start to provide a new `hudi-utilities-slim-bundle` which aims to exclude dependencies that can
-cause conflicts and compatibility issues with different versions of Spark.
-
-It is recommended to switch to `hudi-utilities-slim-bundle`, which should be used along with a Hudi Spark bundle
+It is recommended to use `hudi-utilities-slim-bundle`, which should be used along with a Hudi Spark bundle
 corresponding the Spark version used to make utilities work with Spark, e.g.,
-`--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:0.13.0,org.apache.hudi:hudi-spark3.2-bundle_2.12:0.13.0`.
-
-`hudi-utilities-bundle` remains as a legacy bundle jar to work with Spark 2.4 and 3.1.
+`--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0`.
 
 ### Concurrency Control
 
@@ -292,7 +291,9 @@ As an example, adding the configs to `kafka-source.properties` file and passing 
 A Hudi Streamer job can then be triggered as follows:
 
 ```java
-[hoodie]$ spark-submit --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+[hoodie]$ spark-submit \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
@@ -621,7 +622,9 @@ under `hudi-utilities/src/test/resources/streamer-config`. The command to run `H
 to how you run `HoodieStreamer`.
 
 ```java
-[hoodie]$ spark-submit --class org.apache.hudi.utilities.streamer.HoodieMultiTableStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+[hoodie]$ spark-submit \
+  --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.0,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.0 \
+  --class org.apache.hudi.utilities.streamer.HoodieMultiTableStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --config-folder file://tmp/hudi-ingestion-config \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
