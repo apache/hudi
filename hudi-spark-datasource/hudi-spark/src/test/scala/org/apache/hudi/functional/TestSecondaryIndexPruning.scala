@@ -52,6 +52,7 @@ import org.scalatest.Assertions.{assertResult, assertThrows}
 
 import java.util.concurrent.Executors
 import scala.collection.JavaConverters
+import scala.collection.immutable.Seq
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
 
@@ -703,6 +704,156 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
     checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'abc'")(
       Seq(1, "row1", "abc", "p1")
+    )
+  }
+
+  /**
+   * Test case to write with updates and validate secondary index with EVENT_TIME_ORDERING merge mode.
+   */
+  @Test
+  def testSecondaryIndexWithEventTimeOrderingMerge(): Unit = {
+    val tableName = "test_secondary_index_with_event_time_ordering_merge"
+
+    // Create the Hudi table
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName (
+         |  ts BIGINT,
+         |  record_key_col STRING,
+         |  not_record_key_col STRING,
+         |  partition_key_col STRING
+         |) USING hudi
+         | OPTIONS (
+         |  primaryKey = 'record_key_col',
+         |  type = 'mor',
+         |  preCombineField = 'ts',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+         |  hoodie.enable.data.skipping = 'true'
+         | )
+         | PARTITIONED BY (partition_key_col)
+         | LOCATION '$basePath'
+       """.stripMargin)
+    // by setting small file limit to 0, each insert will create a new file
+    // need to generate more file for non-partitioned table to test data skipping
+    // as the partitioned table will have only one file per partition
+    spark.sql("set hoodie.parquet.small.file.limit=0")
+    // Insert some data
+    spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+    spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
+    // create secondary index
+    spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
+
+    // Update the secondary key column with higher ts value
+    spark.sql(s"update $tableName set not_record_key_col = 'xyz', ts = 3 where record_key_col = 'row1'")
+    // validate data and SI
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
+      Seq(3, "row1", "xyz", "p1")
+    )
+    // validate the secondary index records themselves
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+      Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+    )
+
+    // update the secondary key column with higher ts value and to original secondary key value 'abc'
+    spark.sql(s"update $tableName set not_record_key_col = 'abc', ts = 4 where record_key_col = 'row1'")
+    // validate data and SI
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
+      Seq(4, "row1", "abc", "p1")
+    )
+    // validate the secondary index records themselves
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+      Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+    )
+
+    // update the secondary key column with lower ts value, this should be ignored
+    spark.sql(s"update $tableName set not_record_key_col = 'xyz', ts = 0 where record_key_col = 'row1'")
+    // validate data and SI
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
+      Seq(4, "row1", "abc", "p1")
+    )
+    // validate the secondary index records themselves
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+      Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+    )
+  }
+
+  /**
+   * Test case to write with updates and validate secondary index with CUSTOM merge mode using CDC payload.
+   */
+  @Test
+  def testSecondaryIndexWithCustomMergeMode(): Unit = {
+    val tableName = "test_secondary_index_with_custom_merge"
+
+    // Create the Hudi table
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName (
+         |  record_key_col BIGINT,
+         |  Op STRING,
+         |  replicadmstimestamp STRING,
+         |  not_record_key_col STRING
+         |) USING hudi
+         | OPTIONS (
+         |  primaryKey = 'record_key_col',
+         |  type = 'mor',
+         |  preCombineField = 'replicadmstimestamp',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+         |  hoodie.enable.data.skipping = 'true',
+         |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.AWSDmsAvroPayload',
+         |  hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.NonpartitionedKeyGenerator',
+         |  hoodie.write.record.merge.mode = 'CUSTOM',
+         |  hoodie.table.cdc.enabled = 'true',
+         |  hoodie.table.cdc.supplemental.logging.mode = 'data_before_after'
+         | )
+         | LOCATION '$basePath'
+       """.stripMargin)
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      spark.sql("set spark.sql.defaultColumn.enabled=false")
+    }
+    // by setting small file limit to 0, each insert will create a new file
+    // need to generate more file for non-partitioned table to test data skipping
+    // as the partitioned table will have only one file per partition
+    spark.sql("set hoodie.parquet.small.file.limit=0")
+    // Insert some data
+    spark.sql(
+      s"""|INSERT INTO $tableName(record_key_col, Op, replicadmstimestamp, not_record_key_col) VALUES
+          |    (1, 'I', '2023-06-14 15:46:06.953746', 'A'),
+          |    (2, 'I', '2023-06-14 15:46:07.953746', 'B'),
+          |    (3, 'I', '2023-06-14 15:46:08.953746', 'C');
+          |    """.stripMargin)
+    // create secondary index
+    spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
+
+    // validate data and SI
+    checkAnswer(s"select record_key_col, Op, replicadmstimestamp, not_record_key_col from $tableName")(
+      Seq(1, "I", "2023-06-14 15:46:06.953746", "A"),
+      Seq(2, "I", "2023-06-14 15:46:07.953746", "B"),
+      Seq(3, "I", "2023-06-14 15:46:08.953746", "C")
+    )
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"A${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}1", false),
+      Seq(s"B${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}2", false),
+      Seq(s"C${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}3", false)
+    )
+
+    // Update the delete Op value for record_key_col = 3
+    spark.sql(s"update $tableName set Op = 'D' where record_key_col = 3")
+
+    // validate data and SI
+    checkAnswer(s"select record_key_col, Op, replicadmstimestamp, not_record_key_col from $tableName")(
+      Seq(1, "I", "2023-06-14 15:46:06.953746", "A"),
+      Seq(2, "I", "2023-06-14 15:46:07.953746", "B")
+    )
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"A${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}1", false),
+      Seq(s"B${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}2", false)
     )
   }
 

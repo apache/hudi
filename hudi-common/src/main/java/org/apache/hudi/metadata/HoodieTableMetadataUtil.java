@@ -2212,7 +2212,8 @@ public class HoodieTableMetadataUtil {
                                                                         List<Pair<String, Pair<String, List<String>>>> partitionFiles,
                                                                         int secondaryIndexMaxParallelism,
                                                                         String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
-                                                                        HoodieIndexDefinition indexDefinition) {
+                                                                        HoodieIndexDefinition indexDefinition,
+                                                                        HoodieMetadataFileSystemView fsView) {
     if (partitionFiles.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -2228,9 +2229,17 @@ public class HoodieTableMetadataUtil {
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFiles.size() + " partitions");
     return engineContext.parallelize(partitionFiles, parallelism).flatMap(partitionWithBaseAndLogFiles -> {
       final String partition = partitionWithBaseAndLogFiles.getKey();
+      // get the log files for the partition and group them by fileId
+      Map<String, List<HoodieLogFile>> logFilesByFileId = getPartitionLatestFileSlicesIncludingInflight(metaClient, Option.of(fsView), partition).stream()
+          .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().collect(toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
       final Pair<String, List<String>> baseAndLogFiles = partitionWithBaseAndLogFiles.getValue();
-      List<String> logFilePaths = new ArrayList<>();
-      baseAndLogFiles.getValue().forEach(logFile -> logFilePaths.add(basePath + StoragePath.SEPARATOR + partition + StoragePath.SEPARATOR + logFile));
+      Set<String> logFilePaths = new HashSet<>();
+      baseAndLogFiles.getValue().forEach(logFile -> {
+        // add all log files for the fileId
+        logFilesByFileId.get(FSUtils.getFileIdFromFileName(logFile)).stream()
+            .map(HoodieLogFile::getPath).map(StoragePath::toString).forEach(logFilePaths::add);
+        logFilePaths.add(basePath + StoragePath.SEPARATOR + partition + StoragePath.SEPARATOR + logFile);
+      });
       String baseFilePath = baseAndLogFiles.getKey();
       Option<StoragePath> dataFilePath = baseFilePath.isEmpty() ? Option.empty() : Option.of(FSUtils.constructAbsolutePath(basePath, baseFilePath));
       Schema readerSchema;
@@ -2241,7 +2250,7 @@ public class HoodieTableMetadataUtil {
       } else {
         readerSchema = tableSchema;
       }
-      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition,
+      return createSecondaryIndexGenerator(metaClient, engineType, new ArrayList<>(logFilePaths), readerSchema, partition, dataFilePath, indexDefinition,
           metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(""));
     });
   }

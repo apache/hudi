@@ -20,8 +20,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieSparkIndexClient
-import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.{HoodieIndexDefinition, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.HoodieIndexDefinition
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{StringUtils, ValidationUtils}
 import org.apache.hudi.exception.HoodieIndexException
@@ -73,12 +72,6 @@ case class CreateIndexCommand(table: CatalogTable,
         HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX
       } else {
         HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
-      }
-      if (derivedIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX)) {
-        if ((metaClient.getTableConfig.getPayloadClass != null && !(metaClient.getTableConfig.getPayloadClass.equals(classOf[OverwriteWithLatestAvroPayload].getCanonicalName)))
-          || (metaClient.getTableConfig.getRecordMergeMode ne RecordMergeMode.COMMIT_TIME_ORDERING)) {
-          throw new HoodieIndexException("Secondary Index can only be enabled on table with OverwriteWithLatestAvroPayload payload class or " + "Merge mode set to OVERWRITE_WITH_LATEST")
-        }
       }
       new HoodieSparkIndexClient(sparkSession).create(metaClient, indexName, derivedIndexType, columnsMap, options.asJava, table.properties.asJava)
     } else {
