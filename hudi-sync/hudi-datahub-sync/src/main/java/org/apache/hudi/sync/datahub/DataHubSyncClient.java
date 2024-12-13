@@ -315,7 +315,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return result;
   }
 
-  protected Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
+  Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
     try {
       return new TableSchemaResolver(metaClient).getTableAvroSchema(true);
     } catch (Exception e) {
