@@ -67,6 +67,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -139,14 +140,13 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
         // there is no owner or instant time per se for archival.
         txnManager.beginTransaction(Option.empty(), Option.empty());
       }
-      List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
-      boolean success = true;
+      List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter(archiveFilePath.getParent());
-        LOG.info("Archiving instants " + instantsToArchive);
+        LOG.info("Archiving instants {}", instantsToArchive);
         archive(context, instantsToArchive);
-        LOG.info("Deleting archived instants " + instantsToArchive);
-        success = deleteArchivedInstants(instantsToArchive, context);
+        LOG.info("Deleting archived instants {}", instantsToArchive);
+        deleteArchivedInstants(instantsToArchive, context);
       } else {
         LOG.info("No Instants to archive");
       }
@@ -280,17 +280,18 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     }
   }
 
-  private Stream<HoodieInstant> getInstantsToArchive() throws IOException {
-    Stream<HoodieInstant> instants = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive());
+  private List<HoodieInstant> getInstantsToArchive() throws IOException {
     if (config.isMetaserverEnabled()) {
-      return Stream.empty();
+      return Collections.emptyList();
     }
 
-    // For archiving and cleaning instants, we need to include intermediate state files if they exist
-    HoodieActiveTimeline rawActiveTimeline = new ActiveTimelineV1(metaClient, false);
-    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
-        .collect(Collectors.groupingBy(i -> Pair.of(i.requestedTime(),
-            InstantComparatorV1.getComparableAction(i.getAction()))));
+    List<HoodieInstant> candidates = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive()).collect(Collectors.toList());
+    if (candidates.isEmpty()) {
+      // exit early to avoid loading meta client for metadata table
+      return Collections.emptyList();
+    }
+
+    Stream<HoodieInstant> instants = candidates.stream();
 
     // If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
@@ -339,16 +340,23 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       }
     }
 
-    return instants.flatMap(hoodieInstant -> {
-      List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.requestedTime(),
-          InstantComparatorV1.getComparableAction(hoodieInstant.getAction())));
-      if (instantsToStream != null) {
-        return instantsToStream.stream();
-      } else {
-        // if a concurrent writer archived the instant
-        return Stream.empty();
-      }
-    });
+    List<HoodieInstant> instantsToArchive = instants.collect(Collectors.toList());
+    if (instantsToArchive.isEmpty()) {
+      // Exit early to avoid loading raw timeline
+      return Collections.emptyList();
+    }
+
+    // For archiving and cleaning instants, we need to include intermediate state files if they exist
+    HoodieActiveTimeline rawActiveTimeline = new ActiveTimelineV1(metaClient, false);
+    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
+        .collect(Collectors.groupingBy(i -> Pair.of(i.requestedTime(),
+            InstantComparatorV1.getComparableAction(i.getAction()))));
+
+    return instantsToArchive.stream()
+        .flatMap(hoodieInstant ->
+            groupByTsAction.getOrDefault(Pair.of(hoodieInstant.requestedTime(),
+                InstantComparatorV1.getComparableAction(hoodieInstant.getAction())), Collections.emptyList()).stream())
+        .collect(Collectors.toList());
   }
 
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
