@@ -212,6 +212,7 @@ public class StreamWriteOperatorCoordinator
     if (OptionsResolver.isMultiWriter(conf)) {
       initClientIds(conf);
     }
+    registerMetrics();
   }
 
   @Override
