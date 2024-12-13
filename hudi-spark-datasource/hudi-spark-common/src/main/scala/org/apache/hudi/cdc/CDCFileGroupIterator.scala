@@ -558,5 +558,14 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       curAvroRecord, avroSchema, payloadProps).get()
   }
 
-  override def close(): Unit = {}
+  override def close(): Unit = {
+    recordIter = Iterator.empty
+    logRecordIter = Iterator.empty
+    beforeImageRecords.clear()
+    afterImageRecords.clear()
+    if (cdcLogRecordIterator != null) {
+      cdcLogRecordIterator.close()
+      cdcLogRecordIterator = null
+    }
+  }
 }

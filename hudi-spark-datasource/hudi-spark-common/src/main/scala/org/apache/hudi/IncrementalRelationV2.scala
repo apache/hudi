@@ -53,13 +53,13 @@ import scala.collection.mutable
  * TODO: rebase w/ HoodieBaseRelation HUDI-5362
  *
  */
-class IncrementalRelation(val sqlContext: SQLContext,
-                          val optParams: Map[String, String],
-                          val userSchema: Option[StructType],
-                          val metaClient: HoodieTableMetaClient,
-                          val rangeType: RangeType = RangeType.CLOSED_CLOSED) extends BaseRelation with TableScan {
+class IncrementalRelationV2(val sqlContext: SQLContext,
+                            val optParams: Map[String, String],
+                            val userSchema: Option[StructType],
+                            val metaClient: HoodieTableMetaClient,
+                            val rangeType: RangeType) extends BaseRelation with TableScan {
 
-  private val log = LoggerFactory.getLogger(classOf[IncrementalRelation])
+  private val log = LoggerFactory.getLogger(classOf[IncrementalRelationV2])
 
   val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
   private val basePath = metaClient.getBasePath

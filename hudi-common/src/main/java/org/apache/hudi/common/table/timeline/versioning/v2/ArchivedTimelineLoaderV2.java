@@ -54,7 +54,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
                            BiConsumer<String, GenericRecord> recordConsumer) {
     try {
       // List all files
-      List<String> fileNames = LSMTimeline.latestSnapshotManifest(metaClient).getFileNames();
+      List<String> fileNames = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath()).getFileNames();
 
       Schema readSchema = LSMTimeline.getReadSchema(loadMode);
       fileNames.stream()

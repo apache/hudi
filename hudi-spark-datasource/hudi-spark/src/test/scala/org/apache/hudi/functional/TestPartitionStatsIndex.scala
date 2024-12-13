@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieWriteConflictException
+import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.util.{JFunction, JavaConversions}
@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
+import org.scalatest.Assertions.assertThrows
 
 import java.util.concurrent.Executors
 import java.util.stream.Stream
@@ -57,6 +58,62 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   val sqlTempTable = "hudi_tbl"
+
+  /**
+   * Test case to validate partition stats cannot be created without column stats.
+   */
+  @Test
+  def testPartitionStatsWithoutColumnStats(): Unit = {
+    // remove column stats enable key from commonOpts
+    val hudiOpts = commonOpts - HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key
+    // should throw an exception as column stats is required for partition stats
+    assertThrows[HoodieException] {
+      doWriteAndValidateDataAndPartitionStats(
+        hudiOpts,
+        operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Overwrite)
+    }
+  }
+
+  /**
+   * Test case to validate partition stats for a logical type column
+   */
+  @Test
+  def testPartitionStatsWithLogicalType(): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "current_date"
+    )
+
+    val records = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    inputDF.write.partitionBy("partition").format("hudi")
+      .options(hudiOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key, "true")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshot0 = spark.read.format("org.apache.hudi").options(hudiOpts).load(basePath)
+    assertEquals(100, snapshot0.count())
+
+    val updateRecords = recordsToStrings(dataGen.generateUniqueUpdates("002", 50)).asScala.toList
+    val updateDF = spark.read.json(spark.sparkContext.parallelize(updateRecords, 2))
+    updateDF.write.format("hudi")
+      .options(hudiOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val readOpts = hudiOpts ++ Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+    )
+    val snapshot1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    val dataFilter = EqualTo(attribute("current_date"), Literal(snapshot1.limit(1).collect().head.getAs("current_date")))
+    verifyFilePruning(readOpts, dataFilter, shouldSkipFiles = false)
+  }
 
   /**
    * Test case to do a write (no updates) and validate the partition stats index initialization.
@@ -418,9 +475,11 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   }
 
   def verifyQueryPredicate(hudiOpts: Map[String, String]): Unit = {
-    val reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs("_row_key").toString)
-    val dataFilter = EqualTo(attribute("_row_key"), Literal(reckey(0)))
-    assertEquals(2, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
+    val candidateRow = mergedDfList.last.groupBy("_row_key").count().limit(1).collect().head
+    val rowKey = candidateRow.getAs[String]("_row_key")
+    val count = candidateRow.getLong(1)
+    val dataFilter = EqualTo(attribute("_row_key"), Literal(rowKey))
+    assertEquals(count, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     verifyFilePruning(hudiOpts, dataFilter)
   }
 
@@ -433,14 +492,18 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     readDf.createOrReplaceTempView(sqlTempTable)
   }
 
-  private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression): Unit = {
+  private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, shouldSkipFiles: Boolean = true): Unit = {
     // with data skipping
     val commonOpts = opts + ("path" -> basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
-    assertTrue(filteredFilesCount <= getLatestDataFilesCount(opts))
+    if (shouldSkipFiles) {
+      assertTrue(filteredFilesCount <= getLatestDataFilesCount(opts))
+    } else {
+      assertTrue(filteredFilesCount == getLatestDataFilesCount(opts))
+    }
 
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)

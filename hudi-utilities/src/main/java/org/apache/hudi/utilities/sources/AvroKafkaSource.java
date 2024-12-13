@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
@@ -97,12 +98,12 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> readFromCheckpoint(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
       configureSchemaDeserializer();
       offsetGen = new KafkaOffsetGen(props);
     }
-    return super.fetchNewData(lastCheckpointStr, sourceLimit);
+    return super.readFromCheckpoint(lastCheckpoint, sourceLimit);
   }
 
   @Override

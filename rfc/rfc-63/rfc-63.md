@@ -15,7 +15,7 @@
   limitations under the License.
 -->
 
-# RFC-63: Functional Indexes
+# RFC-63: Expression Indexes
 
 ## Proposers
 
@@ -35,7 +35,7 @@ JIRA: [HUDI-512](https://issues.apache.org/jira/browse/HUDI-512)
 
 ## Abstract
 
-In this RFC, we propose **Functional Indexes**, a new capability to
+In this RFC, we propose **Expression Indexes**, a new capability to
 Hudi's [multi-modal indexing](https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi)
 subsystem that offers a compelling vision to support not only accelerating queries but also reshape partitioning as
 another layer of the indexing system, abstracting them from the traditional notions, while providing flexibility
@@ -144,10 +144,10 @@ paths in the table.
 
 ### Use Case 3: Support for different indexes
 
-Functional index framework should be able to work with different index types such as bloom index, column stats, and at
+Expression index framework should be able to work with different index types such as bloom index, column stats, and at
 the same time should be extensible enough to support any other secondary index such
 as [vector](https://www.pinecone.io/learn/vector-database/) [index]((https://weaviate.io/developers/weaviate/concepts/vector-index))
-in the future. If we think about a very simple index on a column, it is kind of a functional index with identity
+in the future. If we think about a very simple index on a column, it is kind of a expression index with identity
 function `f(X) = X`. It is important to note that these are secondary indexes in the sense they will be stored
 separately from the data, and not materialized with the data.
 
@@ -168,36 +168,36 @@ Based on the use cases we plan to support, we set the following goals and non-go
   partition pruning. Viewing partitions as yet another index goes beyond the traditional view as pointed in use case 2,
   and we will see how we can support logical partitioning and partition evolution simply with indexes.
 - DO NOT tackle the support of using these indexes on the write path in this RFC. That said, we will present a glimpse
-  of how that can be done for functional indexes in the Appendix below.
+  of how that can be done for expression indexes in the Appendix below.
 - DO NOT build an expression engine. Building an expression engine in Hudi that unifies query predicate expressions from
   systems like Spark, Presto, and others into a standardized format is a forward-thinking idea. This would centralize
   the interpretation of queries for Hudi tables, leading to a simpler compatibility with multiple query engines.
-  However, it is not a pre-requisite for the first cut of functional indexes. Expression engine should be discussed in
+  However, it is not a pre-requisite for the first cut of expression indexes. Expression engine should be discussed in
   another RFC.
 
 ## Design and Implementation
 
-At a high level, **Functional Index** design principles are as follows:
+At a high level, **Expression Index** design principles are as follows:
 
-1. User specifies the Functional Index, including the original data column, the expression applying a function on the
+1. User specifies the Expression Index, including the original data column, the expression applying a function on the
    field(s), through **SQL** or Hudi's write config. Indexes can be created or dropped for Hudi tables at any time.
 2. While table properties will be the source of truth about what indexes are available, the metadata about each
-   functional index is registered in a separate index metadata file, to keep track of the relationship between the data
-   column and the functional Index. 
-3. Each functional index will be a partition inside the Hudi metadata table (MT).
-4. No data is materialized to the data files for the functional index, i.e., the data files do not contain a new data
-   column corresponding to the Functional Index, to save storage space.
-5. When query engine makes a logical plan for a query, Hudi intercepts the predicate that relates to a functional index,
+   expression index is registered in a separate index metadata file, to keep track of the relationship between the data
+   column and the expression Index. 
+3. Each expression index will be a partition inside the Hudi metadata table (MT).
+4. No data is materialized to the data files for the expression index, i.e., the data files do not contain a new data
+   column corresponding to the Expression Index, to save storage space.
+5. When query engine makes a logical plan for a query, Hudi intercepts the predicate that relates to a expression index,
    looks for the corresponding index in the MT, and applies data skipping based on one or more indexes.
 6. In order to be engine-agnostic, the design should not make assumptions about any particular engine.
 
 ### Components
 
-We discuss the design and implementation details of each component to realize the Functional Index.
+We discuss the design and implementation details of each component to realize the Expression Index.
 
 #### SQL
 
-Functional index can be created with the usual `CREATE INDEX` command. The function itself can be specified as `func` property in `OPTIONS`.
+Expression index can be created with the usual `CREATE INDEX` command. The function itself can be specified as `func` property in `OPTIONS`.
 
 ```sql
 -- PROPOSED SYNTAX WITH FUNCTION KEYWORD --
@@ -206,8 +206,8 @@ CREATE INDEX [IF NOT EXISTS] index_name ON [TABLE] table_name
     (column_name1 [OPTIONS(key1=value1, key2=value2, ...)], column_name2 [OPTIONS(key1=value1, key2=value2, ...)], ...)
     [OPTIONS (key1=value1, key2=value2, ...)]
 -- Examples --
-CREATE INDEX idx_datestr on hudi_table USING column_stats(ts) OPTIONS(func='from_unixtime', format='yyyy-MM-dd') -- functional index using column stats for DATE_FORMAT(ts, '%Y-%m-%d')
-CREATE INDEX last_name_idx ON employees USING column_stats(last_name) (func='upper'); -- functional index using column stats for UPPER(last_name)
+CREATE INDEX idx_datestr on hudi_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format='yyyy-MM-dd') -- expression index using column stats for DATE_FORMAT(ts, '%Y-%m-%d')
+CREATE INDEX last_name_idx ON employees USING column_stats(last_name) (expr='upper'); -- expression index using column stats for UPPER(last_name)
 CREATE INDEX city_id_idx ON hudi_table USING bloom_filters (city_id); -- usual bloom filters within metadata table
 
 -- NO CHANGE IN DROP INDEX --
@@ -218,13 +218,13 @@ DROP INDEX last_name_idx;
 
 `index_type` - Optional, `column_stats` (default) if omitted and there are no functions and expressions in the command. Valid
 options could be BLOOM_FILTER, RECORD_INDEX, BITMAP, COLUMN_STATS, LUCENE, etc. If `index_type` is not provided, and there are functions or
-expressions in the command then a functional index using column stats will be created.
+expressions in the command then a expression index using column stats will be created.
 
 `expression` - simple scalar expressions or sql functions.
 
-#### Functional Index Metadata
+#### Expression Index Metadata
 
-For each functional index, store a separate metadata with index details. This should be efficiently loaded. One option
+For each expression index, store a separate metadata with index details. This should be efficiently loaded. One option
 is to store the below metadata in `hoodie.properties`. This way all index metadata can be loaded with the table config.
 But, it would be better to not overload the table config. Let `hoodie.properties` still hold the list of indexes (MT
 partitions) available, and we propose to create separate `.index_defs` directory, which will be under `basepath/.hoodie`
@@ -242,18 +242,18 @@ called `hoodie.table.index.defs.path`.
 
 #### APIs
 
-A new interface, `HoodieFunctionalIndex`, is introduced to represent a functional index and track the relationship
+A new interface, `HoodieExpressionIndex`, is introduced to represent a expression index and track the relationship
 between the original data field(s) and the transformation.
 
 ```java
 /**
- * Interface representing a functional index in Hudi.
+ * Interface representing a expression index in Hudi.
  *
- * @param <S> The source type of the values from the fields used in the functional index expression.
+ * @param <S> The source type of the values from the fields used in the expression index expression.
  *            Note that this assumes than an expression is operating on fields of same type.
  * @param <T> The target type after applying the transformation. Represents the type of the indexed value.
  */
-public interface HoodieFunctionalIndex<S, T> {
+public interface HoodieExpressionIndex<S, T> {
   /**
    * Get the name of the index.
    * @return Name of the index.
@@ -289,8 +289,8 @@ metadata in `.index_defs` directory. This RFC will cover any format changes requ
 
 #### Index in Metadata Table
 
-For each functional index, Hudi needs to populate the index to facilitate data skipping. We reuse the metadata table and
-each functional index is stored under a new partition named as `func_index_<index_name>`. Each record in index is a
+For each expression index, Hudi needs to populate the index to facilitate data skipping. We reuse the metadata table and
+each expression index is stored under a new partition named as `expr_index_<index_name>`. Each record in index is a
 key-value and payload will depend on `index_type`. For example, if `index_type` is not provided then key is simply the
 values based on function or expression and value is a collection of file paths. If `index_type` is `column_stats` then
 the value will be stats based on value derived from the function and key will be hash of file path. 
@@ -309,43 +309,43 @@ written:
 
 On receiving a query:
 
-1. Parse the query and index metadata (in `.index_defs`) to determine the relevant functional index is available or not.
+1. Parse the query and index metadata (in `.index_defs`) to determine the relevant expression index is available or not.
 2. Lookup (point/range) index to determine:
-    * Which storage partitions to scan (using aggregated values from functional index)
-    * Which files match functional index predicates
+    * Which storage partitions to scan (using aggregated values from expression index)
+    * Which files match expression index predicates
     * Where these files are physically located (irrespective of their storage layout)
 3. Use the physical paths derived from metadata to access and read the relevant data.
 
-Let's take an example. Assume that we have a functional index on `DATE_FORMAT(ts, '%Y-%m-%d')` and a query
+Let's take an example. Assume that we have a expression index on `DATE_FORMAT(ts, '%Y-%m-%d')` and a query
 `SELECT * FROM hudi_tbl where DATE_FORMAT(ts) > 2022-03-01`. The index will be a collection of key-values where keys are
 the value after evaluating the expression and values are the list of files. Also, keys are sorted by their natural
 order. In this case, the reader will look up the index and find the first key that is greater than `2022-03-01` and 
 return the set of files to be scanned.
 
-When the functional index is created using `column_stats` then the index will be a collection of key-values where keys
+When the expression index is created using `column_stats` then the index will be a collection of key-values where keys
 are the hash of storage partition and file paths and values are the stats of the value after evaluating the expression.
-In this case, the reader will look up the `files` index first to prune partitions and then look up the functional index
+In this case, the reader will look up the `files` index first to prune partitions and then look up the expression index
 to skip files.
 
-Below are the concrete steps on how Hudi will intercept predicate in the query and use functional index whenever it can.
+Below are the concrete steps on how Hudi will intercept predicate in the query and use expression index whenever it can.
 
-1. Identify the relevant functional index based on the predicate and add a new predicate based on the Functional Index
-   name if needed. Take the functional index created by
+1. Identify the relevant expression index based on the predicate and add a new predicate based on the Expression Index
+   name if needed. Take the expression index created by
    SQL `CREATE INDEX datestr ON hudi_table USING col_stats (DATE_FORMAT(ts, '%Y-%m-%d'));`
 
-- If the original data column of a functional index is used, transform the predicate to a new predicate based on the
-  Functional Index name if possible, e.g., `ts between 1666767600 and 1666897200`
+- If the original data column of a expression index is used, transform the predicate to a new predicate based on the
+  Expression Index name if possible, e.g., `ts between 1666767600 and 1666897200`
   to `datestr between '2022-10-26' and '2022-10-27'`;
-- If the expression of a functional index is used, replace the expression to the functional index name,
+- If the expression of a expression index is used, replace the expression to the expression index name,
   e.g., `DATE_FORMAT(ts, '%Y-%m-%d') between '2022-10-26' and '2022-10-27'`
   to `datestr between '2022-10-26' and '2022-10-27'`;
-- If the functional index name is used in the predicate, e.g., `datestr between '2022-10-26' and '2022-10-27'`, no
+- If the expression index name is used in the predicate, e.g., `datestr between '2022-10-26' and '2022-10-27'`, no
   action is needed here.
 
-2. For the functional index name appeared in the predicate, look up the corresponding index metadata from metadata table
+2. For the expression index name appeared in the predicate, look up the corresponding index metadata from metadata table
    and prune files that are not needed for scanning.
 
-In order to use the functional indexes, MT has to be enabled for the readers. Spark, Hive, Presto and Trino can already
+In order to use the expression indexes, MT has to be enabled for the readers. Spark, Hive, Presto and Trino can already
 do so today. In order to generate splits, we will rely on MT. However, we will need to add some code in query engines to
 understand the predicates. For each query engine, we need to intercept the engine-specific representation of the
 predicates, and derive the relevant predicate based on the function, e.g. break down `TupleDomain` in Presto/Trino. We
@@ -353,9 +353,9 @@ consider integrating Spark and Presto first in the implementation.
 
 #### Handling the Storage Layout Scenarios
 
-Let's try to understand how functional indexes can help with different storage layouts.
+Let's try to understand how expression indexes can help with different storage layouts.
 
-1. **Hive-Style Partitioning**: This is straightforward and use the functional index that is similar to `files`.
+1. **Hive-Style Partitioning**: This is straightforward and use the expression index that is similar to `files`.
 2. **Random Prefix Storage Partitioning ([RFC-60](https://github.com/apache/hudi/blob/master/rfc/rfc-60/rfc-60.md)),
    attached to a basepath**: We can still use the `files` index provided it is enriched with storage partition mapping
    as mentioned in RFC-60.
@@ -376,38 +376,38 @@ Let's try to understand how functional indexes can help with different storage l
 
 ## Rollout/Adoption Plan
 
-The functional index will be enabled just like any other index i.e. after the `hoodie.table.metadata.partitions` config 
+The expression index will be enabled just like any other index i.e. after the `hoodie.table.metadata.partitions` config 
 in `hoodie.properties` is updated after building the index.
 
 ## Test Plan
 
 - Unit and functional tests
     - Function can be applied correctly
-    - Functional index is populated in metadata table
+    - Expression index is populated in metadata table
     - Expected skipping behavior is validated
 - Validation of the implementation on the use cases above
     - The workflow should work smoothly
 
 ## Appendix
 
-### Functional Index-Based Ordering on Write Path
+### Expression Index-Based Ordering on Write Path
 
-To unlock efficient data skipping, we can support functional index-based ordering during write operations. Similar to
-clustering, the functional index for ordering can be specified by new write config `hoodie.write.sort.columns`.
+To unlock efficient data skipping, we can support expression index-based ordering during write operations. Similar to
+clustering, the expression index for ordering can be specified by new write config `hoodie.write.sort.columns`.
 
 When writing records to data files, the write client does the following:
 
-- For new inserts, sort the data based on the specified functional index before writing to data files. This reuses
+- For new inserts, sort the data based on the specified expression index before writing to data files. This reuses
   existing flow of bulk insert and clustering
-    - Each data file contains one or a small subset of values corresponding to the functional index.
+    - Each data file contains one or a small subset of values corresponding to the expression index.
     - Different sort modes can be provided like bulk insert and clustering.
 
 - For updates, no change in logic is needed. The record with the same key should go into the same file group.
-- For small file handing, we need to take into account the functional index for the workload profile, so that the new
-  inserts can be combined into the data file without expanding the minimum and maximum values of the functional index when
+- For small file handing, we need to take into account the expression index for the workload profile, so that the new
+  inserts can be combined into the data file without expanding the minimum and maximum values of the expression index when
   the data file is small.
 
-Additionally, when using SQL, users can add hints to specify the functional index for ordering, e.g.,
+Additionally, when using SQL, users can add hints to specify the expression index for ordering, e.g.,
 
 ```sql
 INSERT INTO TABLE hudi_table
@@ -416,7 +416,7 @@ SELECT /*+ ORDER BY datestr */ * FROM source_table;
 
 ### Other Systems
 
-In this section, we compare Hudi's Functional Index to related concepts and solutions on pruning files efficiently and
+In this section, we compare Hudi's Expression Index to related concepts and solutions on pruning files efficiently and
 improving query performance.
 
 #### Hidden Partitioning in Apache Iceberg
@@ -427,7 +427,7 @@ partition columns and physical partitions from catalogs and users, using manifes
 each file to prune files and speed up queries. By using Hidden Partitioning, Iceberg can evolve partition schemes, i.e.,
 partition evolution, without rewriting data.
 
-Hudi's Functional Index achieves the same goal of pruning files based on the column stats, with the support on any data
+Hudi's Expression Index achieves the same goal of pruning files based on the column stats, with the support on any data
 column or function defined on a data column, without coupling with the partition scheme.
 
 #### Index on Expression in PostgreSQL
@@ -439,7 +439,7 @@ queries containing the expression in the predicates. The index on expression is 
 stored separately from the record data. There is no materialization of the values from the expression in the data area.
 PostgreSQL supports Index on Expression and Oracle database supports Function-Based Indexes.
 
-Hudi's Functional Index applies similar concept which allows a new index to be built based on a function defined on 
+Hudi's Expression Index applies similar concept which allows a new index to be built based on a function defined on 
 field(s) at any time for data skipping.
 
 #### Generated Column in Delta Lake
@@ -454,7 +454,7 @@ In Delta Lake, a [generated column](https://docs.delta.io/latest/delta-batch.htm
 a partition column. When doing so, Delta Lake looks at the relationship between the base column and the generated
 column, and populates partition filters based on the generated partition column if possible.
 
-Hudi's Functional Index is similar to virtual generated column, but the Functional Index is not queryable except for the
+Hudi's Expression Index is similar to virtual generated column, but the Expression Index is not queryable except for the
 usage in the predicates.
 
 #### Micro Partitions in Snowflake
@@ -466,5 +466,5 @@ including the range of values for each of the columns. In this way, query prunin
 be efficient, if there are no or little overlapping among micro partitions in terms of the column value range. The
 degree of overlapping is reduced through data clustering.
 
-Hudi's Functional Index depends on optimized storage layout for efficient file pruning, which can be achieved through
+Hudi's Expression Index depends on optimized storage layout for efficient file pruning, which can be achieved through
 clustering and proposed Index-Function-based ordering during write operations.

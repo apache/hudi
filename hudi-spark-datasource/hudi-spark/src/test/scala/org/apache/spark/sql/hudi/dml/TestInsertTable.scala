@@ -30,7 +30,6 @@ import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -39,7 +38,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMeta
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.File
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
@@ -2286,7 +2285,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  'preCombineField'='dt',
            |  'hoodie.index.type' = 'BUCKET',
            |  'hoodie.bucket.index.hash.field' = 'id',
-           |  'hoodie.bucket.index.num.buckets'=512
+           |  'hoodie.bucket.index.num.buckets'=512,
+           |  'hoodie.metadata.enable'='false'
            | )
            |partitioned by (`day`,`hour`)
            |location '${tmp.getCanonicalPath}/$targetTable'
@@ -2312,7 +2312,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         rddHead = rddHead.firstParent
       }
       assertResult(1)(rddHead.partitions.size)
-      countDownLatch.await
+      countDownLatch.await(1, TimeUnit.MINUTES)
       assert(listenerCallCount >= 1)
     }
   }
@@ -2338,7 +2338,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  'preCombineField'='dt',
            |  'hoodie.index.type' = 'BUCKET',
            |  'hoodie.bucket.index.hash.field' = 'id',
-           |  'hoodie.bucket.index.num.buckets'=512
+           |  'hoodie.bucket.index.num.buckets'=512,
+           |  'hoodie.metadata.enable'='false'
            | )
            |partitioned by (`day`)
            |location '${tmp.getCanonicalPath}/$targetTable'
@@ -2364,7 +2365,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         rddHead = rddHead.firstParent
       }
       assertResult(1)(rddHead.partitions.size)
-      countDownLatch.await
+      countDownLatch.await(1, TimeUnit.MINUTES)
       assert(listenerCallCount >= 1)
     }
   }
@@ -2994,6 +2995,46 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             "hudi not support specified cols when enable default columns")
         }
       }
+    }
+  }
+
+  test("Test SparkKeyGenerator When Bulk Insert") {
+    withSQLConf("hoodie.sql.bulk.insert.enable" -> "true", "hoodie.sql.insert.mode" -> "non-strict") {
+      withRecordType()(withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a multi-level partitioned table
+        // Specify wrong keygenarator by setting hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator'
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string,
+             |  pt string
+             |) using hudi
+             |tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator',
+             |  hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.ComplexAvroKeyGenerator'
+             |)
+             | partitioned by (dt, pt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+        //Insert data and check the same
+        spark.sql(
+          s"""insert into $tableName  values
+             |(1, 'a', 31, 1000, '2021-01-05', 'A'),
+             |(2, 'b', 18, 1000, '2021-01-05', 'A')
+             |""".stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt, pt from $tableName order by dt")(
+          Seq(1, "a", 31, 1000, "2021-01-05", "A"),
+          Seq(2, "b", 18, 1000, "2021-01-05", "A")
+        )
+      })
     }
   }
 }

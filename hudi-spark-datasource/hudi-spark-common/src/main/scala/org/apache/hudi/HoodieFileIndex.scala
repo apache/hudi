@@ -19,17 +19,15 @@ package org.apache.hudi
 
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
-import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, convertTimestampPartitionValues, getConfigProperties, DataSkippingFailureMode}
+import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.keygen.{CustomAvroKeyGenerator, KeyGenUtils, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType
-import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
 
@@ -44,14 +42,13 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import javax.annotation.concurrent.NotThreadSafe
-
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
+import javax.annotation.concurrent.NotThreadSafe
 
 import scala.collection.JavaConverters._
-import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
+import scala.util.{Failure, Success, Try}
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -91,8 +88,7 @@ case class HoodieFileIndex(spark: SparkSession,
                            options: Map[String, String],
                            @transient fileStatusCache: FileStatusCache = NoopCache,
                            includeLogFiles: Boolean = false,
-                           shouldEmbedFileSlices: Boolean = false,
-                           shouldUseStringTypeForTimestampPartitionKeyType: Boolean = false)
+                           shouldEmbedFileSlices: Boolean = false)
   extends SparkHoodieTableFileIndex(
     spark = spark,
     metaClient = metaClient,
@@ -102,10 +98,7 @@ case class HoodieFileIndex(spark: SparkSession,
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache,
     startCompletionTime = options.get(DataSourceReadOptions.START_COMMIT.key),
-    endCompletionTime = options.get(DataSourceReadOptions.END_COMMIT.key),
-    shouldUseStringTypeForTimestampPartitionKeyType = shouldUseStringTypeForTimestampPartitionKeyType
-  )
-    with FileIndex {
+    endCompletionTime = options.get(DataSourceReadOptions.END_COMMIT.key)) with FileIndex {
 
   @transient protected var hasPushedDownPartitionPredicates: Boolean = false
 
@@ -119,7 +112,7 @@ case class HoodieFileIndex(spark: SparkSession,
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
     new BucketIndexSupport(spark, metadataConfig, metaClient),
     new SecondaryIndexSupport(spark, metadataConfig, metaClient),
-    new FunctionalIndexSupport(spark, metadataConfig, metaClient),
+    new ExpressionIndexSupport(spark, schema, metadataConfig, metaClient),
     new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
     new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
   )
@@ -171,7 +164,6 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val timestampPartitionIndexes = HoodieFileIndex.getTimestampPartitionIndex(metaClient.getTableConfig)
     val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
         if (shouldEmbedFileSlices) {
@@ -187,13 +179,12 @@ case class HoodieFileIndex(spark: SparkSession,
             .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
               fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
           val c = fileSlices.filter(f => f.hasLogFiles || f.hasBootstrapBase).foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
-          val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, shouldUseStringTypeForTimestampPartitionKeyType)
           if (c.nonEmpty) {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-              new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(convertedPartitionValues), c), baseFileStatusesAndLogFileOnly)
+              new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
           } else {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-              InternalRow.fromSeq(convertedPartitionValues), baseFileStatusesAndLogFileOnly)
+              InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
           }
 
         } else {
@@ -206,9 +197,8 @@ case class HoodieFileIndex(spark: SparkSession,
           })
             .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
               fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
-          val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, shouldUseStringTypeForTimestampPartitionKeyType)
           sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-            InternalRow.fromSeq(convertedPartitionValues), allCandidateFiles)
+            InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
         }
     }
 
@@ -454,8 +444,8 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isRecordIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == RecordLevelIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
-  private def isFunctionalIndexEnabled: Boolean = indicesSupport.exists(idx =>
-    idx.getIndexName == FunctionalIndexSupport.INDEX_NAME && idx.isIndexAvailable)
+  private def isExpressionIndexEnabled: Boolean = indicesSupport.exists(idx =>
+    idx.getIndexName == ExpressionIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
   private def isBucketIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == BucketIndexSupport.INDEX_NAME && idx.isIndexAvailable)
@@ -469,13 +459,13 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isSecondaryIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == SecondaryIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
-  private def isIndexEnabled: Boolean = indicesSupport.exists(idx => idx.isIndexAvailable)
+  private def isIndexAvailable: Boolean = indicesSupport.exists(idx => idx.isIndexAvailable)
 
   private def validateConfig(): Unit = {
-    if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexEnabled)) {
-      logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index, Record Level Index, or Functional Index" +
-        " to be enabled as well! " + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
-        + s", isRecordIndexApplicable = $isRecordIndexEnabled, isFunctionalIndexEnabled = $isFunctionalIndexEnabled, " +
+    if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexAvailable)) {
+      logWarning("Data skipping requires Metadata Table and at least one of the indices to be enabled! "
+        + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
+        + s", isRecordIndexApplicable = $isRecordIndexEnabled, isExpressionIndexEnabled = $isExpressionIndexEnabled, " +
         s"isBucketIndexEnable = $isBucketIndexEnabled, isPartitionStatsIndexEnabled = $isPartitionStatsIndexEnabled)"
         + s", isBloomFiltersIndexEnabled = $isBloomFiltersIndexEnabled)")
     }
@@ -597,48 +587,4 @@ object HoodieFileIndex extends Logging {
 
     paths.map(new StoragePath(_))
   }
-
-  private def convertTimestampPartitionType(timestampPartitionIndexes: Set[Int], index: Int, elem: Any) = {
-    if (timestampPartitionIndexes.contains(index)) {
-      org.apache.spark.unsafe.types.UTF8String.fromString(String.valueOf(elem))
-    } else {
-      elem
-    }
-  }
-
-  private def convertTimestampPartitionValues(values: Array[Object], timestampPartitionIndexes: Set[Int], shouldUseStringTypeForTimestampPartitionKeyType: Boolean) = {
-    if (!shouldUseStringTypeForTimestampPartitionKeyType || timestampPartitionIndexes.isEmpty) {
-      values
-    } else {
-      values.zipWithIndex.map { case (elem, index) => convertTimestampPartitionType(timestampPartitionIndexes, index, elem) }
-    }
-  }
-
-  /**
-   * Returns set of indices with timestamp partition type. For Timestamp based keygen, there is only one
-   * partition so index is 0. For custom keygen, it is the partition indices for which partition type is
-   * timestamp.
-   */
-  def getTimestampPartitionIndex(tableConfig: HoodieTableConfig): Set[Int] = {
-    val keyGeneratorClassNameOpt = Option.apply(tableConfig.getKeyGeneratorClassName)
-    val recordKeyFieldOpt = common.util.Option.ofNullable(tableConfig.getRawRecordKeyFieldProp)
-    val keyGeneratorClassName = keyGeneratorClassNameOpt.getOrElse(KeyGenUtils.inferKeyGeneratorType(recordKeyFieldOpt, tableConfig.getPartitionFieldProp).getClassName)
-    if (keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
-      || keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP_AVRO.getClassName)) {
-      Set(0)
-    } else if (keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM.getClassName)
-      || keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName)) {
-      val partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(tableConfig)
-      var partitionIndexes: Set[Int] = Set.empty
-      for (i <- 0 until partitionTypes.size()) {
-        if (partitionTypes.get(i).equals(PartitionKeyType.TIMESTAMP)) {
-          partitionIndexes = partitionIndexes + i
-        }
-      }
-      partitionIndexes
-    } else {
-      Set.empty
-    }
-  }
-
 }

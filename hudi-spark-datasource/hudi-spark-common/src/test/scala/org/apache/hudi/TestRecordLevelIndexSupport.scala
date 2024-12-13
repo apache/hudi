@@ -125,5 +125,10 @@ class TestRecordLevelIndexSupport {
     testFilter = And(rk3InFilter, Or(rk2EqFilter, rk1EqFilter))
     result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("rk1"), RecordLevelIndexSupport.getComplexKeyLiteralGenerator())
     assertTrue(result.isEmpty)
+
+    // Case 11: Test unsupported query type with And. Here the unsupported query OR is at second level from the root query type
+    testFilter = And(rk1EqFilter, And(rk1InFilter, Or(rk1EqFilter, rk1EqFilter)))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("rk1"), RecordLevelIndexSupport.getComplexKeyLiteralGenerator())
+    assertTrue(result.isEmpty)
   }
 }

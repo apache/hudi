@@ -1487,5 +1487,4 @@ public class HoodieAvroUtils {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
     }
   }
-
 }

@@ -111,7 +111,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       // create secondary index without RLI and assert exception
       assertThrows[HoodieMetadataIndexException] {
-        spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+        spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       }
     }
   }
@@ -158,7 +158,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -181,7 +181,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       verifyQueryPredicate(hudiOpts, "not_record_key_col")
 
       // create another secondary index on non-string column
-      spark.sql(s"create index idx_ts on $tableName using secondary_index(ts)")
+      spark.sql(s"create index idx_ts on $tableName (ts)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.reload(metaClient)
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_ts"))
@@ -257,7 +257,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -320,7 +320,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -370,7 +370,11 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
       tableName += "test_secondary_index_with_partition_stats_index" + (if (isPartitioned) "_partitioned" else "") + sqlTableType
       val partitionedByClause = if (isPartitioned) "partitioned by(partition_key_col)" else ""
-      val partitionStatsEnable = if (isPartitioned) "'hoodie.metadata.index.partition.stats.enable' = 'true'," else ""
+      val partitionStatsEnable = if (isPartitioned)
+        s"""
+           |'hoodie.metadata.index.partition.stats.enable' = 'true',
+           |'hoodie.metadata.index.column.stats.enable' = 'true',
+        """.stripMargin else ""
       val columnsToIndex = if (isPartitioned) "'hoodie.metadata.index.column.stats.column.list' = 'name'," else ""
 
       spark.sql(
@@ -404,7 +408,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'nehru', 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'patel', 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_secondary_key_col on $tableName using secondary_index(secondary_key_col)")
+      spark.sql(s"create index idx_secondary_key_col on $tableName (secondary_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -427,7 +431,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       verifyQueryPredicate(hudiOpts, "secondary_key_col")
 
       // create another secondary index on non-string column
-      spark.sql(s"create index idx_ts on $tableName using secondary_index(ts)")
+      spark.sql(s"create index idx_ts on $tableName (ts)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.reload(metaClient)
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_ts"))
@@ -490,7 +494,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
 
       val executor = Executors.newFixedThreadPool(2)
       implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
@@ -598,7 +602,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -677,7 +681,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -757,7 +761,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'abc', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -829,7 +833,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'abc', 'p1')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p1')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -894,7 +898,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'def', 'p1')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p1')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -970,7 +974,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(2, 'row2', 'abc', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'hjk', 'p2')")
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -1064,7 +1068,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       confirmLastCommitType(ActionType.replacecommit)
 
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.reload(metaClient)
       // validate the secondary index records themselves
@@ -1175,7 +1179,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
 
       // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
       // validate index created successfully
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
@@ -1270,12 +1274,12 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-      spark.sql(s"create index idx_rider_$tableName ON $tableName USING secondary_index(rider)")
+      spark.sql(s"create index idx_rider_$tableName ON $tableName (rider)")
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where rider = 'rider-E'")(
         Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas"))
       verifyQueryPredicate(hudiOpts, "rider")
 
-      spark.sql(s"create index idx_driver_$tableName ON $tableName USING secondary_index(driver)")
+      spark.sql(s"create index idx_driver_$tableName ON $tableName (driver)")
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where driver = 'driver-P'")(
         Seq(1695516137, "trip4", "rider-F", "driver-P", 34.15, "houston", "texas")
       )
@@ -1358,7 +1362,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       // Create secondary indexes for different data types
       val secondaryIndexColumns = Seq("string_col", "int_col", "bigint_col", "double_col", "decimal_col", "timestamp_col", "boolean_col")
       secondaryIndexColumns.foreach { col =>
-        spark.sql(s"create index idx_$col on $tableName using secondary_index($col)")
+        spark.sql(s"create index idx_$col on $tableName ($col)")
       }
 
       // Validate indexes created successfully
@@ -1448,7 +1452,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val secondaryIndexColumns = Seq("struct_col", "array_col", "map_col")
       secondaryIndexColumns.foreach { col =>
         assertThrows[HoodieMetadataIndexException] {
-          spark.sql(s"create index idx_$col on $tableName using secondary_index($col)")
+          spark.sql(s"create index idx_$col on $tableName ($col)")
         }
       }
     }

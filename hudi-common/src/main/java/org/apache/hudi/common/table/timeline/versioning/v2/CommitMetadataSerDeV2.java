@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline.versioning.v2;
 
 import org.apache.hudi.avro.model.HoodieCommitMetadata;
+import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
@@ -71,6 +72,9 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
 
   @Override
   public Option<byte[]> serialize(org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata) throws IOException {
+    if (commitMetadata instanceof org.apache.hudi.common.model.HoodieReplaceCommitMetadata) {
+      return serializeAvroMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata), HoodieReplaceCommitMetadata.class);
+    }
     return serializeAvroMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata), HoodieCommitMetadata.class);
   }
 

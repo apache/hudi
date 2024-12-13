@@ -19,7 +19,7 @@
 
 package org.apache.hudi.index.functional;
 
-import org.apache.hudi.HoodieSparkFunctionalIndex;
+import org.apache.hudi.HoodieSparkExpressionIndex;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.spark.sql.Column;
@@ -41,11 +41,11 @@ import static org.apache.spark.sql.functions.col;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestHoodieSparkFunctionalIndex extends HoodieSparkClientTestHarness {
+public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setup() {
-    initSparkContexts("TestHoodieSparkFunctionalIndex");
+    initSparkContexts("TestHoodieSparkExpressionIndex");
   }
 
   @AfterEach
@@ -66,8 +66,8 @@ public class TestHoodieSparkFunctionalIndex extends HoodieSparkClientTestHarness
     // Register the DataFrame as a temp view so we can query it
     df.createOrReplaceTempView("testData");
 
-    // Initialize the HoodieSparkFunctionalIndex with the year function
-    HoodieSparkFunctionalIndex index = new HoodieSparkFunctionalIndex(
+    // Initialize the HoodieSparkExpressionIndex with the year function
+    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(
         "yearIndex",
         "year",
         Arrays.asList("timestampColumn"),
@@ -100,8 +100,8 @@ public class TestHoodieSparkFunctionalIndex extends HoodieSparkClientTestHarness
     // Register the DataFrame as a temp view so we can query it
     df.createOrReplaceTempView("testData");
 
-    // Initialize the HoodieSparkFunctionalIndex with the hour function
-    HoodieSparkFunctionalIndex index = new HoodieSparkFunctionalIndex(
+    // Initialize the HoodieSparkExpressionIndex with the hour function
+    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(
         "hourIndex",
         "hour",
         Arrays.asList("timestampColumn"),
@@ -125,7 +125,7 @@ public class TestHoodieSparkFunctionalIndex extends HoodieSparkClientTestHarness
   public void testApplyYearFunctionWithWrongNumberOfArguments() {
     // Setup index with the wrong number of source fields
     List<Column> sourceColumns = Arrays.asList(col("timestampColumn"), col("extraColumn"));
-    HoodieSparkFunctionalIndex index = new HoodieSparkFunctionalIndex(
+    HoodieSparkExpressionIndex index = new HoodieSparkExpressionIndex(
         "yearIndex",
         "year",
         Arrays.asList("timestampColumn", "extraColumn"),

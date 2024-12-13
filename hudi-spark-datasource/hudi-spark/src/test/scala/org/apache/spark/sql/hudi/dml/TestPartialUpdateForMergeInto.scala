@@ -17,25 +17,25 @@
 
 package org.apache.spark.sql.hudi.dml
 
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.function.SerializableFunctionUnchecked
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.common.util.CompactionUtils
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
-
 import org.apache.avro.Schema
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
-import java.util.function.Predicate
 import java.util.{Collections, List, Optional}
 
 import scala.collection.JavaConverters._
@@ -64,6 +64,17 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test partial update and insert with MOR and Parquet log format") {
     testPartialUpdateWithInserts("mor", "parquet")
+  }
+
+  test("Test partial update with schema on read enabled") {
+    withSQLConf(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key() -> "true") {
+      try {
+        testPartialUpdate("mor", "parquet")
+        fail("Expected exception to be thrown")
+      } catch {
+        case t: Throwable => assertTrue(t.isInstanceOf[HoodieNotSupportedException])
+      }
+    }
   }
 
   test("Test fallback to full update with MOR even if partial updates are enabled") {
@@ -204,10 +215,10 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |merge into $tableName t0
-           |using ( select 1 as id, 'a1' as name, 12 as price, 1001 as ts
-           |union select 3 as id, 'a3' as name, 25 as price, 1260 as ts) s0
+           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as _ts
+           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as _ts) s0
            |on t0.id = s0.id
-           |when matched then update set price = s0.price, _ts = s0.ts
+           |when matched then update set price = s0.price, _ts = s0._ts
            |""".stripMargin)
 
       checkAnswer(s"select id, name, price, _ts, description from $tableName")(
@@ -224,10 +235,10 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |merge into $tableName t0
-           |using ( select 1 as id, 'a1' as name, 'a1: updated desc1' as description, 1023 as ts
-           |union select 2 as id, 'a2' as name, 'a2: updated desc2' as description, 1270 as ts) s0
+           |using ( select 1 as id, 'a1' as name, 'a1: updated desc1' as description, 1023 as _ts
+           |union select 2 as id, 'a2' as name, 'a2: updated desc2' as description, 1270 as _ts) s0
            |on t0.id = s0.id
-           |when matched then update set description = s0.description, _ts = s0.ts
+           |when matched then update set description = s0.description, _ts = s0._ts
            |""".stripMargin)
 
       checkAnswer(s"select id, name, price, _ts, description from $tableName")(
@@ -238,11 +249,57 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
       if (tableType.equals("mor")) {
         validateLogBlock(basePath, 2, Seq(Seq("price", "_ts"), Seq("_ts", "description")), true)
+
+        spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key} = 3")
+        // Partial updates that trigger compaction
+        spark.sql(
+          s"""
+             |merge into $tableName t0
+             |using ( select 2 as id, '_a2' as name, 18.0 as price, 1275 as _ts
+             |union select 3 as id, '_a3' as name, 28.0 as price, 1280 as _ts) s0
+             |on t0.id = s0.id
+             |when matched then update set price = s0.price, _ts = s0._ts
+             |""".stripMargin)
+        validateCompactionExecuted(basePath)
+        checkAnswer(s"select id, name, price, _ts, description from $tableName")(
+          Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
+          Seq(2, "a2", 18.0, 1275, "a2: updated desc2"),
+          Seq(3, "a3", 28.0, 1280, "a3: desc3")
+        )
+
+        // trigger one more MIT and do inline clustering
+        spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING.key} = true")
+        spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key} = 3")
+        spark.sql(
+          s"""
+             |merge into $tableName t0
+             |using ( select 2 as id, '_a2' as name, 48.0 as price, 1275 as _ts
+             |union select 3 as id, '_a3' as name, 58.0 as price, 1280 as _ts) s0
+             |on t0.id = s0.id
+             |when matched then update set price = s0.price, _ts = s0._ts
+             |""".stripMargin)
+
+        validateClusteringExecuted(basePath)
+        checkAnswer(s"select id, name, price, _ts, description from $tableName")(
+          Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
+          Seq(2, "a2", 48.0, 1275, "a2: updated desc2"),
+          Seq(3, "a3", 58.0, 1280, "a3: desc3")
+        )
+
+        // revert the config overrides.
+        spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key}"
+          + s" = ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.defaultValue()}")
+
+        spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key}"
+          + s" = ${HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.defaultValue()}")
+        spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING.key}"
+          + s" = ${HoodieClusteringConfig.INLINE_CLUSTERING.defaultValue()}")
       }
 
       if (tableType.equals("cow")) {
         // No preCombine field
         val tableName2 = generateTableName
+        val basePath2 = tmp.getCanonicalPath + "/" + tableName2
         spark.sql(
           s"""
              |create table $tableName2 (
@@ -254,21 +311,31 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
              | type ='$tableType',
              | primaryKey = 'id'
              |)
-             |location '${tmp.getCanonicalPath}/$tableName2'
+             |location '$basePath2'
         """.stripMargin)
         spark.sql(s"insert into $tableName2 values(1, 'a1', 10)")
+
+        spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
+        spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING.key} = true")
+        spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key} = 1")
 
         spark.sql(
           s"""
              |merge into $tableName2 t0
-             |using ( select 1 as id, 'a1' as name, 12 as price) s0
+             |using ( select 1 as id, 'a2' as name, 12.0 as price) s0
              |on t0.id = s0.id
              |when matched then update set price = s0.price
              |""".stripMargin)
 
+        validateClusteringExecuted(basePath2)
         checkAnswer(s"select id, name, price from $tableName2")(
           Seq(1, "a1", 12.0)
         )
+
+        spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key}"
+          + s" = ${HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.defaultValue()}")
+        spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING.key}"
+          + s" = ${HoodieClusteringConfig.INLINE_CLUSTERING.defaultValue()}")
       }
     }
   }
@@ -421,5 +488,22 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         avroSchema, changedFields(i).asJava), false)
       assertEquals(expectedSchema, actualSchema)
     }
+  }
+
+  def validateClusteringExecuted(basePath: String): Unit = {
+    val storageConf = HoodieTestUtils.getDefaultStorageConf
+    val metaClient: HoodieTableMetaClient =
+      HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
+    val lastCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, lastCommit.getAction)
+  }
+
+  def validateCompactionExecuted(basePath: String): Unit = {
+    val storageConf = HoodieTestUtils.getDefaultStorageConf
+    val metaClient: HoodieTableMetaClient =
+      HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
+    val lastCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+    assertEquals(HoodieTimeline.COMMIT_ACTION, lastCommit.getAction)
+    CompactionUtils.getCompactionPlan(metaClient, lastCommit.requestedTime())
   }
 }

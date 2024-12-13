@@ -98,17 +98,14 @@ public class ActiveActionWithDetails extends ActiveAction {
   }
 
   public Option<byte[]> getCleanPlan(HoodieTableMetaClient metaClient) {
-    ValidationUtils.checkState(this.requestedDetails.isPresent(), "clean plan does not exist");
     return this.requestedDetails;
   }
 
   public Option<byte[]> getCompactionPlan(HoodieTableMetaClient metaClient) {
-    ValidationUtils.checkState(this.requestedDetails.isPresent(), "compaction plan does not exist");
     return this.requestedDetails;
   }
 
   public Option<byte[]> getLogCompactionPlan(HoodieTableMetaClient metaClient) {
-    ValidationUtils.checkState(this.requestedDetails.isPresent(), "log compaction plan does not exist");
     return this.requestedDetails;
   }
 }

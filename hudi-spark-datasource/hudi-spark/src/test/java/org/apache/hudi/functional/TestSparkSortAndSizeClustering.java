@@ -157,7 +157,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
 
     if (doCommit) {
-      Assertions.assertTrue(writeClient.commitStats(commitTime, context.parallelize(writeStatues, 1), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+      Assertions.assertTrue(writeClient.commitStats(commitTime, writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
           Option.empty(), metaClient.getCommitActionType()));
     }
 
