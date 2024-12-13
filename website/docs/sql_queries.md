@@ -38,7 +38,7 @@ using path filters. We expect that native integration with Spark's optimized tab
 management will yield great performance benefits in those versions.
 :::
 
-### Snapshot Query without Index Acceleration
+### Snapshot Query with Index Acceleration
 
 In this section we would go over the various indexes and how they help in data skipping in Hudi. We will first create
 a hudi table without any index.

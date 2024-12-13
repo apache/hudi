@@ -212,6 +212,14 @@ SELECT id, name, price, _ts, description FROM tableName;
 
 Notice, instead of `UPDATE SET *`, we are updating only the `price` and `_ts` columns.
 
+:::note
+Partial update is not yet supported in the following cases:
+1. When the target table is a bootstrapped table. 
+2. When virtual keys is enabled.
+3. When schema on read is enabled. 
+4. When there is an enum field in the source data.
+:::
+
 ### Delete From
 
 You can remove data from a Hudi table using the `DELETE FROM` statement.

@@ -165,6 +165,32 @@ As general guidelines,
 
 Note that release notes can override this information with specific instructions, applicable on case-by-case basis.
 
+### Upgrading to 1.0.0
+
+1.0.0 is a major release with significant format changes. To ensure a smooth migration experience, we recommend the
+following steps:
+
+1. Stop any async table services in 0.x completely.
+2. Upgrade writers to 1.x with table version (tv) 6, `autoUpgrade` and metadata disabled (this won't auto-upgrade anything);
+   0.x readers will continue to work; writers can also be readers and will continue to read both tv=6.
+   a. Set `hoodie.write.auto.upgrade` to false.
+   b. Set `hoodie.metadata.enable` to false.
+3. Upgrade table services to 1.x with tv=6, and resume operations.
+4. Upgrade all remaining readers to 1.x, with tv=6.
+5. Redeploy writers with tv=8; table services and readers will adapt/pick up tv=8 on the fly.
+6. Once all readers and writers are in 1.x, we are good to enable any new features, including metadata, with 1.x tables.
+
+During the upgrade, metadata table will not be updated and it will be behind the data table. It is important to note
+that metadata table will be updated only when the writer is upgraded to tv=8. So, even the readers should keep metadata
+disabled during rolling upgrade until all writers are upgraded to tv=8.
+
+:::caution
+Most things are seamlessly handled by the auto upgrade process, but there are some limitations. Please read through the
+limitations of the upgrade downgrade process before proceeding to migrate. Please
+check [RFC-78](https://github.com/apache/hudi/blob/master/rfc/rfc-78/rfc-78.md#support-matrix-for-different-readers-and-writers)
+for more details.
+:::
+
 ## Downgrading
 
 Upgrade is automatic whenever a new Hudi version is used whereas downgrade is a manual step. We need to use the Hudi
