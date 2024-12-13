@@ -910,7 +910,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
                |""".stripMargin)
 
           // create index using bloom filters on city column with upper() function
-          spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper', numHashFunctions=1, fpp=0.00000000001)")
+          spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper')")
 
           // Pruning takes place only if query uses upper function on city
           checkAnswer(s"select id, rider from $tableName where upper(city) in ('sunnyvale', 'sg')")()
@@ -929,7 +929,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
           // drop index and recreate without upper() function
           spark.sql(s"drop index idx_bloom_$tableName on $tableName")
-          spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(numHashFunctions=1, fpp=0.00000000001)")
+          spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city)")
           // Pruning takes place only if query uses no function on city
           checkAnswer(s"select id, rider from $tableName where city = 'sunnyvale'")(
             Seq("trip2", "rider-C")
