@@ -195,13 +195,13 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   private MetadataChangeProposalWrapper createContainerAspect(Urn entityUrn, Urn containerUrn) {
-    MetadataChangeProposalWrapper attachContainerProposal = MetadataChangeProposalWrapper.builder()
+    MetadataChangeProposalWrapper containerProposal = MetadataChangeProposalWrapper.builder()
             .entityType(entityUrn.getEntityType())
             .entityUrn(entityUrn)
             .upsert()
             .aspect(new Container().setContainer(containerUrn))
             .build();
-    return attachContainerProposal;
+    return containerProposal;
   }
 
   private MetadataChangeProposalWrapper createBrowsePathsAspect(Urn entityUrn, List<BrowsePathEntry> path) {
@@ -216,25 +216,22 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   private MetadataChangeProposalWrapper createDomainAspect(Urn entityUrn) {
-    if (config.attachDomain()) {
-      try {
-        Urn domainUrn = Urn.createFromString(config.getDomainIdentifier());
-        MetadataChangeProposalWrapper attachDomainProposal = MetadataChangeProposalWrapper.builder()
-                .entityType(entityUrn.getEntityType())
-                .entityUrn(entityUrn)
-                .upsert()
-                .aspect(new Domains().setDomains(new UrnArray(domainUrn)))
-                .build();
-        return attachDomainProposal;
-      } catch (URISyntaxException e) {
-        LOG.warn("Failed to create domain URN from string: {}", config.getDomainIdentifier());
-      }
+    try {
+      Urn domainUrn = Urn.createFromString(config.getDomainIdentifier());
+      MetadataChangeProposalWrapper attachDomainProposal = MetadataChangeProposalWrapper.builder()
+              .entityType(entityUrn.getEntityType())
+              .entityUrn(entityUrn)
+              .upsert()
+              .aspect(new Domains().setDomains(new UrnArray(domainUrn)))
+              .build();
+      return attachDomainProposal;
+    } catch (URISyntaxException e) {
+      LOG.warn("Failed to create domain URN from string: {}", config.getDomainIdentifier());
     }
     return null;
   }
 
   private Stream<MetadataChangeProposalWrapper> createContainerEntity() {
-
     MetadataChangeProposalWrapper containerEntityProposal = MetadataChangeProposalWrapper.builder()
             .entityType("container")
             .entityUrn(databaseUrn)
@@ -242,16 +239,12 @@ public class DataHubSyncClient extends HoodieSyncClient {
             .aspect(new ContainerProperties().setName(databaseName))
             .build();
 
-    MetadataChangeProposalWrapper containerSubTypeProposal = createSubTypeAspect(databaseUrn, "Database");
-
-    MetadataChangeProposalWrapper containerBrowsePathsProposal = createBrowsePathsAspect(databaseUrn, Collections.emptyList());
-
-    MetadataChangeProposalWrapper containerStatusProposal = createStatusAspect(databaseUrn);
-
-    MetadataChangeProposalWrapper domainProposal = createDomainAspect(databaseUrn);
-
-    Stream<MetadataChangeProposalWrapper> resultStream = Stream.of(containerEntityProposal, containerSubTypeProposal, containerBrowsePathsProposal, containerStatusProposal, domainProposal)
-            .filter(Objects::nonNull);
+    Stream<MetadataChangeProposalWrapper> resultStream = Stream.of(
+            containerEntityProposal,
+            createSubTypeAspect(databaseUrn, "Database"),
+            createBrowsePathsAspect(databaseUrn, Collections.emptyList()), createStatusAspect(databaseUrn),
+            config.attachDomain() ? createDomainAspect(databaseUrn) : null
+        ).filter(Objects::nonNull);
     return resultStream;
   }
 
@@ -317,7 +310,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
             createBrowsePathsAspect(datasetUrn, Collections.singletonList(new BrowsePathEntry().setUrn(databaseUrn).setId(databaseName))),
             createContainerAspect(datasetUrn, databaseUrn),
             createSchemaMetadataAspect(tableName),
-            createDomainAspect(datasetUrn)
+            config.attachDomain() ? createDomainAspect(datasetUrn) : null
     ).filter(Objects::nonNull);
     return result;
   }
