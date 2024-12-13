@@ -34,7 +34,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <datahub.version>0.15.0rc9</datahub.version>
+    <datahub.version>0.15.0rc20</datahub.version>
     <httpasync.version>4.1.5</httpasync.version>
   </properties>
 
@@ -59,7 +59,7 @@
     </dependency>
     <dependency>
       <groupId>io.acryl</groupId>
-      <artifactId>datahub-client</artifactId>
+      <artifactId>datahub-client-java8</artifactId>
       <version>${datahub.version}</version>
     </dependency>
 

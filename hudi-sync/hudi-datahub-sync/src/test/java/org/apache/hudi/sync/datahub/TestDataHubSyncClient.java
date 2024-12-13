@@ -143,8 +143,10 @@ public class TestDataHubSyncClient {
     props.put(META_SYNC_BASE_PATH.key(), tableBasePath);
     props.put(META_SYNC_DATAHUB_SYNC_SUPPRESS_EXCEPTIONS.key(), "false");
 
+    CompletableFuture<MetadataWriteResponse> failedFuture = new CompletableFuture<>();
+    failedFuture.completeExceptionally(new IOException("Emission failed"));
     when(restEmitterMock.emit(any(MetadataChangeProposalWrapper.class), any()))
-            .thenReturn(CompletableFuture.failedFuture(new IOException("Emission failed")));
+        .thenReturn(failedFuture);
 
     DatahubSyncConfigStub configStub = new DatahubSyncConfigStub(props, restEmitterMock);
     DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
