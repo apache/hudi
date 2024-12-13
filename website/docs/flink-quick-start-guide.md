@@ -26,7 +26,7 @@ This page introduces Flink-Hudi integration. We can feel the unique charm of how
 
 ### Download Flink and Start Flink cluster
 
-Hudi works with Flink 1.13 (up to Hudi 0.14.x release), Flink 1.14, Flink 1.15, Flink 1.16, Flink 1.17, and Flink 1.18.
+Hudi works with Flink 1.13 (up to Hudi 0.14.x release), Flink 1.14, Flink 1.15, Flink 1.16, Flink 1.17, Flink 1.18, Flink 1.19 and Flink 1.20.
 You can follow the instructions [here](https://flink.apache.org/downloads) for setting up Flink. Then, start a standalone Flink cluster 
 within hadoop environment. In case we are trying on local setup, then we could download hadoop binaries and set HADOOP_HOME.
 
@@ -68,7 +68,7 @@ Now start the SQL CLI:
 ```bash
 # For Flink versions: 1.13 - 1.18
 export FLINK_VERSION=1.17 
-export HUDI_VERSION=0.15.0
+export HUDI_VERSION=1.0.0
 wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-flink${FLINK_VERSION}-bundle/${HUDI_VERSION}/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar -P $FLINK_HOME/lib/
 ./bin/sql-client.sh embedded -j lib/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar shell
 ```
@@ -79,14 +79,14 @@ The SQL CLI only executes the SQL line by line.
 
 <TabItem value="dataStream">
 
-Hudi works with Flink 1.13 (up to Hudi 0.14.x release), Flink 1.14, Flink 1.15, Flink 1.16, Flink 1.17, and Flink 1.18.
+Hudi works with Flink 1.13 (up to Hudi 0.14.x release), Flink 1.14, Flink 1.15, Flink 1.16, Flink 1.17, Flink 1.18, Flink 1.19 and Flink 1.20.
 Please add the desired dependency to your project:
 ```xml
 <!-- For Flink versions 1.13 - 1.18-->
 <properties>
     <flink.version>1.17.0</flink.version>
     <flink.binary.version>1.17</flink.binary.version>
-    <hudi.version>0.15.0</hudi.version>
+    <hudi.version>1.0.0</hudi.version>
 </properties>
 <dependency>
     <groupId>org.apache.hudi</groupId>
