@@ -822,7 +822,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       return;
     }
     try {
-      // We cannot have unbounded commit files. Archive commits if we have to archive
+      // We cannot have unbounded commit files. Archive commits if we have to archive.
+
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
       archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {

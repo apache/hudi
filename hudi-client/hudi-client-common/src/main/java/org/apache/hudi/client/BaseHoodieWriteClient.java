@@ -634,7 +634,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected void mayBeCleanAndArchive(HoodieTable table) {
     autoCleanOnCommit();
     // reload table to that timeline reflects the clean commit
-    autoArchiveOnCommit(createTable(config, hadoopConf));
+    autoArchiveOnCommit(table);
   }
 
   protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
@@ -668,6 +668,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       LOG.info("Async archiver has finished");
     } else {
       LOG.info("Start to archive synchronously.");
+      // Reload table timeline to reflect the latest commits,
+      // there are some table services (for e.g, the cleaning) that executed right before the archiving.
+      table.getMetaClient().reloadActiveTimeline();
       archive(table);
     }
   }

@@ -78,6 +78,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -169,7 +170,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         // there is no owner or instant time per se for archival.
         txnManager.beginTransaction(Option.empty(), Option.empty());
       }
-      List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
+      List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       verifyLastMergeArchiveFilesIfNecessary(context);
       boolean success = true;
       if (!instantsToArchive.isEmpty()) {
@@ -527,18 +528,17 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     return Option.ofNullable(earliestInstantToNotArchive);
   }
 
-  private Stream<HoodieInstant> getInstantsToArchive() throws IOException {
-    Stream<HoodieInstant> instants = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive());
+  private List<HoodieInstant> getInstantsToArchive() throws IOException {
     if (config.isMetaserverEnabled()) {
-      return Stream.empty();
+      return Collections.emptyList();
+    }
+    List<HoodieInstant> candidates = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive()).collect(Collectors.toList());
+    if (candidates.isEmpty()) {
+      // exit early to avoid loading meta client for metadata table
+      return Collections.emptyList();
     }
 
-    // For archiving and cleaning instants, we need to include intermediate state files if they exist
-    HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
-    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
-        .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
-            HoodieInstant.getComparableAction(i.getAction()))));
-
+    Stream<HoodieInstant> instants = candidates.stream();
     // If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
     if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
@@ -586,16 +586,22 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       }
     }
 
-    return instants.flatMap(hoodieInstant -> {
-      List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
-          HoodieInstant.getComparableAction(hoodieInstant.getAction())));
-      if (instantsToStream != null) {
-        return instantsToStream.stream();
-      } else {
-        // if a concurrent writer archived the instant
-        return Stream.empty();
-      }
-    });
+    List<HoodieInstant> instantsToArchive = instants.collect(Collectors.toList());
+    if (instantsToArchive.isEmpty()) {
+      // Exit early to avoid loading raw timeline
+      return Collections.emptyList();
+    }
+
+    // For archiving and cleaning instants, we need to include intermediate state files if they exist
+    HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
+        .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
+            HoodieInstant.getComparableAction(i.getAction()))));
+
+    return instantsToArchive.stream()
+        .flatMap(hoodieInstant ->
+            groupByTsAction.getOrDefault(Pair.of(hoodieInstant.getTimestamp(), HoodieInstant.getComparableAction(hoodieInstant.getAction())), Collections.emptyList()).stream())
+        .collect(Collectors.toList());
   }
 
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {

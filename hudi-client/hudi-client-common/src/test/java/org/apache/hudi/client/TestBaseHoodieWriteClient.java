@@ -36,6 +36,8 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -50,6 +52,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
@@ -63,11 +66,14 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
@@ -154,6 +160,36 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
       writeClient.preCommit(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"), commitMetadata);
       transactionUtilsMockedStatic.verify(() ->
           TransactionUtils.resolveWriteConflictIfAny(table, Option.empty(), Option.of(commitMetadata), writeConfig, Option.empty(), true, Collections.emptySet()));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testMaybeCleanAndArchive(boolean autoCleanAndArchiveEnabled) throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(autoCleanAndArchiveEnabled)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(autoCleanAndArchiveEnabled)
+            .build())
+        .build();
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+    when(table.getMetaClient()).thenReturn(mockMetaClient);
+    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
+    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
+
+    writeClient.mayBeCleanAndArchive(table);
+    if (autoCleanAndArchiveEnabled) {
+      verify(tableServiceClient).clean(any(), eq(true));
+      verify(tableServiceClient).archive(table);
+      verify(mockMetaClient).reloadActiveTimeline();
+    } else {
+      verifyNoInteractions(tableServiceClient);
+      verifyNoInteractions(mockMetaClient);
     }
   }
 
