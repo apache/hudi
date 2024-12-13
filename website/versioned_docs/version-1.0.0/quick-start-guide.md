@@ -58,7 +58,7 @@ From the extracted directory run spark-shell with Hudi:
 ```shell
 # For Spark versions: 3.3 - 3.5
 export SPARK_VERSION=3.5 # or 3.4, 3.3
-spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.15.0 \
+spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
@@ -74,7 +74,7 @@ From the extracted directory run pyspark with Hudi:
 # For Spark versions: 3.3 - 3.5
 export PYSPARK_PYTHON=$(which python3)
 export SPARK_VERSION=3.5 # or 3.4, 3.3
-pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.15.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 </TabItem>
 
@@ -86,7 +86,7 @@ From the extracted directory run Spark SQL with Hudi:
 ```shell
 # For Spark versions: 3.3 - 3.5
 export SPARK_VERSION=3.5 # or 3.4, 3.3
-spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.15.0 \
+spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
 --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
