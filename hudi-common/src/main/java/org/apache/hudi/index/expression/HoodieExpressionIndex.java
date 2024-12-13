@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.index.functional;
+package org.apache.hudi.index.expression;
 
 import java.io.Serializable;
 import java.util.List;
@@ -34,38 +34,17 @@ public interface HoodieExpressionIndex<S, T> extends Serializable {
   String HOODIE_EXPRESSION_INDEX_RELATIVE_FILE_PATH = "_hoodie_expression_index_relative_file_path";
   String HOODIE_EXPRESSION_INDEX_PARTITION = "_hoodie_expression_index_partition";
   String HOODIE_EXPRESSION_INDEX_FILE_SIZE = "_hoodie_expression_index_file_size";
-  String SPARK_DATE_FORMAT = "date_format";
-  String SPARK_DAY = "day";
-  String SPARK_MONTH = "month";
-  String SPARK_YEAR = "year";
-  String SPARK_HOUR = "hour";
-  String SPARK_FROM_UNIXTIME = "from_unixtime";
-  String SPARK_UNIX_TIMESTAMP = "unix_timestamp";
-  String SPARK_TO_DATE = "to_date";
-  String SPARK_TO_TIMESTAMP = "to_timestamp";
-  String SPARK_DATE_ADD = "date_add";
-  String SPARK_DATE_SUB = "date_sub";
-  String SPARK_SUBSTRING = "substring";
-  String SPARK_UPPER = "upper";
-  String SPARK_LOWER = "lower";
-  String SPARK_TRIM = "trim";
-  String SPARK_LTRIM = "ltrim";
-  String SPARK_RTRIM = "rtrim";
-  String SPARK_LENGTH = "length";
-  String SPARK_REGEXP_REPLACE = "regexp_replace";
-  String SPARK_REGEXP_EXTRACT = "regexp_extract";
-  String SPARK_SPLIT = "split";
-  String IDENTITY_FUNCTION = "identity";
 
   String EXPRESSION_OPTION = "expr";
-  String FORMAT_OPTION = "format";
-  String DAYS_OPTION = "days";
-  String POSITION_OPTION = "pos";
-  String LENGTH_OPTION = "len";
-  String PATTERN_OPTION = "pattern";
-  String REPLACEMENT_OPTION = "replacement";
-  String REGEX_GROUP_INDEX_OPTION = "idx";
   String TRIM_STRING_OPTION = "trimString";
+  String REGEX_GROUP_INDEX_OPTION = "idx";
+  String REPLACEMENT_OPTION = "replacement";
+  String PATTERN_OPTION = "pattern";
+  String LENGTH_OPTION = "len";
+  String POSITION_OPTION = "pos";
+  String DAYS_OPTION = "days";
+  String FORMAT_OPTION = "format";
+
   /**
    * Get the name of the index.
    *

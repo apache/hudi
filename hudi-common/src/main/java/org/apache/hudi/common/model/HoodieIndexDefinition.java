@@ -28,14 +28,14 @@ import java.util.StringJoiner;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.DAYS_OPTION;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.FORMAT_OPTION;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.REGEX_GROUP_INDEX_OPTION;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.LENGTH_OPTION;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.PATTERN_OPTION;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.POSITION_OPTION;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.REPLACEMENT_OPTION;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.TRIM_STRING_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.DAYS_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.FORMAT_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.REGEX_GROUP_INDEX_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.LENGTH_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.PATTERN_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.POSITION_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.REPLACEMENT_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING_OPTION;
 
 /**
  * Class representing the metadata for a functional or secondary index in Hudi.

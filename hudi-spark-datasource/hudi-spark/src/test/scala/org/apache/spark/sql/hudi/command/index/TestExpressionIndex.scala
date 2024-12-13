@@ -35,8 +35,7 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, Hoodie
 import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.index.HoodieIndex
-import org.apache.hudi.index.functional.HoodieExpressionIndex
-import org.apache.hudi.index.functional.HoodieExpressionIndex.EXPRESSION_OPTION
+import org.apache.hudi.index.expression.{HoodieExpressionIndex, HoodieSparkExpressionIndex}
 import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
@@ -191,7 +190,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           assertResult("idx_datestr")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
           assertResult("column_stats")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
           assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
-          assertResult(Map(EXPRESSION_OPTION -> "from_unixtime", "format" -> "yyyy-MM-dd"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
+          assertResult(Map(HoodieExpressionIndex.EXPRESSION_OPTION -> "from_unixtime", "format" -> "yyyy-MM-dd"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
 
           logicalPlan = sqlParser.parsePlan(s"create index idx_name on $tableName using bloom_filters(name) options(expr='lower')")
           resolvedLogicalPlan = analyzer.execute(logicalPlan)
@@ -199,7 +198,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           assertResult("idx_name")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
           assertResult("bloom_filters")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
           assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
-          assertResult(Map(EXPRESSION_OPTION -> "lower"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
+          assertResult(Map(HoodieExpressionIndex.EXPRESSION_OPTION -> "lower"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
         }
       }
     }
@@ -764,6 +763,64 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   }
 
   /**
+   * Test expression index with invalid options
+   */
+  @Test
+  def testInvalidOptions(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName + s"_stats_pruning_binary_$tableType"
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+          spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+
+          spark.sql(
+            s"""
+           CREATE TABLE $tableName (
+               |    ts LONG,
+               |    id STRING,
+               |    rider STRING,
+               |    driver STRING,
+               |    fare DOUBLE,
+               |    dateDefault STRING,
+               |    date STRING,
+               |    city STRING,
+               |    state STRING
+               |) USING HUDI
+               |options(
+               |    primaryKey ='id',
+               |    type = '$tableType',
+               |    hoodie.metadata.enable = 'true',
+               |    hoodie.datasource.write.recordkey.field = 'id',
+               |    hoodie.enable.data.skipping = 'true'
+               |)
+               |PARTITIONED BY (state)
+               |location '$basePath'
+               |""".stripMargin)
+
+          spark.sql("set hoodie.parquet.small.file.limit=0")
+          if (HoodieSparkUtils.gteqSpark3_4) {
+            spark.sql("set spark.sql.defaultColumn.enabled=false")
+          }
+
+          spark.sql(
+            s"""
+               |insert into $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+               |  (1695414520,'trip2','rider-C','driver-M',27.70,'2024-11-30 01:30:40', '2024-11-30', 'sunnyvale','california'),
+               |  (1699349649,'trip5','rider-A','driver-Q',3.32, '2019-11-30 01:30:40', '2019-11-30', 'san_diego','texas')
+               |""".stripMargin)
+
+          // With invalid options
+          checkNestedExceptionContains(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', invalidOp='random')")(
+            "Input options [invalidOp] are not valid for spark function"
+          )
+        }
+      }
+    }
+  }
+
+  /**
    * Test expression index with data skipping for unary expression and binary expression.
    */
   @Test
@@ -771,7 +828,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
-          val tableName = generateTableName + s"_stats_pruning_binary_$tableType"
+          val tableName = generateTableName + s"_stats_pruning_date_expr_$tableType"
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
           spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
@@ -923,7 +980,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
-          val tableName = generateTableName + s"_stats_pruning_binary_$tableType"
+          val tableName = generateTableName + s"_stats_pruning_string_expr_$tableType"
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
           spark.sql(

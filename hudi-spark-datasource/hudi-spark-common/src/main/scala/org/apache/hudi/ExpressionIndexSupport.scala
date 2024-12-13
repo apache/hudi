@@ -23,8 +23,7 @@ import org.apache.hudi.ColumnStatsIndexSupport.{composeColumnStatStructType, des
 import org.apache.hudi.ExpressionIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.HoodieSparkExpressionIndex.SPARK_FUNCTION_MAP
-import org.apache.hudi.RecordLevelIndexSupport.{fetchQueryWithAttribute, filterQueryWithRecordKey}
+import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
@@ -34,7 +33,6 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.common.util.{StringUtils, collection}
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.index.functional.HoodieExpressionIndex.SPARK_FROM_UNIXTIME
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
@@ -383,7 +381,7 @@ class ExpressionIndexSupport(spark: SparkSession,
    * Extracts mappings from function names to column names from a sequence of expressions.
    *
    * This method iterates over a given sequence of Spark SQL expressions and identifies expressions
-   * that contain function calls corresponding to keys in the `SPARK_FUNCTION_MAP`. It supports only
+   * that contain function calls corresponding to keys in the ExpressionIndexFunction. It supports only
    * expressions that are simple binary expressions involving a single column. If an expression contains
    * one of the functions and operates on a single column, this method maps the function name to the
    * column name.
