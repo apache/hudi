@@ -348,13 +348,6 @@
         <configuration>
           <source>${java.version}</source>
           <target>${java.version}</target>
-          <annotationProcessorPaths>
-            <path>
-              <groupId>org.projectlombok</groupId>
-              <artifactId>lombok</artifactId>
-              <version>1.18.30</version>
-            </path>
-          </annotationProcessorPaths>
         </configuration>
       </plugin>
       <plugin>
@@ -607,7 +600,7 @@
           <version>${maven-surefire-plugin.version}</version>
           <configuration>
             <rerunFailingTestsCount>3</rerunFailingTestsCount>
-            <argLine>-Djava.security.manager=allow @{argLine}</argLine>
+            <argLine>@{argLine}</argLine>
             <trimStackTrace>false</trimStackTrace>
             <systemPropertyVariables>
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
