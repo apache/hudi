@@ -70,33 +70,38 @@ public class DataHubSyncTool extends HoodieSyncTool {
   public void syncHoodieTable() {
     try {
       LOG.info("Syncing target Hoodie table with DataHub dataset({}). DataHub URL: {}, basePath: {}",
-              tableName, config.getDataHubServerEndpoint(), config.getString(META_SYNC_BASE_PATH));
+          tableName, config.getDataHubServerEndpoint(), config.getString(META_SYNC_BASE_PATH));
 
-      // Sync schema (don't try to detect schema changes - rely on DataHub to do that)
-      syncClient.updateTableSchema(tableName, null, null);
-      LOG.info("Schema synced for table {}", tableName);
+      syncSchema();
+      syncTableProperties();
+      updateLastCommitTimeIfNeeded();
 
-      MessageType storageSchema = syncClient.getStorageSchema();
-
-      HoodieTableMetadata tableMetadata = new HoodieTableMetadata(metaClient, storageSchema);
-
-      // Sync table properties
-      Map<String, String> tableProperties = getTableProperties(config, tableMetadata);
-      syncClient.updateTableProperties(tableName, tableProperties);
-      LOG.info("Properties synced for table {}", tableName);
-
-      // Update last sync time if anything changed and conditional sync is disabled
-      boolean shouldUpdateLastCommitTime = !config.getBoolean(META_SYNC_CONDITIONAL_SYNC);
-
-      if (shouldUpdateLastCommitTime) {
-        syncClient.updateLastCommitTimeSynced(tableName);
-        LOG.info("Updated last sync time for table {}", tableName);
-      }
       LOG.info("Sync completed for table {}", tableName);
     } catch (Exception e) {
       throw new RuntimeException("Failed to sync table " + tableName + " to DataHub", e);
     } finally {
       close();
+    }
+  }
+
+  private void syncSchema() throws Exception {
+    syncClient.updateTableSchema(tableName, null, null);
+    LOG.info("Schema synced for table {}", tableName);
+  }
+
+  private void syncTableProperties() throws Exception {
+    MessageType storageSchema = syncClient.getStorageSchema();
+    HoodieTableMetadata tableMetadata = new HoodieTableMetadata(metaClient, storageSchema);
+    Map<String, String> tableProperties = getTableProperties(config, tableMetadata);
+    syncClient.updateTableProperties(tableName, tableProperties);
+    LOG.info("Properties synced for table {}", tableName);
+  }
+
+  private void updateLastCommitTimeIfNeeded() throws Exception {
+    boolean shouldUpdateLastCommitTime = !config.getBoolean(META_SYNC_CONDITIONAL_SYNC);
+    if (shouldUpdateLastCommitTime) {
+      syncClient.updateLastCommitTimeSynced(tableName);
+      LOG.info("Updated last sync time for table {}", tableName);
     }
   }
 

@@ -112,7 +112,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
     }
   }
 
-  private MetadataChangeProposal buildDatasetPropertiesProposal(String tableName, Map<String, String> tableProperties) {
+  private MetadataChangeProposal createDatasetPropertiesAspect(String tableName, Map<String, String> tableProperties) {
     DatasetPropertiesPatchBuilder datasetPropertiesPatchBuilder = new DatasetPropertiesPatchBuilder().urn(datasetUrn);
     if (tableProperties != null) {
       tableProperties.forEach(datasetPropertiesPatchBuilder::addCustomProperty);
@@ -126,7 +126,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
   @Override
   public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
     // Use PATCH API to avoid overwriting existing properties
-    MetadataChangeProposal proposal = buildDatasetPropertiesProposal(tableName, tableProperties);
+    MetadataChangeProposal proposal = createDatasetPropertiesAspect(tableName, tableProperties);
     DataHubResponseLogger responseLogger = new DataHubResponseLogger();
 
     try (RestEmitter emitter = config.getRestEmitter()) {
@@ -150,7 +150,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
       DataHubResponseLogger responseLogger = new DataHubResponseLogger();
 
       Stream<MetadataChangeProposalWrapper> proposals =
-              Stream.of(createContainerEntityProposals(), createDatasetEntityProposals()).flatMap(stream -> stream);
+              Stream.of(createContainerEntity(), createDatasetEntity()).flatMap(stream -> stream);
 
       // Execute all proposals in parallel and collect futures
       List<Future<MetadataWriteResponse>> futures = proposals.map(
@@ -178,10 +178,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
       if (!failures.isEmpty()) {
         if (!config.suppressExceptions()) {
-          throw new HoodieDataHubSyncException(
-                  "Failed to sync " + failures.size() + " operations",
-                  failures.get(0)
-          );
+          throw new HoodieDataHubSyncException("Failed to sync " + failures.size() + " operations", failures.get(0));
         } else {
           for (Throwable failure : failures) {
             LOG.error("Failed to sync operation", failure);
@@ -190,17 +187,14 @@ public class DataHubSyncClient extends HoodieSyncClient {
       }
     } catch (Exception e) {
       if (!config.suppressExceptions()) {
-        throw new HoodieDataHubSyncException(
-                String.format("Failed to sync metadata for dataset %s", tableName),
-                e
-        );
+        throw new HoodieDataHubSyncException(String.format("Failed to sync metadata for dataset %s", tableName), e);
       } else {
         LOG.error("Failed to sync metadata for dataset {}", tableName, e);
       }
     }
   }
 
-  private MetadataChangeProposalWrapper attachContainerProposal(Urn entityUrn, Urn containerUrn) {
+  private MetadataChangeProposalWrapper createContainerAspect(Urn entityUrn, Urn containerUrn) {
     MetadataChangeProposalWrapper attachContainerProposal = MetadataChangeProposalWrapper.builder()
             .entityType(entityUrn.getEntityType())
             .entityUrn(entityUrn)
@@ -210,7 +204,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return attachContainerProposal;
   }
 
-  private MetadataChangeProposalWrapper browsePathsProposal(Urn entityUrn, List<BrowsePathEntry> path) {
+  private MetadataChangeProposalWrapper createBrowsePathsAspect(Urn entityUrn, List<BrowsePathEntry> path) {
     BrowsePathEntryArray browsePathEntryArray = new BrowsePathEntryArray(path);
     MetadataChangeProposalWrapper browsePathsProposal = MetadataChangeProposalWrapper.builder()
             .entityType(entityUrn.getEntityType())
@@ -221,7 +215,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return browsePathsProposal;
   }
 
-  private MetadataChangeProposalWrapper attachDomainProposal(Urn entityUrn) {
+  private MetadataChangeProposalWrapper createDomainAspect(Urn entityUrn) {
     if (config.attachDomain()) {
       try {
         Urn domainUrn = Urn.createFromString(config.getDomainIdentifier());
@@ -239,7 +233,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return null;
   }
 
-  private Stream<MetadataChangeProposalWrapper> createContainerEntityProposals() {
+  private Stream<MetadataChangeProposalWrapper> createContainerEntity() {
 
     MetadataChangeProposalWrapper containerEntityProposal = MetadataChangeProposalWrapper.builder()
             .entityType("container")
@@ -248,13 +242,13 @@ public class DataHubSyncClient extends HoodieSyncClient {
             .aspect(new ContainerProperties().setName(databaseName))
             .build();
 
-    MetadataChangeProposalWrapper containerSubTypeProposal = createSubType(databaseUrn, "Database");
+    MetadataChangeProposalWrapper containerSubTypeProposal = createSubTypeAspect(databaseUrn, "Database");
 
-    MetadataChangeProposalWrapper containerBrowsePathsProposal = browsePathsProposal(databaseUrn, Collections.emptyList());
+    MetadataChangeProposalWrapper containerBrowsePathsProposal = createBrowsePathsAspect(databaseUrn, Collections.emptyList());
 
     MetadataChangeProposalWrapper containerStatusProposal = createStatusAspect(databaseUrn);
 
-    MetadataChangeProposalWrapper domainProposal = attachDomainProposal(databaseUrn);
+    MetadataChangeProposalWrapper domainProposal = createDomainAspect(databaseUrn);
 
     Stream<MetadataChangeProposalWrapper> resultStream = Stream.of(containerEntityProposal, containerSubTypeProposal, containerBrowsePathsProposal, containerStatusProposal, domainProposal)
             .filter(Objects::nonNull);
@@ -281,7 +275,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return softDeleteUndoProposal;
   }
 
-  private MetadataChangeProposalWrapper<SubTypes> createSubType(Urn urn, String subType) {
+  private MetadataChangeProposalWrapper<SubTypes> createSubTypeAspect(Urn urn, String subType) {
     MetadataChangeProposalWrapper subTypeProposal = MetadataChangeProposalWrapper.builder()
             .entityType(urn.getEntityType())
             .entityUrn(urn)
@@ -291,7 +285,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return subTypeProposal;
   }
 
-  private MetadataChangeProposalWrapper createSchemaMetadataUpdate(String tableName) {
+  private MetadataChangeProposalWrapper createSchemaMetadataAspect(String tableName) {
     Schema avroSchema = getAvroSchemaWithoutMetadataFields(metaClient);
     AvroSchemaConverter avroSchemaConverter = AvroSchemaConverter.builder().build();
     com.linkedin.schema.SchemaMetadata schemaMetadata = avroSchemaConverter.toDataHubSchema(
@@ -316,19 +310,19 @@ public class DataHubSyncClient extends HoodieSyncClient {
             .build();
   }
 
-  Stream<MetadataChangeProposalWrapper> createDatasetEntityProposals() {
+  private Stream<MetadataChangeProposalWrapper> createDatasetEntity() {
     Stream<MetadataChangeProposalWrapper> result = Stream.of(
             createStatusAspect(datasetUrn),
-            createSubType(datasetUrn, "Table"),
-            browsePathsProposal(datasetUrn, Collections.singletonList(new BrowsePathEntry().setUrn(databaseUrn).setId(databaseName))),
-            attachContainerProposal(datasetUrn, databaseUrn),
-            createSchemaMetadataUpdate(tableName),
-            attachDomainProposal(datasetUrn)
+            createSubTypeAspect(datasetUrn, "Table"),
+            createBrowsePathsAspect(datasetUrn, Collections.singletonList(new BrowsePathEntry().setUrn(databaseUrn).setId(databaseName))),
+            createContainerAspect(datasetUrn, databaseUrn),
+            createSchemaMetadataAspect(tableName),
+            createDomainAspect(datasetUrn)
     ).filter(Objects::nonNull);
     return result;
   }
 
-  Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
+  protected Schema getAvroSchemaWithoutMetadataFields(HoodieTableMetaClient metaClient) {
     try {
       return new TableSchemaResolver(metaClient).getTableAvroSchema(true);
     } catch (Exception e) {

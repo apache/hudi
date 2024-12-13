@@ -25,8 +25,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
-
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -41,24 +42,54 @@ import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_BA
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_SPARK_VERSION;
 
-/**
- * Implementation of table properties management for DataHub sync
- */
 public class DataHubTableProperties {
 
-  private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(DataHubTableProperties.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DataHubTableProperties.class);
 
   public static final ConfigProperty<String> DATAHUB_TABLE_PROPERTIES =
       ConfigProperty.key("hoodie.meta.sync.datahub.table.properties")
           .defaultValue("")
-          .withDocumentation(
-              "Additional properties to be attached to the DataHub dataset, specified as key1=val1,key2=val2");
+          .withDocumentation("Additional properties to be attached to the DataHub dataset, specified as key1=val1,key2=val2");
+
+  public static Map<String, String> getTableProperties(DataHubSyncConfig config, HoodieTableMetadata tableMetadata) {
+    Map<String, String> properties = new HashMap<>();
+    addBasicHudiTableProperties(properties, config, tableMetadata);
+    addPartitioningInformation(properties, config);
+    addUserDefinedProperties(properties, config);
+    addSparkRelatedProperties(properties, config, tableMetadata);
+    return properties;
+  }
+
+  private static void addBasicHudiTableProperties(Map<String, String> properties, DataHubSyncConfig config, HoodieTableMetadata tableMetadata) {
+    properties.put("hudi.table.type", tableMetadata.getTableType());
+    properties.put("hudi.table.version", tableMetadata.getTableVersion());
+    properties.put("hudi.base.path", config.getString(META_SYNC_BASE_PATH));
+  }
+
+  private static void addPartitioningInformation(Map<String, String> properties, DataHubSyncConfig config) {
+    if (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
+      properties.put("hudi.partition.fields", String.join(",", config.getSplitStrings(META_SYNC_PARTITION_FIELDS)));
+    }
+  }
+
+  private static void addUserDefinedProperties(Map<String, String> properties, DataHubSyncConfig config) {
+    Map<String, String> userDefinedProps = ConfigUtils.toMap(config.getString(DATAHUB_TABLE_PROPERTIES));
+    properties.putAll(userDefinedProps);
+  }
+
+  private static void addSparkRelatedProperties(Map<String, String> properties, DataHubSyncConfig config, HoodieTableMetadata tableMetadata) {
+    Map<String, String> sparkProperties = SparkDataSourceTableUtils.getSparkTableProperties(
+        config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
+        config.getString(META_SYNC_SPARK_VERSION),
+        config.getInt(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD),
+        tableMetadata.getSchema()
+    );
+    properties.putAll(sparkProperties);
+    properties.putAll(getSerdeProperties(config, false));
+  }
 
   private static Map<String, String> getSerdeProperties(DataHubSyncConfig config, boolean readAsOptimized) {
-    HoodieFileFormat baseFileFormat =
-
-
-        HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
+    HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
     String inputFormatClassName = getInputFormatClassName(baseFileFormat, false, false);
     String outputFormatClassName = getOutputFormatClassName(baseFileFormat);
     String serDeFormatClassName = getSerDeClassName(baseFileFormat);
@@ -67,54 +98,12 @@ public class DataHubTableProperties {
     serdeProperties.put("inputFormat", inputFormatClassName);
     serdeProperties.put("outputFormat", outputFormatClassName);
     serdeProperties.put("serdeClass", serDeFormatClassName);
-    Map<String, String> sparkSerdeProperties =
-        SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, config.getString(META_SYNC_BASE_PATH));
-    // Add the properties to the serde properties, but prefix the keys with "spark." if they are not already prefixed with "spark."
+    Map<String, String> sparkSerdeProperties = SparkDataSourceTableUtils.getSparkSerdeProperties(readAsOptimized, config.getString(META_SYNC_BASE_PATH));
     sparkSerdeProperties.forEach((k, v) -> serdeProperties.putIfAbsent(k.startsWith("spark.") ? k : "spark." + k, v));
     LOG.info("Serde Properties : {}", serdeProperties);
     return serdeProperties;
   }
 
-  /**
-   * Get table properties for DataHub dataset
-   *
-   * @param config        DataHub sync configuration
-   * @param tableMetadata Hoodie table metadata
-   * @return Map of properties to be set in DataHub
-   */
-  public static Map<String, String> getTableProperties(DataHubSyncConfig config, HoodieTableMetadata tableMetadata) {
-    Map<String, String> properties = new HashMap<>();
-
-    // Add basic Hudi table properties
-    properties.put("hudi.table.type", tableMetadata.getTableType());
-    properties.put("hudi.table.version", tableMetadata.getTableVersion());
-    properties.put("hudi.base.path", config.getString(META_SYNC_BASE_PATH));
-
-    // Add partitioning information
-    if (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
-      properties.put("hudi.partition.fields", String.join(",", config.getSplitStrings(META_SYNC_PARTITION_FIELDS)));
-    }
-
-    // Add user-defined properties
-    Map<String, String> userDefinedProps = ConfigUtils.toMap(config.getString(DATAHUB_TABLE_PROPERTIES));
-    properties.putAll(userDefinedProps);
-
-    // Add Spark related properties
-
-    Map<String, String> sparkProperties =
-        SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-            config.getString(META_SYNC_SPARK_VERSION), config.getInt(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD),
-            tableMetadata.getSchema());
-
-    properties.putAll(sparkProperties);
-    properties.putAll(getSerdeProperties(config, false));
-
-    return properties;
-  }
-
-  /**
-   * Helper class to manage table metadata
-   */
   public static class HoodieTableMetadata {
     private final HoodieTableMetaClient metaClient;
     private final MessageType schema;
