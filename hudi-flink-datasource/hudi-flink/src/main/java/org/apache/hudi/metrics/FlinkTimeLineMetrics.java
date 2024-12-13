@@ -61,7 +61,7 @@ public class FlinkTimeLineMetrics extends HoodieFlinkMetrics {
     getAndUpdateLatestCompletedActionMetric(activeTimeline);
   }
 
-  public void getAndUpdateEarliestInflightActionAndCountPendingMetric(HoodieActiveTimeline activeTimeline) {
+  private void getAndUpdateEarliestInflightActionAndCountPendingMetric(HoodieActiveTimeline activeTimeline) {
     Set<String> validActions = CollectionUtils.createSet(CLUSTERTING_ACTION);
     HoodieTimeline filteredInstant = activeTimeline.filterInflightsAndRequested()
         .filter(instant -> validActions.contains(instant.getAction()));
@@ -72,7 +72,7 @@ public class FlinkTimeLineMetrics extends HoodieFlinkMetrics {
     }
   }
 
-  public void getAndUpdateLatestCompletedActionMetric(HoodieActiveTimeline activeTimeline) {
+  private void getAndUpdateLatestCompletedActionMetric(HoodieActiveTimeline activeTimeline) {
     Set<String> validActions = CollectionUtils.createSet(CLUSTERTING_ACTION);
     HoodieTimeline filteredInstant = activeTimeline.filterCompletedInstants()
         .filter(instant -> validActions.contains(instant.getAction()));

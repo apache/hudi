@@ -590,6 +590,8 @@ public class StreamWriteOperatorCoordinator
         reset();
         this.ckpMetadata.commitInstant(instant);
         LOG.info("Commit instant [{}] success!", instant);
+        this.flinkTimeLineMetrics.updateTimeLineMetrics(this.writeClient.getHoodieTable().getActiveTimeline());
+        LOG.info("Update timeline metrics.");
       } else {
         throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
       }
