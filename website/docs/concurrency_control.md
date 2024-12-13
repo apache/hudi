@@ -214,6 +214,11 @@ currently available for preview in version 1.0.0-beta only with the caveat that 
 between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with Flink
 writers [here](sql_dml#non-blocking-concurrency-control-experimental).
 
+:::note
+`NON_BLOCKING_CONCURRENCY_CONTROL` between ingestion writer and table service writer is not yet supported for clustering.
+Please use `OPTIMISTIC_CONCURRENCY_CONTROL` for clustering.
+:::
+
 ## Early conflict Detection
 
 Multi writing using OCC allows multiple writers to concurrently write and atomically commit to the Hudi table if there is no overlapping data file to be written, to guarantee data consistency, integrity and correctness. Prior to 0.13.0 release, as the OCC (optimistic concurrency control) name suggests, each writer will optimistically proceed with ingestion and towards the end, just before committing will go about conflict resolution flow to deduce overlapping writes and abort one if need be. But this could result in lot of compute waste, since the aborted commit will have to retry from beginning. With 0.13.0, Hudi introduced early conflict deduction leveraging markers in hudi to deduce the conflicts eagerly and abort early in the write lifecyle instead of doing it in the end. For large scale deployments, this might avoid wasting lot o compute resources if there could be overlapping concurrent writers.

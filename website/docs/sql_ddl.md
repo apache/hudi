@@ -272,6 +272,7 @@ Both index and column on which the index is created can be qualified with some o
 Please note in order to create secondary index:
 1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
 2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
+3. Secondary index is not supported for [complex types](https://avro.apache.org/docs/1.11.1/specification/#complex-types).
 :::
 
 **Examples**
@@ -334,11 +335,17 @@ date based partitioning, provide same benefits to queries, even if the physical 
 CREATE INDEX IF NOT EXISTS ts_datestr ON hudi_table 
   USING column_stats(ts) 
   OPTIONS(expr='from_unixtime', format='yyyy-MM-dd');
--- Create a expression index on the column `ts` (timestamp in yyyy-MM-dd HH:mm:ss) of the table `hudi_table` using the function `hour`
+-- Create an expression index on the column `ts` (timestamp in yyyy-MM-dd HH:mm:ss) of the table `hudi_table` using the function `hour`
 CREATE INDEX ts_hour ON hudi_table 
   USING column_stats(ts) 
   options(expr='hour');
 ```
+
+:::note
+1. Expression index can only be created for Spark engine using SQL. It is not supported yet with Spark DataSource API.
+2. Expression index is not yet supported for [complex types](https://avro.apache.org/docs/1.11.1/specification/#complex-types).
+3. Expression index is supported for unary and certain binary expressions. Please check [SQL DDL docs](sql_ddl#create-expression-index) for more details.
+   :::
 
 The `expr` option is required for creating expression index, and it should be a valid Spark SQL function. Please check the syntax 
 for the above functions in the [Spark SQL documentation](https://spark.apache.org/docs/latest/sql-ref-functions.html) and provide the options accordingly. For example, 
@@ -434,6 +441,12 @@ and execution.
 
 To enable partition stats index, simply set `hoodie.metadata.index.partition.stats.enable = 'true'` in create table options.
 
+:::note
+1. `column_stats` index is required to be enabled for `partition_stats` index. Both go hand in hand. 
+2. `partition_stats` index is not created automatically for all columns. Users must specify list of columns for which they want to create partition stats index.
+3. `column_stats` and `partition_stats` index is not yet supported for [complex types](https://avro.apache.org/docs/1.11.1/specification/#complex-types).
+:::
+
 ### Create Secondary Index
 
 Secondary indexes are record level indexes built on any column in the table. It supports multiple records having the same
@@ -441,11 +454,8 @@ secondary column value efficiently and is built on top of the existing record le
 Secondary indexes are hash based indexes that offer horizontally scalable write performance by splitting key space into shards 
 by hashing, as well as fast lookups by employing row-based file formats.
 
-:::note
-Please note in order to create secondary index:
-1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
-2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
-:::
+Let us now look at an example of creating a table with multiple indexes and how the query leverage the indexes for both
+partition pruning and data skipping.
 
 ```sql
 DROP TABLE IF EXISTS hudi_table;
@@ -513,23 +523,9 @@ Bloom filter indexes store a bloom filter per file, on the column or column expr
 effective in skipping files that don't contain a high cardinality column value e.g. uuids.
 
 ```sql
-CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
+-- Create a bloom filter index on the column derived from expression `lower(rider)` of the table `hudi_table`
 CREATE INDEX idx_bloom_rider ON hudi_indexed_table USING bloom_filters(rider) OPTIONS(expr='lower');
 ```
-
-
-### Limitations 
-
-- Unlike column stats, partition stats index is not created automatically for all columns. Users must specify list of
-  columns for which they want to create partition stats index.
-- Predicate on internal meta fields such as `_hoodie_record_key` or `_hoodie_partition_path` cannot be used for data
-  skipping. Queries with such predicates cannot leverage the indexes.
-- Secondary index is not supported for nested fields.
-- Secondary index can be created only if record index is available in the table
-- Secondary index can only be used for tables using OverwriteWithLatestAvroPayload payload or COMMIT_TIME_ORDERING merge mode 
-- Column stats Expression Index can not be created using `identity` expression with SQL. Users can leverage column stat index using Datasource instead.
-- Index update can fail with schema evolution.
-- Only one index can be created at a time using [async indexer](metadata_indexing).
 
 ### Setting Hudi configs 
 
