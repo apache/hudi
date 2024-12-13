@@ -45,8 +45,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testRLIWithSQL(tableType: String): Unit = {
-    var hudiOpts = commonOpts
-    hudiOpts = hudiOpts + (
+    val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       "hoodie.metadata.index.column.stats.enable" -> "false",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
