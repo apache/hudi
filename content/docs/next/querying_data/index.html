@@ -19,7 +19,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/assets/css/styles.0e0faa8c.css">
-<script src="/assets/js/runtime~main.861c60ac.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.042f2f35.js" defer="defer"></script>
 <script src="/assets/js/main.8623d488.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -34,7 +34,7 @@ See the <a href="/docs/quick-start-guide">Spark Quick Start</a> for more example
 <p><strong>Setup</strong></p>
 <p>If your Spark environment does not have the Hudi jars installed, add <a href="https://mvnrepository.com/artifact/org.apache.hudi/hudi-spark-bundle" target="_blank" rel="noopener noreferrer">hudi-spark-bundle</a> jar to the
 classpath of drivers and executors using <code>--jars</code> option. Alternatively, hudi-spark-bundle can also fetched via the
---packages options (e.g: --packages org.apache.hudi<!-- -->:hudi-spark-bundle_2<!-- -->.11:0.13.0).</p>
+--packages options (e.g: --packages org.apache.hudi<!-- -->:hudi-spark3<!-- -->.5-bundle_2.12:1.0.0).</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="spark-snap-query">Snapshot query<a href="#spark-snap-query" class="hash-link" aria-label="Direct link to Snapshot query" title="Direct link to Snapshot query">​</a></h3>
 <p>Retrieve the data table at the present point in time.</p>
 <div class="language-scala codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-scala codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">val hudiSnapshotQueryDF = spark</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">     .read</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">     .format(&quot;hudi&quot;)</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">     .option(&quot;hoodie.datasource.query.type&quot;, &quot;snapshot&quot;)</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">     .load(tablePath) </span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>
