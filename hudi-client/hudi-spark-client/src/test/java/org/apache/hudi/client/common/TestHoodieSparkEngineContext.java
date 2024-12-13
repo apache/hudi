@@ -31,7 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieSparkEngineContext extends SparkClientFunctionalTestHarness {
-
   private HoodieSparkEngineContext context;
 
   @BeforeEach
@@ -47,5 +46,24 @@ class TestHoodieSparkEngineContext extends SparkClientFunctionalTestHarness {
     assertEquals(Arrays.asList(1, 2, 3), context.getCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)));
     assertEquals(Arrays.asList(1, 2, 3), context.removeCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)));
     assertTrue(context.getCachedDataIds(HoodieDataCacheKey.of(basePath, instantTime)).isEmpty());
+  }
+
+  @Test
+  void testSetJobStatus() {
+    // Test data
+    String jobGroupId = "jobGroupId";
+    String initialJobDescription = "initialJobDescription";
+    String activeModule = "TestModule";
+    String activityDescription = "Running test operation";
+    String expectedJobDescription = String.format("%s:%s", activeModule, activityDescription);
+    context.getJavaSparkContext().setJobGroup(jobGroupId, initialJobDescription);
+    assertEquals(jobGroupId, context.getJavaSparkContext().getLocalProperty("spark.jobGroup.id"));
+    assertEquals(initialJobDescription, context.getJavaSparkContext().getLocalProperty("spark.job.description"));
+
+    // Set the job status
+    context.setJobStatus(activeModule, activityDescription);
+    assertEquals(expectedJobDescription, context.getJavaSparkContext().getLocalProperty("spark.job.description"));
+    // Assert jobGroupId does not change
+    assertEquals(jobGroupId, context.getJavaSparkContext().getLocalProperty("spark.jobGroup.id"));
   }
 }
