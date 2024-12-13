@@ -40,6 +40,8 @@ import static org.mockito.Mockito.when;
 class TestHoodieAvroReadSupport {
   private final Type legacyListType = ConversionPatterns.listType(Type.Repetition.REQUIRED, "legacyList",
       Types.primitive(PrimitiveType.PrimitiveTypeName.DOUBLE, Type.Repetition.REPEATED).named("double_field"));
+  private final Type legacyListTypeWithObject = ConversionPatterns.listType(Type.Repetition.REQUIRED, "legacyList",
+      new MessageType("foo", Types.primitive(PrimitiveType.PrimitiveTypeName.DOUBLE, Type.Repetition.REPEATED).named("double_field")));
   private final Type listType = ConversionPatterns.listOfElements(Type.Repetition.REQUIRED, "newList",
       Types.primitive(PrimitiveType.PrimitiveTypeName.DOUBLE, Type.Repetition.REPEATED).named("element"));
   private final Type integerField = Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, Type.Repetition.REQUIRED).named("int_field");
@@ -54,6 +56,14 @@ class TestHoodieAvroReadSupport {
   void fileContainsLegacyList() {
     when(configuration.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE_DEFAULT)).thenReturn(false);
     MessageType messageType = new MessageType("LegacyList", integerField, legacyListType, mapType);
+    new HoodieAvroReadSupport<>().init(configuration, Collections.emptyMap(), messageType);
+    verify(configuration).set(eq(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE), eq("true"), anyString());
+  }
+
+  @Test
+  void fileContainsLegacyListWithElements() {
+    when(configuration.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE_DEFAULT)).thenReturn(false);
+    MessageType messageType = new MessageType("LegacyList", integerField, legacyListTypeWithObject, mapType);
     new HoodieAvroReadSupport<>().init(configuration, Collections.emptyMap(), messageType);
     verify(configuration).set(eq(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE), eq("true"), anyString());
   }
@@ -79,5 +89,34 @@ class TestHoodieAvroReadSupport {
     MessageType messageType = new MessageType("noListOrMap", integerField);
     new HoodieAvroReadSupport<>().init(configuration, Collections.emptyMap(), messageType);
     verify(configuration, never()).set(anyString(), anyString());
+  }
+
+  @Test
+  void nestedLegacyList() {
+    when(configuration.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE_DEFAULT)).thenReturn(false);
+    MessageType nested = new MessageType("Nested", integerField, legacyListType);
+    MessageType messageType = new MessageType("NestedList", integerField, nested);
+    new HoodieAvroReadSupport<>().init(configuration, Collections.emptyMap(), messageType);
+    verify(configuration).set(eq(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE), eq("true"), anyString());
+  }
+
+  @Test
+  void nestedLegacyMap() {
+    when(configuration.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE_DEFAULT)).thenReturn(false);
+    MessageType nested = new MessageType("Nested", integerField, legacyMapType);
+    MessageType messageType = new MessageType("NestedList", integerField, nested);
+    new HoodieAvroReadSupport<>().init(configuration, Collections.emptyMap(), messageType);
+    verify(configuration).set(eq(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE), eq("true"), anyString());
+  }
+
+  @Test
+  void mapWithLegacyList() {
+    when(configuration.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE_DEFAULT)).thenReturn(false);
+    Type listValue = ConversionPatterns.listType(Type.Repetition.REQUIRED, "value",
+        Types.primitive(PrimitiveType.PrimitiveTypeName.DOUBLE, Type.Repetition.REPEATED).named("double_field"));
+    Type mapWithList = ConversionPatterns.stringKeyMapType(Type.Repetition.OPTIONAL, "newMap", listValue);
+    MessageType messageType = new MessageType("NestedList", integerField, mapWithList);
+    new HoodieAvroReadSupport<>().init(configuration, Collections.emptyMap(), messageType);
+    verify(configuration).set(eq(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE), eq("true"), anyString());
   }
 }
