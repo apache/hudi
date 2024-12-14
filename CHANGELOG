@@ -480,3 +480,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-18575][MINOR] Avoid scanning raw timeline on archival if no instants to archive (#1087)
 [ENG-18445][HUDI-8748] Fix check for whether legacy mode is enabled for file (#1086)
 [AUDIT-1093]: Changelog for release-v1.56.0 (#1085)
+
+--- [2024-12-14 16:03:38] [release-v1.58.0] ---
+[ENG-17422][INTERNAL] Add abstraction of HoodieMergeHandle to make its implementations configurable. (#1078)
+[AUDIT-1097]: Changelog for release-v1.57.0 (#1089)
