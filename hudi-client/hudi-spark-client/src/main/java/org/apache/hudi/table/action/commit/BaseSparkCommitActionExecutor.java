@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
@@ -55,6 +56,7 @@ import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -342,14 +344,35 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
 
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
-    return handleUpdateInternal(upsertHandle, fileId);
+    HoodieMergeHandle mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr);
+    return handleUpdateInternal(mergeHandle, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String fileId)
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> mergeHandle, String fileId)
       throws IOException {
-    table.runMerge(upsertHandle, instantTime, fileId);
-    return upsertHandle.getWriteStatusesAsIterator();
+    if (mergeHandle.getOldFilePath() == null) {
+      throw new HoodieUpsertException(
+          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
+    } else {
+      if (mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
+        Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
+        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
+            table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+            mergeHandle.getWriterSchema(), (Configuration) table.getStorageConf().unwrap());
+        mergeHandle.setPartitionFields(partitionFields);
+        mergeHandle.setPartitionValues(partitionValues);
+      }
+
+      mergeHandle.doMerge();
+    }
+
+    // TODO(vc): This needs to be revisited
+    if (mergeHandle.getPartitionPath() == null) {
+      LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", "
+          + mergeHandle.getWriteStatuses());
+    }
+
+    return Collections.singletonList(mergeHandle.getWriteStatuses()).iterator();
   }
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {

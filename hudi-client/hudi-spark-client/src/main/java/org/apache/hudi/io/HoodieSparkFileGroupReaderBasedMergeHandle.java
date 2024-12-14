@@ -49,6 +49,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
@@ -77,7 +78,7 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_
  * the records, and writes the records to a new base file.
  */
 @NotThreadSafe
-public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieRowMergeHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkFileGroupReaderBasedMergeHandle.class);
 
   protected HoodieReaderContext readerContext;
@@ -89,7 +90,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
                                                     CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                                     Option<BaseKeyGenerator> keyGeneratorOpt,
                                                     HoodieReaderContext readerContext, Configuration conf) {
-    super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
+    super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
     this.conf = conf;
@@ -145,7 +146,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
           latestValidFilePath.isPresent() ? latestValidFilePath.get() : null, newFileName);
 
       LOG.info(String.format(
-          "Merging data from file group %s, to a new base file %s", fileId, newFilePath.toString()));
+          "Merging data from file group %s, to a new base file %s", fileId, targetFilePath.toString()));
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
@@ -156,10 +157,10 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
       // Create Marker file,
       // uses name of `newFilePath` instead of `newFileName`
       // in case the sub-class may roll over the file handle name.
-      createMarkerFile(partitionPath, newFilePath.getName());
+      createMarkerFile(partitionPath, targetFilePath.getName());
 
       // Create the writer for writing the new version file
-      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getStorage(),
+      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, targetFilePath, hoodieTable.getStorage(),
           config, writeSchemaWithMetaFields, taskContextSupplier, HoodieRecord.HoodieRecordType.SPARK);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
@@ -253,7 +254,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
       throws IOException {
     // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
     //       file holding this record even in cases when overall metadata is preserved
-    MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
+    MetadataValues metadataValues = new MetadataValues().setFileName(targetFilePath.getName());
     HoodieRecord populatedRecord = record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
 
     if (shouldPreserveRecordMetadata) {
@@ -287,5 +288,10 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
     } catch (Exception e) {
       throw new HoodieUpsertException("Failed to close HoodieSparkFileGroupReaderBasedMergeHandle", e);
     }
+  }
+
+  @Override
+  public void doMerge() throws IOException {
+    HoodieMergeHelper.newInstance().runMerge(hoodieTable, this);
   }
 }

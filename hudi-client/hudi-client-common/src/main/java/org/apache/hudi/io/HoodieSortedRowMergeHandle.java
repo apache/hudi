@@ -46,13 +46,13 @@ import java.util.Queue;
  * keys in newRecordKeys (sorted in-memory).
  */
 @NotThreadSafe
-public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieSortedRowMergeHandle<T, I, K, O> extends HoodieRowMergeHandle<T, I, K, O> {
 
   private final Queue<String> newRecordKeysSorted = new PriorityQueue<>();
 
-  public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                 Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                                 Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieSortedRowMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                    Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
+                                    Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     newRecordKeysSorted.addAll(keyToNewRecords.keySet());
   }
@@ -60,9 +60,9 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
   /**
    * Called by compactor code path.
    */
-  public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-      Map<String, HoodieRecord<T>> keyToNewRecordsOrig, String partitionPath, String fileId,
-      HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieSortedRowMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                    Map<String, HoodieRecord<T>> keyToNewRecordsOrig, String partitionPath, String fileId,
+                                    HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, keyToNewRecordsOrig, partitionPath, fileId, dataFileToBeMerged,
         taskContextSupplier, keyGeneratorOpt);
 

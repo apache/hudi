@@ -45,15 +45,15 @@ import java.util.Map;
 /**
  * A merge handle that supports logging change logs.
  */
-public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieRowMergeHandleWithChangeLog<T, I, K, O> extends HoodieRowMergeHandle<T, I, K, O> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandleWithChangeLog.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowMergeHandleWithChangeLog.class);
 
   protected final HoodieCDCLogger cdcLogger;
 
-  public HoodieMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                        Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                        TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieRowMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                           TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.cdcLogger = new HoodieCDCLogger(
         instantTime,
@@ -69,9 +69,9 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
   /**
    * Called by compactor code path.
    */
-  public HoodieMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                        Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                                        HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieRowMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                           Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+                                           HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     this.cdcLogger = new HoodieCDCLogger(
         instantTime,

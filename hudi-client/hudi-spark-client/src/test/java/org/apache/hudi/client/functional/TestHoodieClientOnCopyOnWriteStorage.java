@@ -79,6 +79,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieRowMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -469,10 +470,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
       HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath);
 
-      HoodieMergeHandle handle = null;
+      HoodieRowMergeHandle handle = null;
       try {
-        handle = new HoodieMergeHandle(config, instantTime, table, new HashMap<>(),
-            partitionPath, FSUtils.getFileId(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
+        handle = new HoodieRowMergeHandle(config, instantTime, table, new HashMap<>(),
+            partitionPath, FSUtils.getFileId(baseFilePath), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())));
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
@@ -490,10 +491,17 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       handle = null;
       try {
         final String newInstantTime = "006";
+<<<<<<< HEAD
         config.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
         HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
         handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
+=======
+        cfg.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
+        HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(cfg.getProps()).build();
+        handle = new HoodieRowMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+            partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
+>>>>>>> 393055c1f73 ([ENG-17422][INTERNAL] Add abstraction of HoodieMergeHandle to make its implementations configurable. (#1078))
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())));
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
@@ -570,7 +578,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test Insert API for HoodieConcatHandle.
+   * Test Insert API for HoodieRowConcatHandle.
    */
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
@@ -579,15 +587,58 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test InsertPrepped API for HoodieConcatHandle.
+   * Test InsertPrepped API for HoodieRowConcatHandle.
    */
-  @Test
-  public void testInsertsPreppedWithHoodieConcatHandle() throws Exception {
-    testHoodieConcatHandle(true, true, INSTANT_GENERATOR);
+  @ParameterizedTest
+  @MethodSource("populateMetaFieldsParams")
+  public void testInsertsPreppedWithHoodieConcatHandle(boolean populateMetaFields) throws Exception {
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    testHoodieConcatHandle(cfgBuilder.build(), true);
   }
 
   /**
-   * Test Insert API for HoodieConcatHandle when incoming entries contain duplicate keys.
+   * Test one of HoodieRowConcatHandle w/ {@link BaseHoodieWriteClient#insert(Object, String)} API.
+   *
+   * @param config Write Config
+   * @throws Exception in case of error
+   */
+  private void testHoodieConcatHandle(HoodieWriteConfig config, boolean isPrepped)
+      throws Exception {
+    // Force using older timeline layout
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+        .withProps(config.getProps()).withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(
+            VERSION_0).build();
+    HoodieTableMetaClient.withPropertyBuilder()
+        .fromMetaClient(metaClient)
+        .setTimelineLayoutVersion(VERSION_0)
+        .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
+
+    SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
+
+    // Write 1 (only inserts)
+    String newCommitTime = "001";
+    String initCommitTime = "000";
+    int numRecords = 200;
+    insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, SparkRDDWriteClient::insert,
+        isPrepped, true, numRecords, config.populateMetaFields());
+
+    // Write 2 (updates)
+    String prevCommitTime = newCommitTime;
+    newCommitTime = "004";
+    numRecords = 100;
+    String commitTimeBetweenPrevAndNew = "002";
+
+    final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+        generateWrapRecordsFn(isPrepped, hoodieWriteConfig, dataGen::generateUniqueUpdates);
+
+    writeBatch(client, newCommitTime, prevCommitTime, Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime,
+        numRecords, recordGenFunction, SparkRDDWriteClient::insert, true, numRecords, 300,
+        2, false, config.populateMetaFields());
+  }
+
+  /**
+   * Test Insert API for HoodieRowConcatHandle when incoming entries contain duplicate keys.
    */
   @Test
   public void testInsertsWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {
@@ -595,7 +646,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test InsertPrepped API for HoodieConcatHandle when incoming entries contain duplicate keys.
+   * Test InsertPrepped API for HoodieRowConcatHandle when incoming entries contain duplicate keys.
    */
   @Test
   public void testInsertsPreppedWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {

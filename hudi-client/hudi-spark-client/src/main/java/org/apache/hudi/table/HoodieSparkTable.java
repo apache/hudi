@@ -130,22 +130,4 @@ public abstract class HoodieSparkTable<T>
     final TaskContext taskContext = TaskContext.get();
     return () -> TaskContext$.MODULE$.setTaskContext(taskContext);
   }
-
-  @Override
-  public void runMerge(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime, String fileId) throws IOException {
-    if (upsertHandle.getOldFilePath() == null) {
-      throw new HoodieUpsertException("Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
-    } else {
-      if (upsertHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
-        Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
-        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, upsertHandle.getPartitionPath(),
-            getMetaClient().getTableConfig().getBootstrapBasePath().get(),
-            upsertHandle.getWriterSchema(), getStorageConf().unwrapAs(Configuration.class));
-        upsertHandle.setPartitionFields(partitionFields);
-        upsertHandle.setPartitionValues(partitionValues);
-      }
-      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
-    }
-  }
-
 }

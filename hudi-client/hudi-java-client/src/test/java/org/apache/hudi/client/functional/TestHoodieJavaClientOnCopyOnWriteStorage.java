@@ -42,6 +42,7 @@ import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieRowMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -57,6 +58,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -256,10 +258,10 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     Pair<String, String> partitionAndBaseFilePaths = getPartitionAndBaseFilePathsFromLatestCommitMetadata(metaClient);
     HoodieBaseFile baseFile = new HoodieBaseFile(partitionAndBaseFilePaths.getRight());
 
-    HoodieMergeHandle handle = null;
+    HoodieRowMergeHandle handle = null;
     try {
-      handle = new HoodieMergeHandle(config, instantTime, table, new HashMap<>(),
-          partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
+      handle = new HoodieRowMergeHandle(config, instantTime, table, new HashMap<>(),
+          partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(partitionAndBaseFilePaths.getRight()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));
     } catch (HoodieCorruptedDataException e1) {
@@ -276,8 +278,8 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       config.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
       HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
       // does the handle need to be closed to clean up the writer it contains?
-      handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
-          partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
+      handle = new HoodieRowMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+          partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(partitionAndBaseFilePaths.getRight()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));
       fail("The above line should have thrown an exception");
@@ -291,7 +293,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   /**
-   * Test Insert API for HoodieConcatHandle.
+   * Test Insert API for HoodieRowConcatHandle.
    */
   @Test
   public void testInsertsWithHoodieConcatHandle() throws Exception {
@@ -299,15 +301,57 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   /**
-   * Test InsertPrepped API for HoodieConcatHandle.
+   * Test InsertPrepped API for HoodieRowConcatHandle.
    */
   @Test
   public void testInsertsPreppedWithHoodieConcatHandle() throws Exception {
-    testHoodieConcatHandle(true, true, INSTANT_GENERATOR);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    testHoodieConcatHandle(cfgBuilder.build(), true);
   }
 
   /**
-   * Test Insert API for HoodieConcatHandle when incoming entries contain duplicate keys.
+   * Test one of HoodieRowConcatHandle w/ {@link BaseHoodieWriteClient#insert(Object, String)} API.
+   *
+   * @param config Write Config
+   * @throws Exception in case of error
+   */
+  private void testHoodieConcatHandle(HoodieWriteConfig config, boolean isPrepped)
+      throws Exception {
+    // Force using older timeline layout
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+        .withProps(config.getProps()).withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(
+            VERSION_0).build();
+    HoodieTableMetaClient.withPropertyBuilder()
+        .fromMetaClient(metaClient)
+        .setTimelineLayoutVersion(VERSION_0)
+        .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
+
+    HoodieJavaWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
+
+    // Write 1 (only inserts)
+    String newCommitTime = "001";
+    String initCommitTime = "000";
+    int numRecords = 200;
+    insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, HoodieJavaWriteClient::insert,
+        isPrepped, true, numRecords, config.populateMetaFields());
+
+    // Write 2 (updates)
+    String prevCommitTime = newCommitTime;
+    newCommitTime = "004";
+    numRecords = 100;
+    String commitTimeBetweenPrevAndNew = "002";
+
+    final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+        generateWrapRecordsFn(isPrepped, hoodieWriteConfig, dataGen::generateUniqueUpdates);
+
+    writeBatch(client, newCommitTime, prevCommitTime, Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime,
+        numRecords, recordGenFunction, HoodieJavaWriteClient::insert, true, numRecords, 300,
+        2, false, config.populateMetaFields());
+  }
+
+  /**
+   * Test Insert API for HoodieRowConcatHandle when incoming entries contain duplicate keys.
    */
   @Test
   public void testInsertsWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {
@@ -315,7 +359,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   /**
-   * Test InsertPrepped API for HoodieConcatHandle when incoming entries contain duplicate keys.
+   * Test InsertPrepped API for HoodieRowConcatHandle when incoming entries contain duplicate keys.
    */
   @Test
   public void testInsertsPreppedWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {

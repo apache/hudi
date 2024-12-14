@@ -34,21 +34,21 @@ import java.util.Collections;
 import java.util.Iterator;
 
 /**
- * A {@link FlinkMergeAndReplaceHandle} that supports CONCAT write incrementally(small data buffers).
+ * A {@link FlinkRowMergeAndReplaceHandle} that supports CONCAT write incrementally(small data buffers).
  *
  * <P>The records iterator for super constructor is reset as empty thus the initialization for new records
  * does nothing. This handle keep the iterator for itself to override the write behavior.
  */
-public class FlinkConcatAndReplaceHandle<T, I, K, O>
-    extends FlinkMergeAndReplaceHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatAndReplaceHandle.class);
+public class FlinkConcatAndReplaceHandleRow<T, I, K, O>
+    extends FlinkRowMergeAndReplaceHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatAndReplaceHandleRow.class);
 
   // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
 
-  public FlinkConcatAndReplaceHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                     Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                     TaskContextSupplier taskContextSupplier, StoragePath basePath) {
+  public FlinkConcatAndReplaceHandleRow(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                        Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                        TaskContextSupplier taskContextSupplier, StoragePath basePath) {
     super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier, basePath);
     this.recordItr = recordItr;
   }
@@ -63,9 +63,8 @@ public class FlinkConcatAndReplaceHandle<T, I, K, O>
     try {
       fileWriter.write(key, oldRecord, writeSchema);
     } catch (IOException | RuntimeException e) {
-      String errMsg = String.format(
-          "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
-          key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
+      String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
+          key, getOldFilePath(), targetFilePath, writeSchemaWithMetaFields.toString(true));
       LOG.debug("Old record is " + oldRecord);
       throw new HoodieUpsertException(errMsg, e);
     }

@@ -38,16 +38,16 @@ import java.util.Iterator;
  * <P>The records iterator for super constructor is reset as empty thus the initialization for new records
  * does nothing. This handle keep the iterator for itself to override the write behavior.
  */
-public class FlinkConcatHandle<T, I, K, O>
-    extends FlinkMergeHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatHandle.class);
+public class FlinkConcatHandleRow<T, I, K, O>
+    extends FlinkRowMergeHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatHandleRow.class);
 
   // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
 
-  public FlinkConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                           TaskContextSupplier taskContextSupplier) {
+  public FlinkConcatHandleRow(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                              Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                              TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier);
     this.recordItr = recordItr;
   }
@@ -64,7 +64,7 @@ public class FlinkConcatHandle<T, I, K, O>
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format(
           "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
-          key, getOldFilePath(), newFilePath, oldSchema.toString(true));
+          key, getOldFilePath(), targetFilePath, oldSchema.toString(true));
       LOG.debug("Old record is " + oldRecord);
       throw new HoodieUpsertException(errMsg, e);
     }

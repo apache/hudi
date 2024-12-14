@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -40,21 +41,22 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * A flink merge handle that supports logging change logs.
+ * A flink merge and replace handle that supports logging change logs.
  *
- * <p>The cdc about logic is copied from {@link HoodieMergeHandleWithChangeLog},
+ * <p>The cdc about logic is copied from {@link HoodieRowMergeHandleWithChangeLog},
  * we should refactor it out when there are good abstractions.
  */
-public class FlinkMergeHandleWithChangeLog<T, I, K, O>
-    extends FlinkMergeHandle<T, I, K, O> {
+public class FlinkRowMergeAndReplaceHandleWithChangeLog<T, I, K, O>
+    extends FlinkRowMergeAndReplaceHandle<T, I, K, O> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkRowMergeAndReplaceHandleWithChangeLog.class);
+
   private final HoodieCDCLogger cdcLogger;
 
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeHandleWithChangeLog.class);
-
-  public FlinkMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                       Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                       TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier);
+  public FlinkRowMergeAndReplaceHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                                    Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                                    TaskContextSupplier taskContextSupplier, StoragePath basePath) {
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, basePath);
     this.cdcLogger = new HoodieCDCLogger(
         instantTime,
         config,
@@ -87,6 +89,7 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
     super.writeInsertRecord(newRecord);
     if (!HoodieOperation.isDelete(newRecord.getOperation())) {
       cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
+      newRecord.deflate();
     }
   }
 
