@@ -474,3 +474,9 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2024-12-11 23:02:23] [release-v1.56.0] ---
 [ENG-18575][HUDI-8706] Avoid reading partition path from records if not required (#1083)
 [AUDIT-1071]: Changelog for release-v1.55.0 (#1084)
+
+--- [2024-12-14 01:12:19] [release-v1.57.0] ---
+[ENG-17359][HUDI-8596] Fix hudi spark sql cancelling issue (#1062)
+[ENG-18575][MINOR] Avoid scanning raw timeline on archival if no instants to archive (#1087)
+[ENG-18445][HUDI-8748] Fix check for whether legacy mode is enabled for file (#1086)
+[AUDIT-1093]: Changelog for release-v1.56.0 (#1085)
