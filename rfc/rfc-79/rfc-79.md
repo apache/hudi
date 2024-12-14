@@ -56,14 +56,14 @@ Note that a failed cancellable clustering plan should still be able to be safely
 
 ## Design
 ### Enabling a clustering plan to be cancellable
-To satisfy goal (A), a new config flag "cancellable" can be added to a clustering plan. A writer that intends to schedule a cancellable table service plan can enable the flag in the serialized plan metadata. Any writer executing the plan can infer that the plan is cancellable, and when trying to commit the instant should abort if it detects that any ingestion write or table service plan (without cancellable config flag) is targeting the same file groups. As a future optimization, the cancellable table writer can use early conflict detection (instead of waiting until committing the instant) to repeatadly poll for any conflicting write appearing on timeline, and abort earlier if needed.
-On the other side in ingestion write, the commit finalization flow for ingestion writers can be updated to ignore any inflight table service plans if they are cancellable.
-For the purpose of this design proposal, consider an ingestion job as having three steps:
+To satisfy goal (A), a new config flag "cancellable" can be added to a clustering plan. A writer that intends to schedule a cancellable table service plan can enable the flag in the serialized plan metadata. Any writer executing the plan can infer that the plan is cancellable, and when trying to commit the instant should abort if it detects that is has been requested for cancellation. As a future optimization, the cancellable clustering worker can continually poll during its execution to see if it has been requested for cancellation.
+On the other side in the ingestion write flow, the commit finalization logic for ingestion writers can be updated to ignore any inflight clustering plans if they are cancellable.
+For the purpose of this design proposal, consider the existing ingestion write flow as having three steps:
 1. Schedule itself on the timeline with a new instant time in a .requested file
 2. Process/record tag incoming records, build a workload profile, and write the updating/replaced file groups to a "inflight" instant file on the timeline. Check for conflicts and abort if needed.
 3. Perform write conflict checks and commit the instant on the timeline
 
-The aforementioned changes to ingestion and table service flow will ensure that in the event of a conflicting ingestion and cancellable table service writer, the ingestion job will take precedence (and cause the cancellable table service instant to eventually fail) as long as a cancellable table service hasn't be completed before (2). Since if the cancellable table service has already been completed before (2), the ingestion job will see that a completed instant (a cancellable table service action) conflicts with its ongoing inflight write, and therefore it would not be legal to proceed. 
+The aforementioned changes to ingestion and clustering flow will ensure that in the event of a conflicting ingestion and cancellable table service writer, the ingestion job will take precedence (and cause the cancellable table service instant to eventually cancel) as long as a cancellable clustering plan hasn't be completed before (2). Since if the cancellable table service has already been completed before (2), the ingestion job will see that a completed instant (a cancellable table service action) conflicts with its ongoing inflight write, and therefore it would not be legal to proceed. 
 
 ### Adding a cancel action and aborted state for cancellable plans
 This proposed design will also involve adding a new instant state and interal hoodie metadata directory, by making the following changes:
