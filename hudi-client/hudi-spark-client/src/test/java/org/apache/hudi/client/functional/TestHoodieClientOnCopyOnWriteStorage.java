@@ -104,7 +104,7 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieRowMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -722,9 +722,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       Path baseFilePath = new Path(basePathStr, filePath);
       HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath.toString());
 
-      HoodieMergeHandle handle = null;
+      HoodieRowMergeHandle handle = null;
       try {
-        handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
+        handle = new HoodieRowMergeHandle(cfg, instantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -745,7 +745,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         final String newInstantTime = "006";
         cfg.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
         HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(cfg.getProps()).build();
-        handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+        handle = new HoodieRowMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -826,7 +826,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test Insert API for HoodieConcatHandle.
+   * Test Insert API for HoodieRowConcatHandle.
    */
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
@@ -837,7 +837,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test InsertPrepped API for HoodieConcatHandle.
+   * Test InsertPrepped API for HoodieRowConcatHandle.
    */
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
@@ -848,7 +848,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test one of HoodieConcatHandle w/ {@link BaseHoodieWriteClient#insert(Object, String)} API.
+   * Test one of HoodieRowConcatHandle w/ {@link BaseHoodieWriteClient#insert(Object, String)} API.
    *
    * @param config Write Config
    * @throws Exception in case of error
@@ -888,7 +888,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test Insert API for HoodieConcatHandle when incoming entries contain duplicate keys.
+   * Test Insert API for HoodieRowConcatHandle when incoming entries contain duplicate keys.
    */
   @Test
   public void testInsertsWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {
@@ -897,7 +897,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test InsertPrepped API for HoodieConcatHandle when incoming entries contain duplicate keys.
+   * Test InsertPrepped API for HoodieRowConcatHandle when incoming entries contain duplicate keys.
    */
   @Test
   public void testInsertsPreppedWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {

@@ -162,7 +162,7 @@ public class FlinkWriteHandleFactory {
         String partitionPath,
         String fileId,
         Path basePath) {
-      return new FlinkMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+      return new FlinkRowMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
           table.getTaskContextSupplier(), basePath);
     }
 
@@ -174,7 +174,7 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId) {
-      return new FlinkMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
+      return new FlinkRowMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
           fileId, table.getTaskContextSupplier());
     }
   }
@@ -200,7 +200,7 @@ public class FlinkWriteHandleFactory {
         String partitionPath,
         String fileId,
         Path basePath) {
-      return new FlinkConcatAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+      return new FlinkConcatAndReplaceHandleRow<>(config, instantTime, table, recordItr, partitionPath, fileId,
           table.getTaskContextSupplier(), basePath);
     }
 
@@ -212,7 +212,7 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId) {
-      return new FlinkConcatHandle<>(config, instantTime, table, recordItr, partitionPath,
+      return new FlinkConcatHandleRow<>(config, instantTime, table, recordItr, partitionPath,
           fileId, table.getTaskContextSupplier());
     }
   }
@@ -238,7 +238,7 @@ public class FlinkWriteHandleFactory {
         String partitionPath,
         String fileId,
         Path basePath) {
-      return new FlinkMergeAndReplaceHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath, fileId,
+      return new FlinkRowMergeAndReplaceHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath, fileId,
           table.getTaskContextSupplier(), basePath);
     }
 
@@ -250,7 +250,7 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId) {
-      return new FlinkMergeHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath,
+      return new FlinkRowMergeHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath,
           fileId, table.getTaskContextSupplier());
     }
   }

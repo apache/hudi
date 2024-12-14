@@ -65,6 +65,7 @@ import org.apache.hudi.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.HoodieRowMergeHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -810,6 +811,22 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Enable validation for commit time generation to ensure new commit time generated is always the latest among other entries. "
           + "This is for additional safety to always generate a monotonically increasing commit times (for ingestion writer, table services etc).");
 
+  public static final ConfigProperty<String> MERGE_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.write.merge.handle.class")
+      .defaultValue(HoodieRowMergeHandle.class.getName())
+      .markAdvanced()
+      .sinceVersion("0.15.1")
+      .withDocumentation("The merge handle class to use to merge the records from a base file with an iterator of incoming records"
+          + " or a map of updates and deletes from log files at a file group level.");
+
+  public static final ConfigProperty<Boolean> MERGE_HANDLE_PERFORM_FALLBACK = ConfigProperty
+      .key("hoodie.write.merge.handle.fallback")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("0.15.1")
+      .withDocumentation("When using a custom Hoodie Merge Handle Implementation controlled by the config" + MERGE_HANDLE_CLASS_NAME.key()
+              + " enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -1343,6 +1360,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieTableConfig.CDC_ENABLED, HoodieTableConfig.CDC_ENABLED.defaultValue());
   }
 
+  public boolean isMergeHandleFallbackEnabled() {
+    return getBooleanOrDefault(HoodieWriteConfig.MERGE_HANDLE_PERFORM_FALLBACK, HoodieWriteConfig.MERGE_HANDLE_PERFORM_FALLBACK.defaultValue());
+  }
+
   public boolean isConsistentLogicalTimestampEnabled() {
     return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
   }
@@ -1441,6 +1462,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getWriteStatusClassName() {
     return getString(WRITE_STATUS_CLASS_NAME);
+  }
+
+  public String getMergeHandleClassName() {
+    return getStringOrDefault(MERGE_HANDLE_CLASS_NAME);
   }
 
   public int getFinalizeWriteParallelism() {
@@ -3242,6 +3267,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEnableTimestampOrderingValidation(boolean enableTimestampOrderingValidation) {
       writeConfig.setValue(ENABLE_TIMESTAMP_ORDERING_VALIDATION, Boolean.toString(enableTimestampOrderingValidation));
+      return this;
+    }
+
+    public Builder withMergeHandleClassName(String className) {
+      writeConfig.setValue(MERGE_HANDLE_CLASS_NAME, className);
       return this;
     }
 

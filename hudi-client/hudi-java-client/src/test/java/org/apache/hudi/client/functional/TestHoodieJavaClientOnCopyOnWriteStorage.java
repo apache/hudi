@@ -84,7 +84,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieRowMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
@@ -550,9 +550,9 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     Path baseFilePath = new Path(basePathStr, filePath);
     HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath.toString());
 
-    HoodieMergeHandle handle = null;
+    HoodieRowMergeHandle handle = null;
     try {
-      handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
+      handle = new HoodieRowMergeHandle(cfg, instantTime, table, new HashMap<>(),
           partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -574,7 +574,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       cfg.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
       HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(cfg.getProps()).build();
       // does the handle need to be closed to clean up the writer it contains?
-      handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+      handle = new HoodieRowMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
           partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -593,7 +593,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   /**
-   * Test Insert API for HoodieConcatHandle.
+   * Test Insert API for HoodieRowConcatHandle.
    */
   @Test
   public void testInsertsWithHoodieConcatHandle() throws Exception {
@@ -603,7 +603,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   /**
-   * Test InsertPrepped API for HoodieConcatHandle.
+   * Test InsertPrepped API for HoodieRowConcatHandle.
    */
   public void testInsertsPreppedWithHoodieConcatHandle() throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
@@ -612,7 +612,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   /**
-   * Test one of HoodieConcatHandle w/ {@link BaseHoodieWriteClient#insert(Object, String)} API.
+   * Test one of HoodieRowConcatHandle w/ {@link BaseHoodieWriteClient#insert(Object, String)} API.
    *
    * @param config Write Config
    * @throws Exception in case of error
@@ -652,7 +652,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   /**
-   * Test Insert API for HoodieConcatHandle when incoming entries contain duplicate keys.
+   * Test Insert API for HoodieRowConcatHandle when incoming entries contain duplicate keys.
    */
   @Test
   public void testInsertsWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {
@@ -661,7 +661,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   /**
-   * Test InsertPrepped API for HoodieConcatHandle when incoming entries contain duplicate keys.
+   * Test InsertPrepped API for HoodieRowConcatHandle when incoming entries contain duplicate keys.
    */
   @Test
   public void testInsertsPreppedWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {

@@ -37,7 +37,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieCreateHandle;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieRowMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -181,7 +181,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         // the second batch batch2 tries to reuse the same bucket
         // and append instead of UPDATE.
         return handleInsert(fileIdHint, recordItr);
-      } else if (this.writeHandle instanceof HoodieMergeHandle) {
+      } else if (this.writeHandle instanceof HoodieRowMergeHandle) {
         return handleUpdate(partitionPath, fileIdHint, recordItr);
       } else {
         switch (bucketType) {
@@ -210,26 +210,26 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
-    HoodieMergeHandle<?, ?, ?, ?> upsertHandle = (HoodieMergeHandle<?, ?, ?, ?>) this.writeHandle;
-    return handleUpdateInternal(upsertHandle, fileId);
+    HoodieRowMergeHandle<?, ?, ?, ?> mergeHandle = (HoodieRowMergeHandle<?, ?, ?, ?>) this.writeHandle;
+    return handleUpdateInternal(mergeHandle, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String fileId)
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieRowMergeHandle<?, ?, ?, ?> mergeHandle, String fileId)
       throws IOException {
-    if (upsertHandle.getOldFilePath() == null) {
+    if (mergeHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      HoodieMergeHelper.newInstance().runMerge(table, upsertHandle);
+      HoodieMergeHelper.newInstance().runMerge(table, mergeHandle);
     }
 
     // TODO(vc): This needs to be revisited
-    if (upsertHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", "
-          + upsertHandle.writeStatuses());
+    if (mergeHandle.getPartitionPath() == null) {
+      LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", "
+          + mergeHandle.writeStatuses());
     }
 
-    return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
+    return Collections.singletonList(mergeHandle.writeStatuses()).iterator();
   }
 
   @Override

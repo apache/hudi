@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +19,6 @@
 package org.apache.hudi.io;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -33,22 +32,22 @@ import java.util.Collections;
 import java.util.Iterator;
 
 /**
- * A {@link FlinkMergeAndReplaceHandle} that supports CONCAT write incrementally(small data buffers).
+ * Handle to concatenate new records to old records w/o any merging.
  *
  * <P>The records iterator for super constructor is reset as empty thus the initialization for new records
  * does nothing. This handle keep the iterator for itself to override the write behavior.
  */
-public class FlinkConcatAndReplaceHandle<T, I, K, O>
-    extends FlinkMergeAndReplaceHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatAndReplaceHandle.class);
+public class FlinkConcatHandleRow<T, I, K, O>
+    extends FlinkRowMergeHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatHandleRow.class);
 
   // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
 
-  public FlinkConcatAndReplaceHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                     Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                     TaskContextSupplier taskContextSupplier, Path basePath) {
-    super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier, basePath);
+  public FlinkConcatHandleRow(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                              Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                              TaskContextSupplier taskContextSupplier) {
+    super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier);
     this.recordItr = recordItr;
   }
 
@@ -60,10 +59,10 @@ public class FlinkConcatAndReplaceHandle<T, I, K, O>
     Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     try {
-      fileWriter.write(key, oldRecord, writeSchema);
+      fileWriter.write(key, oldRecord, oldSchema);
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
-          key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
+          key, getOldFilePath(), targetFilePath, oldSchema.toString(true));
       LOG.debug("Old record is " + oldRecord);
       throw new HoodieUpsertException(errMsg, e);
     }
