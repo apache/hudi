@@ -86,14 +86,13 @@ The clustering execution flow will be updated to check the /.cancel folder durin
 
 The below visualization shows the flow for cancellable table service plans (steps that are already in existing table service flow are grey-ed out) 
 
+![cancel table service lifecycle with lock (5)](https://github.com/user-attachments/assets/c05dae68-4330-4d85-b29e-e3e47754509e)
 
-![cancel table service lifecycle with lock (4)](https://github.com/user-attachments/assets/4b419823-76cd-487f-b3aa-95d02a4945b9)
 
 
 Having this new .hoodie/.cancel folder (in addition to only having the .aborted state) is needed not only to allow any caller to forcibily block an instant from being comitted, but also to prevent the need for table service workers to also perform write conflict detection (that ingestion already will perform) or unecessairly re-attempt execution of the instant if it has been already been requested for cancellation but not succefully aborted yet. The below visualized scenario shows how this clustering attempt will "short circuit" in this manner by checking /.cancel to see if clustering execution should even proceed. This scenario also includes an example of concurrent writers to show how transaction and heartbeating in the above proposed flow will allow correct behavior even in the face of concurrent writers attempting to execute and/or cancel the instant.
 
-![cancel flow table serivce](https://github.com/user-attachments/assets/aa8a363c-48f7-4a6c-ae51-cc0c126983f2)
-
+![cancel flow table serivce (1)](https://github.com/user-attachments/assets/f130f326-952f-49eb-bdbb-b0b34206f677)
 
 Aside from modifications to the clustering execution flow, a new pair of cancel APIs request_cancel and execute_cancel will be added for all writers to use. They will allow a writer to request an instant to be cancelled (by adding it to /.cancel) and transition an instant to the terminal .aborted state, respectively.
 
