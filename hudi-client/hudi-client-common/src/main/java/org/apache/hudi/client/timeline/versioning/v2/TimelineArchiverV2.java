@@ -62,6 +62,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.client.utils.ArchivalUtils.getMinAndMaxInstantsToKeep;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_LIMIT_INSTANTS;
 
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
@@ -104,7 +105,8 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
 
     try {
       // Sort again because the cleaning and rollback instants could break the sequence.
-      List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
+      List<ActiveAction> instantsToArchive = getInstantsToArchive()
+          .limit(config.getLongOrDefault(ARCHIVE_LIMIT_INSTANTS)).sorted().collect(Collectors.toList());
       if (!instantsToArchive.isEmpty()) {
         LOG.info("Archiving and deleting instants {}", instantsToArchive);
         Consumer<Exception> exceptionHandler = e -> {
