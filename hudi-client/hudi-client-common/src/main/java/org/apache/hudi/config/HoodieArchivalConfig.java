@@ -102,6 +102,14 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("If enabled, archival will proceed beyond savepoint, skipping savepoint commits."
           + " If disabled, archival will stop at the earliest savepoint commit.");
 
+  public static final ConfigProperty<Long> ARCHIVE_LIMIT_INSTANTS = ConfigProperty
+      .key("hoodie.archive.limit.instants")
+      .defaultValue(Long.MAX_VALUE)
+      .markAdvanced()
+      .sinceVersion("0.16.0")
+      .withDocumentation("If enabled, archival will limit the instants upto this value."
+          + "This is useful when a large timeline containing tens of thousands instants that need to archived");
+
   /**
    * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
    */
@@ -190,6 +198,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
 
     public Builder withArchiveBeyondSavepoint(boolean archiveBeyondSavepoint) {
       archivalConfig.setValue(ARCHIVE_BEYOND_SAVEPOINT, String.valueOf(archiveBeyondSavepoint));
+      return this;
+    }
+
+    public Builder withArchiveLimitInstants(long limitInstants) {
+      archivalConfig.setValue(ARCHIVE_LIMIT_INSTANTS, String.valueOf(limitInstants));
       return this;
     }
 
