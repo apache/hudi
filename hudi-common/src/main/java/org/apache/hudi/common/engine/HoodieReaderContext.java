@@ -142,7 +142,7 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_ORDERING_FIELD = "_2";
   public static final String INTERNAL_META_OPERATION = "_3";
   public static final String INTERNAL_META_INSTANT_TIME = "_4";
-  public static final String INTERNAL_META_SCHEMA = "_5";
+  public static final String INTERNAL_META_SCHEMA_ID = "_5";
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
@@ -295,7 +295,7 @@ public abstract class HoodieReaderContext<T> {
   public Map<String, Object> generateMetadataForRecord(T record, Schema schema) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema));
-    meta.put(INTERNAL_META_SCHEMA, schema);
+    meta.put(INTERNAL_META_SCHEMA_ID, this.schemaHandler.encodeAvroSchema(schema));
     return meta;
   }
 
@@ -309,7 +309,7 @@ public abstract class HoodieReaderContext<T> {
   public Map<String, Object> updateSchemaAndResetOrderingValInMetadata(Map<String, Object> meta,
                                                                        Schema schema) {
     meta.remove(INTERNAL_META_ORDERING_FIELD);
-    meta.put(INTERNAL_META_SCHEMA, schema);
+    meta.put(INTERNAL_META_SCHEMA_ID, this.schemaHandler.encodeAvroSchema(schema));
     return meta;
   }
 

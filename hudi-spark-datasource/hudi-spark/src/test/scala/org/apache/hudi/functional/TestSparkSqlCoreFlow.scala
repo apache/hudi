@@ -143,15 +143,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     assertEquals(1, countsPerCommit.length)
     assertEquals(commitInstantTime3, countsPerCommit(0).get(0).toString)
 
-
-    val timeTravelDf = if (HoodieSparkUtils.gteqSpark3_3) {
-      spark.sql(s"select * from $tableName timestamp as of '$commitInstantTime2'").cache()
-    } else {
-      //HUDI-5265
-      spark.read.format("org.apache.hudi")
-        .option("as.of.instant", commitInstantTime2)
-        .load(tableBasePath).cache()
-    }
+    val timeTravelDf = spark.sql(s"select * from $tableName timestamp as of '$commitInstantTime2'").cache()
     assertEquals(100, timeTravelDf.count())
     compareEntireInputDfWithHudiDf(snapshotDf2, timeTravelDf)
     timeTravelDf.unpersist(true)

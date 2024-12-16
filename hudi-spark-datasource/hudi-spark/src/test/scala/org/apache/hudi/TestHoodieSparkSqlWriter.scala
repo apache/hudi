@@ -1262,14 +1262,7 @@ object TestHoodieSparkSqlWriter {
 
     val parquetScenarios = scenarios.map { _ :+ "parquet" }
     val orcScenarios = scenarios.map { _ :+ "orc" }
-
-    // NOTE: Hudi doesn't support Orc in Spark < 3.0
-    //       Please check HUDI-4496 for more details
-    val targetScenarios = if (HoodieSparkUtils.gteqSpark3_3) {
-      parquetScenarios ++ orcScenarios
-    } else {
-      parquetScenarios
-    }
+    val targetScenarios = parquetScenarios ++ orcScenarios
 
     java.util.Arrays.stream(targetScenarios.map(as => Arguments.arguments(as.map(_.asInstanceOf[AnyRef]):_*)))
   }

@@ -40,6 +40,7 @@ import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -187,7 +188,7 @@ public abstract class FileFormatUtils {
    * @param filePath the data file path.
    * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath);
+  public abstract ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath);
 
   /**
    * Provides a closable iterator for reading the given data file.
@@ -195,11 +196,13 @@ public abstract class FileFormatUtils {
    * @param storage         {@link HoodieStorage} instance.
    * @param filePath        the data file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
+   * @param partitionPath optional partition path for the file, if provided only the record key is read from the file
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
    */
   public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage,
                                                                    StoragePath filePath,
-                                                                   Option<BaseKeyGenerator> keyGeneratorOpt);
+                                                                   Option<BaseKeyGenerator> keyGeneratorOpt,
+                                                                   Option<String> partitionPath);
 
   /**
    * Provides a closable iterator for reading the given data file.
@@ -216,11 +219,13 @@ public abstract class FileFormatUtils {
    * @param storage         {@link HoodieStorage} instance.
    * @param filePath        the data file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
+   * @param partitionPath optional partition path for the file, if provided only the record key is read from the file
+   * @return {@link Iterator} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
-                                                                           StoragePath filePath,
-                                                                           Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
+                                                                                       StoragePath filePath,
+                                                                                       Option<BaseKeyGenerator> keyGeneratorOpt,
+                                                                                       Option<String> partitionPath);
 
   /**
    * Read the Avro schema of the data file.
@@ -291,11 +296,11 @@ public abstract class FileFormatUtils {
     private final ClosableIterator<GenericRecord> nestedItr;
     private final Function<GenericRecord, HoodieKey> func;
 
-    public static HoodieKeyIterator getInstance(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
-      return new HoodieKeyIterator(nestedItr, keyGenerator);
+    public static HoodieKeyIterator getInstance(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator, Option<String> partitionPathOption) {
+      return new HoodieKeyIterator(nestedItr, keyGenerator, partitionPathOption);
     }
 
-    private HoodieKeyIterator(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+    private HoodieKeyIterator(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator, Option<String> partitionPathOption) {
       this.nestedItr = nestedItr;
       if (keyGenerator.isPresent()) {
         this.func = retVal -> {
@@ -305,8 +310,8 @@ public abstract class FileFormatUtils {
         };
       } else {
         this.func = retVal -> {
-          String recordKey = retVal.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-          String partitionPath = retVal.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          String recordKey = retVal.get(0).toString();
+          String partitionPath = partitionPathOption.orElseGet(() -> retVal.get(1).toString());
           return new HoodieKey(recordKey, partitionPath);
         };
       }

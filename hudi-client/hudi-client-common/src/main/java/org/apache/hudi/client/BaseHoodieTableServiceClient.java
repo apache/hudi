@@ -826,10 +826,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     try {
       final Timer.Context timerContext = metrics.getArchiveCtx();
       // We cannot have unbounded commit files. Archive commits if we have to archive.
-
-      // Reload table timeline to reflect the latest commits,
-      // there are some table services (for e.g, the cleaning) that executed right before the archiving.
-      table.getMetaClient().reloadActiveTimeline();
       HoodieTimelineArchiver archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
       int instantsToArchive = archiver.archiveIfRequired(context, true);
       if (timerContext != null) {
