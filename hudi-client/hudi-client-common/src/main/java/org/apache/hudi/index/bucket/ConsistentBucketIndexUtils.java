@@ -108,11 +108,11 @@ public class ConsistentBucketIndexUtils {
     try {
       Predicate<StoragePathInfo> hashingMetaCommitFilePredicate = pathInfo -> {
         String filename = pathInfo.getPath().getName();
-        return filename.contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX);
+        return filename.endsWith(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX);
       };
       Predicate<StoragePathInfo> hashingMetadataFilePredicate = pathInfo -> {
         String filename = pathInfo.getPath().getName();
-        return filename.contains(HASHING_METADATA_FILE_SUFFIX);
+        return filename.endsWith(HASHING_METADATA_FILE_SUFFIX);
       };
       final List<StoragePathInfo> metaFiles = metaClient.getStorage().listDirectEntries(metadataPath);
       final TreeSet<String> commitMetaTss = metaFiles.stream().filter(hashingMetaCommitFilePredicate)
@@ -185,10 +185,23 @@ public class ConsistentBucketIndexUtils {
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
     try {
-      storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()));
+      if (storage.exists(fullPath)) {
+        // the file has been created by other tasks
+        return true;
+      }
+      storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()), true);
       return true;
-    } catch (IOException e) {
-      LOG.warn("Failed to update bucket metadata: " + metadata, e);
+    } catch (IOException e1) {
+      // ignore the exception and check the file existence
+      try {
+        if (storage.exists(fullPath)) {
+          return true;
+        }
+      } catch (IOException e2) {
+        // ignore the exception and return false
+        LOG.warn("Failed to check the existence of bucket metadata file: " + fullPath, e2);
+      }
+      LOG.warn("Failed to update bucket metadata: " + metadata, e1);
       return false;
     }
   }
