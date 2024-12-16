@@ -66,7 +66,7 @@ public class ExpressionIndexSparkFunctions {
   private static final String SPARK_SPLIT = "split";
   public static final String IDENTITY_FUNCTION = "identity";
 
-  private static Map<String, SparkFunction> SPARK_FUNCTION_MAP = new HashMap<>();
+  private static final Map<String, SparkFunction> SPARK_FUNCTION_MAP = new HashMap<>();
   static {
     SPARK_FUNCTION_MAP.put(IDENTITY_FUNCTION, new SparkIdentityFunction(){});
     SPARK_FUNCTION_MAP.put(SPARK_SPLIT, new SparkSplitFunction(){});

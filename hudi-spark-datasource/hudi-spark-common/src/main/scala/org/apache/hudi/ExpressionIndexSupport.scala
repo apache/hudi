@@ -52,10 +52,11 @@ import scala.collection.parallel.mutable.ParHashMap
 class ExpressionIndexSupport(spark: SparkSession,
                              tableSchema: StructType,
                              metadataConfig: HoodieMetadataConfig,
-                             metaClient: HoodieTableMetaClient)
+                             metaClient: HoodieTableMetaClient,
+                             allowCaching: Boolean = false)
   extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
 
-  @transient private lazy val cachedColumnStatsIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
+  @transient private lazy val cachedExpressionIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
 
   // NOTE: Since [[metadataConfig]] is transient this has to be eagerly persisted, before this will be passed on to the executor
@@ -100,8 +101,8 @@ class ExpressionIndexSupport(spark: SparkSession,
   def loadTransposed[T](targetColumns: Seq[String],
                         shouldReadInMemory: Boolean,
                         colStatRecords: HoodieData[HoodieMetadataColumnStats],
-                        expressionIndexQuery: Expression) (block: DataFrame => T): T = {
-    cachedColumnStatsIndexViews.get(targetColumns) match {
+                        expressionIndexQuery: Expression)(block: DataFrame => T): T = {
+    cachedExpressionIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
       case None =>
@@ -119,9 +120,8 @@ class ExpressionIndexSupport(spark: SparkSession,
             spark.createDataFrame(rdd, indexSchema)
           }
 
-          val allowCaching: Boolean = false
           if (allowCaching) {
-            cachedColumnStatsIndexViews.put(targetColumns, df)
+            cachedExpressionIndexViews.put(targetColumns, df)
             // NOTE: Instead of collecting the rows from the index and hold them in memory, we instead rely
             //       on Spark as (potentially distributed) cache managing data lifecycle, while we simply keep
             //       the referenced to persisted [[DataFrame]] instance
@@ -321,8 +321,8 @@ class ExpressionIndexSupport(spark: SparkSession,
   }
 
   override def invalidateCaches(): Unit = {
-    cachedColumnStatsIndexViews.foreach { case (_, df) => df.unpersist() }
-    cachedColumnStatsIndexViews.clear()
+    cachedExpressionIndexViews.foreach { case (_, df) => df.unpersist() }
+    cachedExpressionIndexViews.clear()
   }
 
   /**
@@ -548,7 +548,7 @@ class ExpressionIndexSupport(spark: SparkSession,
 }
 
 object ExpressionIndexSupport {
-  val INDEX_NAME = "FUNCTIONAL"
+  val INDEX_NAME = "EXPRESSION"
   /**
    * Target Column Stats Index columns which internally are mapped onto fields of the corresponding
    * Column Stats record payload ([[HoodieMetadataColumnStats]]) persisted w/in Metadata Table
