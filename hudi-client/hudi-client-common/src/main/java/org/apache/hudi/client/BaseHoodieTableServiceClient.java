@@ -344,6 +344,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       LOG.info("Committing Compaction {}", compactionCommitTime);
       LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+      // update table config for cols to Index as applicable
+      updateColsToIndex(table, config, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
       releaseResources(compactionCommitTime);
@@ -407,6 +409,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       LOG.info("Committing Log Compaction {}", logCompactionCommitTime);
       LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
+      // update table config for cols to Index as applicable
+      updateColsToIndex(table, config, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(logCompactionInstant));
       releaseResources(logCompactionCommitTime);
@@ -545,6 +549,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
       ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(false, clusteringInstant,
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata), table.getActiveTimeline());
+      // update table config for cols to Index as applicable
+      updateColsToIndex(table, config, metadata);
     } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {
