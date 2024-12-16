@@ -185,6 +185,10 @@ public class ConsistentBucketIndexUtils {
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
     try {
+      if (storage.exists(fullPath)) {
+        // the file has been created by other tasks
+        return true;
+      }
       storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()), true);
       return true;
     } catch (IOException e1) {
