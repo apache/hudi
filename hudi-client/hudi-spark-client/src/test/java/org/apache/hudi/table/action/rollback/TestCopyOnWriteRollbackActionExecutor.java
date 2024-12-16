@@ -361,6 +361,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         .withBaseFilesInPartition(p1, "id21").getLeft()
         .withBaseFilesInPartition(p2, "id22").getLeft();
 
+    // we are using test table infra. So, col stats are not populated.
     HoodieTable table =
         this.getHoodieTable(metaClient, getConfigBuilder().withRollbackBackupEnabled(true)
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build())

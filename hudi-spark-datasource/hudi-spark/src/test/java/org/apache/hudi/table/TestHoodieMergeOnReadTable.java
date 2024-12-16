@@ -427,6 +427,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         .withAllowAutoEvolutionColumnDrop(true)
         .withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).build())
+        // in this test we mock few entries in timeline. hence col stats initialization does not work.
         .build();
 
     setUp(cfg.getProps());

@@ -300,68 +300,45 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   }
 
   @Test
-  public void testHoodieClientBasicMultiWriterCOW1() throws Exception {
+  public void testHoodieClientBasicMultiWriterCOW_InProcessLP_SimpleCRS() throws Exception {
     testHoodieClientBasicMultiWriter(HoodieTableType.COPY_ON_WRITE, InProcessLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
   }
 
   @Test
-  public void testHoodieClientBasicMultiWriterCOW2() throws Exception {
+  public void testHoodieClientBasicMultiWriterCOW_FSBasedLP_SimpleCRS() throws Exception {
     testHoodieClientBasicMultiWriter(HoodieTableType.COPY_ON_WRITE, FileSystemBasedLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
   }
 
   @Test
-  public void testHoodieClientBasicMultiWriterCOW3() throws Exception {
+  public void testHoodieClientBasicMultiWriterCOW_FSBasedLP_PreferWriterCRS() throws Exception {
     testHoodieClientBasicMultiWriter(HoodieTableType.COPY_ON_WRITE, FileSystemBasedLockProvider.class, new PreferWriterConflictResolutionStrategy());
   }
 
   @Test
-  public void testHoodieClientBasicMultiWriterCOW4() throws Exception {
+  public void testHoodieClientBasicMultiWriterCOW_InProcessLP_PreferWriterCRS() throws Exception {
     testHoodieClientBasicMultiWriter(HoodieTableType.COPY_ON_WRITE, InProcessLockProvider.class, new PreferWriterConflictResolutionStrategy());
   }
 
   @Test
-  public void testHoodieClientBasicMultiWriterMOR1() throws Exception {
+  public void testHoodieClientBasicMultiWriterMOR_InProcessLP_SimpleCRS() throws Exception {
     testHoodieClientBasicMultiWriter(HoodieTableType.MERGE_ON_READ, InProcessLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
   }
 
   @Test
-  public void testHoodieClientBasicMultiWriterMOR2() throws Exception {
+  public void testHoodieClientBasicMultiWriterMOR_FSBasedLP_SimpleCRS() throws Exception {
     testHoodieClientBasicMultiWriter(HoodieTableType.MERGE_ON_READ, FileSystemBasedLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
   }
 
   @Test
-  public void testHoodieClientBasicMultiWriterMOR3() throws Exception {
+  public void testHoodieClientBasicMultiWriterMOR_FSBasedLP_PreferWriterCRS() throws Exception {
     testHoodieClientBasicMultiWriter(HoodieTableType.MERGE_ON_READ, FileSystemBasedLockProvider.class, new PreferWriterConflictResolutionStrategy());
   }
 
   @Test
-  public void testHoodieClientBasicMultiWriterMOR4() throws Exception {
+  public void testHoodieClientBasicMultiWriterMOR_InProcessLP_PreferWriterCRS() throws Exception {
     testHoodieClientBasicMultiWriter(HoodieTableType.MERGE_ON_READ, InProcessLockProvider.class, new PreferWriterConflictResolutionStrategy());
   }
 
-  /*
-  private static final List<Class> LOCK_PROVIDER_CLASSES = Arrays.asList(
-      InProcessLockProvider.class,
-      FileSystemBasedLockProvider.class);
-
-  private static final List<ConflictResolutionStrategy> CONFLICT_RESOLUTION_STRATEGY_CLASSES = Arrays.asList(
-      new SimpleConcurrentFileWritesConflictResolutionStrategy(),
-      new PreferWriterConflictResolutionStrategy());
-
-  private static Iterable<Object[]> providerClassResolutionStrategyAndTableType() {
-    List<Object[]> opts = new ArrayList<>();
-    for (Object providerClass : LOCK_PROVIDER_CLASSES) {
-      for (ConflictResolutionStrategy resolutionStrategy : CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
-        opts.add(new Object[] {HoodieTableType.COPY_ON_WRITE, providerClass, resolutionStrategy});
-        opts.add(new Object[] {HoodieTableType.MERGE_ON_READ, providerClass, resolutionStrategy});
-      }
-    }
-    return opts;
-  }
-  */
-
-  //@ParameterizedTest
-  //@MethodSource("providerClassResolutionStrategyAndTableType")
   private void testHoodieClientBasicMultiWriter(HoodieTableType tableType, Class providerClass,
                                                ConflictResolutionStrategy resolutionStrategy) throws Exception {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -554,7 +531,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(providerClass)
             .withConflictResolutionStrategy(resolutionStrategy)
             .build()).withAutoCommit(false).withProperties(lockProperties)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build())
         .withProperties(properties);
 
     Set<String> validInstants = new HashSet<>();

@@ -507,6 +507,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
                 .withMaxNumDeltaCommitsBeforeCompaction(1)
                 .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).build())
+        // if col stats is enabled, col stats based pruning kicks in and changes some expected value in this test.
         .build();
     List<WriteResult> inserts = new ArrayList<>();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {

@@ -144,7 +144,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups. When "
           + "enabled, metadata table will have a partition to store the column ranges and will be "
@@ -757,6 +757,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
     }
@@ -766,6 +767,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
         case FLINK:
         case SPARK:
           return ENABLE.defaultValue();
+        case JAVA:
+          return false;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private boolean getDefaultColStatsEnable(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return true;
+        case FLINK:
         case JAVA:
           return false;
         default:
