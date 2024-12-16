@@ -35,8 +35,7 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, Hoodie
 import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.index.HoodieIndex
-import org.apache.hudi.index.functional.HoodieExpressionIndex
-import org.apache.hudi.index.functional.HoodieExpressionIndex.EXPRESSION_OPTION
+import org.apache.hudi.index.expression.{HoodieExpressionIndex, HoodieSparkExpressionIndex}
 import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
@@ -190,7 +189,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         assertResult("idx_datestr")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
         assertResult("column_stats")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
         assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
-        assertResult(Map(EXPRESSION_OPTION -> "from_unixtime", "format" -> "yyyy-MM-dd"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
+        assertResult(Map(HoodieExpressionIndex.EXPRESSION_OPTION -> "from_unixtime", "format" -> "yyyy-MM-dd"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
 
         logicalPlan = sqlParser.parsePlan(s"create index idx_name on $tableName using bloom_filters(name) options(expr='lower')")
         resolvedLogicalPlan = analyzer.execute(logicalPlan)
@@ -198,7 +197,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         assertResult("idx_name")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
         assertResult("bloom_filters")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
         assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
-        assertResult(Map(EXPRESSION_OPTION -> "lower"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
+        assertResult(Map(HoodieExpressionIndex.EXPRESSION_OPTION -> "lower"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
       }
     }
   }
@@ -745,14 +744,16 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   }
 
   /**
-   * Test expression index with data skipping for unary expression and binary expression.
+   * Test expression index with invalid options
    */
   @Test
-  def testColumnStatsPruningWithUnaryBinaryExpr(): Unit = {
+  def testInvalidOptions(): Unit = {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_stats_pruning_binary_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
           s"""
@@ -762,6 +763,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |    rider STRING,
              |    driver STRING,
              |    fare DOUBLE,
+             |    dateDefault STRING,
+             |    date STRING,
              |    city STRING,
              |    state STRING
              |) USING HUDI
@@ -783,28 +786,74 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
         spark.sql(
           s"""
-             |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
-             |  (1695414527,'trip1','rider-A','driver-K',19.10,'san_francisco','california'),
-             |  (1695414531,'trip6','rider-C','driver-K',17.14,'san_diego','california'),
-             |  (1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas'),
-             |  (1695516137,'trip4','rider-F','driver-P',34.15,'houston','texas')
+             |insert into $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+             |  (1695414520,'trip2','rider-C','driver-M',27.70,'2024-11-30 01:30:40', '2024-11-30', 'sunnyvale','california'),
+             |  (1699349649,'trip5','rider-A','driver-Q',3.32, '2019-11-30 01:30:40', '2019-11-30', 'san_diego','texas')
+             |""".stripMargin)
+
+        // With invalid options
+        checkNestedExceptionContains(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', invalidOp='random')")(
+          "Input options [invalidOp] are not valid for spark function"
+        )
+      }
+    }
+  }
+
+  /**
+   * Test expression index with data skipping for date and timestamp based expressions.
+   */
+  @Test
+  def testColumnStatsPruningWithDateTimestampExpressions(): Unit = {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName + s"_stats_pruning_date_expr_$tableType"
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+
+        spark.sql(
+          s"""
+           CREATE TABLE $tableName (
+             |    ts LONG,
+             |    id STRING,
+             |    rider STRING,
+             |    driver STRING,
+             |    fare DOUBLE,
+             |    dateDefault STRING,
+             |    date STRING,
+             |    city STRING,
+             |    state STRING
+             |) USING HUDI
+             |options(
+             |    primaryKey ='id',
+             |    type = '$tableType',
+             |    hoodie.metadata.enable = 'true',
+             |    hoodie.datasource.write.recordkey.field = 'id',
+             |    hoodie.enable.data.skipping = 'true'
+             |)
+             |PARTITIONED BY (state)
+             |location '$basePath'
+             |""".stripMargin)
+
+        spark.sql("set hoodie.parquet.small.file.limit=0")
+        if (HoodieSparkUtils.gteqSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled=false")
+        }
+
+        spark.sql(
+          s"""
+             |insert into $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+             |  (1695414527,'trip1','rider-A','driver-K',19.10, '2020-11-30 01:30:40', '2020-11-30', 'san_francisco','california'),
+             |  (1695414531,'trip6','rider-C','driver-K',17.14, '2021-11-30 01:30:40', '2021-11-30', 'san_diego','california'),
+             |  (1695332066,'trip3','rider-E','driver-O',93.50, '2022-11-30 01:30:40', '2022-11-30', 'austin','texas'),
+             |  (1695516137,'trip4','rider-F','driver-P',34.15, '2023-11-30 01:30:40', '2023-11-30', 'houston','texas')
              |""".stripMargin)
         spark.sql(
           s"""
-             |insert into $tableName(ts, id, rider, driver, fare, city, state) VALUES
-             |  (1695414520,'trip2','rider-C','driver-M',27.70,'sunnyvale','california'),
-             |  (1699349649,'trip5','rider-A','driver-Q',3.32,'san_diego','texas')
+             |insert into $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+             |  (1695414520,'trip2','rider-C','driver-M',27.70,'2024-11-30 01:30:40', '2024-11-30', 'sunnyvale','california'),
+             |  (1699349649,'trip5','rider-A','driver-Q',3.32, '2019-11-30 01:30:40', '2019-11-30', 'san_diego','texas')
              |""".stripMargin)
-
-        // With unary expression
-        spark.sql(s"create index idx_rider on $tableName using column_stats(rider) options(expr='lower')")
-        // With binary expression
-        spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')")
-        // validate index created successfully
-        var metaClient = createMetaClient(spark, basePath)
-        assertTrue(metaClient.getIndexMetadata.isPresent)
-        val expressionIndexMetadata = metaClient.getIndexMetadata.get()
-        assertEquals("expr_index_idx_datestr", expressionIndexMetadata.getIndexDefinitions.get("expr_index_idx_datestr").getIndexName)
 
         val tableSchema: StructType =
           StructType(
@@ -814,23 +863,216 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
               StructField("rider", StringType),
               StructField("driver", StringType),
               StructField("fare", DoubleType),
+              StructField("dateDefault", StringType),
+              StructField("date", StringType),
               StructField("city", StringType),
               StructField("state", StringType)
             )
           )
         val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
-        metaClient = createMetaClient(spark, basePath)
 
+        // With binary expression
+        spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')")
+        // validate index created successfully
+        var metaClient = createMetaClient(spark, basePath)
+        val fromUnixTime = resolveExpr(spark, unapply(functions.from_unixtime(functions.col("ts"), "yyyy-MM-dd")).get, tableSchema)
+        var literal = Literal.create("2023-11-07")
+        var dataFilter = EqualTo(fromUnixTime, literal)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_datestr on $tableName")
+
+        spark.sql(s"create index idx_unix_default on $tableName using column_stats(dateDefault) options(expr='unix_timestamp')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val unixTimestampDefault = resolveExpr(spark, unapply(functions.unix_timestamp(functions.col("dateDefault"))).get, tableSchema)
+        literal = Literal.create(1606699840L)
+        dataFilter = EqualTo(unixTimestampDefault, literal)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_unix_default on $tableName")
+
+        spark.sql(s"create index idx_unix on $tableName using column_stats(date) options(expr='unix_timestamp', format='yyyy-MM-dd')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val unixTimestamp = resolveExpr(spark, unapply(functions.unix_timestamp(functions.col("date"), "yyyy-MM-dd")).get, tableSchema)
+        literal = Literal.create(1606694400L)
+        dataFilter = EqualTo(unixTimestamp, literal)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_unix on $tableName")
+
+        spark.sql(s"create index idx_to_date on $tableName using column_stats(date) options(expr='to_date', format='yyyy-MM-dd')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val toDate = resolveExpr(spark, unapply(functions.to_date(functions.col("date"), "yyyy-MM-dd")).get, tableSchema)
+        dataFilter = EqualTo(toDate, lit(18596).expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_to_date on $tableName")
+
+        spark.sql(s"create index idx_to_date_default on $tableName using column_stats(date) options(expr='to_date')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val toDateDefault = resolveExpr(spark, unapply(functions.to_date(functions.col("date"))).get, tableSchema)
+        dataFilter = EqualTo(toDateDefault, lit(18596).expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_to_date_default on $tableName")
+
+        spark.sql(s"create index idx_date_format on $tableName using column_stats(date) options(expr='date_format', format='yyyy')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val dateFormatDefault = resolveExpr(spark, unapply(functions.date_format(functions.col("date"), "yyyy")).get, tableSchema)
+        dataFilter = EqualTo(dateFormatDefault, lit("2020").expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_date_format on $tableName")
+
+        spark.sql(s"create index idx_to_timestamp_default on $tableName using column_stats(date) options(expr='to_timestamp')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val toTimestampDefault = resolveExpr(spark, unapply(functions.to_timestamp(functions.col("date"))).get, tableSchema)
+        dataFilter = EqualTo(toTimestampDefault, lit(1732924800000000L).expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_to_timestamp_default on $tableName")
+
+        spark.sql(s"create index idx_to_timestamp on $tableName using column_stats(date) options(expr='to_timestamp', format='yyyy-MM-dd')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val toTimestamp = resolveExpr(spark, unapply(functions.to_timestamp(functions.col("date"), "yyyy-MM-dd")).get, tableSchema)
+        dataFilter = EqualTo(toTimestamp, lit(1732924800000000L).expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_to_timestamp on $tableName")
+
+        spark.sql(s"create index idx_date_add on $tableName using column_stats(date) options(expr='date_add', days='10')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val dateAdd = resolveExpr(spark, unapply(functions.date_add(functions.col("date"), 10)).get, tableSchema)
+        dataFilter = EqualTo(dateAdd, lit(18606).expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_date_add on $tableName")
+
+        spark.sql(s"create index idx_date_sub on $tableName using column_stats(date) options(expr='date_sub', days='10')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val dateSub = resolveExpr(spark, unapply(functions.date_sub(functions.col("date"), 10)).get, tableSchema)
+        dataFilter = EqualTo(dateSub, lit(18586).expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_date_sub on $tableName")
+      }
+    }
+  }
+
+  /**
+   * Test expression index with data skipping for string expressions.
+   */
+  @Test
+  def testColumnStatsPruningWithStringExpressions(): Unit = {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName + s"_stats_pruning_string_expr_$tableType"
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        spark.sql(
+          s"""
+           CREATE TABLE $tableName (
+             |    ts LONG,
+             |    id STRING,
+             |    rider STRING,
+             |    driver STRING,
+             |    fare DOUBLE,
+             |    dateDefault STRING,
+             |    date STRING,
+             |    city STRING,
+             |    state STRING
+             |) USING HUDI
+             |options(
+             |    primaryKey ='id',
+             |    type = '$tableType',
+             |    hoodie.metadata.enable = 'true',
+             |    hoodie.datasource.write.recordkey.field = 'id',
+             |    hoodie.enable.data.skipping = 'true'
+             |)
+             |PARTITIONED BY (state)
+             |location '$basePath'
+             |""".stripMargin)
+
+        spark.sql("set hoodie.parquet.small.file.limit=0")
+        spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+        if (HoodieSparkUtils.gteqSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled=false")
+        }
+
+        spark.sql(
+          s"""
+             |insert into $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+             |  (1695414527,'trip1','rider-A','driver-K',19.10, '2020-11-30 01:30:40', '2020-11-30', 'san_francisco','california'),
+             |  (1695414531,'trip6','rider-C','driver-K',17.14, '2021-11-30 01:30:40', '2021-11-30', 'san_diego','california'),
+             |  (1695332066,'trip3','rider-E','driver-O',93.50, '2022-11-30 01:30:40', '2022-11-30', 'austin','texas'),
+             |  (1695516137,'trip4','rider-F','driver-P',34.15, '2023-11-30 01:30:40', '2023-11-30', 'houston','texas')
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |insert into $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+             |  (1695414520,'trip2','rider-C','driver-M',27.70,'2024-11-30 01:30:40', '2024-11-30', 'sunnyvale','california'),
+             |  (1699349649,'trip5','rider-A','driver-Q',3.32, '2019-11-30 01:30:40', '2019-11-30', 'san_diego','texas')
+             |""".stripMargin)
+
+        val tableSchema: StructType =
+          StructType(
+            Seq(
+              StructField("ts", LongType),
+              StructField("id", StringType),
+              StructField("rider", StringType),
+              StructField("driver", StringType),
+              StructField("fare", DoubleType),
+              StructField("dateDefault", StringType),
+              StructField("date", StringType),
+              StructField("city", StringType),
+              StructField("state", StringType)
+            )
+          )
+        val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
+
+        // With unary expression
+        spark.sql(s"create index idx_lower on $tableName using column_stats(rider) options(expr='lower')")
+        var metaClient = createMetaClient(spark, basePath)
         // validate skipping with both types of expression
         val lowerExpr = resolveExpr(spark, unapply(functions.lower(functions.col("rider"))).get, tableSchema)
         var literal = Literal.create("rider-c")
         var dataFilter = EqualTo(lowerExpr, literal)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_lower on $tableName")
 
-        val fromUnixTime = resolveExpr(spark, unapply(functions.from_unixtime(functions.col("ts"), "yyyy-MM-dd")).get, tableSchema)
-        literal = Literal.create("2023-11-07")
-        dataFilter = EqualTo(fromUnixTime, literal)
+        spark.sql(s"create index idx_substring on $tableName using column_stats(driver) options(expr='substring', pos='8', len='1')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val substring = resolveExpr(spark, unapply(functions.substring(functions.col("driver"), 8, 1)).get, tableSchema)
+        dataFilter = EqualTo(substring, lit("K").expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_substring on $tableName")
+
+        spark.sql(s"create index idx_trim on $tableName using column_stats(driver) options(expr='trim', trimString='-K')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val trim = resolveExpr(spark, unapply(functions.trim(functions.col("driver"), "-K")).get, tableSchema)
+        dataFilter = EqualTo(trim, lit("driver").expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_trim on $tableName")
+
+        spark.sql(s"create index idx_rtrim on $tableName using column_stats(driver) options(expr='rtrim', trimString='-K')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val rtrim = resolveExpr(spark, unapply(functions.rtrim(functions.col("driver"), "-K")).get, tableSchema)
+        dataFilter = EqualTo(rtrim, lit("driver").expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_rtrim on $tableName")
+
+        spark.sql(s"create index idx_ltrim on $tableName using column_stats(driver) options(expr='ltrim', trimString='driver-')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val ltrim = resolveExpr(spark, unapply(functions.ltrim(functions.col("driver"), "driver-")).get, tableSchema)
+        dataFilter = EqualTo(ltrim, lit("K").expr)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_ltrim on $tableName")
+
+        spark.sql(s"create index idx_regexp on $tableName using column_stats(rider) options(expr='regexp_replace', pattern='rider', replacement='passenger')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val regExpReplace = resolveExpr(spark, unapply(functions.regexp_replace(functions.col("rider"), "rider", "passenger")).get, tableSchema)
+        literal = Literal.create("passenger-F")
+        dataFilter = EqualTo(regExpReplace, literal)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_regexp on $tableName")
+
+        spark.sql(s"create index idx_regexp_extract on $tableName using column_stats(driver) options(expr='regexp_extract', pattern='driver-(\\\\w+)', idx='1')")
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        val regExpExtract = resolveExpr(spark, unapply(functions.regexp_extract(functions.col("driver"), "driver-(\\w+)", 1)).get, tableSchema)
+        literal = Literal.create("K")
+        dataFilter = EqualTo(regExpExtract, literal)
+        verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
+        spark.sql(s"drop index idx_regexp_extract on $tableName")
       }
     }
   }
@@ -888,7 +1130,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         // create index using bloom filters on city column with upper() function
-        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper', numHashFunctions=1, fpp=0.00000000001)")
+        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper')")
 
         // Pruning takes place only if query uses upper function on city
         checkAnswer(s"select id, rider from $tableName where upper(city) in ('sunnyvale', 'sg')")()
@@ -907,7 +1149,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
         // drop index and recreate without upper() function
         spark.sql(s"drop index idx_bloom_$tableName on $tableName")
-        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(numHashFunctions=1, fpp=0.00000000001)")
+        spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city)")
         // Pruning takes place only if query uses no function on city
         checkAnswer(s"select id, rider from $tableName where city = 'sunnyvale'")(
           Seq("trip2", "rider-C")
