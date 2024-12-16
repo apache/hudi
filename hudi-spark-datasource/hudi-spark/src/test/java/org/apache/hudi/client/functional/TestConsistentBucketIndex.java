@@ -114,7 +114,6 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
             .withBucketNum("8")
             .build())
         .withAutoCommit(false)
-        .withParallelism(1, 1)
         .build();
     writeClient = getHoodieWriteClient(config);
     index = writeClient.getIndex();
@@ -140,7 +139,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     String newCommitTime = "001";
     int totalRecords = 20 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
@@ -168,7 +167,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     String newCommitTime = "001";
     int totalRecords = 20 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
 
     // Insert totalRecords records
     List<WriteStatus> writeStatues = writeData(writeRecords, newCommitTime, WriteOperationType.UPSERT, true);
@@ -217,7 +216,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     String newCommitTime = "001";
     int totalRecords = 20 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
 
     // Bulk insert totalRecords records
     List<WriteStatus> writeStatues = writeData(writeRecords, newCommitTime, WriteOperationType.BULK_INSERT, true);
@@ -256,7 +255,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
    */
   private List<WriteStatus> writeData(String commitTime, int totalRecords, boolean doCommit) {
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, totalRecords);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
     return writeData(writeRecords, commitTime, WriteOperationType.UPSERT, doCommit);
   }
 

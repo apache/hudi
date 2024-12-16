@@ -112,7 +112,6 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
             .withClusteringPlanStrategyClass(SparkConsistentBucketClusteringPlanStrategy.class.getName())
             .withClusteringExecutionStrategyClass(SparkConsistentBucketClusteringExecutionStrategy.class.getName())
             .withClusteringUpdatesStrategy(SparkConsistentBucketDuplicateUpdateStrategy.class.getName()).build())
-        .withParallelism(1, 1)
         .build();
 
     writeClient = getHoodieWriteClient(config);

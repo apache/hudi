@@ -309,10 +309,29 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public final void createImmutableFileInPath(StoragePath path,
                                               Option<byte[]> content) throws HoodieIOException {
+    createImmutableFileInPath(path, content, needCreateTempFile());
+  }
+
+  /**
+   * Creates a new file with overwrite set to false. This ensures files are created
+   * only once and never rewritten, also, here we take care if the content is not
+   * empty, will first write the content to a temp file if {needCreateTempFile} is
+   * true, and then rename it back after the content is written.
+   *
+   * <p>CAUTION: if this method is invoked in multi-threads for concurrent write of the same file,
+   * an existence check of the file is recommended.
+   *
+   * @param path    File path.
+   * @param content Content to be stored.
+   * @param needTempFile Whether to create auxiliary temp file.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public final void createImmutableFileInPath(StoragePath path,
+                                              Option<byte[]> content,
+                                              boolean needTempFile) throws HoodieIOException {
     OutputStream fsout = null;
     StoragePath tmpPath = null;
 
-    boolean needTempFile = needCreateTempFile();
     try {
       if (!content.isPresent()) {
         fsout = create(path, false);
