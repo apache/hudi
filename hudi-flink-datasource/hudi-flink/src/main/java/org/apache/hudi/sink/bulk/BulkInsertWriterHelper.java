@@ -25,6 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.table.HoodieTable;
@@ -45,6 +46,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.FutureUtils.allOf;
 
 /**
  * Helper class for bulk insert used by Flink.
@@ -160,6 +168,31 @@ public class BulkInsertWriterHelper {
     for (HoodieRowDataCreateHandle rowCreateHandle : handles.values()) {
       LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
       writeStatusList.add(closeWriteHandle(rowCreateHandle));
+    }
+    handles.clear();
+    handle = null;
+  }
+
+  public void close1() throws IOException {
+    ExecutorService executorService = Executors.newFixedThreadPool(handles.size());
+    allOf(handles.values().stream()
+        .map(rowCreateHandle -> CompletableFuture.supplyAsync(() -> {
+          try {
+            LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
+            return rowCreateHandle.close();
+          } catch (IOException e) {
+            throw new HoodieIOException("IOE during rowCreateHandle.close()", e);
+          }
+        }, executorService))
+        .collect(Collectors.toList())
+    ).whenComplete((result, throwable) -> {
+      writeStatusList.addAll(result);
+    }).join();
+    try {
+      executorService.shutdown();
+      executorService.awaitTermination(24, TimeUnit.DAYS);
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
     }
     handles.clear();
     handle = null;
