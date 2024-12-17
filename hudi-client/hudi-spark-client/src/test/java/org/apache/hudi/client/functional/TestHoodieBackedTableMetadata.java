@@ -371,7 +371,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   @Test
   void testReverseLookupSecondaryKeysInternalWithOnlyBaseFileRecord() {
     String recordKey = "recordKey";
-    List<String> recordKeys = Collections.singletonList(recordKey);
+    Set<String> recordKeys = Collections.singleton(recordKey);
     Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords = new HashMap<>();
     HoodieMetadataLogRecordReader logRecordReader = mock(HoodieMetadataLogRecordReader.class);
     List<HoodieRecord<HoodieMetadataPayload>> logRecords = new ArrayList<>();
@@ -391,7 +391,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   @Test
   void testReverseLookupSecondaryKeysInternalWithOnlyLogRecords() {
     String recordKey = "recordKey";
-    List<String> recordKeys = Collections.singletonList(recordKey);
+    Set<String> recordKeys = Collections.singleton(recordKey);
     Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords = new HashMap<>();
     HoodieMetadataLogRecordReader logRecordReader = mock(HoodieMetadataLogRecordReader.class);
     List<HoodieRecord<HoodieMetadataPayload>> logRecords = new ArrayList<>();
@@ -427,7 +427,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   @Test
   void testReverseLookupSecondaryKeysInternal() {
     String recordKey = "recordKey";
-    List<String> recordKeys = Collections.singletonList(recordKey);
+    Set<String> recordKeys = Collections.singleton(recordKey);
     Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords = new HashMap<>();
     HoodieMetadataLogRecordReader logRecordReader = mock(HoodieMetadataLogRecordReader.class);
     List<HoodieRecord<HoodieMetadataPayload>> logRecords = new ArrayList<>();

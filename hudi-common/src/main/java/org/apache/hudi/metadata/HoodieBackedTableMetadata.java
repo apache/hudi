@@ -73,7 +73,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -834,11 +833,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       if (baseFileReader == null && logRecordScanner == null) {
         return Collections.emptyMap();
       }
-      Set<String> keySet = new TreeSet<>(recordKeys);
+      Set<String> keySet = new HashSet<>(recordKeys);
       Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords =
           fetchBaseFileAllRecordsByPayloadForSecIndex(baseFileReader, keySet, partitionName);
 
-      return reverseLookupSecondaryKeysInternal(recordKeys, baseFileRecords, logRecordScanner);
+      return reverseLookupSecondaryKeysInternal(keySet, baseFileRecords, logRecordScanner);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for  " + recordKeys.size() + " key : ", ioe);
     } finally {
@@ -888,10 +887,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @VisibleForTesting
-  public static Map<String, String> reverseLookupSecondaryKeysInternal(List<String> recordKeys,
+  public static Map<String, String> reverseLookupSecondaryKeysInternal(Set<String> recordKeySet,
                                                                        Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords,
                                                                        HoodieMetadataLogRecordReader logRecordScanner) {
-    Set<String> keySet = new HashSet<>(recordKeys);
     Set<String> deletedRecordsFromLogs = new HashSet<>();
     Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
     // Note that: we read the log records from the oldest to the latest!!!
@@ -900,7 +898,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
       HoodieMetadataPayload payload = record.getData();
       if (!payload.isDeleted()) { // process only valid records.
-        if (keySet.contains(recordKey)) {
+        if (recordKeySet.contains(recordKey)) {
           logRecordsMap.put(recordKey, record);
           deletedRecordsFromLogs.remove(recordKey);
         }
