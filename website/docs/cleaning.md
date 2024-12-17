@@ -148,6 +148,10 @@ cleans run --sparkMaster local --hoodieConfigs hoodie.cleaner.policy=KEEP_LATEST
 You can find more details and the relevant code for these commands in [`org.apache.hudi.cli.commands.CleansCommand`](https://github.com/apache/hudi/blob/master/hudi-cli/src/main/java/org/apache/hudi/cli/commands/CleansCommand.java) class. 
 
 ## Related Resources
+
+<h3>Blogs</h3>
+* [Cleaner and Archival in Apache Hudi](https://medium.com/@simpsons/cleaner-and-archival-in-apache-hudi-9e15b08b2933)
+
 <h3>Videos</h3>
 
 * [Cleaner Service: Save up to 40% on data lake storage costs | Hudi Labs](https://youtu.be/mUvRhJDoO3w)

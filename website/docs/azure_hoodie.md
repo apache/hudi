@@ -48,3 +48,8 @@ This combination works out of the box. No extra config needed.
     .format("org.apache.hudi")
     .load("/mountpoint/hudi-tables/customer")
   ```
+
+## Related Resources
+<h3>Blogs</h3>
+
+* [How to use Apache Hudi with Databricks](https://www.onehouse.ai/blog/how-to-use-apache-hudi-with-databricks)

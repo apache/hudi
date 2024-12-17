@@ -219,6 +219,9 @@ partition path value could change due to an update e.g users table partitioned b
 
 
 ## Related Resources
+
+* [Global vs Non-global index in Apache Hudi](https://medium.com/@simpsons/global-vs-non-global-index-in-apache-hudi-ac880b031cbc)
+
 <h3>Videos</h3>
 
 * [Global Bloom Index: Remove duplicates & guarantee uniquness - Hudi Labs](https://youtu.be/XlRvMFJ7g9c)

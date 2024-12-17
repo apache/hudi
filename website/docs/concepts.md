@@ -169,4 +169,9 @@ The intention of merge on read table is to enable near real-time processing dire
 data out to specialized systems, which may not be able to handle the data volume. There are also a few secondary side benefits to 
 this table such as reduced write amplification by avoiding synchronous merge of data, i.e, the amount of data written per 1 bytes of data in a batch
 
+## Related Resources
+<h3>Blogs</h3>
 
+* [Comparing Apache Hudi's MOR and COW Tables: Use Cases from Uber and Shopee](https://www.onehouse.ai/blog/comparing-apache-hudis-mor-and-cow-tables-use-cases-from-uber-and-shopee)
+* [Hudi Metafields demystified](https://www.onehouse.ai/blog/hudi-metafields-demystified)
+* [File Naming conventions in Apache Hudi](https://medium.com/@simpsons/file-naming-conventions-in-apache-hudi-cd1cdd95f5e7)

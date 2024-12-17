@@ -333,7 +333,12 @@ If you are using the `WriteClient` API, please note that multiple writes to the 
 It is **NOT** recommended to use the same instance of the write client to perform multi writing. 
 
 ## Related Resources
+<h3>Blogs</h3>
+* [Data Lakehouse Concurrency Control](https://www.onehouse.ai/blog/lakehouse-concurrency-control-are-we-too-optimistic)
+* [Multi-writer support with Apache Hudi](https://medium.com/@simpsons/multi-writer-support-with-apache-hudi-e1b75dca29e6)
+
 <h3>Videos</h3>
 
 * [Hands on Lab with using DynamoDB as lock table for Apache Hudi Data Lakes](https://youtu.be/JP0orl9_0yQ)
 * [Non Blocking Concurrency Control Flink Demo](/blog/2024/12/06/non-blocking-concurrency-control)
+* [Multi-writer support with Apache Hudi](https://medium.com/@simpsons/multi-writer-support-with-apache-hudi-e1b75dca29e6)

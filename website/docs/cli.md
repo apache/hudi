@@ -753,3 +753,7 @@ table change-table-type COW
 ║ hoodie.timeline.layout.version                 │ 1                                    │ 1                                    ║
 ╚════════════════════════════════════════════════╧══════════════════════════════════════╧══════════════════════════════════════╝
 ```
+
+## Related Resources
+
+* [Getting Started: Manage your Hudi tables with the admin Hudi-CLI tool](https://www.onehouse.ai/blog/getting-started-manage-your-hudi-tables-with-the-admin-hudi-cli-tool)
