@@ -163,6 +163,7 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     }
 
     return DynamoDbClient.builder()
+            .region(Region.of(region))
             .endpointOverride(URI.create(endpointURL))
             .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(dynamoDBLockConfiguration.getProps()))
             .build();
