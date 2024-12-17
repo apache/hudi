@@ -413,6 +413,38 @@ The record index is stored in Hudi metadata table under the partition `record_in
 | fileId         | A string that represents fileId of the location where record belongs to. When the encoding is 1, fileID is stored in raw string format.                                                                                                                      |
 | instantTime    | A long that represents epoch time in millisecond representing the commit time at which record was added.                                                                                                                                                     |
 
+### Secondary Index
+
+Just like databases, secondary index is a way to accelerate the queries by columns other than the record (primary) keys.
+Hudi supports near-standard [SQL syntax](/docs/sql_ddl#create-index) for creating/dropping indexes on different columns
+via Spark SQL, along with an asynchronous indexing table service to build indexes without interrupting the writers.
+
+Secondary index definition is serialized to JSON format and saved at a path specified by `hoodie.table.index.defs.path`.
+The index itself is stored in Hudi metadata table under the partition `secondary_index_<index_name>`. As usual the index
+record is a key-value, however the encoding is slightly more nuanced.
+
+**Key** is constructed by combining the values of **secondary column** and **primary key column** separated by a delimiter. 
+The key is encoded in a format that ensures:
+
+1. **Uniqueness**: Each key is distinct.
+2. **Safety**: Any occurrences of the delimiter or escape character within the data itself are handled correctly to avoid ambiguity.
+3. **Efficiency**: The encoding and decoding processes are optimized for performance while ensuring data integrity.
+
+The key format is:
+```
+<escaped-secondary-key>$<escaped-primary-key>
+
+Where:
+  - `$` is the delimiter separating the secondary key and primary key.
+  - Special characters in the secondary or primary key (`$` and `\`) are escaped to avoid conflicts.
+```
+
+**Value** contains metadata about the record, specifically an `isDeleted` flag indicating whether the record is valid or has been logically deleted.
+
+For example, consider a secondary index on the `city` column. The key-value pair for a record with `city` as `Chennai` and `id` as `id1` would look like:
+```
+chennai$id1 -> {"isDeleted": false}
+```
 
 ### Expression Indexes
 
@@ -424,14 +456,15 @@ Index itself is stored in Hudi metadata table under the partition `expr_index_<u
 We covered different [storage layouts](#storage-layout) earlier. Functional index aggregates stats by storage partitions and, as such, partitioning can be absorbed into functional indexes.
 From that perspective, some useful functions that can also be applied as transforms on a field to extract and index partitions are listed below.
 
-| Function   | Description                         |
-|------------|-------------------------------------|
-| `identity` | Identity function, unmodified value |
-| `year`     | Year of the timestamp               |
-| `month`    | Month of the timestamp              |
-| `day`      | Day of the timestamp                |
-| `hour`     | Hour of the timestamp               |
-| `lower`    | Lower case of the string            | 
+| Function        | Description                                                                       |
+|-----------------|-----------------------------------------------------------------------------------|
+| `identity`      | Identity function, unmodified value                                               |
+| `year`          | Year of the timestamp                                                             |
+| `month`         | Month of the timestamp                                                            |
+| `day`           | Day of the timestamp                                                              |
+| `hour`          | Hour of the timestamp                                                             |
+| `lower`         | Lower case of the string                                                          |
+| `from_unixtime` | Convert unix epoch to a string representing the timestamp in the specified format |
 
 ## Relational Model
 
