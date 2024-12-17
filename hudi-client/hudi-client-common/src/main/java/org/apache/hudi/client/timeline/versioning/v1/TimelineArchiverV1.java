@@ -141,8 +141,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
         // there is no owner or instant time per se for archival.
         txnManager.beginTransaction(Option.empty(), Option.empty());
       }
-      List<HoodieInstant> instantsToArchive = getInstantsToArchive().stream()
-          .limit(config.getLongOrDefault(ARCHIVE_LIMIT_INSTANTS)).collect(Collectors.toList());
+      List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter(archiveFilePath.getParent());
         LOG.info("Archiving instants {} for table {}", instantsToArchive, config.getBasePath());
@@ -355,6 +354,8 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
             InstantComparatorV1.getComparableAction(i.getAction()))));
 
     return instantsToArchive.stream()
+        .sorted()
+        .limit(config.getLongOrDefault(ARCHIVE_LIMIT_INSTANTS))
         .flatMap(hoodieInstant ->
             groupByTsAction.getOrDefault(Pair.of(hoodieInstant.requestedTime(),
                 InstantComparatorV1.getComparableAction(hoodieInstant.getAction())), Collections.emptyList()).stream())
