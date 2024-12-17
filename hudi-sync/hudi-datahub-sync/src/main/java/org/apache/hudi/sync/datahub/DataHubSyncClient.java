@@ -43,8 +43,6 @@ import com.linkedin.data.template.StringArray;
 import com.linkedin.domain.Domains;
 import com.linkedin.metadata.aspect.patch.builder.DatasetPropertiesPatchBuilder;
 import com.linkedin.mxe.MetadataChangeProposal;
-import com.linkedin.schema.OtherSchema;
-import com.linkedin.schema.SchemaMetadata;
 import datahub.client.MetadataWriteResponse;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
@@ -291,9 +289,6 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
     // Reorder fields to relocate _hoodie_ metadata fields to the end
     schemaMetadata.setFields(SchemaFieldsUtil.reorderPrefixedFields(schemaMetadata.getFields(), "_hoodie_"));
-
-    final SchemaMetadata.PlatformSchema platformSchema = new SchemaMetadata.PlatformSchema();
-    platformSchema.setOtherSchema(new OtherSchema().setRawSchema(avroSchema.toString()));
 
     return MetadataChangeProposalWrapper.builder()
             .entityType("dataset")
