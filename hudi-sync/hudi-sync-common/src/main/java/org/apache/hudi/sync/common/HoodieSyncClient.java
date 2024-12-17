@@ -240,9 +240,25 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     for (Partition tablePartition : partitionsInMetastore) {
       List<String> hivePartitionValues = tablePartition.getValues();
       String fullTablePartitionPath =
-          Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getStorageLocation())).toUri().getPath();
+              Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getStorageLocation())).toUri().getPath();
       paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
     }
     return paths;
+  }
+
+  public List<PartitionEvent> getPartitionAddAndDropEventsOnly(List<String> partitionStoragePartitions, Set<String> droppedPartitions) {
+    List<PartitionEvent> events = new ArrayList<>();
+    for (String storagePartition : partitionStoragePartitions) {
+      List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
+
+      if (droppedPartitions.contains(storagePartition)) {
+        events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
+      } else {
+        if (!storagePartitionValues.isEmpty()) {
+          events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
+        }
+      }
+    }
+    return events;
   }
 }

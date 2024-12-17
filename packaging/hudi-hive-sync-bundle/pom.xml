@@ -24,6 +24,7 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <artifactId>hudi-hive-sync-bundle</artifactId>
+  <version>0.15.0-heap-fork</version>
   <packaging>jar</packaging>
 
   <properties>
@@ -144,19 +145,19 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
     </dependency>
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-mr-bundle</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
     </dependency>
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hive-sync</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
     </dependency>
 
     <!-- Parquet -->
