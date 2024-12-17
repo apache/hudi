@@ -46,8 +46,14 @@ public class DataHubTableProperties {
 
   private static final Logger LOG = LoggerFactory.getLogger(DataHubTableProperties.class);
 
+  public static final String HOODIE_META_SYNC_DATAHUB_TABLE_PROPERTIES = "hoodie.meta.sync.datahub.table.properties";
+  public static final String HUDI_TABLE_TYPE = "hudi.table.type";
+  public static final String HUDI_TABLE_VERSION = "hudi.table.version";
+  public static final String HUDI_BASE_PATH = "hudi.base.path";
+  public static final String HUDI_PARTITION_FIELDS = "hudi.partition.fields";
+
   public static final ConfigProperty<String> DATAHUB_TABLE_PROPERTIES =
-      ConfigProperty.key("hoodie.meta.sync.datahub.table.properties")
+      ConfigProperty.key(HOODIE_META_SYNC_DATAHUB_TABLE_PROPERTIES)
           .defaultValue("")
           .withDocumentation("Additional properties to be attached to the DataHub dataset, specified as key1=val1,key2=val2");
 
@@ -61,14 +67,14 @@ public class DataHubTableProperties {
   }
 
   private static void addBasicHudiTableProperties(Map<String, String> properties, DataHubSyncConfig config, HoodieTableMetadata tableMetadata) {
-    properties.put("hudi.table.type", tableMetadata.getTableType());
-    properties.put("hudi.table.version", tableMetadata.getTableVersion());
-    properties.put("hudi.base.path", config.getString(META_SYNC_BASE_PATH));
+    properties.put(HUDI_TABLE_TYPE, tableMetadata.getTableType());
+    properties.put(HUDI_TABLE_VERSION, tableMetadata.getTableVersion());
+    properties.put(HUDI_BASE_PATH, config.getString(META_SYNC_BASE_PATH));
   }
 
   private static void addPartitioningInformation(Map<String, String> properties, DataHubSyncConfig config) {
     if (!config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
-      properties.put("hudi.partition.fields", String.join(",", config.getSplitStrings(META_SYNC_PARTITION_FIELDS)));
+      properties.put(HUDI_PARTITION_FIELDS, String.join(",", config.getSplitStrings(META_SYNC_PARTITION_FIELDS)));
     }
   }
 
