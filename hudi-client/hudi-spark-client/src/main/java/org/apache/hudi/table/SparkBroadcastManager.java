@@ -97,9 +97,9 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
       // PARQUET_INFER_TIMESTAMP_NTZ_ENABLED is required from Spark 3.4.0 or above
       hadoopConf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", false);
     }
-    StorageConfiguration config = new HadoopStorageConfiguration(hadoopConf).getInline();
 
-    configurationBroadcast = jsc.broadcast(new SerializableConfiguration((Configuration) config.unwrap()));
+    StorageConfiguration<Configuration> config = new HadoopStorageConfiguration(hadoopConf).getInline();
+    configurationBroadcast = jsc.broadcast(new SerializableConfiguration(config.unwrap()));
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
