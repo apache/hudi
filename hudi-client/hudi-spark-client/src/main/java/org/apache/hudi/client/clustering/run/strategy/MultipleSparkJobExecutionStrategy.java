@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -538,7 +539,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     SerializableSchema serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields);
 
     // broadcast reader context.
-    SparkBroadcastManager broadcastManager = new SparkBroadcastManager(getEngineContext());
+    SparkBroadcastManager broadcastManager = new SparkBroadcastManager(getEngineContext(), getHoodieTable().getMetaClient());
     broadcastManager.prepareAndBroadcast();
     StructType sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields);
 

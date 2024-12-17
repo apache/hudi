@@ -23,11 +23,17 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
@@ -41,7 +47,10 @@ import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.util.SerializableConfiguration;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 import scala.collection.JavaConverters;
@@ -52,14 +61,16 @@ import scala.collection.JavaConverters;
 public class SparkBroadcastManager extends EngineBroadcastManager {
 
   private final transient HoodieEngineContext context;
+  private final transient HoodieTableMetaClient metaClient;
 
   protected Option<SparkParquetReader> parquetReaderOpt = Option.empty();
   protected Broadcast<SQLConf> sqlConfBroadcast;
   protected Broadcast<SparkParquetReader> parquetReaderBroadcast;
   protected Broadcast<SerializableConfiguration> configurationBroadcast;
 
-  public SparkBroadcastManager(HoodieEngineContext context) {
+  public SparkBroadcastManager(HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.context = context;
+    this.metaClient = metaClient;
   }
 
   @Override
@@ -76,12 +87,17 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     scala.collection.immutable.Map<String, String> options =
         scala.collection.immutable.Map$.MODULE$.<String, String>empty()
             .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), Boolean.toString(returningBatch)));
+    Map<String, String> schemaEvolutionConfigs = getSchemaEvolutionConfigs(metaClient);
 
-    // Do broadcast.
+    // Broadcast: SQLConf.
     sqlConfBroadcast = jsc.broadcast(sqlConf);
+    // Broadcast: Configuration.
+    Configuration configs = getHadoopConfiguration(jsc.hadoopConfiguration());
+    addSchemaEvolutionConfigs(configs, schemaEvolutionConfigs);
     configurationBroadcast = jsc.broadcast(
-        new SerializableConfiguration(getHadoopConfiguration(jsc.hadoopConfiguration())));
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
+        new SerializableConfiguration(configs));
+    // Broadcast: ParquetReader.
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
     parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());
@@ -125,5 +141,25 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
       hadoopConf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", false);
     }
     return (new HadoopStorageConfiguration(hadoopConf).getInline()).unwrap();
+  }
+
+  static Map<String, String> getSchemaEvolutionConfigs(HoodieTableMetaClient metaClient) {
+    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
+    Option<InternalSchema> internalSchemaOpt = resolver.getTableInternalSchemaFromCommitMetadata();
+    Map<String, String> configs = new HashMap<>();
+    if (internalSchemaOpt.isPresent()) {
+      InstantFileNameGenerator fileNameGenerator = metaClient.getTimelineLayout().getInstantFileNameGenerator();
+      HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
+      List<String> instantFiles = timeline.getInstants().stream().map(fileNameGenerator::getFileName).collect(Collectors.toList());
+      configs.put(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, String.join(",", instantFiles));
+      configs.put(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath().toString());
+    }
+    return configs;
+  }
+
+  static void addSchemaEvolutionConfigs(Configuration configs, Map<String, String> schemaEvolutionConfigs) {
+    for (Map.Entry<String, String> entry : schemaEvolutionConfigs.entrySet()) {
+      configs.set(entry.getKey(), entry.getValue());
+    }
   }
 }

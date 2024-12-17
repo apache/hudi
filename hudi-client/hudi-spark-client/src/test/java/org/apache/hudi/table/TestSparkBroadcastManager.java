@@ -20,15 +20,21 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.hash.Hash;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class TestSparkBroadcastManager {
   @Test
@@ -46,5 +52,19 @@ class TestSparkBroadcastManager {
 
     String inlineClassName = createdConfig.get("fs." + InLineFileSystem.SCHEME + ".impl");
     assertEquals(InLineFileSystem.class.getName(), inlineClassName);
+  }
+
+  @Test
+  void testExtraConfigsAdded() {
+    Map<String, String> extraConfigs = new HashMap<>();
+    extraConfigs.put("K1", "V1");
+    Configuration configs = new Configuration(false);
+    SparkBroadcastManager.addSchemaEvolutionConfigs(configs, extraConfigs);
+    assertEquals("V1", configs.get("K1"));
+  }
+
+  @Test
+  void testGetSchemaEvolutionConfigurations() {
+
   }
 }
