@@ -59,7 +59,8 @@ public abstract class BaseHoodieIndexClient {
   /**
    * Create a expression index.
    */
-  public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) throws Exception;
+  public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
+                              Map<String, String> tableProperties) throws Exception;
 
   /**
    * Drop an index. By default, ignore drop if index does not exist.

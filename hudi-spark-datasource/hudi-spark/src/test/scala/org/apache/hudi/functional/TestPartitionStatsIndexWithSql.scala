@@ -33,7 +33,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GreaterThan, LessThan, Literal}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, StringType}
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 import org.junit.jupiter.api.{BeforeAll, Tag}
 
 import scala.collection.JavaConverters._
@@ -46,6 +46,62 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
   @BeforeAll
   def init(): Unit = {
     initQueryIndexConf()
+  }
+
+  test("Test drop partition stats index") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        // Create table with date type partition
+        spark.sql(
+          s"""
+             | create table $tableName using hudi
+             | partitioned by (dt)
+             | tblproperties(
+             |    type = '$tableType',
+             |    primaryKey = 'id',
+             |    preCombineField = 'ts',
+             |    'hoodie.metadata.index.partition.stats.enable' = 'true',
+             |    'hoodie.metadata.index.column.stats.enable' = 'true',
+             |    'hoodie.metadata.index.column.stats.column.list' = 'name'
+             | )
+             | location '$tablePath'
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts, cast('2021-05-06' as date) as dt
+         """.stripMargin
+        )
+
+        assertResult(WriteOperationType.BULK_INSERT) {
+          HoodieSparkSqlTestBase.getLastCommitMetadata(spark, tablePath).getOperationType
+        }
+        checkAnswer(s"select id, name, price, ts, cast(dt as string) from $tableName")(
+          Seq(1, "a1", 10, 1000, "2021-05-06")
+        )
+
+        val partitionValue = "2021-05-06"
+        // Test insert into
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, cast('$partitionValue' as date))")
+        checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, price, ts, cast(dt as string) from $tableName order by id")(
+          Seq("1", s"dt=$partitionValue", 1, "a1", 10, 1000, partitionValue),
+          Seq("2", s"dt=$partitionValue", 2, "a2", 10, 1000, partitionValue)
+        )
+
+        var metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tablePath)
+          .setConf(HoodieTestUtils.getDefaultStorageConf)
+          .build()
+        // Validate partition_stats index exists
+        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
+        spark.sql(s"drop index partition_stats on $tableName")
+        metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tablePath)
+          .setConf(HoodieTestUtils.getDefaultStorageConf)
+          .build()
+        // Validate partition_stats index does not exist
+        assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
+      }
+    }
   }
 
   test("Test partition stats index following insert, merge into, update and delete") {

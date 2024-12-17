@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -72,7 +71,6 @@ public class ConsistentBucketIndexUtils {
    * @param table      Hoodie table
    * @param partition  Table partition
    * @param numBuckets Default bucket number
-   *
    * @return Consistent hashing metadata
    */
   public static HoodieConsistentHashingMetadata loadOrCreateMetadata(HoodieTable table, String partition, int numBuckets) {
@@ -85,7 +83,7 @@ public class ConsistentBucketIndexUtils {
 
     // There is no metadata, so try to create a new one and save it.
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partition, numBuckets);
-    if (saveMetadata(table, metadata, false)) {
+    if (saveMetadata(table, metadata)) {
       return metadata;
     }
 
@@ -110,11 +108,11 @@ public class ConsistentBucketIndexUtils {
     try {
       Predicate<StoragePathInfo> hashingMetaCommitFilePredicate = pathInfo -> {
         String filename = pathInfo.getPath().getName();
-        return filename.contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX);
+        return filename.endsWith(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX);
       };
       Predicate<StoragePathInfo> hashingMetadataFilePredicate = pathInfo -> {
         String filename = pathInfo.getPath().getName();
-        return filename.contains(HASHING_METADATA_FILE_SUFFIX);
+        return filename.endsWith(HASHING_METADATA_FILE_SUFFIX);
       };
       final List<StoragePathInfo> metaFiles = metaClient.getStorage().listDirectEntries(metadataPath);
       final TreeSet<String> commitMetaTss = metaFiles.stream().filter(hashingMetaCommitFilePredicate)
@@ -177,25 +175,35 @@ public class ConsistentBucketIndexUtils {
   /**
    * Saves the metadata into storage
    *
-   * @param table     Hoodie table
-   * @param metadata  Hashing metadata to be saved
-   * @param overwrite Whether to overwrite existing metadata
+   * @param table    Hoodie table
+   * @param metadata Hashing metadata to be saved
    * @return true if the metadata is saved successfully
    */
-  public static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata, boolean overwrite) {
+  public static boolean saveMetadata(HoodieTable table, HoodieConsistentHashingMetadata metadata) {
     HoodieStorage storage = table.getStorage();
     StoragePath dir = FSUtils.constructAbsolutePath(
         table.getMetaClient().getHashingMetadataPath(), metadata.getPartitionPath());
     StoragePath fullPath = new StoragePath(dir, metadata.getFilename());
-    try (OutputStream out = storage.create(fullPath, overwrite)) {
-      byte[] bytes = metadata.toBytes();
-      out.write(bytes);
-      out.close();
+    try {
+      if (storage.exists(fullPath)) {
+        // the file has been created by other tasks
+        return true;
+      }
+      storage.createImmutableFileInPath(fullPath, Option.of(metadata.toBytes()), true);
       return true;
-    } catch (IOException e) {
-      LOG.warn("Failed to update bucket metadata: " + metadata, e);
+    } catch (IOException e1) {
+      // ignore the exception and check the file existence
+      try {
+        if (storage.exists(fullPath)) {
+          return true;
+        }
+      } catch (IOException e2) {
+        // ignore the exception and return false
+        LOG.warn("Failed to check the existence of bucket metadata file: " + fullPath, e2);
+      }
+      LOG.warn("Failed to update bucket metadata: " + metadata, e1);
+      return false;
     }
-    return false;
   }
 
   /***
