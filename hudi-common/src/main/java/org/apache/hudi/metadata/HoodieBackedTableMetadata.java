@@ -891,8 +891,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public static Map<String, String> reverseLookupSecondaryKeysInternal(List<String> recordKeys,
                                                                        Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords,
                                                                        HoodieMetadataLogRecordReader logRecordScanner) {
-    Map<String, String> recordKeyMap = new HashMap<>();
-    Set<String> keySet = new TreeSet<>(recordKeys);
+    Set<String> keySet = new HashSet<>(recordKeys);
     Set<String> deletedRecordsFromLogs = new HashSet<>();
     Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
     // Note that: we read the log records from the oldest to the latest!!!
@@ -903,6 +902,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       if (!payload.isDeleted()) { // process only valid records.
         if (keySet.contains(recordKey)) {
           logRecordsMap.put(recordKey, record);
+          deletedRecordsFromLogs.remove(recordKey);
         }
       } else {
         // When and Only when the latest log record is non-tombstone, logRecordMap contains its recordKey.
@@ -911,11 +911,19 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     });
 
-    // Return non-tombstone records from the log files.
-    logRecordsMap.forEach((key, value) -> recordKeyMap.put(
-        key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey())));
-    // Return non-tombstone records from the base file.
-    if (baseFileRecords != null) {
+    Map<String, String> recordKeyMap = new HashMap<>();
+    if (baseFileRecords == null || baseFileRecords.isEmpty()) {
+      logRecordsMap.forEach((key, value) -> {
+        if (!value.getData().isDeleted() && !deletedRecordsFromLogs.contains(key)) {
+          recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
+        }
+      });
+    } else {
+      // Iterate over all provided log-records, merging them into existing records
+      logRecordsMap.forEach((key, value) -> baseFileRecords.merge(key, value, (oldRecord, newRecord) -> {
+        Option<HoodieRecord<HoodieMetadataPayload>> mergedRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldRecord, newRecord);
+        return mergedRecord.orElse(null);
+      }));
       baseFileRecords.forEach((key, value) -> {
         if (!deletedRecordsFromLogs.contains(key)) {
           recordKeyMap.put(key, SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
