@@ -91,6 +91,6 @@ with direct markers because the file system metadata is efficiently cached in me
 
 
 ## Related Resources
-<h3>Blogs</h3>
 
+<h3>Blogs</h3>
 [Timeline Server in Apache Hudi](https://medium.com/@simpsons/timeline-server-in-apache-hudi-b5be25f85e47)

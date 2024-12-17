@@ -211,7 +211,7 @@ Input field value: "20200401" <br/>
 Partition path generated from key generator: "04/01/2020"
 
 ## Related Resources
-<h3>Blogs</h3>
 
+<h3>Blogs</h3>
 * [Hudi metafields demystified](https://www.onehouse.ai/blog/hudi-metafields-demystified)
 * [Primary key and Partition Generators with Apache Hudi](https://medium.com/@simpsons/primary-key-and-partition-generators-with-apache-hudi-f0e4d71d9d26)

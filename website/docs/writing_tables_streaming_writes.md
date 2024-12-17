@@ -94,8 +94,8 @@ df.writeStream.format("hudi")
 >
 
 ## Related Resources
-<h3>Blogs</h3>
 
+<h3>Blogs</h3>
 * [An Introduction to the Hudi and Flink Integration](https://www.onehouse.ai/blog/intro-to-hudi-and-flink)
 * [Bulk Insert Sort Modes with Apache Hudi](https://medium.com/@simpsons/bulk-insert-sort-modes-with-apache-hudi-c781e77841bc)
 

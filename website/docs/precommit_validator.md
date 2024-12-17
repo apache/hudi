@@ -96,9 +96,9 @@ Hudi offers a [commit notification service](platform_services_post_commit_callba
 The commit notification service can be combined with pre-commit validators to send a notification when a commit fails a validation. This is possible by passing details about the validation as a custom value to the HTTP endpoint.
 
 ## Related Resources
+
 <h3>Blogs</h3>
-
 * [Apply Pre-Commit Validation for Data Quality in Apache Hudi](https://www.onehouse.ai/blog/apply-pre-commit-validation-for-data-quality-in-apache-hudi)
-<h3>Videos</h3>
 
+<h3>Videos</h3>
 * [Learn About Apache Hudi Pre Commit Validator with Hands on Lab](https://www.youtube.com/watch?v=KNzs9dj_Btc)

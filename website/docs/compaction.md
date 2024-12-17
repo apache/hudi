@@ -227,7 +227,6 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 | `--service` | `false`  (Optional)  | Whether to start a monitoring service that checks and schedules new compaction task in configured interval. |
 | `--min-compaction-interval-seconds` | `600(s)` (optional)  | The checking interval for service mode, by default 10 minutes. |
 
-
 ## Related Resources
 
 <h3>Blogs</h3>

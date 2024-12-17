@@ -252,6 +252,6 @@ captured via Debezium for MySQL and PostgresDB. [`AWSDmsAvroPayload`](https://gi
 For full configurations, go [here](/docs/configurations#RECORD_PAYLOAD) and please check out [this FAQ](faq_writing_tables/#can-i-implement-my-own-logic-for-how-input-records-are-merged-with-record-on-storage) if you want to implement your own custom payloads.
 
 ## Related Resources
-<h3>Blogs</h3>
 
+<h3>Blogs</h3>
 * [How to define your own merge logic with Apache Hudi](https://medium.com/@simpsons/how-to-define-your-own-merge-logic-with-apache-hudi-622ee5ccab1e)

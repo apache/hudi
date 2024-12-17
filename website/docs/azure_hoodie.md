@@ -50,6 +50,6 @@ This combination works out of the box. No extra config needed.
   ```
 
 ## Related Resources
-<h3>Blogs</h3>
 
+<h3>Blogs</h3>
 * [How to use Apache Hudi with Databricks](https://www.onehouse.ai/blog/how-to-use-apache-hudi-with-databricks)
