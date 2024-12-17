@@ -105,7 +105,7 @@ public class TimelineUtils {
             .map(partition -> new AbstractMap.SimpleEntry<>(partition, pair.getLeft().getTimestamp()))
         ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
     // cleaner could delete a partition when there are no active filegroups in the partition
-    HoodieTimeline cleanerTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
+    HoodieTimeline cleanerTimeline = TimelineUtils.getCleanerTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced).filterCompletedInstants();
     cleanerTimeline.getInstantsAsStream()
         .forEach(instant -> {
           try {
@@ -138,7 +138,6 @@ public class TimelineUtils {
             throw new HoodieIOException("Failed to get partitions writes at " + instant, e);
           }
         }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
-
     return partitionToLatestDeleteTimestamp.entrySet().stream()
         .filter(entry -> !partitionToLatestWriteTimestamp.containsKey(entry.getKey())
             || compareTimestamps(entry.getValue(), GREATER_THAN, partitionToLatestWriteTimestamp.get(entry.getKey()))
@@ -213,7 +212,7 @@ public class TimelineUtils {
    */
   public static Option<String> getExtraMetadataFromLatest(HoodieTableMetaClient metaClient, String extraMetadataKey) {
     return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants()
-        // exclude clustering commits for returning user stored extra metadata 
+        // exclude clustering commits for returning user stored extra metadata
         .filter(instant -> !isClusteringCommit(metaClient, instant))
         .findFirst().map(instant ->
             getMetadataValue(metaClient, extraMetadataKey, instant)).orElse(Option.empty());
@@ -252,7 +251,7 @@ public class TimelineUtils {
   public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
       if (REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
-        // replacecommit is used for multiple operations: insert_overwrite/cluster etc. 
+        // replacecommit is used for multiple operations: insert_overwrite/cluster etc.
         // Check operation type to see if this instant is related to clustering.
         HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(
             metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
@@ -304,6 +303,28 @@ public class TimelineUtils {
     }
 
     return timelineSinceLastSync;
+  }
+
+  /**
+   * Returns a Hudi timeline with cleaner commits after the given instant time (exclusive).
+   * Assumes all required clean commits are on the active timeline.
+   *
+   * @param metaClient                {@link HoodieTableMetaClient} instance.
+   * @param exclusiveStartInstantTime Start instant time (exclusive).
+   * @param lastMaxCompletionTime     Last commit max completion time synced
+   * @return Hudi timeline.
+   */
+  public static HoodieTimeline getCleanerTimelineAfter(
+          HoodieTableMetaClient metaClient, String exclusiveStartInstantTime, Option<String> lastMaxCompletionTime) {
+    HoodieTimeline cleanerTimeline = metaClient.getActiveTimeline().getCleanerTimeline();
+
+    // return commits meeting one of the conditions:
+    // - instant timestamp (start time) after `exclusiveStartInstantTime`
+    // - instant timestamp (start time) before `exclusiveStartInstantTime` and transition time after `lastMaxCompletionTime`
+    return cleanerTimeline.filter(s ->
+      compareTimestamps(s.getTimestamp(), GREATER_THAN, exclusiveStartInstantTime) ||
+              (compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime) && compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, lastMaxCompletionTime.get()))
+    );
   }
 
   /**
