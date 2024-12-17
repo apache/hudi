@@ -24,7 +24,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-aws</artifactId>
-    <version>0.15.0</version>
+    <version>0.15.0-heap-fork</version>
 
     <name>hudi-aws</name>
     <packaging>jar</packaging>
@@ -45,12 +45,12 @@
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-common</artifactId>
-            <version>${project.version}</version>
+            <version>0.15.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-hive-sync</artifactId>
-            <version>${project.version}</version>
+            <version>0.15.0</version>
         </dependency>
 
         <!-- Hadoop -->
@@ -191,7 +191,7 @@
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-tests-common</artifactId>
-            <version>${project.version}</version>
+            <version>0.15.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
