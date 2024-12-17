@@ -140,15 +140,14 @@ public class ConsistentBucketIndexUtils {
 
       // fix the in-consistency between un-committed and committed hashing metadata files.
       List<StoragePathInfo> fixed = new ArrayList<>();
+      Option<StoragePathInfo> maxCommittedMetadataFileOpt = Option.empty();
       if (maxCommitMetaFileTs != null) {
-        // add max committed metadata file to fixed list, we should return max committed metadata file if there is not any metadata file can be successfully fixed.
-        Option<StoragePathInfo> maxCommittedMetadataFileOpt = Option.fromJavaOptional(hashingMetaFiles.stream().filter(hashingMetaFile -> {
+        maxCommittedMetadataFileOpt = Option.fromJavaOptional(hashingMetaFiles.stream().filter(hashingMetaFile -> {
           String timestamp = getTimestampFromFile(hashingMetaFile.getPath().getName());
           return maxCommitMetaFileTs.equals(timestamp);
         }).findFirst());
         ValidationUtils.checkState(maxCommittedMetadataFileOpt.isPresent(),
-            () -> "Failed to find max committed metadata file but commit marker file exist with instant: " + maxCommittedMetadataFileOpt);
-        fixed.add(maxCommittedMetadataFileOpt.get());
+            "Failed to find max committed metadata file but commit marker file exist with instant: " + maxCommittedMetadataFileOpt);
       }
       hashingMetaFiles.forEach(hashingMetaFile -> {
         StoragePath path = hashingMetaFile.getPath();
@@ -171,8 +170,11 @@ public class ConsistentBucketIndexUtils {
           fixed.add(hashingMetaFile);
         }
       });
-
-      return fixed.isEmpty() ? Option.empty() : loadMetadataFromGivenFile(table, fixed.get(fixed.size() - 1));
+      if (!fixed.isEmpty()) {
+        return loadMetadataFromGivenFile(table, fixed.get(fixed.size() - 1));
+      }
+      // we should return max committed metadata file if there is not any metadata file can be successfully fixed.
+      return maxCommittedMetadataFileOpt.isPresent() ? loadMetadataFromGivenFile(table, maxCommittedMetadataFileOpt.get()) : Option.empty();
     } catch (FileNotFoundException e) {
       return Option.empty();
     } catch (IOException e) {
