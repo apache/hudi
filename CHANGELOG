@@ -484,3 +484,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2024-12-14 16:03:38] [release-v1.58.0] ---
 [ENG-17422][INTERNAL] Add abstraction of HoodieMergeHandle to make its implementations configurable. (#1078)
 [AUDIT-1097]: Changelog for release-v1.57.0 (#1089)
+
+--- [2024-12-17 16:04:15] [release-v1.59.0] ---
+[ENG-19077][MINOR] Reduce logs from marker creation (#1092)
+[AUDIT-1071]: Changelog for release-v1.58.0 (#1090)
