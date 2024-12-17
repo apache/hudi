@@ -28,7 +28,9 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -95,7 +97,9 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
       // PARQUET_INFER_TIMESTAMP_NTZ_ENABLED is required from Spark 3.4.0 or above
       hadoopConf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", false);
     }
-    configurationBroadcast = jsc.broadcast(new SerializableConfiguration(hadoopConf));
+    StorageConfiguration config = new HadoopStorageConfiguration(hadoopConf).getInline();
+
+    configurationBroadcast = jsc.broadcast(new SerializableConfiguration((Configuration) config.unwrap()));
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
