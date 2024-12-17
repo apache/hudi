@@ -21,6 +21,7 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
@@ -218,7 +219,7 @@ public class TestDataHubSyncClient {
     DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
 
     dhClient.updateLastCommitTimeSynced("some_table");
-    verify(restEmitterMock, times(1)).emit(any(MetadataChangeProposal.class), any());
+    verify(restEmitterMock, times(2)).emit(any(MetadataChangeProposal.class), any());
   }
 
   public class DataHubSyncClientStub extends DataHubSyncClient {
@@ -233,8 +234,13 @@ public class TestDataHubSyncClient {
     }
 
     @Override
-    protected String getLastCommitTime() {
-      return "1000";
+    protected Option<String> getLastCommitTime() {
+      return Option.of("1000");
+    }
+
+    @Override
+    protected Option<String> getLastCommitCompletionTime() {
+      return Option.of("1000");
     }
 
   }

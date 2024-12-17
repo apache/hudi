@@ -21,6 +21,7 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.sync.common.HoodieSyncClient;
@@ -93,20 +94,34 @@ public class DataHubSyncClient extends HoodieSyncClient {
     throw new UnsupportedOperationException("Not supported: `getLastCommitTimeSynced`");
   }
 
-  protected String getLastCommitTime() {
-    try {
-      return getActiveTimeline().lastInstant().get().requestedTime();
-    } catch (Exception e) {
-      LOG.error("Failed to get last commit time", e);
-      return null;
-    }
+  protected Option<String> getLastCommitTime() {
+    return getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime);
+  }
+
+  protected Option<String> getLastCommitCompletionTime() {
+    int countInstants = getActiveTimeline().countInstants();
+    return getActiveTimeline()
+        .getInstantsOrderedByCompletionTime()
+        .skip(countInstants - 1)
+        .findFirst()
+        .map(HoodieInstant::getCompletionTime)
+        .map(Option::of).orElseGet(Option::empty);
   }
 
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    String lastCommitTime = getLastCommitTime();
-    if (lastCommitTime != null) {
-      updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTime));
+    Option<String> lastCommitTime = getLastCommitTime();
+    if (lastCommitTime.isPresent()) {
+      updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTime.get()));
+    } else {
+      LOG.error("Failed to get last commit time");
+    }
+
+    Option<String> lastCommitCompletionTime = getLastCommitCompletionTime();
+    if (lastCommitCompletionTime.isPresent()) {
+      updateTableProperties(tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionTime.get()));
+    } else {
+      LOG.error("Failed to get last commit completion time");
     }
   }
 
@@ -317,5 +332,4 @@ public class DataHubSyncClient extends HoodieSyncClient {
       throw new HoodieSyncException("Failed to read avro schema", e);
     }
   }
-
 }
