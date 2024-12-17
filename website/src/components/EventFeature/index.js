@@ -11,14 +11,11 @@ const Events = () => {
                  <div className="container">
                      <div className={styles.flexContainer}>
                         <div className={styles.bannercontent}>
-                            <h3> Powering Amazon Unit Economics with Configurations and Apache Hudi</h3>
-                            <p className={styles.flexParagraph}><span className={styles.sideMicrophone}><Microphone/></span>
-                             Linkedin Live Event | <span className={styles.sideCalendar}><Calendar/></span>
-                           Nov 19th, 9am Pacific Time</p>
+                            <h3> Announcing Apache Hudi 1.0 and the Next Generation of Data Lakehouses</h3>
                         </div>
                          <div className={styles.joinButton}>
-                             <LinkButton class={styles.registerbutton} type="secondary" to="https://www.linkedin.com/events/poweringamazonuniteconomicswith7259635618979229696/theater/">
-                                             Join Now
+                             <LinkButton class={styles.registerbutton} type="secondary" to="https://hudi.apache.org/blog/2024/12/16/announcing-hudi-1-0-0">
+                                             Read Now
                              </LinkButton>
                          </div>
                      </div>
