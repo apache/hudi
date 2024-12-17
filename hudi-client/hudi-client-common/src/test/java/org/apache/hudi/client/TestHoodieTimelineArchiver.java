@@ -89,6 +89,7 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
         .withPath(tempDir.toString())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(2, 3)
+            .withArchiveLimitInstants(1)
             .build())
         .withMarkersType("DIRECT")
         .build();
@@ -108,10 +109,20 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
 
     HoodieTimelineArchiver archiver = new HoodieTimelineArchiver<>(writeConfig, hoodieTable);
     archiver.archiveIfRequired(context);
-    assertEquals(2, metaClient.reloadActiveTimeline().countInstants());
+    assertEquals(4, metaClient.reloadActiveTimeline().countInstants());
+    // Run archive again with reloaded metaClient results.
+    hoodieTable = setupMockHoodieTable(context, writeConfig);
+    archiver = new HoodieTimelineArchiver<>(writeConfig, hoodieTable);
+    archiver.archiveIfRequired(context);
+    assertEquals(3, metaClient.reloadActiveTimeline().countInstants());
+    // Run archive again with reloaded metaClient results but it's no op as timeline instants is not above max limit of 3.
+    hoodieTable = setupMockHoodieTable(context, writeConfig);
+    archiver = new HoodieTimelineArchiver<>(writeConfig, hoodieTable);
+    archiver.archiveIfRequired(context);
+    assertEquals(3, metaClient.reloadActiveTimeline().countInstants());
 
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
-    assertEquals(6, rawActiveTimeline.countInstants());
+    assertEquals(9, rawActiveTimeline.countInstants());
   }
 
   @Test

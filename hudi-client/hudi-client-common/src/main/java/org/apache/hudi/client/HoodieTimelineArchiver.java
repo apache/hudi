@@ -92,6 +92,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
+import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_LIMIT_INSTANTS;
 
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
@@ -175,7 +176,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       boolean success = true;
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter();
-        LOG.info("Archiving and deleting instants {}", instantsToArchive);
+        LOG.info("Archiving and deleting {} instants {}", instantsToArchive.size(), instantsToArchive);
         archive(context, instantsToArchive);
         LOG.debug("Deleting archived instants");
         success = deleteArchivedInstants(instantsToArchive, context);
@@ -599,6 +600,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             HoodieInstant.getComparableAction(i.getAction()))));
 
     return instantsToArchive.stream()
+        .sorted()
+        .limit(config.getLongOrDefault(ARCHIVE_LIMIT_INSTANTS))
         .flatMap(hoodieInstant ->
             groupByTsAction.getOrDefault(Pair.of(hoodieInstant.getTimestamp(), HoodieInstant.getComparableAction(hoodieInstant.getAction())), Collections.emptyList()).stream())
         .collect(Collectors.toList());
