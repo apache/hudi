@@ -322,8 +322,8 @@ public class TimelineUtils {
     // - instant timestamp (start time) after `exclusiveStartInstantTime`
     // - instant timestamp (start time) before `exclusiveStartInstantTime` and transition time after `lastMaxCompletionTime`
     return cleanerTimeline.filter(s ->
-      compareTimestamps(s.getTimestamp(), GREATER_THAN, exclusiveStartInstantTime) ||
-              (compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime) && compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, lastMaxCompletionTime.get()))
+      compareTimestamps(s.getTimestamp(), GREATER_THAN, exclusiveStartInstantTime)
+              || (compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime) && compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, lastMaxCompletionTime.get()))
     );
   }
 
