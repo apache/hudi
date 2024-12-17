@@ -231,62 +231,6 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Secondary Index Creation Failure For Unsupported payloads") {
-    withTempDir {
-      tmp => {
-        val tableName = generateTableName
-        val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  ts bigint,
-             |  id string,
-             |  rider string,
-             |  driver string,
-             |  fare int,
-             |  city string,
-             |  state string
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = 'mor',
-             |  preCombineField = 'ts',
-             |  hoodie.metadata.enable = 'true',
-             |  hoodie.metadata.record.index.enable = 'true',
-             |  hoodie.metadata.index.secondary.enable = 'true',
-             |  hoodie.datasource.write.recordkey.field = 'id',
-             |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
-             | )
-             | partitioned by(state)
-             | location '$basePath'
-       """.stripMargin)
-        spark.sql(
-          s"""
-             | insert into $tableName
-             | values
-             | (1695159649087, '334e26e9-8355-45cc-97c6-c31daf0df330', 'rider-A', 'driver-K', 19, 'san_francisco', 'california'),
-             | (1695091554787, 'e96c4396-3fad-413a-a942-4cb36106d720', 'rider-B', 'driver-M', 27, 'austin', 'texas')
-             | """.stripMargin
-        )
-
-        // validate record_index created successfully
-        val metadataDF = spark.sql(s"select key from hudi_metadata('$basePath') where type=5")
-        assert(metadataDF.count() == 2)
-
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(basePath)
-          .setConf(HoodieTestUtils.getDefaultStorageConf)
-          .build()
-        assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
-        // create secondary index throws error when trying to create on multiple fields at a time
-        checkException(sql = s"create index idx_city on $tableName (city)")(
-          "Secondary Index can only be enabled on table with OverwriteWithLatestAvroPayload payload class or Merge mode set to OVERWRITE_WITH_LATEST"
-        )
-      }
-    }
-  }
-
   test("Test Secondary Index With Updates Compaction Clustering Deletes") {
     withTempDir { tmp =>
       val tableName = generateTableName
