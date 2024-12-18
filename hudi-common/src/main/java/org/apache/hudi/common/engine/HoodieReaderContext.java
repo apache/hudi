@@ -61,6 +61,8 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
+
+  // should we do position based merging for mor
   private Boolean shouldMergeUseRecordPosition = null;
 
   // Getter and Setter for schemaHandler
