@@ -22,7 +22,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.model.ActionType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -30,17 +29,14 @@ import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameGeneratorV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.hash.Hash;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos;
 import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
