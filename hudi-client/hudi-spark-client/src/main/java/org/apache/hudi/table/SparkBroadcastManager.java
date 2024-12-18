@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -38,8 +39,6 @@ import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.util.SerializableConfiguration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,8 +50,6 @@ import scala.collection.JavaConverters;
  * Broadcast variable management for Spark.
  */
 public class SparkBroadcastManager extends EngineBroadcastManager {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkBroadcastManager.class);
 
   private final transient HoodieEngineContext context;
 
@@ -82,20 +79,8 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
 
     // Do broadcast.
     sqlConfBroadcast = jsc.broadcast(sqlConf);
-    // new Configuration() is critical so that we don't run into ConcurrentModificatonException
-    Configuration hadoopConf = new Configuration(jsc.hadoopConfiguration());
-    hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED().key(), false);
-    hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE().key(), false);
-    // Sets flags for `ParquetToSparkSchemaConverter`
-    hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), false);
-    hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), true);
-    // Using string value of this conf to preserve compatibility across spark versions.
-    hadoopConf.setBoolean("spark.sql.legacy.parquet.nanosAsLong", false);
-    if (HoodieSparkUtils.gteqSpark3_4()) {
-      // PARQUET_INFER_TIMESTAMP_NTZ_ENABLED is required from Spark 3.4.0 or above
-      hadoopConf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", false);
-    }
-    configurationBroadcast = jsc.broadcast(new SerializableConfiguration(hadoopConf));
+    configurationBroadcast = jsc.broadcast(
+        new SerializableConfiguration(getHadoopConfiguration(jsc.hadoopConfiguration())));
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
@@ -123,5 +108,22 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
   @Override
   public Option<Configuration> retrieveStorageConfig() {
     return Option.of(configurationBroadcast.getValue().value());
+  }
+
+  static Configuration getHadoopConfiguration(Configuration configuration) {
+    // new Configuration() is critical so that we don't run into ConcurrentModificatonException
+    Configuration hadoopConf = new Configuration(configuration);
+    hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED().key(), false);
+    hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE().key(), false);
+    // Sets flags for `ParquetToSparkSchemaConverter`
+    hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), false);
+    hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), true);
+    // Using string value of this conf to preserve compatibility across spark versions.
+    hadoopConf.setBoolean("spark.sql.legacy.parquet.nanosAsLong", false);
+    if (HoodieSparkUtils.gteqSpark3_4()) {
+      // PARQUET_INFER_TIMESTAMP_NTZ_ENABLED is required from Spark 3.4.0 or above
+      hadoopConf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", false);
+    }
+    return (new HadoopStorageConfiguration(hadoopConf).getInline()).unwrap();
   }
 }
