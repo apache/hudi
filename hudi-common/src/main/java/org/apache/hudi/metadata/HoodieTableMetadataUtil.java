@@ -1146,7 +1146,7 @@ public class HoodieTableMetadataUtil {
     final List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(),
         metadataConfig, Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)),
         dataMetaClient.getActiveTimeline().filterCompletedInstants().empty());
-    if (columnsToIndex.isEmpty()) {
+    if (columnsToIndex.isEmpty() || (partitionToAppendedFiles.isEmpty() && partitionToDeletedFiles.isEmpty())) {
       // In case there are no columns to index, bail
       LOG.warn("No columns to index for column stats index.");
       return engineContext.emptyHoodieData();
@@ -2462,6 +2462,9 @@ public class HoodieTableMetadataUtil {
                                                                              HoodieMetadataConfig metadataConfig,
                                                                              HoodieTableMetaClient dataTableMetaClient,
                                                                              Option<Schema> writerSchemaOpt) {
+    if (partitionInfoList.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
     Lazy<Option<Schema>> lazyWriterSchemaOpt = writerSchemaOpt.isPresent() ? Lazy.eagerly(writerSchemaOpt) : Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient));
     final List<String> columnsToIndex = getColumnsToIndex(dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt,
         dataTableMetaClient.getActiveTimeline().filterCompletedInstants().empty());

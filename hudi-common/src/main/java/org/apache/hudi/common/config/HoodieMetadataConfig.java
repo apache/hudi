@@ -758,7 +758,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
-      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, getDefaultPartitionStatsEnable(engineType));
+      // fix me: disable when schema on read is enabled.
+      // if col stats is disabled, default value for partition stats is false.
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled()
+          ? getDefaultPartitionStatsEnable(engineType) : false);
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
     }
