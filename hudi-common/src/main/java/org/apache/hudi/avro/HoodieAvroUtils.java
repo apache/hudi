@@ -1487,4 +1487,14 @@ public class HoodieAvroUtils {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
     }
   }
+
+  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper, String wrapperClassName) {
+    if (avroValueWrapper == null) {
+      return null;
+    } else if (DateWrapper.class.getSimpleName().equals(wrapperClassName)) {
+      return LocalDate.ofEpochDay((Integer)((Record) avroValueWrapper).get(0));
+    } else {
+      throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+    }
+  }
 }
