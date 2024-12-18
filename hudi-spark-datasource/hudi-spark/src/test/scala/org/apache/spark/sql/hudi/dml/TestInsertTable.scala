@@ -1665,43 +1665,101 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
               Seq(3, "a3,3", 30.0, 3000, "2021-01-07")
             )
 
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1, 'a1', 10, 1000, "2021-01-05"),
-                 | (3, "a3", 30, 3000, "2021-01-07")
-               """.stripMargin)
+            // for COW with disabled Spark native row writer, multiple bulk inserts are restricted
+            if (tableType != "cow" && bulkInsertAsRow != "false") {
+              spark.sql(
+                s"""
+                   | insert into $tableName values
+                   | (1, 'a1', 10, 1000, "2021-01-05"),
+                   | (3, "a3", 30, 3000, "2021-01-07")
+                 """.stripMargin)
 
-            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-              Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
-              Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-              Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-              Seq(3, "a3,3", 30.0, 3000, "2021-01-07"),
-              Seq(3, "a3", 30.0, 3000, "2021-01-07")
-            )
+              checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+                Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+                Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+                Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+                Seq(3, "a3,3", 30.0, 3000, "2021-01-07"),
+                Seq(3, "a3", 30.0, 3000, "2021-01-07")
+              )
 
-            // there are two files in partition(dt = '2021-01-05')
-            checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(
-              Seq(2)
-            )
+              // there are two files in partition(dt = '2021-01-05')
+              checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(
+                Seq(2)
+              )
 
-            // would generate 6 other files in partition(dt = '2021-01-05')
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (4, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (5, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (6, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (7, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (8, 'a1,1', 10, 1000, "2021-01-05"),
-                 | (10, 'a3,3', 30, 3000, "2021-01-05")
-               """.stripMargin)
+              // would generate 6 other files in partition(dt = '2021-01-05')
+              spark.sql(
+                s"""
+                   | insert into $tableName values
+                   | (4, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (5, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (6, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (7, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (8, 'a1,1', 10, 1000, "2021-01-05"),
+                   | (10, 'a3,3', 30, 3000, "2021-01-05")
+                 """.stripMargin)
 
-            checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(
-              Seq(8)
-            )
+              checkAnswer(s"select count(distinct _hoodie_file_name) from $tableName where dt = '2021-01-05'")(
+                Seq(8)
+              )
+            }
           }
         }
+      }
+    }
+  }
+
+  test("Test not supported multiple BULK INSERTs into COW with SIMPLE BUCKET and disabled Spark native row writer") {
+    withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id long,
+             |  name string,
+             |  ts int,
+             |  par string
+             |) using hudi
+             | tblproperties (
+             | primaryKey = 'id,name',
+             | type = 'cow',
+             | preCombineField = 'ts',
+             | hoodie.index.type = 'BUCKET',
+             | hoodie.index.bucket.engine = 'SIMPLE',
+             | hoodie.bucket.index.num.buckets = '4',
+             | hoodie.bucket.index.hash.field = 'id,name',
+             | hoodie.datasource.write.row.writer.enable = 'false')
+             | partitioned by (par)
+             | location '${tmp.getCanonicalPath}'
+             """.stripMargin)
+
+        // Used rows with corresponding `bucketId`s if there are 4 buckets
+        //   `id,name`    `bucketId`
+        //    5,'a1,1' ->    1
+        //    6,'a6,6' ->    2
+        //    9,'a3,3' ->    1
+        // 13,'a13,13' ->    2
+        //     24,'cd' ->    0
+
+        // buckets 1 & 2 into partition 'main', bucket 1 into partition 'side'
+        spark.sql(s"insert into $tableName values (5, 'a1,1', 1, 'main'), (6, 'a6,6', 1, 'main'), (9, 'a3,3', 1, 'side')")
+        // bucket 1 into 'main', bucket 2 into 'side', the whole insert will fail due to existed bucket 1 in 'main'
+        val causeRegex = "Multiple bulk insert.*COW.*Spark native row writer.*not supported.*"
+        checkExceptionMatch(s"insert into $tableName values (9, 'a3,3', 2, 'main'), (13, 'a13,13', 1, 'side')")(causeRegex)
+        checkAnswer(spark.sql(s"select id from $tableName order by id").collect())(Seq(5), Seq(6), Seq(9))
+
+        // bucket 0 into 'main', no bucket into 'side', will also fail,
+        // bulk insert into separate not presented bucket, if there is some other buckets already written, also restricted
+        checkExceptionMatch(s"insert into $tableName values (24, 'cd', 1, 'main')")(causeRegex)
+        checkAnswer(spark.sql(s"select id from $tableName where par = 'main' order by id").collect())(Seq(5), Seq(6))
+
+        // for overwrite mode it's allowed to do multiple bulk inserts
+        spark.sql(s"insert overwrite $tableName values (9, 'a3,3', 3, 'main'), (13, 'a13,13', 2, 'side')")
+        // only data from the latest insert overwrite is available,
+        // because insert overwrite drops the whole table due to [HUDI-4704]
+        checkAnswer(spark.sql(s"select id from $tableName order by id").collect())(Seq(9), Seq(13))
       }
     }
   }
