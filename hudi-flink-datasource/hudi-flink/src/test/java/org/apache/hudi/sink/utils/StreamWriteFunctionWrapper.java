@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.adapter.CollectOutputAdapter;
-import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -122,7 +121,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
     // one function
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    this.coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(this.coordinatorContext));
+    this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.bucketAssignFunctionContext = new MockBucketAssignFunctionContext();
     this.stateInitializationContext = new MockStateInitializationContext();
     this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
@@ -244,7 +243,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void restartCoordinator() throws Exception {
     this.coordinator.close();
-    this.coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(this.coordinatorContext));
+    this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
   }

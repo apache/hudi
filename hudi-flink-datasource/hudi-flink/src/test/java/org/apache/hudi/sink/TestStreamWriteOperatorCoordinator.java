@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -90,9 +89,9 @@ public class TestStreamWriteOperatorCoordinator {
   public void before() throws Exception {
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
     coordinator = new StreamWriteOperatorCoordinator(
-        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), new ContextAdapter(context));
+        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), context);
     coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(new ContextAdapter(context)));
+    coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
     coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
     coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1));
@@ -189,7 +188,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
 
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
-    coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(context));
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
@@ -244,7 +243,7 @@ public class TestStreamWriteOperatorCoordinator {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(context));
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
@@ -296,7 +295,7 @@ public class TestStreamWriteOperatorCoordinator {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.HIVE_SYNC_ENABLED, true);
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(context));
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
@@ -321,7 +320,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
     conf.setInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, metadataCompactionDeltaCommits);
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(context));
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
@@ -394,7 +393,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 20);
     conf.setString("hoodie.metadata.log.compaction.enable", "true");
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(context));
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
@@ -444,7 +443,7 @@ public class TestStreamWriteOperatorCoordinator {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(context));
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
@@ -491,7 +490,7 @@ public class TestStreamWriteOperatorCoordinator {
     Logger logger = Mockito.mock(Logger.class); // avoid too many logs by executor
     NonThrownExecutor executor = NonThrownExecutor.builder(logger).waitForTasksFinish(true).build();
 
-    try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(context))) {
+    try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, context)) {
       coordinator.start();
       coordinator.setExecutor(executor);
       coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
@@ -530,7 +529,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setInteger("hoodie.write.lock.client.num_retries", 1);
 
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(context));
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
@@ -563,7 +562,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
     MockOperatorCoordinatorContext context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
     NonThrownExecutor executor = new MockCoordinatorExecutor(context);
-    try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, new ContextAdapter(context))) {
+    try (StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, context)) {
       coordinator.start();
       coordinator.setExecutor(executor);
       coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0));
@@ -642,8 +641,8 @@ public class TestStreamWriteOperatorCoordinator {
   private void assertError(Runnable runnable, String message) {
     runnable.run();
     // wait a little while for the task to finish
-    assertThat(coordinator.getContext(), instanceOf(ContextAdapter.class));
-    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext().context;
+    assertThat(coordinator.getContext(), instanceOf(MockOperatorCoordinatorContext.class));
+    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
     assertTrue(context.isJobFailed(), message);
   }
 }

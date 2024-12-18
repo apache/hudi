@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.adapter.ContextAdapter;
 import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -104,7 +103,7 @@ public class StreamWriteOperatorCoordinator
   /**
    * Coordinator context.
    */
-  private final ContextAdapter context;
+  private final Context context;
 
   /**
    * Gateways for sending events to sub tasks.
@@ -175,7 +174,7 @@ public class StreamWriteOperatorCoordinator
    */
   public StreamWriteOperatorCoordinator(
       Configuration conf,
-      ContextAdapter context) {
+      Context context) {
     this.conf = conf;
     this.context = context;
     this.parallelism = context.currentParallelism();
@@ -622,7 +621,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   @VisibleForTesting
-  public ContextAdapter getContext() {
+  public Context getContext() {
     return context;
   }
 
@@ -662,7 +661,7 @@ public class StreamWriteOperatorCoordinator
 
     @Override
     public OperatorCoordinator create(Context context) {
-      return new StreamWriteOperatorCoordinator(this.conf, new ContextAdapter(context));
+      return new StreamWriteOperatorCoordinator(this.conf, context);
     }
   }
 
