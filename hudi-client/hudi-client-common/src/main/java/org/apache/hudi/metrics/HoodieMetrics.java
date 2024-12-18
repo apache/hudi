@@ -19,7 +19,10 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -31,6 +34,8 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Set;
 
 /**
  * Wrapper for metrics-related operations.
@@ -75,7 +80,6 @@ public class HoodieMetrics {
   public static final String FINALIZE_ACTION = "finalize";
   public static final String INDEX_ACTION = "index";
   public static final String SOURCE_READ_AND_INDEX_ACTION = "source_read_and_index";
-  public static final String CLUSTERTING_INSTANT_ACTION = "replacecommit";
 
   private Metrics metrics;
   // Some timers
@@ -91,7 +95,6 @@ public class HoodieMetrics {
   public String indexTimerName = null;
   public String sourceReadAndIndexTimerName = null;
   private String conflictResolutionTimerName = null;
-  private String clusteringInstantTimerName = null;
   private String conflictResolutionSuccessCounterName = null;
   private String conflictResolutionFailureCounterName = null;
   private String compactionRequestedCounterName = null;
@@ -110,7 +113,6 @@ public class HoodieMetrics {
   private Timer indexTimer = null;
   private Timer sourceReadAndIndexTimer = null;
   private Timer conflictResolutionTimer = null;
-  private Timer clusteringInstantTimer = null;
   private Counter conflictResolutionSuccessCounter = null;
   private Counter conflictResolutionFailureCounter = null;
   private Counter compactionRequestedCounter = null;
@@ -133,7 +135,6 @@ public class HoodieMetrics {
       this.indexTimerName = getMetricsName(TIMER_ACTION, INDEX_ACTION);
       this.sourceReadAndIndexTimerName = getMetricsName(TIMER_ACTION, SOURCE_READ_AND_INDEX_ACTION);
       this.conflictResolutionTimerName = getMetricsName(TIMER_ACTION, CONFLICT_RESOLUTION_STR);
-      this.clusteringInstantTimerName = getMetricsName(TIMER_ACTION, CLUSTERTING_INSTANT_ACTION);
       this.conflictResolutionSuccessCounterName = getMetricsName(COUNTER_ACTION, CONFLICT_RESOLUTION_STR + SUCCESS_EXTENSION);
       this.conflictResolutionFailureCounterName = getMetricsName(COUNTER_ACTION, CONFLICT_RESOLUTION_STR + FAILURE_EXTENSION);
       this.compactionRequestedCounterName = getMetricsName(COUNTER_ACTION, HoodieTimeline.COMPACTION_ACTION + HoodieTimeline.REQUESTED_EXTENSION);
@@ -231,13 +232,6 @@ public class HoodieMetrics {
       conflictResolutionTimer = createTimer(conflictResolutionTimerName);
     }
     return conflictResolutionTimer == null ? null : conflictResolutionTimer.time();
-  }
-
-  public Timer.Context getClusteringInstantTimerCtx() {
-    if (config.isMetricsOn() && clusteringInstantTimer == null) {
-      clusteringInstantTimer = createTimer(clusteringInstantTimerName);
-    }
-    return clusteringInstantTimer == null ? null : clusteringInstantTimer.time();
   }
 
   public void updateMetricsForEmptyData(String actionType) {
@@ -388,16 +382,33 @@ public class HoodieMetrics {
     reportMetrics(HoodieTimeline.CLUSTERING_ACTION, "fileCreationTime", durationInMs);
   }
 
-  public void updateTimeLineClusteringInstantMetrics(final long durationInMs, final long earliestInfightClusteringInstant, final long latestCompletedClusteringInstant,
-                                              final long pendingClusteringInstantCount) {
+  public void updateClusteringTimeLineInstantMetrics(final HoodieActiveTimeline activeTimeline) {
     if (config.isMetricsOn()) {
+      // Compute Metrics
+      Set<String> validActions = CollectionUtils.createSet(HoodieTimeline.CLUSTERING_ACTION);
+      HoodieTimeline inflightAndRequested = activeTimeline.filterInflightsAndRequested()
+          .filter(instant -> validActions.contains(instant.getAction()));
+      long pendingClusteringInstantCount = Long.valueOf(inflightAndRequested.countInstants());
+      long earliestInflightClusteringInstant = 0L;
+      Option<HoodieInstant> firstInstant = inflightAndRequested.firstInstant();
+      if (firstInstant.isPresent()) {
+        earliestInflightClusteringInstant = Long.valueOf(firstInstant.get().requestedTime());
+      }
+
+      HoodieTimeline completed = activeTimeline.filterCompletedInstants()
+          .filter(instant -> validActions.contains(instant.getAction()));
+      long latestCompletedClusteringInstant = 0L;
+      Option<HoodieInstant> lastInstant = completed.lastInstant();
+      if (lastInstant.isPresent()) {
+        latestCompletedClusteringInstant = Long.valueOf(lastInstant.get().requestedTime());
+      }
+
       LOG.info(
-          String.format("Sending timeline clustering instant metrics (%s=%d, %s=%d, %s=%d, %s=%d)", DURATION_STR, durationInMs,
-              EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR, earliestInfightClusteringInstant, LATEST_COMPLETED_CLUSTERING_INSTANT_STR, latestCompletedClusteringInstant,
-              PENDING_CLUSTERING_INSTANT_COUNT_STR, pendingClusteringInstantCount));
-      metrics.registerGauge(getMetricsName(CLUSTERTING_INSTANT_ACTION, EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR), earliestInfightClusteringInstant);
-      metrics.registerGauge(getMetricsName(CLUSTERTING_INSTANT_ACTION, LATEST_COMPLETED_CLUSTERING_INSTANT_STR), latestCompletedClusteringInstant);
-      metrics.registerGauge(getMetricsName(CLUSTERTING_INSTANT_ACTION, PENDING_CLUSTERING_INSTANT_COUNT_STR), pendingClusteringInstantCount);
+          String.format("Sending timeline clustering instant metrics (%s=%d, %s=%d, %s=%d)", EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR, earliestInflightClusteringInstant,
+              LATEST_COMPLETED_CLUSTERING_INSTANT_STR, latestCompletedClusteringInstant, PENDING_CLUSTERING_INSTANT_COUNT_STR, pendingClusteringInstantCount));
+      metrics.registerGauge(getMetricsName(HoodieTimeline.CLUSTERING_ACTION, EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR), earliestInflightClusteringInstant);
+      metrics.registerGauge(getMetricsName(HoodieTimeline.CLUSTERING_ACTION, LATEST_COMPLETED_CLUSTERING_INSTANT_STR), latestCompletedClusteringInstant);
+      metrics.registerGauge(getMetricsName(HoodieTimeline.CLUSTERING_ACTION, PENDING_CLUSTERING_INSTANT_COUNT_STR), pendingClusteringInstantCount);
     }
   }
 
