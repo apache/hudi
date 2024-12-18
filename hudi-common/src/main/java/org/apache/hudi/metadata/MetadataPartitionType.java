@@ -296,27 +296,43 @@ public enum MetadataPartitionType {
       checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_COLUMN_STATS) == null,
           String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
     } else {
-      String minValueWrapperClassName = ((GenericRecord)((GenericRecord)record.get(SCHEMA_FIELD_ID_COLUMN_STATS)).get("minValue")).getSchema().getName();
-      String maxValueWrapperClassName = ((GenericRecord)((GenericRecord)record.get(SCHEMA_FIELD_ID_COLUMN_STATS)).get("maxValue")).getSchema().getName();
-      boolean isDateWrapper = minValueWrapperClassName.equals(DateWrapper.class.getSimpleName());
-      payload.columnStatMetadata = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())
-          .setFileName(columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME).toString())
-          .setColumnName(columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME).toString())
-          // AVRO-2377 1.9.2 Modified the type of org.apache.avro.Schema#FIELD_RESERVED to Collections.unmodifiableSet.
-          // This causes Kryo to fail when deserializing a GenericRecord, See HUDI-5484.
-          // We should avoid using GenericRecord and convert GenericRecord into a serializable type.
-          .setMinValue(wrapValueIntoAvro(
-              isDateWrapper ? unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE), minValueWrapperClassName)
-                  : unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))))
-          .setMaxValue(wrapValueIntoAvro(isDateWrapper ? unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE), maxValueWrapperClassName)
-              : unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))))
-          .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
-          .setNullCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_NULL_COUNT))
-          .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
-          .setTotalUncompressedSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE))
-          .setIsDeleted((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_DELETED))
-          .setIsTightBound((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_TIGHT_BOUND))
-          .build();
+      try {
+        Object minValue = ((GenericRecord) record.get(SCHEMA_FIELD_ID_COLUMN_STATS)).get("minValue");
+        Object maxValue = ((GenericRecord) record.get(SCHEMA_FIELD_ID_COLUMN_STATS)).get("maxValue");
+        boolean isMinValueDateWrapper = false;
+        boolean isMaxValueDateWrapper = false;
+        String minValueWrapperClassName = null;
+        String maxValueWrapperClassName = null;
+        if (minValue != null) {
+          minValueWrapperClassName = ((GenericRecord) minValue).getSchema().getName();
+          isMinValueDateWrapper = minValueWrapperClassName.equals(DateWrapper.class.getSimpleName());
+        }
+        if (maxValue != null) {
+          maxValueWrapperClassName = ((GenericRecord) maxValue).getSchema().getName();
+          isMaxValueDateWrapper = maxValueWrapperClassName.equals(DateWrapper.class.getSimpleName());
+        }
+        payload.columnStatMetadata = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())
+            .setFileName(columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME).toString())
+            .setColumnName(columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME).toString())
+            // AVRO-2377 1.9.2 Modified the type of org.apache.avro.Schema#FIELD_RESERVED to Collections.unmodifiableSet.
+            // This causes Kryo to fail when deserializing a GenericRecord, See HUDI-5484.
+            // We should avoid using GenericRecord and convert GenericRecord into a serializable type.
+            .setMinValue(wrapValueIntoAvro(
+                isMinValueDateWrapper ? unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE), minValueWrapperClassName)
+                    : unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))))
+            .setMaxValue(wrapValueIntoAvro(isMaxValueDateWrapper ? unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE), maxValueWrapperClassName)
+                : unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))))
+            .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
+            .setNullCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_NULL_COUNT))
+            .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))
+            .setTotalUncompressedSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE))
+            .setIsDeleted((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_DELETED))
+            .setIsTightBound((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_TIGHT_BOUND))
+            .build();
+      } catch (Throwable e) {
+        System.out.println("adfasdf");
+        throw e;
+      }
     }
   }
 

@@ -572,13 +572,13 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertTrue(validateDataTypeForPartitionStats("floatField", schema));
     assertTrue(validateDataTypeForPartitionStats("doubleField", schema));
     assertTrue(validateDataTypeForPartitionStats("longField", schema));
-    assertTrue(validateDataTypeForPartitionStats("bytesField", schema));
     assertTrue(validateDataTypeForPartitionStats("unionIntField", schema));
 
-    // Test for complex fields
+    // Test for unsupported fields
     assertFalse(validateDataTypeForPartitionStats("arrayField", schema));
     assertFalse(validateDataTypeForPartitionStats("mapField", schema));
     assertFalse(validateDataTypeForPartitionStats("structField", schema));
+    assertFalse(validateDataTypeForPartitionStats("bytesField", schema));
 
     // Test for logical types
     Schema dateFieldSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
@@ -586,6 +586,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .fields()
         .name("dateField").type(dateFieldSchema).noDefault()
         .endRecord();
-    assertFalse(validateDataTypeForPartitionStats("dateField", schema));
+    assertTrue(validateDataTypeForPartitionStats("dateField", schema));
   }
 }
