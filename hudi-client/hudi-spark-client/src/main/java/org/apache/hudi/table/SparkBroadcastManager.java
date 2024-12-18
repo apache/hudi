@@ -83,11 +83,16 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     SQLConf sqlConf = hoodieSparkEngineContext.getSqlContext().sessionState().conf();
     JavaSparkContext jsc = hoodieSparkEngineContext.jsc();
 
+    // Prepare
     boolean returningBatch = sqlConf.parquetVectorizedReaderEnabled();
     scala.collection.immutable.Map<String, String> options =
         scala.collection.immutable.Map$.MODULE$.<String, String>empty()
             .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), Boolean.toString(returningBatch)));
-    Map<String, String> schemaEvolutionConfigs = getSchemaEvolutionConfigs(metaClient);
+    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
+    InstantFileNameGenerator fileNameGenerator = metaClient.getTimelineLayout().getInstantFileNameGenerator();
+    HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
+    Map<String, String> schemaEvolutionConfigs =
+        getSchemaEvolutionConfigs(resolver, timeline, fileNameGenerator, metaClient.getBasePath().toString());
 
     // Broadcast: SQLConf.
     sqlConfBroadcast = jsc.broadcast(sqlConf);
@@ -143,16 +148,16 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     return (new HadoopStorageConfiguration(hadoopConf).getInline()).unwrap();
   }
 
-  static Map<String, String> getSchemaEvolutionConfigs(HoodieTableMetaClient metaClient) {
-    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
-    Option<InternalSchema> internalSchemaOpt = resolver.getTableInternalSchemaFromCommitMetadata();
+  static Map<String, String> getSchemaEvolutionConfigs(TableSchemaResolver schemaResolver,
+                                                       HoodieTimeline timeline,
+                                                       InstantFileNameGenerator fileNameGenerator,
+                                                       String basePath) {
+    Option<InternalSchema> internalSchemaOpt = schemaResolver.getTableInternalSchemaFromCommitMetadata();
     Map<String, String> configs = new HashMap<>();
     if (internalSchemaOpt.isPresent()) {
-      InstantFileNameGenerator fileNameGenerator = metaClient.getTimelineLayout().getInstantFileNameGenerator();
-      HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
       List<String> instantFiles = timeline.getInstants().stream().map(fileNameGenerator::getFileName).collect(Collectors.toList());
       configs.put(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, String.join(",", instantFiles));
-      configs.put(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath().toString());
+      configs.put(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, basePath);
     }
     return configs;
   }
