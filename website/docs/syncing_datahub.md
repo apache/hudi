@@ -9,8 +9,26 @@ obeservability, federated governance, etc.
 Since Hudi 0.11.0, you can now sync to a DataHub instance by setting `DataHubSyncTool` as one of the sync tool classes
 for `HoodieStreamer`.
 
-The target Hudi table will be sync'ed to DataHub as a `Dataset`. The Hudi table's avro schema will be sync'ed, along
-with the commit timestamp when running the sync.
+The target Hudi table will be sync'ed to DataHub as a `Dataset`, which will be created with the following properties:
+
+* Hudi table properties and partitioning information
+* Spark-related properties
+* User-defined properties
+* The last commit and the last commit completion timestamps
+
+Additionally, the `Dataset` object will include the following metadata:
+
+* sub-type as `Table`
+* browse path
+* parent container
+* Avro schema
+* optionally, attached with a `Domain` object
+
+Also, the parent database will be sync'ed to DataHub as a `Container`, including the following metadata:
+
+* sub-type as `Database`
+* browse paths
+* optionally, attached with a `Domain` object
 
 ### Configurations
 
@@ -26,6 +44,11 @@ to `hoodie.meta.sync.datahub.emitter.supplier.class`.
 By default, the sync config's database name and table name will be used to make the target `Dataset`'s URN.
 Subclass `HoodieDataHubDatasetIdentifier` and set it to `hoodie.meta.sync.datahub.dataset.identifier.class` to customize
 the URN creation.
+
+Optionally, sync'ed `Dataset` and `Container` objects can be attached with a `Domain` object. To do this, set
+`hoodie.meta.sync.datahub.domain.name` to a valid `Domain` URN. Also, sync'ed `Dataset` can be attached with 
+user defined properties. To do this, set `hoodie.meta.sync.datahub.table.properties` to a comma-separated key-value
+string (_eg_ `key1=val1,key2=val2`).
 
 ### Example
 
