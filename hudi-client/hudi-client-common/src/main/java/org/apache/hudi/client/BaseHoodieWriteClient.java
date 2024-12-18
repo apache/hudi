@@ -55,6 +55,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -568,6 +569,30 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      if (metrics.getClusteringInstantTimerCtx() != null) {
+        long durationInMs = metrics.getDurationInMs(metrics.getClusteringInstantTimerCtx().stop());
+        // Compute Metrics
+        Set<String> validActions = CollectionUtils.createSet(HoodieMetrics.CLUSTERTING_INSTANT_ACTION);
+        HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+        HoodieTimeline inflightAndRequested = activeTimeline.filterInflightsAndRequested()
+                .filter(instant -> validActions.contains(instant.getAction()));
+        long pendingClusteringInstantCount = Long.valueOf(inflightAndRequested.countInstants());
+        long earliestInflightClusteringInstant = 0L;
+        Option<HoodieInstant> firstInstant = inflightAndRequested.firstInstant();
+        if (firstInstant.isPresent()) {
+          earliestInflightClusteringInstant = Long.valueOf(firstInstant.get().requestedTime());
+        }
+
+        HoodieTimeline completed = activeTimeline.filterCompletedInstants()
+            .filter(instant -> validActions.contains(instant.getAction()));
+        long latestCompletedClusteringInstant = 0L;
+        Option<HoodieInstant> lastInstant = completed.lastInstant();
+        if (lastInstant.isPresent()) {
+          latestCompletedClusteringInstant = Long.valueOf(lastInstant.get().requestedTime());
+        }
+        metrics.updateTimeLineClusteringInstantMetrics(durationInMs, earliestInflightClusteringInstant, latestCompletedClusteringInstant,
+            pendingClusteringInstantCount);
+      }
     } finally {
       this.heartbeatClient.stop(instantTime);
     }

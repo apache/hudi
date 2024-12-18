@@ -36,7 +36,6 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.metrics.FlinkTimeLineMetrics;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
@@ -163,8 +162,6 @@ public class StreamWriteOperatorCoordinator
    */
   private CkpMetadata ckpMetadata;
 
-  private FlinkTimeLineMetrics flinkTimeLineMetrics;
-
   /**
    * The client id heartbeats.
    */
@@ -212,7 +209,6 @@ public class StreamWriteOperatorCoordinator
     if (OptionsResolver.isMultiWriter(conf)) {
       initClientIds(conf);
     }
-    registerMetrics();
   }
 
   @Override
@@ -591,8 +587,6 @@ public class StreamWriteOperatorCoordinator
         reset();
         this.ckpMetadata.commitInstant(instant);
         LOG.info("Commit instant [{}] success!", instant);
-        this.flinkTimeLineMetrics.updateTimeLineMetrics(this.writeClient.getHoodieTable().getActiveTimeline());
-        LOG.info("Update timeline metrics.");
       } else {
         throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
       }
@@ -702,10 +696,5 @@ public class StreamWriteOperatorCoordinator
     public static TableState create(Configuration conf) {
       return new TableState(conf);
     }
-  }
-
-  public void registerMetrics() {
-    this.flinkTimeLineMetrics = new FlinkTimeLineMetrics(context.metricGroup());
-    this.flinkTimeLineMetrics.registerMetrics();
   }
 }
