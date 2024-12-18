@@ -32,7 +32,6 @@ import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.WriteHandleFactory;
-import org.apache.hudi.table.ConsistentHashingBucketInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.Partitioner;
@@ -49,28 +48,48 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * A partitioner for (consistent hashing) bucket index used in bulk_insert
  */
-public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexPartitioner<T> implements ConsistentHashingBucketInsertPartitioner {
+public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexPartitioner<T> {
 
-  private final Map<String, List<ConsistentHashingNode>> hashingChildrenNodes;
+  private Map<String/*partition*/, List<ConsistentHashingNode/*pending resizing related child nodes*/>> hashingChildrenNodes;
 
   // mark if this partitioner is used for writing to uncommitted buckets. Only for case that clustering service executes bucket resizing.
   private boolean isExecutingClustering = false;
-
-  public RDDConsistentBucketBulkInsertPartitioner(HoodieTable table,
-                                                  Map<String, String> strategyParams,
-                                                  boolean preserveHoodieMetadata) {
-    super(table,
-        strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null),
-        preserveHoodieMetadata);
-    ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
-        "Consistent hash bucket index doesn't support CoW table");
-    this.hashingChildrenNodes = new HashMap<>();
-  }
 
   public RDDConsistentBucketBulkInsertPartitioner(HoodieTable table) {
     this(table, Collections.emptyMap(), false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSparkConsistentBucketIndex,
         "RDDConsistentBucketPartitioner can only be used together with consistent hashing bucket index");
+  }
+
+  public RDDConsistentBucketBulkInsertPartitioner(HoodieTable table,
+                                                  Map<String, String> strategyParams,
+                                                  boolean preserveHoodieMetadata) {
+    this(table, strategyParams, preserveHoodieMetadata, null);
+  }
+
+  /**
+   * Constructor of RDDConsistentBucketBulkInsertPartitioner.
+   * @param hashingChildrenNodes children nodes for clustering, only used in executing clustering
+   */
+  public RDDConsistentBucketBulkInsertPartitioner(HoodieTable table,
+                                                  Map<String, String> strategyParams,
+                                                  boolean preserveHoodieMetadata, Map<String, List<ConsistentHashingNode>> hashingChildrenNodes) {
+    super(table,
+        strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null),
+        preserveHoodieMetadata);
+    ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
+        "Consistent hash bucket index doesn't support CoW table");
+    if (hashingChildrenNodes != null) {
+      /**
+       * Set pending consistent hashing for partition.
+       * The bulk insert will directly use the pending metadata as the consistent hash metadata for writing data to after-resizing buckets.
+       * NOTE: Only used in the case of executing bulk insert.
+       */
+      ValidationUtils.checkArgument(hashingChildrenNodes.values().stream().flatMap(List::stream).noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL),
+          "children nodes should not be tagged as NORMAL");
+      this.hashingChildrenNodes = hashingChildrenNodes;
+      this.isExecutingClustering = true;
+    }
   }
 
   /**
@@ -102,13 +121,6 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
     });
   }
 
-  @Override
-  public void addHashingChildrenNodes(String partition, List<ConsistentHashingNode> nodes) {
-    ValidationUtils.checkState(nodes.stream().noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL), "children nodes should not be tagged as NORMAL");
-    hashingChildrenNodes.put(partition, nodes);
-    this.isExecutingClustering = true;
-  }
-
   /**
    * Get (construct) the bucket identifier of the given partition
    */
@@ -121,7 +133,7 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
     } else {
       // for normal bulk insert
-      ValidationUtils.checkState(!hashingChildrenNodes.containsKey(partition), "children nodes should not be provided for normal bulk insert");
+      ValidationUtils.checkState(hashingChildrenNodes == null, "children nodes should not be provided for normal bulk insert");
     }
     return new ConsistentBucketIdentifier(metadata);
   }
