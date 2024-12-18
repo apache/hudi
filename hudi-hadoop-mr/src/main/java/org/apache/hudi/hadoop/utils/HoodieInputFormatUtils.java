@@ -436,44 +436,6 @@ public class HoodieInputFormatUtils {
     return returns;
   }
 
-  /**
-   * Takes in a list of filesStatus and a list of table metadata. Groups the files status list
-   * based on given table metadata.
-   *
-   * @param fileStatuses
-   * @param fileExtension
-   * @param metaClientList
-   * @return
-   * @throws IOException
-   */
-  public static Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatusForSnapshotPaths(
-      FileStatus[] fileStatuses, String fileExtension, Collection<HoodieTableMetaClient> metaClientList) {
-    // This assumes the paths for different tables are grouped together
-    Map<HoodieTableMetaClient, List<FileStatus>> grouped = new HashMap<>();
-    HoodieTableMetaClient metadata = null;
-    for (FileStatus status : fileStatuses) {
-      Path inputPath = status.getPath();
-      if (!inputPath.getName().endsWith(fileExtension)) {
-        //FIXME(vc): skip non data files for now. This wont be needed once log file name start
-        // with "."
-        continue;
-      }
-      if ((metadata == null) || (!inputPath.toString().contains(metadata.getBasePath().toString()))) {
-        for (HoodieTableMetaClient metaClient : metaClientList) {
-          if (inputPath.toString().contains(metaClient.getBasePath().toString())) {
-            metadata = metaClient;
-            if (!grouped.containsKey(metadata)) {
-              grouped.put(metadata, new ArrayList<>());
-            }
-            break;
-          }
-        }
-      }
-      grouped.get(metadata).add(status);
-    }
-    return grouped;
-  }
-
   public static Map<HoodieTableMetaClient, List<Path>> groupSnapshotPathsByMetaClient(
       Collection<HoodieTableMetaClient> metaClientList,
       List<Path> snapshotPaths
@@ -481,9 +443,14 @@ public class HoodieInputFormatUtils {
     Map<HoodieTableMetaClient, List<Path>> grouped = new HashMap<>();
     metaClientList.forEach(metaClient -> grouped.put(metaClient, new ArrayList<>()));
     for (Path path : snapshotPaths) {
+      String inputPathStr = path.toString();
       // Find meta client associated with the input path
-      metaClientList.stream().filter(metaClient -> path.toString().contains(metaClient.getBasePath().toString()))
-          .forEach(metaClient -> grouped.get(metaClient).add(path));
+      Option<HoodieTableMetaClient> matchedMetaClient = Option.fromJavaOptional(metaClientList.stream()
+          .filter(metaClient -> {
+            String basePathStr = metaClient.getBasePath().toString();
+            return inputPathStr.equals(basePathStr) || inputPathStr.startsWith(basePathStr + "/"); })
+          .findFirst());
+      matchedMetaClient.ifPresent(metaClient -> grouped.get(metaClient).add(path));
     }
     return grouped;
   }
