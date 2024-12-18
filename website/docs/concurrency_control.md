@@ -342,4 +342,3 @@ It is **NOT** recommended to use the same instance of the write client to perfor
 
 * [Hands on Lab with using DynamoDB as lock table for Apache Hudi Data Lakes](https://youtu.be/JP0orl9_0yQ)
 * [Non Blocking Concurrency Control Flink Demo](/blog/2024/12/06/non-blocking-concurrency-control)
-* [Multi-writer support with Apache Hudi](https://medium.com/@simpsons/multi-writer-support-with-apache-hudi-e1b75dca29e6)
