@@ -34,7 +34,7 @@ class TestSparkBroadcastManager {
   @Test
   void testGetStorageConfiguration() {
     Configuration config = new Configuration(false);
-    Configuration createdConfig = SparkBroadcastManager.getStorageConfiguration(config);
+    Configuration createdConfig = SparkBroadcastManager.getHadoopConfiguration(config);
     assertFalse(createdConfig.getBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED().key(), true));
     assertFalse(createdConfig.getBoolean(SQLConf.CASE_SENSITIVE().key(), true));
     assertFalse(createdConfig.getBoolean(SQLConf.PARQUET_BINARY_AS_STRING().key(), true));
