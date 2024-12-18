@@ -99,10 +99,9 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     // Broadcast: Configuration.
     Configuration configs = getHadoopConfiguration(jsc.hadoopConfiguration());
     addSchemaEvolutionConfigs(configs, schemaEvolutionConfigs);
-    configurationBroadcast = jsc.broadcast(
-    // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
-        new SerializableConfiguration(configs));
+    configurationBroadcast = jsc.broadcast(new SerializableConfiguration(configs));
     // Broadcast: ParquetReader.
+    // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
     parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());
