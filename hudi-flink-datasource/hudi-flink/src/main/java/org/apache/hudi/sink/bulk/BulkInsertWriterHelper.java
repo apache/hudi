@@ -165,15 +165,6 @@ public class BulkInsertWriterHelper {
   }
 
   public void close() throws IOException {
-    for (HoodieRowDataCreateHandle rowCreateHandle : handles.values()) {
-      LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
-      writeStatusList.add(closeWriteHandle(rowCreateHandle));
-    }
-    handles.clear();
-    handle = null;
-  }
-
-  public void close1() throws IOException {
     ExecutorService executorService = Executors.newFixedThreadPool(handles.size());
     allOf(handles.values().stream()
         .map(rowCreateHandle -> CompletableFuture.supplyAsync(() -> {
