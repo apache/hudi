@@ -354,7 +354,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable aggregating stats for each column at the storage partition level.");
 
@@ -758,7 +758,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
-      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, getDefaultColStatsEnable(engineType));
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, getDefaultPartitionStatsEnable(engineType));
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
     }

@@ -39,21 +39,16 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
-import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
-import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,14 +97,14 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     String fileName = "file.parquet";
     String targetColName = "c1";
 
-    Date minDate = new Date(1000*60*60*10);
-    Date maxDate = new Date(1000*60*60*60);
+    Date minDate = new Date(1000 * 60 * 60 * 10);
+    Date maxDate = new Date(1000 * 60 * 60 * 60);
 
     HoodieColumnRangeMetadata<Comparable> expectedColStats =
         HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, minDate, maxDate, 5, 1000, 123456, 123456);
 
     // let's ensure this record gets serialized as DateWrapper
-    assertEquals(DateWrapper.class.getCanonicalName(), ((HoodieMetadataPayload)HoodieMetadataPayload.createColumnStatsRecords("p1", Collections.singletonList(expectedColStats), false)
+    assertEquals(DateWrapper.class.getCanonicalName(), ((HoodieMetadataPayload) HoodieMetadataPayload.createColumnStatsRecords("p1", Collections.singletonList(expectedColStats), false)
         .collect(Collectors.toList()).get(0).getData()).getColumnStatMetadata().get().getMinValue().getClass().getCanonicalName());
 
     // create mdt records
@@ -131,15 +126,15 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     String filePath = writeStatus.getStat().getPath();
 
     // read the hfile using base file reader.
-    StoragePath baseFilePath = new StoragePath(mdtMetaClient.getBasePath()+"/"+filePath);
+    StoragePath baseFilePath = new StoragePath(mdtMetaClient.getBasePath() + "/" + filePath);
     HoodieSeekingFileReader baseFileReader = (HoodieSeekingFileReader<?>) HoodieIOFactory.getIOFactory(mdtMetaClient.getStorage())
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, baseFilePath);
 
     ClosableIterator itr = baseFileReader.getRecordIterator();
     List<HoodieRecord<HoodieMetadataPayload>> allRecords = new ArrayList<>();
-    while(itr.hasNext()) {
-      GenericRecord genericRecord = (GenericRecord) ((HoodieRecord)itr.next()).getData();
+    while (itr.hasNext()) {
+      GenericRecord genericRecord = (GenericRecord) ((HoodieRecord) itr.next()).getData();
       HoodieRecord<HoodieMetadataPayload> mdtRec = SpillableMapUtils.convertToHoodieRecordPayload(genericRecord,
           mdtWriteConfig.getPayloadClass(), mdtWriteConfig.getPreCombineField(),
           Pair.of(mdtMetaClient.getTableConfig().getRecordKeyFieldProp(), mdtMetaClient.getTableConfig().getPartitionFieldProp()),
@@ -149,7 +144,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
 
     // validate the min and max values.
     HoodieMetadataColumnStats actualColStatsMetadata = allRecords.get(0).getData().getColumnStatMetadata().get();
-    HoodieMetadataColumnStats expectedColStatsMetadata = ((HoodieMetadataPayload)HoodieMetadataPayload.createColumnStatsRecords("p1", Collections.singletonList(expectedColStats), false)
+    HoodieMetadataColumnStats expectedColStatsMetadata = ((HoodieMetadataPayload) HoodieMetadataPayload.createColumnStatsRecords("p1", Collections.singletonList(expectedColStats), false)
         .collect(Collectors.toList()).get(0).getData()).getColumnStatMetadata().get();
     assertEquals(expectedColStatsMetadata.getMinValue().getClass().getCanonicalName(), actualColStatsMetadata.getMinValue().getClass().getCanonicalName());
     assertEquals(expectedColStatsMetadata.getMinValue(), actualColStatsMetadata.getMinValue());
@@ -170,17 +165,6 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return writeStatuses;
-  }
-
-  private WriteStatus writeAndGetWriteStatus(Dataset<Row> inputRows, HoodieRowCreateHandle handle)
-      throws Exception {
-    List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(inputRows, SparkDatasetTestUtils.ENCODER);
-    // issue writes
-    for (InternalRow internalRow : internalRows) {
-      handle.write(internalRow);
-    }
-    // close the create handle
-    return handle.close();
   }
 
   class PhoneyTaskContextSupplier extends TaskContextSupplier {

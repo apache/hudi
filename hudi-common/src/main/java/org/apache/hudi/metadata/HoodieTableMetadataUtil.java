@@ -27,7 +27,6 @@ import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
-import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -122,6 +121,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -245,17 +245,19 @@ public class HoodieTableMetadataUtil {
       // with the values from this record
       targetFields.forEach(field -> {
         ColumnStats colStats = allColumnStats.computeIfAbsent(field.name(), ignored -> new ColumnStats());
-
         Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(recordSchema, field.name());
         Object fieldValue;
         if (record.getRecordType() == HoodieRecordType.AVRO) {
           fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{field.name()}, recordSchema, false)[0];
-          if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType().getName().equals("date")) {
+          if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType().getName().equals("date")) {
             fieldValue = java.sql.Date.valueOf(fieldValue.toString());
           }
 
         } else if (record.getRecordType() == HoodieRecordType.SPARK) {
           fieldValue = record.getColumnValues(recordSchema, new String[]{field.name()}, false)[0];
+          if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType().getName().equals("date")) {
+            fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer)fieldValue).toString());
+          }
         } else {
           throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
         }
@@ -2571,14 +2573,15 @@ public class HoodieTableMetadataUtil {
             .map(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, validColumnsToIndex, tableSchema))
             .collect(Collectors.toList());
         // convert to payload and reconstruct the stats to maintain parity for certain data types where avro wrapping and unwrapping could change the types.
-        List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = rawFileColumnMetadata.stream().map(new Function<List<HoodieColumnRangeMetadata<Comparable>>, List<HoodieColumnRangeMetadata<Comparable>>>() {
-          @Override
-          public List<HoodieColumnRangeMetadata<Comparable>> apply(List<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadata) {
-            return HoodieMetadataPayload.createColumnStatsRecords(partitionName, hoodieColumnRangeMetadata, false).map(record -> {
-              return HoodieColumnRangeMetadata.fromColumnStats((((HoodieMetadataPayload) record.getData()).getColumnStatMetadata().get()));
+        List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = rawFileColumnMetadata.stream()
+            .map(new Function<List<HoodieColumnRangeMetadata<Comparable>>, List<HoodieColumnRangeMetadata<Comparable>>>() {
+              @Override
+              public List<HoodieColumnRangeMetadata<Comparable>> apply(List<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadata) {
+                return HoodieMetadataPayload.createColumnStatsRecords(partitionName, hoodieColumnRangeMetadata, false).map(record -> {
+                  return HoodieColumnRangeMetadata.fromColumnStats((((HoodieMetadataPayload) record.getData()).getColumnStatMetadata().get()));
+                }).collect(toList());
+              }
             }).collect(toList());
-          }
-        }).collect(toList());
 
         if (shouldScanColStatsForTightBound) {
           checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
@@ -2591,18 +2594,19 @@ public class HoodieTableMetadataUtil {
               .filter(Objects::nonNull)
               .collect(Collectors.toSet());
           // Fetch metadata table COLUMN_STATS partition records for above files
-          List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata.getRecordsByKeyPrefixes(generateKeyPrefixes(validColumnsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
+          List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
+              .getRecordsByKeyPrefixes(generateKeyPrefixes(validColumnsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
               // schema and properties are ignored in getInsertValue, so simply pass as null
               .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
               .filter(Option::isPresent)
               .map(colStatsOpt -> colStatsOpt.get())
               .filter(stats -> fileNames.contains(stats.getFileName()))
               .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
-            if (!partitionColumnMetadata.isEmpty()) {
-              // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
-              // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
-              fileColumnMetadata.add(partitionColumnMetadata);
-            }
+          if (!partitionColumnMetadata.isEmpty()) {
+            // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
+            // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
+            fileColumnMetadata.add(partitionColumnMetadata);
+          }
         }
 
         return collectAndProcessColumnMetadata(fileColumnMetadata, partitionName, shouldScanColStatsForTightBound).iterator();
@@ -2622,6 +2626,7 @@ public class HoodieTableMetadataUtil {
   @VisibleForTesting
   static boolean validateDataTypeForPartitionStats(String columnToIndex, Schema tableSchema) {
     Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(tableSchema, columnToIndex);
+    return isColumnTypeSupported(fieldSchema, Option.of(HoodieRecordType.SPARK));
     // Exclude fields based on logical type
     /*if ((fieldSchema.getType() == Schema.Type.INT || fieldSchema.getType() == Schema.Type.LONG)
         && fieldSchema.getLogicalType() != null) {
@@ -2631,7 +2636,7 @@ public class HoodieTableMetadataUtil {
       return !logicalType.equals("date") && !logicalType.equals("timestamp-millis") && !logicalType.equals("timestamp-micros") && !logicalType.equals("time-millis")
           && !logicalType.equals("time-micros") && !logicalType.equals("local-timestamp-millis") && !logicalType.equals("local-timestamp-micros");
     }*/
-    return true;
+    //return true;
     // Include other supported primitive types
     //return SUPPORTED_TYPES_PARTITION_STATS.contains(fieldSchema.getType());
   }
