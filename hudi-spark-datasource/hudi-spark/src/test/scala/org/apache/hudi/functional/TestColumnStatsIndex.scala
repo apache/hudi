@@ -24,7 +24,7 @@ import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
-import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieTableType}
+import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.ParquetUtils
@@ -62,6 +62,9 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 @Tag("functional")
 class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
+  val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+    HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
+
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParams"))
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
@@ -77,7 +80,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      "hoodie.compact.inline.max.delta.commits" -> "10"
     ) ++ metadataOpts
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
@@ -94,7 +98,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
     //       deferred updates), diverging from COW
-    val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+    var expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
       "index/colstats/cow-updated2-column-stats-index-table.json"
     } else {
       "index/colstats/mor-updated2-column-stats-index-table.json"
@@ -105,6 +109,56 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append))
+
+    metaClient.reloadTableConfig()
+    validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
+
+    // update list of columns to explicit list of cols.
+    val metadataOpts1 = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "c1,c2,c3,c5,c6,c7,c8" // ignore c4
+    )
+
+    expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-updated3-column-stats-index-table.json"
+    } else {
+      "index/colstats/mor-updated3-column-stats-index-table.json"
+    }
+
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
+      dataSourcePath = "index/colstats/update5-input-table-json",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append))
+
+    metaClient.reloadTableConfig()
+    validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c6","c7","c8"))
+
+    // lets explicitly override again. ignore c6
+    // update list of columns to explicit list of cols.
+    val metadataOpts2 = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "c1,c2,c3,c5,c7,c8" // ignore c4,c6
+    )
+
+    expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-updated4-column-stats-index-table.json"
+    } else {
+      "index/colstats/mor-updated4-column-stats-index-table.json"
+    }
+
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts2, commonOpts,
+      dataSourcePath = "index/colstats/update6-input-table-json",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append))
+
+    metaClient.reloadTableConfig()
+    validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c7","c8"))
   }
 
   /**
@@ -136,6 +190,10 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = "index/colstats/cow-table-nested.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite), true)
+
+      metaClient.reloadTableConfig()
+      validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+        HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8"))
   }
 
   @ParameterizedTest
@@ -249,6 +307,9 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
+
+    metaClient.reloadTableConfig()
+    validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
   }
 
   @ParameterizedTest
@@ -325,6 +386,9 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
+
+    metaClient.reloadTableConfig()
+    validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
   }
 
   def simulateFailureForLatestCommit(tableType: HoodieTableType, partitionCol: String) : Unit = {
