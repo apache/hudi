@@ -44,6 +44,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieOSSStorageStrategy;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -162,8 +164,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * If the file statuses are limited to a single partition, use {@link #addFilesToView(String, List)} instead.
    */
   public List<HoodieFileGroup> addFilesToView(List<StoragePathInfo> statuses) {
+    HoodieStorage storage = metaClient.getStorage();
+    HashMap<String, String> config = new HashMap<>();
+    config.put(HoodieOSSStorageStrategy.TABLE_NAME, metaClient.getTableConfig().getTableName());
     Map<String, List<StoragePathInfo>> statusesByPartitionPath = statuses.stream()
-        .collect(Collectors.groupingBy(fileStatus -> FSUtils.getRelativePartitionPath(metaClient.getBasePath(), fileStatus.getPath().getParent())));
+        .collect(Collectors.groupingBy(fileStatus ->
+            storage.getRelativePath(fileStatus.getPath().getParent().getPathWithoutSchemeAndAuthority().toUri().getPath(), config)
+            .toUri().getPath()));
     return statusesByPartitionPath.entrySet().stream().map(entry -> addFilesToView(entry.getKey(), entry.getValue()))
         .flatMap(List::stream).collect(Collectors.toList());
   }
@@ -376,11 +383,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         // Not loaded yet
         try {
           LOG.debug("Building file system view for partitions: " + partitionSet);
-
+          HoodieStorage storage = metaClient.getStorage();
+          HashMap<String, String> config = new HashMap<>();
+          config.put(HoodieOSSStorageStrategy.TABLE_BASE_PATH, metaClient.getBasePath().getPathWithoutSchemeAndAuthority().toUri().getPath());
           // Pairs of relative partition path and absolute partition path
           List<Pair<String, StoragePath>> absolutePartitionPathList = partitionSet.stream()
               .map(partition -> Pair.of(
-                  partition, FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition)))
+                  partition, storage.getAllLocations(partition, config).stream().findFirst().get()))
               .collect(Collectors.toList());
           long beginLsTs = System.currentTimeMillis();
           Map<Pair<String, StoragePath>, List<StoragePathInfo>> pathInfoMap =
