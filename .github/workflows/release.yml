@@ -20,6 +20,7 @@ jobs:
       matrix:
         include:
           - sparkProfile: "spark3.2"
+          - sparkProfile: "spark3.4"
           - sparkProfile: "spark3.5"
     steps:
       - uses: actions/checkout@v2
@@ -55,6 +56,8 @@ jobs:
         run: |
           if [ "$SPARK_PROFILE" == "spark3.5" ]; then
             echo "VERSION=$(echo $RELEASE_BRANCH | sed -e 's/release-v//')-spark35" >> $GITHUB_ENV
+          elif [ "$SPARK_PROFILE" == "spark3.4" ]; then
+            echo "VERSION=$(echo $RELEASE_BRANCH | sed -e 's/release-v//')-spark34" >> $GITHUB_ENV
           else
             echo "VERSION=$(echo $RELEASE_BRANCH | sed -e 's/release-v//')" >> $GITHUB_ENV
           fi
