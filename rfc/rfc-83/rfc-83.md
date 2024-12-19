@@ -76,7 +76,7 @@ HoodieCleanerPlan.avsc
 }
 ```
 
-`EarliestCommitToReta` in clean commit meta
+`EarliestCommitToRetan` in clean commit meta
 
 HoodieCleanMetadata.avsc
 
@@ -101,13 +101,9 @@ newInstantToRetain is computed based on Clean configs such as `hoodie.clean.comm
 
 ## Design And Implementation
 
-### Current Table Service Plan AND Execute Logic
-
-![currentTableServiceDiagram.png](currentTableServiceDiagram.png)
-
 ### Changes in TableService Metadata Schema
 
-Add new column `earliestInstantToRetain` in Clustering/Compaction plan same as `earliestInstantToRetain` in clean plan
+Add new column `earliestInstantToRetain` (default null) in Clustering/Compaction plan same as `earliestInstantToRetain` in clean plan
 
 ```text
     {
@@ -134,71 +130,55 @@ Add new column `earliestInstantToRetain` in Clustering/Compaction plan same as `
     },
 ```
 
-Add `EarliestCommitToReta` in HoodieCommitMetadata extra meta MAP for clustering and compaction operation which are all written-commit
-
-```text
-{"name": "earliestCommitToRetain", "type": "string"}
-```
-
-We also need a unified interface/abstract-class to control the Plan behavior and Commit behavior of the TableService.
+We also need a unified interface/abstract-class to control the Plan behavior of the TableService including clustering and compaction.
 
 ### Abstraction
 
-Use `TableServiceCommitter` to control table service related commit action.
+Use `BaseTableServicePlanStrategy` to control the behavior of getting partitions, filter partitions and generate table service plan etc.
+
+Since we want to implement different strategies to control partition retrieval, partition filtering, and plan generation,
+the first step is to use an abstraction to consolidate these logics into a strategy.
 
 ```java
-package org.apache.hudi.table.action;
-
-public interface TableServiceCommitter<R> {
-
-  /**
-   * Build table service related commit metadata, 
-   * Especially `EarliestCommitToReta` column when enable incremental table service.
-   * @return metadata to commit
-   */
-  R buildCommitMeta();
-}
-```
-
-Use `TableServiceBaseActionExecutor` to control the behavior of getting partitions to be performed into current table service.
-
-```java
-package org.apache.hudi.table.action;
+package org.apache.hudi.table;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
 import java.util.List;
 
-public abstract class TableServiceBaseActionExecutor<T, I, K, O, R> extends BaseActionExecutor<T, I, K, O, R> implements TableServiceCommitter<R> {
-
-  public TableServiceBaseActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
-    super(context, config, table, instantTime);
-  }
+public abstract class BaseTableServicePlanStrategy<R,S> {
 
   /**
-   * Returns the earliest commit to retain and will record in meta as new EarliestCommitToRetain
-   */
-  public Option<HoodieInstant> getEarliestCommitToRetain() {
-    return null;
-  }
-
-  /**
-   * get partitions to be performed in current table service
-   * @param instantToRetain
-   * @param type
+   * Generate table service plan based on given instant.
    * @return
-   * @throws IOException
    */
-  public List<String> getPartitionPaths(Option<HoodieInstant> instantToRetain, TableServiceType type) {
-    return null;
-  }
+  public abstract R generateTableServicePlan(Option<String> instant) throws IOException;
+
+  /**
+   * Generate table service plan based on given instant.
+   * @return
+   */
+  public abstract R generateTableServicePlan(List<S> operations) throws IOException;
+
+
+  /**
+   * Get partition paths to be performed for current table service.
+   * @param metaClient
+   * @return
+   */
+  public abstract List<String> getPartitionPaths(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient, HoodieEngineContext engineContext);
+
+  /**
+   * Filter partition path for given fully paths.
+   * @param metaClient
+   * @return
+   */
+  public abstract List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths);
 
   /**
    * Get incremental partitions from EarliestCommitToRetain to instantToRetain
@@ -208,50 +188,43 @@ public abstract class TableServiceBaseActionExecutor<T, I, K, O, R> extends Base
    * @return
    * @throws IOException
    */
-  private List<String> getIncrementalPartitionPaths(Option<HoodieInstant> instantToRetain, TableServiceType type) {
-    return null;
+  public List<String> getIncrementalPartitionPaths(Option<HoodieInstant> instantToRetain) {
+    throw new UnsupportedOperationException("Not support yet");
   }
 
   /**
-   * Get all table partitions related to current table
-   * @param instantToRetain
-   * @param type
-   * @param deleteEmptyCommit
-   * @return
-   * @throws IOException
+   * Returns the earliest commit to retain from instant meta
    */
-  private List<String> getAllPartitionPaths(Option<HoodieInstant> instantToRetain, TableServiceType type) {
-    return null;
+  public Option<HoodieInstant> getEarliestCommitToRetain() {
+    throw new UnsupportedOperationException("Not support yet");
   }
-
-  public R buildCommitMeta() {
-    return null;
-  }
-
 }
 
 ```
 
-### Optimize the inheritance relationship of Table Service
+Default action of `generateTableServicePlan`, `getPartitionPaths` and `filterPartitionPaths` API remains the same as it is now.
 
-![NewTableServiceDiagram.png](NewTableServiceDiagram.png)
+Let baseAbstraction `CompactionStrategy` and `ClusteringPlanStrategy` extends this `BaseTableServicePlanStrategy` which are
+1. `public abstract class CompactionStrategy extends BaseTableServicePlanStrategy<HoodieCompactionPlan, HoodieCompactionOperation> implements Serializable`
+2. `public abstract class ClusteringPlanStrategy<T,I,K,O> extends BaseTableServicePlanStrategy<Option<HoodieClusteringPlan>, HoodieClusteringGroup> implements Serializable`
 
-### Work Flow for Incremental Table Service
+**For Incremental Table Service including clustering and compaction, we will support a new IncrementalCompactionStrategy and 
+new IncrementalClusteringPlanStrategy**
 
-Table Service Planner
-1. Retrieve the instant recorded in the last completed table service commit as **INSTANT 1**.
+
+### Work Flow for Incremental Clustering/Compaction Strategy
+
+Table Service Planner with Incremental Clustering/Compaction Strategy
+1. Retrieve the instant recorded in the last table service `xxxx.requested` as **INSTANT 1**.
 2. Calculate the current instant to be processed as **INSTANT 2**.
 3. Obtain all partitions involved from **INSTANT 1** to **INSTANT 2** as incremental partitions and perform the table service plan operation.
 4. Record **INSTANT 2** in the table service plan.
 
-Table Service Executor
-1. Retrieve **INSTANT 2** from the table service plan.
-2. Execute the corresponding table service plan.
-3. Record **INSTANT 2** in the current table service commit. 
 
-For cleaning, record it inHoodieCleanMetadata#earliestInstantToRetain 
+### About archive
 
-For compaction and clustering, record it inHoodieCommitMetadata#extraMeta
+We record `EarliestCommitToRetain` in the TableService Request metadata file and use it as the basis for retrieving incremental partitions. 
+Therefore, when Incremental Table Service is enabled, we should always ensure that there is a Clustering/Compaction request metadata in the active timeline.
 
 ## Rollout/Adoption Plan
 
