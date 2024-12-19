@@ -18,33 +18,9 @@
 
 package org.apache.hudi.common.util.collection;
 
-import java.util.Iterator;
-import java.util.function.Function;
+import java.io.Closeable;
+import java.io.Serializable;
+import java.util.Map;
 
-/**
- * Iterator mapping elements of the provided source {@link Iterator} from {@code I} to {@code O}
- */
-public class MappingIterator<I, O> implements Iterator<O> {
-
-  protected final Iterator<I> source;
-  private final Function<I, O> mapper;
-
-  public MappingIterator(Iterator<I> source, Function<I, O> mapper) {
-    this.source = source;
-    this.mapper = mapper;
-  }
-
-  @Override
-  public boolean hasNext() {
-    return source.hasNext();
-  }
-
-  @Override
-  public O next() {
-    return mapper.apply(source.next());
-  }
-
-  public static <I, O> MappingIterator<I, O> wrap(Iterator source, Function mapper) {
-    return new MappingIterator(source, mapper);
-  }
+public interface AbstractExternalSpillableMap<T extends Serializable, R extends Serializable> extends Map<T, R>, Serializable, Closeable {
 }

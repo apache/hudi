@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -45,7 +44,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -74,12 +72,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * This results in two I/O passes over the log file.
  */
 @NotThreadSafe
-public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
-    implements Iterable<HoodieRecord>, Closeable {
+public class HoodieMergedLogRecordScanner extends HoodieLogRecordScanner {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordScanner.class);
-  // A timer for calculating elapsed time in millis
-  public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
   private final ExternalSpillableMap<String, HoodieRecord> records;
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
@@ -87,8 +82,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   // count of merged records in log
   private long numMergedRecordsInLog;
   private final long maxMemorySizeInBytes;
-  // Stores the total time taken to perform reading and merging of log blocks
-  private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -199,11 +192,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
 
   private void performScan() {
     // Do the scan and merge
-    timer.startTimer();
+    scanStart();
 
     scanInternal(Option.empty(), false);
 
-    this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
+    scanEnd();
     this.numMergedRecordsInLog = records.size();
 
     if (LOG.isInfoEnabled()) {
@@ -294,25 +287,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     }
   }
 
-  public long getTotalTimeTakenToReadAndMergeBlocks() {
-    return totalTimeTakenToReadAndMergeBlocks;
-  }
-
   @Override
   public void close() {
     if (records != null) {
       records.close();
     }
-  }
-
-  private static <T> HoodieRecord getLatestHoodieRecord(HoodieRecord<T> newRecord, HoodieRecord<T> combinedRecord, String key) {
-    HoodieRecord latestHoodieRecord =
-        combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
-
-    latestHoodieRecord.unseal();
-    latestHoodieRecord.setCurrentLocation(newRecord.getCurrentLocation());
-    latestHoodieRecord.seal();
-    return latestHoodieRecord;
   }
 
   /**
