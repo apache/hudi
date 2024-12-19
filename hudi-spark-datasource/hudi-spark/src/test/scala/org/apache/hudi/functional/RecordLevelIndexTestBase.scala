@@ -59,7 +59,8 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     RECORDKEY_FIELD.key -> "_row_key",
     PARTITIONPATH_FIELD.key -> "partition",
     PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15"
   ) ++ metadataOpts
 
   val secondaryIndexOpts = Map(

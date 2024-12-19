@@ -1702,11 +1702,12 @@ public class HoodieTableMetadataUtil {
   private static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType) {
     // if record type is set and if its AVRO, MAP, ARRAY and RECORD type is unsupported.
     if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
-      return (schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP);
+      return (schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
+          && schema.getType() != Schema.Type.ENUM);
     }
     // if record Type is not set or if recordType is SPARK then we cannot compare RECORD and ARRAY types in addition to MAP type
     return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
-        && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED; // HUDI-8585 will add support for BYTES and FIXED
+        && schema.getType() != Schema.Type.ENUM && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED; // HUDI-8585 will add support for BYTES and FIXED
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {

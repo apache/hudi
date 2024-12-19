@@ -99,6 +99,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
         checkAnswer(s"show indexes from default.$tableName")(
           Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("record_index", "record_index", "")
         )
 
@@ -110,6 +111,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"create index idx_name on $tableName (name)")
         checkAnswer(s"show indexes from default.$tableName")(
           Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("secondary_index_idx_name", "secondary_index", "name"),
           Seq("record_index", "record_index", "")
         )
@@ -123,6 +125,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         // Both indexes should be shown
         checkAnswer(s"show indexes from $tableName")(
           Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("secondary_index_idx_name", "secondary_index", "name"),
           Seq("secondary_index_idx_price", "secondary_index", "price"),
           Seq("record_index", "record_index", "")
@@ -132,6 +135,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         // show index shows only one index after dropping
         checkAnswer(s"show indexes from $tableName")(
           Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("secondary_index_idx_price", "secondary_index", "price"),
           Seq("record_index", "record_index", "")
         )
@@ -144,6 +148,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         checkAnswer(s"drop index idx_name on $tableName")()
         checkAnswer(s"show indexes from $tableName")(
           Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("secondary_index_idx_price", "secondary_index", "price"),
           Seq("record_index", "record_index", "")
         )
@@ -162,11 +167,13 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         checkAnswer(s"drop index idx_price on $tableName")()
         checkAnswer(s"show indexes from $tableName")(
           Seq("column_stats", "column_stats", ""),
+          Seq("partition_stats", "partition_stats", ""),
           Seq("record_index", "record_index", "")
         )
 
         // Drop the record index and show index should show no index
         checkAnswer(s"drop index record_index on $tableName")()
+        checkAnswer(s"drop index partition_stats on $tableName")()
         checkAnswer(s"drop index column_stats on $tableName")()
         checkAnswer(s"show indexes from $tableName")()
 
