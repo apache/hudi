@@ -231,15 +231,15 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     spark.read.json(spark.sparkContext.parallelize(records, 2))
   }
 
-  @Disabled("to be fixed")
+  @Test
   def testTimeTravelQuery(): Unit = {
     val dataGen = new HoodieTestDataGenerator()
     val metadataOpts: Map[String, String] = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ",
-      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "5",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "6",
     )
     val combinedOpts: Map[String, String] = partitionedCommonOpts ++ metadataOpts
 
@@ -258,7 +258,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
       .setBasePath(s"$basePath/.hoodie/metadata")
       .build
     val timelineT0 = metaClient.getActiveTimeline
-    assertEquals(2, timelineT0.countInstants())
+    assertEquals(4, timelineT0.countInstants())
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT0.lastInstant().get().getAction)
     val t0 = timelineT0.lastInstant().get().requestedTime
 
@@ -284,7 +284,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     //Validate T1
     val timelineT1 = metaClient.reloadActiveTimeline()
-    assertEquals(3, timelineT1.countInstants())
+    assertEquals(5, timelineT1.countInstants())
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT1.lastInstant().get().getAction)
     val t1 =  timelineT1.lastInstant().get().requestedTime
 
@@ -311,7 +311,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     //Validate T2
     val timelineT2 = metaClient.reloadActiveTimeline()
-    assertEquals(4, timelineT2.countInstants())
+    assertEquals(6, timelineT2.countInstants())
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT2.lastInstant().get().getAction)
     val t2 =  timelineT2.lastInstant().get().requestedTime
 
@@ -342,7 +342,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     //Validate T3
     val timelineT3 = metaClient.reloadActiveTimeline()
-    assertEquals(5, timelineT3.countInstants())
+    assertEquals(8, timelineT3.countInstants())
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT3.getInstants.get(5).getAction)
     assertEquals(HoodieTimeline.COMMIT_ACTION, timelineT3.lastInstant().get().getAction)
 
