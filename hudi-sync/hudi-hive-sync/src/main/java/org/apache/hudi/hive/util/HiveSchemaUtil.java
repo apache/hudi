@@ -446,8 +446,8 @@ public class HiveSchemaUtil {
     List<String> partitionFields = new ArrayList<>();
     for (String partitionKey : config.getSplitStrings(META_SYNC_PARTITION_FIELDS)) {
       String partitionKeyWithTicks = tickSurround(partitionKey);
-      partitionFields.add(new StringBuilder().append(partitionKeyWithTicks).append(" ")
-          .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
+      partitionFields.add(partitionKeyWithTicks + " "
+          + getPartitionKeyType(hiveSchema, partitionKeyWithTicks));
     }
 
     String partitionsStr = String.join(",", partitionFields);

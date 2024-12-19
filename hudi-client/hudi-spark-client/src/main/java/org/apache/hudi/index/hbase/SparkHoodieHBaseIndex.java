@@ -119,7 +119,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   private int maxQpsPerRegionServer;
   private long totalNumInserts;
   private int numWriteStatusWithInserts;
-  private static transient Thread shutdownThread;
+  private static Thread shutdownThread;
 
   /**
    * multiPutBatchSize will be computed and re-set in updateLocation if
@@ -691,7 +691,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
    * that are based on inserts in each WriteStatus.
    */
   public static class WriteStatusPartitioner extends Partitioner {
-    private int totalPartitions;
+    private final int totalPartitions;
     final Map<String, Integer> fileIdPartitionMap;
 
     public WriteStatusPartitioner(final Map<String, Integer> fileIdPartitionMap, final int totalPartitions) {

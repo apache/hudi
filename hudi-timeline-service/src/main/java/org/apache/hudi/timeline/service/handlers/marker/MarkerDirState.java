@@ -86,7 +86,7 @@ public class MarkerDirState implements Serializable {
   private final Object markerCreationProcessingLock = new Object();
   // Early conflict detection strategy if enabled
   private final Option<TimelineServerBasedDetectionStrategy> conflictDetectionStrategy;
-  private transient HoodieEngineContext hoodieEngineContext;
+  private final transient HoodieEngineContext hoodieEngineContext;
   // Last underlying file index used, for finding the next file index
   // in a round-robin fashion
   private int lastFileIndexUsed = -1;
@@ -378,6 +378,6 @@ public class MarkerDirState implements Serializable {
       closeQuietly(bufferedWriter);
       closeQuietly(outputStream);
     }
-    LOG.debug(markersFilePath.toString() + " written in " + timer.endTimer() + " ms");
+    LOG.debug(markersFilePath + " written in " + timer.endTimer() + " ms");
   }
 }

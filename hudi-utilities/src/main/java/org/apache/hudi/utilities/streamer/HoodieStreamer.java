@@ -655,12 +655,12 @@ public class HoodieStreamer implements Serializable {
     /**
      * Schema provider that supplies the command for reading the input and writing out the target table.
      */
-    private transient SchemaProvider schemaProvider;
+    private final transient SchemaProvider schemaProvider;
 
     /**
      * Spark Session.
      */
-    private transient SparkSession sparkSession;
+    private final transient SparkSession sparkSession;
 
     /**
      * Spark context Wrapper.
@@ -668,9 +668,9 @@ public class HoodieStreamer implements Serializable {
 
     private final transient HoodieSparkEngineContext hoodieSparkContext;
 
-    private transient HoodieStorage storage;
+    private final transient HoodieStorage storage;
 
-    private transient Configuration hiveConf;
+    private final transient Configuration hiveConf;
 
     /**
      * Bag of properties with source, hoodie client, key generator etc.

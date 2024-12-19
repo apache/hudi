@@ -36,7 +36,7 @@ public class ExplicitWriteHandler<T>
 
   private final List<WriteStatus> statuses = new ArrayList<>();
 
-  private HoodieWriteHandle handle;
+  private final HoodieWriteHandle handle;
 
   public ExplicitWriteHandler(HoodieWriteHandle handle) {
     this.handle = handle;

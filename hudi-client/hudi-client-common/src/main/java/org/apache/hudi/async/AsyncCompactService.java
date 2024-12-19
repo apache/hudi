@@ -47,7 +47,7 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   private static final Logger LOG = LoggerFactory.getLogger(AsyncCompactService.class);
   private final int maxConcurrentCompaction;
   protected transient HoodieEngineContext context;
-  private transient BaseCompactor compactor;
+  private final transient BaseCompactor compactor;
 
   public AsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client) {
     this(context, client, false);

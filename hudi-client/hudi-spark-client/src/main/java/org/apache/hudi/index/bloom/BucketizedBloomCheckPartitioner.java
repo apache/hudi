@@ -59,12 +59,12 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
 
   private static final Logger LOG = LoggerFactory.getLogger(BucketizedBloomCheckPartitioner.class);
 
-  private int partitions;
+  private final int partitions;
 
   /**
    * Stores the final mapping of a file group to a list of partitions for its keys.
    */
-  private Map<HoodieFileGroupId, List<Integer>> fileGroupToPartitions;
+  private final Map<HoodieFileGroupId, List<Integer>> fileGroupToPartitions;
 
   /**
    * Create a partitioner that computes a plan based on provided workload characteristics.
@@ -147,7 +147,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     // TODO replace w/ more performant hash
     final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts.getRight());
     final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts.getLeft());
-    final int idx = (int) Math.floorMod((int) hashOfKey, candidatePartitions.size());
+    final int idx = Math.floorMod((int) hashOfKey, candidatePartitions.size());
     assert idx >= 0;
     return candidatePartitions.get(idx);
   }

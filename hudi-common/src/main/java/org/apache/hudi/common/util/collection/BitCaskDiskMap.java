@@ -306,7 +306,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   @Override
   public Stream<R> valueStream() {
     final BufferedRandomAccessFile file = getRandomAccessFile();
-    return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (R) get(valueMetaData, file, isCompressionEnabled));
+    return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> get(valueMetaData, file, isCompressionEnabled));
   }
 
   @Override
@@ -324,17 +324,17 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   public static final class FileEntry {
 
     // Checksum of the value written to disk, compared during every readFromDisk to make sure no corruption
-    private Long crc;
+    private final Long crc;
     // Size (numberOfBytes) of the key written to disk
-    private Integer sizeOfKey;
+    private final Integer sizeOfKey;
     // Size (numberOfBytes) of the value written to disk
-    private Integer sizeOfValue;
+    private final Integer sizeOfValue;
     // Actual key
-    private byte[] key;
+    private final byte[] key;
     // Actual value
-    private byte[] value;
+    private final byte[] value;
     // Current timestamp when the value was written to disk
-    private Long timestamp;
+    private final Long timestamp;
 
     public FileEntry(long crc, int sizeOfKey, int sizeOfValue, byte[] key, byte[] value, long timestamp) {
       this.crc = crc;
@@ -376,15 +376,15 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   public static final class ValueMetadata implements Comparable<ValueMetadata> {
 
     // FilePath to store the spilled data
-    private String filePath;
+    private final String filePath;
     // Size (numberOfBytes) of the value written to disk
-    private Integer sizeOfValue;
+    private final Integer sizeOfValue;
     // FilePosition of the value written to disk
-    private Long offsetOfValue;
+    private final Long offsetOfValue;
     // Current timestamp when the value was written to disk
-    private Long timestamp;
+    private final Long timestamp;
 
-    protected ValueMetadata(String filePath, int sizeOfValue, long offsetOfValue, long timestamp) {
+    private ValueMetadata(String filePath, int sizeOfValue, long offsetOfValue, long timestamp) {
       this.filePath = filePath;
       this.sizeOfValue = sizeOfValue;
       this.offsetOfValue = offsetOfValue;

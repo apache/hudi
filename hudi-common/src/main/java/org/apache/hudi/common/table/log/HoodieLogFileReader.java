@@ -83,7 +83,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final boolean reverseReader;
   private final boolean enableRecordLookups;
   private boolean closed = false;
-  private SeekableDataInputStream inputStream;
+  private final SeekableDataInputStream inputStream;
 
   public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize) throws IOException {
     this(storage, logFile, readerSchema, bufferSize, false);

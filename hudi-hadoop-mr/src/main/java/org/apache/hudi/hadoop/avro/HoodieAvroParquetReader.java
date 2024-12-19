@@ -48,7 +48,7 @@ import static org.apache.parquet.hadoop.ParquetInputFormat.getFilter;
 public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
 
   private final ParquetRecordReader<GenericData.Record> parquetRecordReader;
-  private Schema baseSchema;
+  private final Schema baseSchema;
 
   public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf) throws IOException {
     // get base schema

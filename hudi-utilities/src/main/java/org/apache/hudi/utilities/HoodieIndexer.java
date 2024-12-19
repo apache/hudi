@@ -93,7 +93,7 @@ public class HoodieIndexer {
   static final String DROP_INDEX = "dropindex";
 
   private final HoodieIndexer.Config cfg;
-  private TypedProperties props;
+  private final TypedProperties props;
   private final JavaSparkContext jsc;
   private final HoodieTableMetaClient metaClient;
 

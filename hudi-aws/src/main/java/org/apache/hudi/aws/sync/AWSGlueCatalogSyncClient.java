@@ -713,10 +713,11 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       boolean indexesChanges = false;
       for (PartitionIndexDescriptor existingIdx: existingIdxsResp.partitionIndexDescriptorList()) {
         List<String> idxColumns = existingIdx.keys().stream().map(key -> key.name()).collect(Collectors.toList());
-        Boolean toBeRemoved = true;
+        boolean toBeRemoved = true;
         for (List<String> neededIdx : partitionsIndexNeeded) {
           if (neededIdx.equals(idxColumns)) {
             toBeRemoved = false;
+            break;
           }
         }
         if (toBeRemoved) {

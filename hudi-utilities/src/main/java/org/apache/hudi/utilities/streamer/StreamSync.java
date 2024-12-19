@@ -175,12 +175,12 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Source to pull deltas from.
    */
-  private transient SourceFormatAdapter formatAdapter;
+  private final transient SourceFormatAdapter formatAdapter;
 
   /**
    * User Provided Schema Provider.
    */
-  private transient SchemaProvider userProvidedSchemaProvider;
+  private final transient SchemaProvider userProvidedSchemaProvider;
 
   /**
    * Schema provider that supplies the command for reading the input and writing out the target table.
@@ -190,14 +190,14 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Allows transforming source to target table before writing.
    */
-  private transient Option<Transformer> transformer;
+  private final transient Option<Transformer> transformer;
 
-  private String keyGenClassName;
+  private final String keyGenClassName;
 
   /**
    * Filesystem used.
    */
-  private transient HoodieStorage storage;
+  private final transient HoodieStorage storage;
 
   /**
    * Spark context Wrapper.
@@ -207,12 +207,12 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Spark Session.
    */
-  private transient SparkSession sparkSession;
+  private final transient SparkSession sparkSession;
 
   /**
    * Hive Config.
    */
-  private transient Configuration conf;
+  private final transient Configuration conf;
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
@@ -224,7 +224,7 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Callback when write client is instantiated.
    */
-  private transient Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient;
+  private final transient Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient;
 
   /**
    * Timeline with completed commits, including both .commit and .deltacommit.
@@ -1278,7 +1278,7 @@ public class StreamSync implements Serializable, Closeable {
 
   class WriteClientWriteResult {
     private Map<String, List<String>> partitionToReplacedFileIds = Collections.emptyMap();
-    private JavaRDD<WriteStatus> writeStatusRDD;
+    private final JavaRDD<WriteStatus> writeStatusRDD;
 
     public WriteClientWriteResult(JavaRDD<WriteStatus> writeStatusRDD) {
       this.writeStatusRDD = writeStatusRDD;

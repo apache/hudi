@@ -28,8 +28,8 @@ import java.util.Properties;
  * Extensible metrics reporter for custom implementation.
  */
 public abstract class CustomizableMetricsReporter extends MetricsReporter {
-  private Properties props;
-  private MetricRegistry registry;
+  private final Properties props;
+  private final MetricRegistry registry;
 
   public CustomizableMetricsReporter(Properties props, MetricRegistry registry) {
     this.props = props;

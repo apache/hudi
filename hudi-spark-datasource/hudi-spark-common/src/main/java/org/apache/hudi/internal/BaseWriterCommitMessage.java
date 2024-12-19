@@ -29,7 +29,7 @@ import java.util.List;
  */
 public class BaseWriterCommitMessage implements Serializable {
 
-  private List<WriteStatus> writeStatuses;
+  private final List<WriteStatus> writeStatuses;
 
   public BaseWriterCommitMessage(List<WriteStatus> writeStatuses) {
     this.writeStatuses = writeStatuses;

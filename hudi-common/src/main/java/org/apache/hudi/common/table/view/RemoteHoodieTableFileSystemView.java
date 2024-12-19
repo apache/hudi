@@ -189,7 +189,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     LOG.info("Sending request : ({})", url);
     Response response = retryHelper != null ? retryHelper.start(() -> get(timeoutMs, url, method)) : get(timeoutMs, url, method);
     String content = response.returnContent().asString(Consts.UTF_8);
-    return (T) OBJECT_MAPPER.readValue(content, reference);
+    return OBJECT_MAPPER.readValue(content, reference);
   }
 
   private Map<String, String> getParamsWithPartitionPath(String partitionPath) {

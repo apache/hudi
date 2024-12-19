@@ -57,11 +57,11 @@ public abstract class HoodieAsyncService implements Serializable {
   // Run in daemon mode
   private final boolean runInDaemonMode;
   // Queue to hold pending compaction/clustering instants
-  private transient BlockingQueue<String> pendingInstants = new LinkedBlockingQueue<>();
+  private final transient BlockingQueue<String> pendingInstants = new LinkedBlockingQueue<>();
   // Mutex lock for synchronized access to pendingInstants queue
-  private transient ReentrantLock queueLock = new ReentrantLock();
+  private final transient ReentrantLock queueLock = new ReentrantLock();
   // Condition instance to use with the queueLock
-  private transient Condition consumed = queueLock.newCondition();
+  private final transient Condition consumed = queueLock.newCondition();
 
   protected HoodieAsyncService() {
     this(false);
