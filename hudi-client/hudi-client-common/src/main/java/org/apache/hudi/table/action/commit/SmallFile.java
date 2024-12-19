@@ -32,9 +32,8 @@ public class SmallFile implements Serializable {
 
   @Override
   public String toString() {
-    String sb = "SmallFile {" + "location=" + location + ", "
+    return "SmallFile {" + "location=" + location + ", "
         + "sizeBytes=" + sizeBytes
         + '}';
-    return sb;
   }
 }

@@ -50,11 +50,10 @@ public class BucketInfo implements Serializable {
 
   @Override
   public String toString() {
-    String sb = "BucketInfo {" + "bucketType=" + bucketType + ", "
+    return "BucketInfo {" + "bucketType=" + bucketType + ", "
         + "fileIdPrefix=" + fileIdPrefix + ", "
         + "partitionPath=" + partitionPath
         + '}';
-    return sb;
   }
 
   @Override
