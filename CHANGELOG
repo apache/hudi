@@ -492,3 +492,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2024-12-18 16:04:00] [release-v1.60.0] ---
 [ENG-18477][HUDI-8769] Limit instantsToArchive to avoid expensive locks blocking ingestion and table services (#1091)
 [AUDIT-1071]: Changelog for release-v1.59.0 (#1094)
+
+--- [2024-12-19 16:04:01] [release-v1.61.0] ---
+[ENG-10945][INTERNAL] Spark3.4 release workflow (#1095)
+[AUDIT-1071]: Changelog for release-v1.60.0 (#1097)
