@@ -159,10 +159,11 @@ public interface HoodieStorageStrategy extends Serializable {
    * Return a storage location for the given path
    *
    * @param path
-   * @param configMap
+   * @param instantTime
+   * @param fileID
    * @return Append the appropriate prefix based on the Path and return
    */
-  StoragePath storageLocation(String path, Map<String, String> configMap);
+  StoragePath storageLocation(String path, String instantTime, String fileID);
 
   /**
    * Return all possible StoragePaths
@@ -327,7 +328,7 @@ public class HoodieCacheLayerStorageStrategy extends HoodieDefaultStorageStrateg
    * do the data migration works from cache layer to persistent layer
    */
   @Override
-  public StoragePath storageLocation(String path, String instantTime) {
+  public StoragePath storageLocation(String path, String instantTime, String fileID) {
     // 
   }
 
