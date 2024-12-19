@@ -26,7 +26,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.utils.ConcatenatingIterator;
+import org.apache.hudi.client.utils.LazyConcatenatingIterator;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.SerializableSchema;
@@ -111,6 +111,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -336,44 +337,47 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
 
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
-      List<Iterator<HoodieRecord<T>>> recordIterators = new ArrayList<>();
+      List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-        long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config);
-        LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
-        try {
-          Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-          HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-              .withStorage(table.getStorage())
-              .withBasePath(table.getMetaClient().getBasePath())
-              .withLogFilePaths(clusteringOp.getDeltaFilePaths())
-              .withReaderSchema(readerSchema)
-              .withLatestInstantTime(instantTime)
-              .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-              .withReverseReader(config.getCompactionReverseLogReadEnabled())
-              .withBufferSize(config.getMaxDFSStreamBufferSize())
-              .withSpillableMapBasePath(config.getSpillableMapBasePath())
-              .withPartition(clusteringOp.getPartitionPath())
-              .withOptimizedLogBlocksScan(config.enableOptimizedLogBlocksScan())
-              .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
-              .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-              .withRecordMerger(config.getRecordMerger())
-              .withTableMetaClient(table.getMetaClient())
-              .build();
 
-          Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
-              ? Option.empty()
-              : Option.of(getBaseOrBootstrapFileReader(storageConf, bootstrapBasePath, partitionFields, clusteringOp));
-          recordIterators.add(new HoodieFileSliceReader(baseFileReader, scanner, readerSchema, tableConfig.getPreCombineField(), config.getRecordMerger(),
-              tableConfig.getProps(),
-              tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
-                  tableConfig.getPartitionFieldProp()))));
-        } catch (IOException e) {
-          throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
-              + " and " + clusteringOp.getDeltaFilePaths(), e);
-        }
+        Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> {
+          long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config);
+          LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
+          try {
+            Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
+            HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+                .withStorage(table.getStorage())
+                .withBasePath(table.getMetaClient().getBasePath())
+                .withLogFilePaths(clusteringOp.getDeltaFilePaths())
+                .withReaderSchema(readerSchema)
+                .withLatestInstantTime(instantTime)
+                .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+                .withReverseReader(config.getCompactionReverseLogReadEnabled())
+                .withBufferSize(config.getMaxDFSStreamBufferSize())
+                .withSpillableMapBasePath(config.getSpillableMapBasePath())
+                .withPartition(clusteringOp.getPartitionPath())
+                .withOptimizedLogBlocksScan(config.enableOptimizedLogBlocksScan())
+                .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+                .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+                .withRecordMerger(config.getRecordMerger())
+                .withTableMetaClient(table.getMetaClient())
+                .build();
+
+            Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
+                ? Option.empty()
+                : Option.of(getBaseOrBootstrapFileReader(storageConf, bootstrapBasePath, partitionFields, clusteringOp));
+            return new HoodieFileSliceReader(baseFileReader, scanner, readerSchema, tableConfig.getPreCombineField(), config.getRecordMerger(),
+                tableConfig.getProps(),
+                tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
+                    tableConfig.getPartitionFieldProp())));
+          } catch (IOException e) {
+            throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
+                + " and " + clusteringOp.getDeltaFilePaths(), e);
+          }
+        };
+        suppliers.add(iteratorSupplier);
       });
-
-      return new ConcatenatingIterator<>(recordIterators);
+      return new LazyConcatenatingIterator<>(suppliers);
     }));
   }
 
@@ -395,27 +399,29 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism)
         .mapPartitions(clusteringOpsPartition -> {
-          List<Iterator<HoodieRecord<T>>> iteratorsForPartition = new ArrayList<>();
+          List<Supplier<ClosableIterator<HoodieRecord<T>>>> iteratorGettersForPartition = new ArrayList<>();
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-            try {
-              Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
-              HoodieFileReader baseFileReader = getBaseOrBootstrapFileReader(storageConf, bootstrapBasePath, partitionFields, clusteringOp);
+            Supplier<ClosableIterator<HoodieRecord<T>>> recordIteratorGetter = () -> {
+              try {
+                Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
+                HoodieFileReader baseFileReader = getBaseOrBootstrapFileReader(storageConf, bootstrapBasePath, partitionFields, clusteringOp);
 
-              Option<BaseKeyGenerator> keyGeneratorOp = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
-              // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-              //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-              //       it since these records will be shuffled later.
-              CloseableMappingIterator mappingIterator = new CloseableMappingIterator(
-                  (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
-                  rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema, writeConfig.getProps(), keyGeneratorOp));
-              iteratorsForPartition.add(mappingIterator);
-            } catch (IOException e) {
-              throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
-                  + " and " + clusteringOp.getDeltaFilePaths(), e);
-            }
+                Option<BaseKeyGenerator> keyGeneratorOp = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
+                // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+                //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+                //       it since these records will be shuffled later.
+                return new CloseableMappingIterator(
+                    (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(readerSchema),
+                    rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema, writeConfig.getProps(), keyGeneratorOp));
+              } catch (IOException e) {
+                throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
+                    + " and " + clusteringOp.getDeltaFilePaths(), e);
+              }
+            };
+            iteratorGettersForPartition.add(recordIteratorGetter);
           });
 
-          return new ConcatenatingIterator<>(iteratorsForPartition);
+          return new LazyConcatenatingIterator<>(iteratorGettersForPartition);
         }));
   }
 
