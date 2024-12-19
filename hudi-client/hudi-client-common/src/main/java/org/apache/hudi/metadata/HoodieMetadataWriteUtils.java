@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -80,6 +81,7 @@ public class HoodieMetadataWriteUtils {
    * @param writeConfig                {@code HoodieWriteConfig} of the main dataset writer
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    */
+  @VisibleForTesting
   public static HoodieWriteConfig createMetadataWriteConfig(
       HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;

@@ -133,8 +133,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   @Test
   public void testIndexerWithNotAllIndexesEnabled() {
     String tableName = "indexer_test";
-    // enable files and bloom_filters on the regular write client
-    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+    // enable files and bloom_filters only w/ the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(false);
     upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
@@ -148,7 +148,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   @Test
   public void testIndexerWithFilesPartition() {
     String tableName = "indexer_test";
-    // enable files and bloom_filters on the regular write client
+    // enable files and bloom_filters only with the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false).withMetadataIndexBloomFilter(true);
     upsertToTable(metadataConfigBuilder.build(), tableName);
 
@@ -165,8 +165,10 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   @Test
   public void testIndexerForRecordIndex() {
     String tableName = "indexer_test";
-    // enable files and bloom_filters on the regular write client
-    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false);
+    // enable files and bloom_filters only with the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withAsyncIndex(false).withMetadataIndexColumnStats(false);
     upsertToTable(metadataConfigBuilder.build(), tableName);
 
     // validate table config
@@ -183,9 +185,9 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // is inflight, while the regular writer is updating metadata table.
     // The delta commit from the indexer should not be rolled back.
     String tableName = "indexer_with_writer_finishing_first";
-    // Enable files and bloom_filters on the regular write client
+    // Enable files and bloom_filters only with the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder =
-        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(false);
     HoodieMetadataConfig metadataConfig = metadataConfigBuilder.build();
     upsertToTable(metadataConfig, tableName);
 
@@ -256,9 +258,9 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // finishes the original delta commit.  In this case, the async indexer should not
     // trigger the rollback on other inflight writes in the metadata table.
     String tableName = "indexer_with_writer_finishing_first";
-    // Enable files and bloom_filters on the regular write client
+    // Enable files and bloom_filters only with the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder =
-        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+        getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(false);
     HoodieMetadataConfig metadataConfig = metadataConfigBuilder.build();
     upsertToTable(metadataConfig, tableName);
     upsertToTable(metadataConfig, tableName);
@@ -324,7 +326,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   public void testColStatsFileGroupCount(int colStatsFileGroupCount) {
     TestHoodieIndexer.colStatsFileGroupCount = colStatsFileGroupCount;
     String tableName = "indexer_test";
-    // enable files and bloom_filters on the regular write client
+    // enable files and bloom_filters only with the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false).withMetadataIndexBloomFilter(true);
     upsertToTable(metadataConfigBuilder.build(), tableName);
 
@@ -352,7 +354,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   @Test
   public void testIndexerForExceptionWithNonFilesPartition() {
     String tableName = "indexer_test";
-    // enable files and bloom_filters on the regular write client
+    // enable files and bloom_filters only with the regular write client
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(false, false);
     upsertToTable(metadataConfigBuilder.build(), tableName);
     // validate table config
@@ -447,8 +449,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   public void testIndexerDropPartitionDeletesInstantFromTimeline() {
     String tableName = "indexer_test";
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
-    // enable files on the regular write client
-    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
+    // enable files only with the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(false);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
@@ -501,8 +503,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   public void testTwoIndexersOneCreateOneDropPartition() {
     String tableName = "indexer_test";
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
-    // enable files on the regular write client
-    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false);
+    // enable files only with the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexColumnStats(false);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
