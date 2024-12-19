@@ -129,6 +129,6 @@ metadata table across all writers.
 
 ## Related Resources
 <h3>Blogs</h3>
-
 * [Table service deployment models in Apache Hudi](https://medium.com/@simpsons/table-service-deployment-models-in-apache-hudi-9cfa5a44addf)
 * [Multi Modal Indexing for the Data Lakehouse](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi)
+* [How to Optimize Performance for Your Open Data Lakehouse](https://www.onehouse.ai/blog/how-to-optimize-performance-for-your-open-data-lakehouse)
