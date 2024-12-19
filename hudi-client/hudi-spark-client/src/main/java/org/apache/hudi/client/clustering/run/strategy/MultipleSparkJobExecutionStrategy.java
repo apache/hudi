@@ -544,7 +544,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     SerializableSchema serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields);
 
     // broadcast reader context.
-    SparkBroadcastManager broadcastManager = new SparkBroadcastManager(getEngineContext());
+    SparkBroadcastManager broadcastManager = new SparkBroadcastManager(getEngineContext(), getHoodieTable().getMetaClient());
     broadcastManager.prepareAndBroadcast();
     StructType sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields);
 
