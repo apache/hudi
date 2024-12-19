@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
@@ -27,55 +26,52 @@ import java.util.List;
 import java.util.Queue;
 import java.util.function.Supplier;
 
+/**
+ * Provides iterator interface over List of iterators. Consumes all records from first iterator element
+ * before moving to next iterator in the list. That is concatenating elements across multiple iterators.
+ *
+ * <p>Different with {@link ConcatenatingIterator}, the internal iterators are instantiated lazily.
+ */
 public class LazyConcatenatingIterator<T> implements ClosableIterator<T> {
 
-  private final Queue<Supplier<ClosableIterator<T>>> allLaziedIterators;
+  private final Queue<Supplier<ClosableIterator<T>>> iteratorSuppliers;
 
-  private Option<ClosableIterator<T>> currentIterator = Option.empty();
+  private ClosableIterator<T> itr;
 
   private boolean initialed = false;
 
   private boolean closed = false;
 
-  public LazyConcatenatingIterator(List<Supplier<ClosableIterator<T>>> allLaziedIterators) {
-    this.allLaziedIterators = new LinkedList<>(allLaziedIterators);
+  public LazyConcatenatingIterator(List<Supplier<ClosableIterator<T>>> iteratorSuppliers) {
+    this.iteratorSuppliers = new LinkedList<>(iteratorSuppliers);
   }
 
   @Override
   public void close() {
     if (!closed) {
-      if (currentIterator.isPresent()) {
-        currentIterator.get().close();
-        currentIterator = Option.empty();
+      if (itr != null) {
+        itr.close();
+        itr = null;
       }
-      allLaziedIterators.clear();
+      iteratorSuppliers.clear();
       closed = true;
-    }
-  }
-
-  private void init() {
-    if (!initialed) {
-      if (!allLaziedIterators.isEmpty()) {
-        currentIterator = Option.of(allLaziedIterators.poll().get());
-      }
-      initialed = true;
     }
   }
 
   @Override
   public boolean hasNext() {
     init();
-    while (currentIterator.isPresent()) {
-      if (currentIterator.get().hasNext()) {
+    while (itr != null) {
+      if (itr.hasNext()) {
         return true;
       }
       // close current iterator
-      currentIterator.get().close();
-      if (!allLaziedIterators.isEmpty()) {
-        // move to next
-        currentIterator = Option.of(allLaziedIterators.poll().get());
+      this.itr.close();
+      if (!iteratorSuppliers.isEmpty()) {
+        // move to the next
+        itr = iteratorSuppliers.poll().get();
       } else {
-        currentIterator = Option.empty();
+        itr = null;
       }
     }
     return false;
@@ -84,6 +80,19 @@ public class LazyConcatenatingIterator<T> implements ClosableIterator<T> {
   @Override
   public T next() {
     ValidationUtils.checkState(hasNext(), "No more elements left");
-    return currentIterator.get().next();
+    return itr.next();
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  private void init() {
+    if (!initialed) {
+      if (!this.iteratorSuppliers.isEmpty()) {
+        this.itr = iteratorSuppliers.poll().get();
+      }
+      initialed = true;
+    }
   }
 }

@@ -337,10 +337,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
 
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
-      List<Supplier<ClosableIterator<HoodieRecord<T>>>> recordIteratorGetters = new ArrayList<>();
+      List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
 
-        Supplier<ClosableIterator<HoodieRecord<T>>> recordIteratorGetter = () -> {
+        Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> {
           long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config);
           LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
           try {
@@ -375,9 +375,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                 + " and " + clusteringOp.getDeltaFilePaths(), e);
           }
         };
-        recordIteratorGetters.add(recordIteratorGetter);
+        suppliers.add(iteratorSupplier);
       });
-      return new LazyConcatenatingIterator<>(recordIteratorGetters);
+      return new LazyConcatenatingIterator<>(suppliers);
     }));
   }
 
