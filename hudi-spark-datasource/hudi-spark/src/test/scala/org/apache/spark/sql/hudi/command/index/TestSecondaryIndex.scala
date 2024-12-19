@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata
@@ -31,13 +32,11 @@ import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY
 import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
-
 import scala.collection.JavaConverters._
 
 class TestSecondaryIndex extends HoodieSparkSqlTestBase {
@@ -469,7 +468,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       // Perform Deletes on Records and Validate Secondary Index
       val deleteDf = spark.read.format("hudi").load(basePath).filter(s"_row_key in ('${updateKeys.mkString("','")}')")
       // Get fileId for the delete record
-      val deleteFileId = deleteDf.select("_hoodie_file_name").collect().head.getString(0)
+      val deleteFileId = FSUtils.getFileIdFromFileName(deleteDf.select("_hoodie_file_name").collect().head.getString(0))
       deleteDf.write.format("hudi")
         .options(hudiOpts)
         .option(OPERATION.key, DELETE_OPERATION_OPT_VAL)

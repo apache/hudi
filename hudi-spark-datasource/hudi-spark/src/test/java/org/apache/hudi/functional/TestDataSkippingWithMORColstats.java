@@ -373,17 +373,13 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
    * no records match the condition
    */
   private List<Path> getFilesToCorrupt() {
-    Set<String> fileNames = new HashSet<>();
+    Set<String> fileIds = new HashSet<>();
     sparkSession.read().format("hudi").load(basePath.toString())
             .where(matchCond)
             .select("_hoodie_file_name").distinct()
         .collectAsList().forEach(row -> {
           String fileName = row.getString(0);
-          if (fileName.contains(".parquet")) {
-            fileNames.add(FSUtils.getFileId(fileName));
-          } else {
-            fileNames.add(fileName);
-          }
+          fileIds.add(FSUtils.getFileIdFromFileName(fileName));
         });
 
     try (Stream<Path> stream = Files.list(basePath)) {
@@ -392,7 +388,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
           .filter(file -> !Files.isDirectory(file))
           .filter(file -> file.toString().contains(".parquet"))
           .filter(file -> !file.toString().contains(".crc"))
-          .filter(file -> !fileNames.contains(FSUtils.getFileId(file.getFileName().toString())))
+          .filter(file -> !fileIds.contains(FSUtils.getFileId(file.getFileName().toString())))
           .collect(Collectors.toList());
       files.forEach(f -> {
         String fileID = FSUtils.getFileId(f.getFileName().toString());

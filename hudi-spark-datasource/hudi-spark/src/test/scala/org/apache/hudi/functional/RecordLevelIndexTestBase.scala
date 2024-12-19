@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, MetadataConversionUtils}
@@ -32,7 +33,6 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataU
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, not}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -40,7 +40,6 @@ import org.junit.jupiter.api._
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
-
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
 import scala.util.Using
@@ -304,12 +303,13 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
       val recordKey: String = row.getAs("_hoodie_record_key")
       val partitionPath: String = row.getAs("_hoodie_partition_path")
       val fileName: String = row.getAs("_hoodie_file_name")
+      val fileId = FSUtils.getFileIdFromFileName(fileName)
       val recordLocations = recordIndexMap.get(recordKey)
       assertFalse(recordLocations.isEmpty)
       // assuming no duplicate keys for now
       val recordLocation = recordLocations.get(0)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
-      assertTrue(fileName.startsWith(recordLocation.getFileId), fileName + " should start with " + recordLocation.getFileId)
+      assertTrue(fileId.equals(recordLocation.getFileId), fileName + " should have same file id with " + recordLocation.getFileId)
     }
 
     val deletedRows = deletedDf.collect()
