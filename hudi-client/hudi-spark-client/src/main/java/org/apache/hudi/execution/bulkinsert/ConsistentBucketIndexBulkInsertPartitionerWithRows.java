@@ -85,7 +85,7 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSo
   public ConsistentBucketIndexBulkInsertPartitionerWithRows(HoodieTable table,
                                                             Map<String, String> strategyParams,
                                                             boolean populateMetaFields, Map<String, List<ConsistentHashingNode>> hashingChildrenNodes) {
-      super(table, strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), ""));
+    super(table, strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), ""));
     this.indexKeyFields = table.getConfig().getBucketIndexHashField();
     this.populateMetaFields = populateMetaFields;
     if (!populateMetaFields) {
