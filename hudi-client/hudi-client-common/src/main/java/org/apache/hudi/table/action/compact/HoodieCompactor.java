@@ -94,7 +94,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    *
    * @return the {@link EngineBroadcastManager} if available.
    */
-  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context) {
+  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context,
+                                                                  HoodieTableMetaClient metaClient) {
     return Option.empty();
   }
 
@@ -152,7 +153,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         && config.populateMetaFields();                                             // Virtual key support by fg reader is not ready
 
     if (useFileGroupReaderBasedCompaction) {
-      Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context);
+      Option<EngineBroadcastManager> broadcastManagerOpt = getEngineBroadcastManager(context, metaClient);
       // Broadcast required information.
       broadcastManagerOpt.ifPresent(EngineBroadcastManager::prepareAndBroadcast);
       return context.parallelize(operations).map(

@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -45,8 +46,9 @@ public class HoodieSparkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
   @Override
-  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context) {
-    return Option.of(new SparkBroadcastManager(context));
+  public Option<EngineBroadcastManager> getEngineBroadcastManager(HoodieEngineContext context,
+                                                                  HoodieTableMetaClient metaClient) {
+    return Option.of(new SparkBroadcastManager(context, metaClient));
   }
 
   @Override
