@@ -22,6 +22,7 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -273,7 +274,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
           Option.empty(), WriteOperationType.UPSERT, writeConfig.getSchema(), "commit");
 
       try {
-        HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(context, commitMetadata, writeConfig.getMetadataConfig(), metaClient, finalCommitTime3);
+        HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(context, commitMetadata, writeConfig.getMetadataConfig(), metaClient, finalCommitTime3, EngineType.SPARK);
         fail("Should not have reached here");
       } catch (Exception e) {
         // no op
@@ -286,7 +287,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
       // no RLI records should be generated for compaction operation.
       assertTrue(HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
-          metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get()).isEmpty());
+          metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get(), EngineType.SPARK).isEmpty());
     }
   }
 
@@ -315,12 +316,12 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         .forEach(writeStatus -> {
           try {
             // used for RLI
-            finalActualDeletes.addAll(HoodieTableMetadataUtil.getRecordKeys(basePath + "/" + writeStatus.getStat().getPath(), metaClient, writerSchemaOpt,
-                writeConfig.getMetadataConfig().getMaxReaderBufferSize(), latestCommitTimestamp, false, true));
+            finalActualDeletes.addAll(HoodieTableMetadataUtil.getRecordKeys(Collections.singletonList(basePath + "/" + writeStatus.getStat().getPath()), metaClient, writerSchemaOpt,
+                writeConfig.getMetadataConfig().getMaxReaderBufferSize(), latestCommitTimestamp, false, true, false, EngineType.SPARK));
 
             // used in SI flow
-            actualUpdatesAndDeletes.addAll(HoodieTableMetadataUtil.getRecordKeys(basePath + "/" + writeStatus.getStat().getPath(), metaClient, writerSchemaOpt,
-                writeConfig.getMetadataConfig().getMaxReaderBufferSize(), latestCommitTimestamp, true, true));
+            actualUpdatesAndDeletes.addAll(HoodieTableMetadataUtil.getRecordKeys(Collections.singletonList(basePath + "/" + writeStatus.getStat().getPath()), metaClient, writerSchemaOpt,
+                writeConfig.getMetadataConfig().getMaxReaderBufferSize(), latestCommitTimestamp, true, true, false, EngineType.SPARK));
           } catch (IOException e) {
             throw new HoodieIOException("Failed w/ IOException ", e);
           }
@@ -334,7 +335,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
     // validate HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated for entire CommitMetadata which is used in SI code path.
     List<String> updatedOrDeletedKeys =
-        new ArrayList<>(HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(context, commitMetadata, writeConfig.getMetadataConfig(), metaClient, finalCommitTime3));
+        new ArrayList<>(HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(context, commitMetadata, writeConfig.getMetadataConfig(), metaClient, finalCommitTime3, EngineType.SPARK));
     List<String> expectedUpdatesOrDeletes = new ArrayList<>(expectedUpdates);
     expectedUpdatesOrDeletes.addAll(expectedRLIDeletes);
     assertListEquality(expectedUpatesAndDeletes, updatedOrDeletedKeys);
