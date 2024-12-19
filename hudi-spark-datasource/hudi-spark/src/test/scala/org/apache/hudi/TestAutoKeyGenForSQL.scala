@@ -84,8 +84,6 @@ class TestAutoKeyGenForSQL extends SparkClientFunctionalTestHarness {
     val expectedDf = spark.createDataFrame(expected).toDF(columns: _*)
     val expectedMinusActual = expectedDf.except(actualDf)
     val actualMinusExpected = actualDf.except(expectedDf)
-    expectedMinusActual.show(false)
-    actualMinusExpected.show(false)
     assertTrue(expectedMinusActual.isEmpty && actualMinusExpected.isEmpty)
     // Validate: table property.
     val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
