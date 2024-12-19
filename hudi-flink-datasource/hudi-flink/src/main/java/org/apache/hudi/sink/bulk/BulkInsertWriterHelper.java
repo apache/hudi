@@ -181,7 +181,7 @@ public class BulkInsertWriterHelper {
     }).join();
     try {
       executorService.shutdown();
-      executorService.awaitTermination(24, TimeUnit.DAYS);
+      executorService.awaitTermination(24, TimeUnit.HOURS);
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
     }
