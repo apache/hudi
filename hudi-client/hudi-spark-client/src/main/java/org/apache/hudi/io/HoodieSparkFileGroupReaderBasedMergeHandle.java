@@ -193,7 +193,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
         hoodieTable.getMetaClient(),
         hoodieTable.getMetaClient().getTableConfig().getProps(),
         0,
-        Long.MAX_VALUE,
+        -1,
         usePosition)) {
       fileGroupReader.initRecordIterators();
       // Reads the records from the file slice
