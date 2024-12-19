@@ -235,12 +235,13 @@ public class TestHoodieMetrics {
 
     // Clustering Timeline Instant Metrics
     HoodieInstant instant001 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLUSTERING_ACTION, "1001");
+    HoodieInstant instant0011 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "11001");
     HoodieInstant instant002 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, "1002");
     HoodieInstant instant003 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, "1003");
     HoodieInstant instant004 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, "1004");
     HoodieInstant instant005 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLUSTERING_ACTION, "1005");
     HoodieInstant instant006 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, "1006");
-    HoodieActiveTimeline activeTimeline = new MockHoodieActiveTimeline(instant001, instant002, instant003, instant004, instant005, instant006);
+    HoodieActiveTimeline activeTimeline = new MockHoodieActiveTimeline(instant001, instant0011, instant002, instant003, instant004, instant005, instant006);
     hoodieMetrics.updateClusteringTimeLineInstantMetrics(activeTimeline);
 
     metricName = hoodieMetrics.getMetricsName(HoodieTimeline.CLUSTERING_ACTION, HoodieMetrics.EARLIEST_INFLIGHT_CLUSTERING_INSTANT_STR);

@@ -384,7 +384,7 @@ public class HoodieMetrics {
       // Compute Metrics
       long pendingClusteringInstantCount = activeTimeline.filterPendingClusteringTimeline().getInstants().size();
       long earliestInflightClusteringInstantLong = 0L;
-      Option<HoodieInstant> earliestInflightClusteringInstant = activeTimeline.filterInflightsAndRequested().firstInstant();
+      Option<HoodieInstant> earliestInflightClusteringInstant = activeTimeline.filterPendingClusteringTimeline().getFirstPendingClusterInstant();
       if (earliestInflightClusteringInstant.isPresent()) {
         earliestInflightClusteringInstantLong = Long.valueOf(earliestInflightClusteringInstant.get().requestedTime());
       }
