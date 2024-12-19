@@ -301,4 +301,14 @@ public class FileIOUtils {
     Collections.shuffle(localDirLists);
     return !localDirLists.isEmpty() ? localDirLists.get(0) : "/tmp/";
   }
+
+  public static String getDefaultExternalSorterBasePath() {
+    String[] localDirs = getConfiguredLocalDirs();
+    if (localDirs == null) {
+      return "/tmp/";
+    }
+    List<String> localDirLists = Arrays.asList(localDirs);
+    Collections.shuffle(localDirLists);
+    return !localDirLists.isEmpty() ? localDirLists.get(0) : "/tmp/";
+  }
 }
