@@ -1293,8 +1293,12 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   def testSecondaryIndexWithPrimitiveDataTypes(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false")
     tableName += "test_secondary_index_with_primitive_data_types"
+
+    spark.sql("set hoodie.metadata.index.partition.stats.enable=false")
+    // HUDI-8620 tracks fixing BYTES and FIXED type for col stats and partition stats.
 
     // Create table with different data types
     spark.sql(
@@ -1379,6 +1383,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         verifyQueryPredicate(hudiOpts, col)
       }
     }
+    spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.partition.stats.enable")
   }
 
   @Test

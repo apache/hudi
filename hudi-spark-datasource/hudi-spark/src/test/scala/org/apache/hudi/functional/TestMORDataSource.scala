@@ -430,7 +430,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO","SPARK"))
   def testPrunedFiltered(recordType: HoodieRecordType) {
 
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
