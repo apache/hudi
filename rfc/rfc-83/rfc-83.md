@@ -136,8 +136,8 @@ We also need a unified interface/abstract-class to control the Plan behavior of 
 
 Use `BaseTableServicePlanStrategy` to control the behavior of getting partitions, filter partitions and generate table service plan etc.
 
-Since we want to implement different strategies to control partition retrieval, partition filtering, and plan generation,
-the first step is to use an abstraction to consolidate these logics into a strategy.
+Since we want to control the logic of partition acquisition, partition filtering, and plan generation through different strategies, 
+in the first step, we need to use an abstraction to converge the logic of partition acquisition, partition filtering, and plan generation into the base strategy.
 
 ```java
 package org.apache.hudi.table;
