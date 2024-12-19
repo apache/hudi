@@ -757,6 +757,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
+      // fix me: disable when schema on read is enabled.
+      // if col stats is disabled, default value for partition stats is false.
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled()
+          ? getDefaultPartitionStatsEnable(engineType) : false);
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
     }
@@ -766,6 +771,30 @@ public final class HoodieMetadataConfig extends HoodieConfig {
         case FLINK:
         case SPARK:
           return ENABLE.defaultValue();
+        case JAVA:
+          return false;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private boolean getDefaultColStatsEnable(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return true;
+        case FLINK:
+        case JAVA:
+          return false;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private boolean getDefaultPartitionStatsEnable(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return true;
+        case FLINK:
         case JAVA:
           return false;
         default:
