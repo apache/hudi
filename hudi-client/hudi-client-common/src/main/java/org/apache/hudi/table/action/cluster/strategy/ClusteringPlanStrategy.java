@@ -153,13 +153,15 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
    * Transform {@link FileSlice} to {@link HoodieSliceInfo}.
    */
   protected static List<HoodieSliceInfo> getFileSliceInfo(List<FileSlice> slices) {
-    return slices.stream().map(slice -> new HoodieSliceInfo().newBuilder()
-        .setPartitionPath(slice.getPartitionPath())
-        .setFileId(slice.getFileId())
-        .setDataFilePath(slice.getBaseFile().map(BaseFile::getPath).orElse(StringUtils.EMPTY_STRING))
-        .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toList()))
-        .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(bbf -> bbf.getPath()).orElse(StringUtils.EMPTY_STRING)).orElse(StringUtils.EMPTY_STRING))
-        .build()).collect(Collectors.toList());
+    return slices.stream().map(slice -> {
+      return HoodieSliceInfo.newBuilder()
+          .setPartitionPath(slice.getPartitionPath())
+          .setFileId(slice.getFileId())
+          .setDataFilePath(slice.getBaseFile().map(BaseFile::getPath).orElse(StringUtils.EMPTY_STRING))
+          .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toList()))
+          .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(bbf -> bbf.getPath()).orElse(StringUtils.EMPTY_STRING)).orElse(StringUtils.EMPTY_STRING))
+          .build();
+    }).collect(Collectors.toList());
   }
 
   /**

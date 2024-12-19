@@ -307,12 +307,12 @@ public class TimelineUtils {
         ? metaClient.getArchivedTimeline(exclusiveStartInstantTime).mergeTimeline(writeTimeline)
         : writeTimeline;
 
-    HoodieTimeline timelineSinceLastSync = (HoodieTimeline) (((HoodieTimeline) timeline).getCommitsTimeline()
-        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE));
+    HoodieTimeline timelineSinceLastSync = timeline.getCommitsTimeline()
+        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
 
     if (lastMaxCompletionTime.isPresent()) {
       // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
-      HoodieTimeline hollowInstantsTimeline = ((HoodieTimeline) timeline).getCommitsTimeline()
+      HoodieTimeline hollowInstantsTimeline = timeline.getCommitsTimeline()
           .filterCompletedInstants()
           .filter(s -> compareTimestamps(s.requestedTime(), LESSER_THAN, exclusiveStartInstantTime))
           .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN, lastMaxCompletionTime.get()));

@@ -30,7 +30,7 @@ import java.util.function.Supplier;
  * Flink task context supplier.
  */
 public class FlinkTaskContextSupplier extends TaskContextSupplier {
-  private RuntimeContext flinkRuntimeContext;
+  private final RuntimeContext flinkRuntimeContext;
 
   public FlinkTaskContextSupplier(RuntimeContext flinkRuntimeContext) {
     this.flinkRuntimeContext = flinkRuntimeContext;

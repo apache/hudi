@@ -330,14 +330,10 @@ public class HoodieTableSource implements
     List<String> fields = Arrays.stream(this.requiredPos)
         .mapToObj(i -> schemaFieldNames[i])
         .collect(Collectors.toList());
-    StringBuilder sb = new StringBuilder();
-    sb.append(operatorName)
-        .append("(")
-        .append("table=").append(Collections.singletonList(conf.getString(FlinkOptions.TABLE_NAME)))
-        .append(", ")
-        .append("fields=").append(fields)
-        .append(")");
-    return sb.toString();
+    return operatorName + "("
+        + "table=" + Collections.singletonList(conf.get(FlinkOptions.TABLE_NAME))
+        + ", " + "fields=" + fields
+        + ")";
   }
 
   @Nullable

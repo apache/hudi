@@ -192,7 +192,7 @@ public class StreamSync implements Serializable, Closeable {
    */
   private transient Option<Transformer> transformer;
 
-  private String keyGenClassName;
+  private final String keyGenClassName;
 
   /**
    * Filesystem used.
@@ -202,12 +202,12 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Spark context Wrapper.
    */
-  private final transient HoodieSparkEngineContext hoodieSparkContext;
+  private transient HoodieSparkEngineContext hoodieSparkContext;
 
   /**
    * Spark Session.
    */
-  private transient SparkSession sparkSession;
+  private final transient SparkSession sparkSession;
 
   /**
    * Hive Config.
@@ -1308,7 +1308,7 @@ public class StreamSync implements Serializable, Closeable {
 
   class WriteClientWriteResult {
     private Map<String, List<String>> partitionToReplacedFileIds = Collections.emptyMap();
-    private JavaRDD<WriteStatus> writeStatusRDD;
+    private final JavaRDD<WriteStatus> writeStatusRDD;
 
     public WriteClientWriteResult(JavaRDD<WriteStatus> writeStatusRDD) {
       this.writeStatusRDD = writeStatusRDD;

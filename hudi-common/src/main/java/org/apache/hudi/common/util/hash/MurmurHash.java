@@ -29,10 +29,10 @@ package org.apache.hudi.common.util.hash;
  * to Java by Andrzej Bialecki (ab at getopt org).</p>
  */
 public class MurmurHash extends Hash {
-  private static MurmurHash _instance = new MurmurHash();
+  private static final MurmurHash INSTANCE = new MurmurHash();
 
   public static Hash getInstance() {
-    return _instance;
+    return INSTANCE;
   }
 
   @Override
@@ -56,7 +56,7 @@ public class MurmurHash extends Hash {
       k = k << 8;
       k = k | (data[i4 + 1] & 0xff);
       k = k << 8;
-      k = k | (data[i4 + 0] & 0xff);
+      k = k | (data[i4] & 0xff);
       k *= m;
       k ^= k >>> r;
       k *= m;
@@ -77,7 +77,7 @@ public class MurmurHash extends Hash {
         h ^= (int) data[length - 2] << 8;
       }
       if (left >= 1) {
-        h ^= (int) data[length - 1];
+        h ^= data[length - 1];
       }
 
       h *= m;

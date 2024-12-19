@@ -34,7 +34,7 @@ import java.util.List;
  */
 public class FlinkInsertCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
 
-  private List<HoodieRecord<T>> inputRecords;
+  private final List<HoodieRecord<T>> inputRecords;
 
   public FlinkInsertCommitActionExecutor(HoodieEngineContext context,
                                          HoodieWriteHandle<?, ?, ?, ?> writeHandle,

@@ -40,7 +40,7 @@ public enum InsertMode {
    */
   NON_STRICT("non-strict");
 
-  private String value;
+  private final String value;
 
   InsertMode(String value) {
     this.value = value;

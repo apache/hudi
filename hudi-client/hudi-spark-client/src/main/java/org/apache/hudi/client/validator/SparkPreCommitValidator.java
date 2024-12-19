@@ -50,10 +50,10 @@ import java.util.stream.Collectors;
 public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> {
   private static final Logger LOG = LoggerFactory.getLogger(SparkPreCommitValidator.class);
 
-  private HoodieSparkTable<T> table;
-  private HoodieEngineContext engineContext;
-  private HoodieWriteConfig writeConfig;
-  private HoodieMetrics metrics;
+  private final HoodieSparkTable<T> table;
+  private final HoodieEngineContext engineContext;
+  private final HoodieWriteConfig writeConfig;
+  private final HoodieMetrics metrics;
 
   protected SparkPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     this.table = table;

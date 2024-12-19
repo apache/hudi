@@ -195,7 +195,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
-    LOG.info("[direct] Created marker file " + markerPath.toString()
+    LOG.info("[direct] Created marker file " + markerPath
         + " in " + timer.endTimer() + " ms");
     return Option.of(markerPath);
   }

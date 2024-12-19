@@ -59,15 +59,12 @@ public class RDDPartitionSortPartitioner<T>
     return records.coalesce(outputSparkPartitions)
         .mapToPair(record ->
             new Tuple2<>(
-                new StringBuilder()
-                    .append(record.getPartitionPath())
-                    .append("+")
-                    .append(record.getRecordKey())
-                    .toString(), record))
+                record.getPartitionPath() + "+"
+                    + record.getRecordKey(), record))
         .mapPartitions(partition -> {
           // Sort locally in partition
           List<Tuple2<String, HoodieRecord<T>>> recordList = new ArrayList<>();
-          for (; partition.hasNext(); ) {
+          while (partition.hasNext()) {
             recordList.add(partition.next());
           }
           Collections.sort(recordList, (o1, o2) -> o1._1.compareTo(o2._1));

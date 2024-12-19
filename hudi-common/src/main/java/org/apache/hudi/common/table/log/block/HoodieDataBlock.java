@@ -71,7 +71,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   protected Schema readerSchema;
 
   //  Map of string schema to parsed schema.
-  private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
+  private static final ConcurrentHashMap<String, Schema> SCHEMA_MAP = new ConcurrentHashMap<>();
 
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
@@ -368,8 +368,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected Schema getSchemaFromHeader() {
     String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
-    schemaMap.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
-    return schemaMap.get(schemaStr);
+    SCHEMA_MAP.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
+    return SCHEMA_MAP.get(schemaStr);
   }
 
   /**
