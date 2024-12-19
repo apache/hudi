@@ -80,7 +80,6 @@ public class HoodieSecondaryIndex {
         }
         break;
       default:
-        return;
     }
   }
 

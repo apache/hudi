@@ -54,9 +54,9 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
 import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -83,12 +83,12 @@ public class BootstrapExecutor implements Serializable {
   /**
    * Schema provider that supplies the command for reading the input and writing out the target table.
    */
-  private transient SchemaProvider schemaProvider;
+  private final transient SchemaProvider schemaProvider;
 
   /**
    * Spark context.
    */
-  private transient JavaSparkContext jssc;
+  private final transient JavaSparkContext jssc;
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
@@ -108,9 +108,9 @@ public class BootstrapExecutor implements Serializable {
   /**
    * FileSystem instance.
    */
-  private transient FileSystem fs;
+  private final transient FileSystem fs;
 
-  private String bootstrapBasePath;
+  private final String bootstrapBasePath;
 
   /**
    * Bootstrap Executor.

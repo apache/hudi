@@ -70,7 +70,7 @@ public class TimelineServerPerf implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(TimelineServerPerf.class);
   private final Config cfg;
-  private transient TimelineService timelineServer;
+  private final transient TimelineService timelineServer;
   private final boolean useExternalTimelineServer;
   private String hostAddr;
 

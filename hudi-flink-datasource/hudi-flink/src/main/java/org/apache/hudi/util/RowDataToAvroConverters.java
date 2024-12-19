@@ -50,7 +50,7 @@ import java.util.Map;
 @Internal
 public class RowDataToAvroConverters {
 
-  private static Conversions.DecimalConversion decimalConversion = new Conversions.DecimalConversion();
+  private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   // --------------------------------------------------------------------------------
   // Runtime Converters
@@ -219,7 +219,7 @@ public class RowDataToAvroConverters {
               @Override
               public Object convert(Schema schema, Object object) {
                 BigDecimal javaDecimal = ((DecimalData) object).toBigDecimal();
-                return decimalConversion.toFixed(javaDecimal, schema, schema.getLogicalType());
+                return DECIMAL_CONVERSION.toFixed(javaDecimal, schema, schema.getLogicalType());
               }
             };
         break;

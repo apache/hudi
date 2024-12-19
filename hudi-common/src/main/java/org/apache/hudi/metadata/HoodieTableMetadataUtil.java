@@ -829,9 +829,9 @@ public class HoodieTableMetadataUtil {
                 return deletedRecordKeys.stream().map(recordKey -> HoodieMetadataPayload.createRecordIndexDelete(recordKey)).collect(toList()).iterator();
               }
               // ignore log file data blocks.
-              return new ArrayList<HoodieRecord>().iterator();
+              return Collections.emptyIterator();
             } else {
-              throw new HoodieIOException("Unsupported file type " + fullFilePath.toString() + " while generating MDT records");
+              throw new HoodieIOException("Unsupported file type " + fullFilePath + " while generating MDT records");
             }
           });
 
@@ -933,7 +933,7 @@ public class HoodieTableMetadataUtil {
               return getRecordKeys(fullFilePath.toString(), dataTableMetaClient, finalWriterSchemaOpt, maxBufferSize, instantTime, true, true)
                   .iterator();
             } else {
-              throw new HoodieIOException("Found unsupported file type " + fullFilePath.toString() + ", while generating MDT records");
+              throw new HoodieIOException("Found unsupported file type " + fullFilePath + ", while generating MDT records");
             }
           }).collectAsList();
     } catch (Exception e) {
@@ -2662,7 +2662,7 @@ public class HoodieTableMetadataUtil {
 
     Comparable minValue =
         (Comparable) Stream.of(
-                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMinValue()),
+                unwrapAvroValueWrapper(prevColumnStats.getMinValue()),
                 (Comparable) unwrapAvroValueWrapper(newColumnStats.getMinValue()))
             .filter(Objects::nonNull)
             .min(Comparator.naturalOrder())
@@ -2670,7 +2670,7 @@ public class HoodieTableMetadataUtil {
 
     Comparable maxValue =
         (Comparable) Stream.of(
-                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMaxValue()),
+                unwrapAvroValueWrapper(prevColumnStats.getMaxValue()),
                 (Comparable) unwrapAvroValueWrapper(newColumnStats.getMaxValue()))
             .filter(Objects::nonNull)
             .max(Comparator.naturalOrder())

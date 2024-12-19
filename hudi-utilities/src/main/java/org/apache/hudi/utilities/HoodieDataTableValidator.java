@@ -110,7 +110,7 @@ public class HoodieDataTableValidator implements Serializable {
   // Properties with source, hoodie client, key generator etc.
   private TypedProperties props;
 
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
 
   protected transient Option<AsyncDataTableValidateService> asyncDataTableValidateService;
 
@@ -351,7 +351,7 @@ public class HoodieDataTableValidator implements Serializable {
 
         if (!danglingFiles.isEmpty()) {
           LOG.error("Data table validation failed due to extra files found for completed commits " + danglingFiles.size());
-          danglingFiles.forEach(entry -> LOG.error("Dangling file: " + entry.toString()));
+          danglingFiles.forEach(entry -> LOG.error("Dangling file: " + entry));
           finalResult = false;
           if (!cfg.ignoreFailed) {
             throw new HoodieValidationException("Data table validation failed due to dangling files " + danglingFiles.size());

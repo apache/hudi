@@ -47,12 +47,12 @@ public class HoodieCleaner {
   /**
    * Spark context.
    */
-  private transient JavaSparkContext jssc;
+  private final transient JavaSparkContext jssc;
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
    */
-  private TypedProperties props;
+  private final TypedProperties props;
 
   public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
     this(cfg, jssc, UtilHelpers.buildProperties(jssc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));

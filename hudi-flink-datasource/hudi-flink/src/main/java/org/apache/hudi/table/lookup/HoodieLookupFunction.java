@@ -138,7 +138,7 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
       return;
     }
     // Determine whether to reload data by comparing instant
-    if (currentCommit != null && latestCommitInstant.get().equals(currentCommit)) {
+    if (latestCommitInstant.get().equals(currentCommit)) {
       LOG.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
       return;
     }

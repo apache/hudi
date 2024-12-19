@@ -85,10 +85,8 @@ public class HoodieKey implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieKey {");
-    sb.append(" recordKey=").append(recordKey);
-    sb.append(" partitionPath=").append(partitionPath);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieKey {" + " recordKey=" + recordKey
+        + " partitionPath=" + partitionPath
+        + '}';
   }
 }
