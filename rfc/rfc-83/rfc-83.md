@@ -216,7 +216,7 @@ new IncrementalClusteringPlanStrategy**
 
 Table Service Planner with Incremental Clustering/Compaction Strategy
 1. Retrieve the instant recorded in the last table service `xxxx.requested` as **INSTANT 1**.
-2. Calculate the current instant to be processed as **INSTANT 2**.
+2. Calculate the current instant(Request time) to be processed as **INSTANT 2**.
 3. Obtain all partitions involved from **INSTANT 1** to **INSTANT 2** as incremental partitions and perform the table service plan operation.
 4. Record **INSTANT 2** in the table service plan.
 
