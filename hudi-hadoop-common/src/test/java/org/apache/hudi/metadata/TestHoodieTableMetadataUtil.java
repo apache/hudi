@@ -483,7 +483,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("timestamp");
     expected.add("_row_key");
     expected.add("partition_path");
-    expected.add("trip_type");
     expected.add("rider");
     expected.add("driver");
     expected.add("begin_lat");
