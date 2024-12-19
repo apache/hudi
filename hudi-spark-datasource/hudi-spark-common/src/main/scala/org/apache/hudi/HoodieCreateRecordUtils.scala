@@ -226,7 +226,7 @@ object HoodieCreateRecordUtils {
       None
     }
     val recordLocation: Option[HoodieRecordLocation] = if (instantTime.isDefined && fileName.isDefined) {
-      val fileId = FSUtils.getFileId(fileName.get)
+      val fileId = FSUtils.getFileIdFromFileName(fileName.get)
       Some(new HoodieRecordLocation(instantTime.get, fileId))
     } else {
       None
@@ -265,7 +265,7 @@ object HoodieCreateRecordUtils {
     }
 
     val recordLocation: Option[HoodieRecordLocation] = if (instantTime.isDefined && fileName.isDefined) {
-      val fileId = FSUtils.getFileId(fileName.get)
+      val fileId = FSUtils.getFileIdFromFileName(fileName.get)
       Some(new HoodieRecordLocation(instantTime.get, fileId))
     } else {
       None
