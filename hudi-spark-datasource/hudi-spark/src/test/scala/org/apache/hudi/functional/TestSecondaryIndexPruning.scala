@@ -1289,7 +1289,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     verifyQueryPredicate(hudiOpts, "rider")
   }
 
-  @Disabled("to be fixed")
+  @Test
   def testSecondaryIndexWithPrimitiveDataTypes(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
