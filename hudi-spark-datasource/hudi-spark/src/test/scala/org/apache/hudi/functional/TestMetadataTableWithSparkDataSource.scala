@@ -239,7 +239,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ",
-      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "6",
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "6"
     )
     val combinedOpts: Map[String, String] = partitionedCommonOpts ++ metadataOpts
 
