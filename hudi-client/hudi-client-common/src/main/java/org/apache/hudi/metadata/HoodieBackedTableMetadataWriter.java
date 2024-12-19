@@ -1181,6 +1181,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     long targetPartitionSize = 100 * 1024 * 1024;
     int parallelism = (int) Math.max(1, (totalWriteBytesForSecondaryIndex + targetPartitionSize - 1) / targetPartitionSize);
 
+    // Load file system view for only the affected partitions on the driver.
+    // By loading on the driver one time, we avoid loading the same metadata multiple times on the executors.
+    HoodieMetadataFileSystemView fsView = getMetadataView();
+    fsView.loadPartitions(partitionFilePairs.stream().map(Pair::getKey).collect(Collectors.toList()));
+
     return readSecondaryKeysFromBaseFiles(
         engineContext,
         partitionFilePairs,
@@ -1188,7 +1193,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         this.getClass().getSimpleName(),
         dataMetaClient,
         getEngineType(),
-        indexDefinition)
+        indexDefinition,
+        fsView)
         .union(deletedRecords)
         .distinctWithKey(HoodieRecord::getKey, parallelism);
   }
