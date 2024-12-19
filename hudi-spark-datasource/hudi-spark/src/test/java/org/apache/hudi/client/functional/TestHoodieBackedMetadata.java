@@ -896,7 +896,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .enableMetrics(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(5)
+            .withMaxNumDeltaCommitsBeforeCompaction(4)
+            .withMetadataIndexColumnStats(false)
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
     doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
@@ -929,7 +930,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     testTable.moveCompleteCommitToInflight(inflightInstant2);
 
     // write some commits to trigger the MDT compaction
-    doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
     doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
     doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
 

@@ -66,14 +66,7 @@ public abstract class FileFormatUtils {
         .map(e -> HoodieColumnRangeMetadata.create(
             relativePartitionPath, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
             e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize()))
-        .reduce((left, right) -> {
-          try {
-            return HoodieColumnRangeMetadata.merge(left, right);
-          } catch (ClassCastException cce) {
-            System.out.println("adfasdf");
-            throw cce;
-          }
-        }).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
+        .reduce(HoodieColumnRangeMetadata::merge).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
   }
 
   /**

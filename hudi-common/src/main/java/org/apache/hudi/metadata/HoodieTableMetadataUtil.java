@@ -1142,11 +1142,14 @@ public class HoodieTableMetadataUtil {
                                                                           HoodieMetadataConfig metadataConfig,
                                                                           int columnStatsIndexParallelism,
                                                                           int maxReaderBufferSize) {
+    if ((partitionToAppendedFiles.isEmpty() && partitionToDeletedFiles.isEmpty())) {
+      return engineContext.emptyHoodieData();
+    }
     // Find the columns to index
     final List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(),
         metadataConfig, Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)),
         dataMetaClient.getActiveTimeline().filterCompletedInstants().empty());
-    if (columnsToIndex.isEmpty() || (partitionToAppendedFiles.isEmpty() && partitionToDeletedFiles.isEmpty())) {
+    if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
       LOG.warn("No columns to index for column stats index.");
       return engineContext.emptyHoodieData();
@@ -1700,14 +1703,15 @@ public class HoodieTableMetadataUtil {
   }
 
   private static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType) {
-    // if record type is set and if its AVRO, MAP, ARRAY and RECORD type is unsupported.
+    // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
     if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
       return (schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
           && schema.getType() != Schema.Type.ENUM);
     }
-    // if record Type is not set or if recordType is SPARK then we cannot compare RECORD and ARRAY types in addition to MAP type
+    // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
+    // HUDI-8585 will add support for BYTES and FIXED
     return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
-        && schema.getType() != Schema.Type.ENUM && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED; // HUDI-8585 will add support for BYTES and FIXED
+        && schema.getType() != Schema.Type.ENUM && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
@@ -2631,18 +2635,6 @@ public class HoodieTableMetadataUtil {
   static boolean validateDataTypeForPartitionStats(String columnToIndex, Schema tableSchema) {
     Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(tableSchema, columnToIndex);
     return isColumnTypeSupported(fieldSchema, Option.of(HoodieRecordType.SPARK));
-    // Exclude fields based on logical type
-    /*if ((fieldSchema.getType() == Schema.Type.INT || fieldSchema.getType() == Schema.Type.LONG)
-        && fieldSchema.getLogicalType() != null) {
-
-      // Skip fields with logical types DATE or TIME_MILLIS for INT, TIMESTAMP_MILLIS for LONG
-      String logicalType = fieldSchema.getLogicalType().getName();
-      return !logicalType.equals("date") && !logicalType.equals("timestamp-millis") && !logicalType.equals("timestamp-micros") && !logicalType.equals("time-millis")
-          && !logicalType.equals("time-micros") && !logicalType.equals("local-timestamp-millis") && !logicalType.equals("local-timestamp-micros");
-    }*/
-    //return true;
-    // Include other supported primitive types
-    //return SUPPORTED_TYPES_PARTITION_STATS.contains(fieldSchema.getType());
   }
 
   /**
