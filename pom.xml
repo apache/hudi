@@ -226,7 +226,7 @@
     <moto.endpoint>http://localhost:${moto.port}</moto.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
-    <snappy.version>1.1.8.3</snappy.version>
+    <snappy.version>1.1.10.7</snappy.version>
   </properties>
 
   <scm>
@@ -1162,7 +1162,7 @@
       <dependency>
         <groupId>xerces</groupId>
         <artifactId>xercesImpl</artifactId>
-        <version>2.9.1</version>
+        <version>2.12.2</version>
       </dependency>
 
       <dependency>
