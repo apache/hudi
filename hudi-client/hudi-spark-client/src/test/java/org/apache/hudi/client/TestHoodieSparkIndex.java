@@ -37,8 +37,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.IDENTITY_FUNCTION;
-import static org.apache.hudi.index.functional.HoodieExpressionIndex.RANGE_TYPE;
+import static org.apache.hudi.index.expression.ExpressionIndexSparkFunctions.IDENTITY_FUNCTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.RANGE_TYPE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
