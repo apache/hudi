@@ -40,7 +40,7 @@ class TestDecimalTypeDataWorkflow extends SparkClientFunctionalTestHarness{
   val opts = sparkOpts ++ fgReaderOpts
 
   @ParameterizedTest
-  @CsvSource(value = Array("10,2", "20,10", "38,18", "5,0"))
+  @CsvSource(value = Array("10,2", "15,5", "20,10", "38,18", "5,0"))
   def testDecimalInsertUpdateDeleteRead(precision: String, scale: String): Unit = {
     // Create schema
     val schema = StructType(Seq(
