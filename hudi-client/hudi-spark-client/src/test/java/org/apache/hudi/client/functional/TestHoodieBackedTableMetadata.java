@@ -50,6 +50,7 @@ import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
+import org.apache.hudi.metadata.SecondaryIndexKeyUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -410,18 +411,19 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
     // Case 2: Multiple log records, and the latest record is a tombstone.
     logRecords.add(HoodieMetadataPayload.createSecondaryIndexRecord(
-        recordKey, secondaryKey, "partitionPath", true));
+        recordKey, secondaryKey + "_new", "partitionPath", true));
     r = HoodieBackedTableMetadata.reverseLookupSecondaryKeysInternal(recordKeys, baseFileRecords, logRecordReader);
-    assertEquals(0, r.size());
+    assertEquals(1, r.size());
 
     // Case 3: Multiple log records, and the latest record is not a tombstone.
     String newSecondaryKey = "newSecondaryKey";
+    String newRecordKey = "newRecordKey";
     logRecords.add(HoodieMetadataPayload.createSecondaryIndexRecord(
-        recordKey, newSecondaryKey, "partitionPath", false));
+        newRecordKey, newSecondaryKey, "partitionPath", false));
     r = HoodieBackedTableMetadata.reverseLookupSecondaryKeysInternal(recordKeys, baseFileRecords, logRecordReader);
     assertEquals(1, r.size());
-    assertTrue(r.containsKey(recordKey));
-    assertEquals(newSecondaryKey, r.get(recordKey));
+    assertFalse(r.containsKey(newRecordKey));
+    assertEquals(secondaryKey, r.get(recordKey));
   }
 
   @Test
@@ -437,8 +439,10 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     String secondaryKey = "secondaryKey";
     logRecords.add(HoodieMetadataPayload.createSecondaryIndexRecord(
         recordKey, secondaryKey, "partitionPath", true));
-    baseFileRecords.put(recordKey, HoodieMetadataPayload.createSecondaryIndexRecord(
-        recordKey, secondaryKey, "partitionPath", false));
+    baseFileRecords.put(
+        SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey),
+        HoodieMetadataPayload.createSecondaryIndexRecord(
+            recordKey, secondaryKey, "partitionPath", false));
     Map<String, String> r =
         HoodieBackedTableMetadata.reverseLookupSecondaryKeysInternal(recordKeys, baseFileRecords, logRecordReader);
     assertEquals(0, r.size());
