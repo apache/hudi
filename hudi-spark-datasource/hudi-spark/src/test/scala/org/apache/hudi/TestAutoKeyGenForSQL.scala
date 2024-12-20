@@ -25,16 +25,18 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.spark.SparkConf
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 
 class TestAutoKeyGenForSQL extends SparkClientFunctionalTestHarness {
-  var tableName = "hoodie_test"
   override def conf: SparkConf = conf(getSparkSqlConf)
 
-  @Test
-  def testAutoKeyGen(): Unit = {
+  @ParameterizedTest
+  @CsvSource(value = Array("MERGE_ON_READ", "COPY_ON_WRITE"))
+  def testAutoKeyGen(tableType: String): Unit = {
     // No record key is set, which should trigger auto key gen.
     // MOR table is used to generate log files.
+    val tableName = "hoodie_test_" + tableType
     spark.sql(
       s"""
          |create table $tableName (
@@ -52,7 +54,7 @@ class TestAutoKeyGenForSQL extends SparkClientFunctionalTestHarness {
          | )
          | partitioned by(city)
          | location '$basePath'
-         | TBLPROPERTIES (hoodie.datasource.write.table.type='MERGE_ON_READ')
+         | TBLPROPERTIES (hoodie.datasource.write.table.type='$tableType')
        """.stripMargin)
     // Initial data.
     spark.sql(
