@@ -156,7 +156,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   }
 
   @Override
-  public void createOrUpdateColStatsIndex(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+  public void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
 
     String fullIndexName = PARTITION_NAME_COLUMN_STATS;
 

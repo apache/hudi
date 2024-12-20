@@ -392,6 +392,6 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @Override
   protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    new HoodieSparkIndexClient(config, context).createOrUpdateColStatsIndex(metaClient, columnsToIndex);
+    new HoodieSparkIndexClient(config, context).createOrUpdateColumnStatsIndexDefinition(metaClient, columnsToIndex);
   }
 }

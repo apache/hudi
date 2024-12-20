@@ -31,8 +31,6 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
-
 public abstract class BaseHoodieIndexClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieIndexClient.class);
@@ -50,12 +48,7 @@ public abstract class BaseHoodieIndexClient {
   public void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
     LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
     // build HoodieIndexMetadata and then add to index definition file
-    boolean indexDefnUpdated = true;
-    if (indexDefinition.getIndexName().equals(PARTITION_NAME_COLUMN_STATS)) {
-      indexDefnUpdated = metaClient.buildColSatsIndexDefinition(indexDefinition);
-    } else {
-      metaClient.buildIndexDefinition(indexDefinition);
-    }
+    boolean indexDefnUpdated = metaClient.buildIndexDefinition(indexDefinition);
     if (indexDefnUpdated) {
       // update table config if necessary
       String indexMetaPath = metaClient.getIndexDefinitionPath();
@@ -72,7 +65,7 @@ public abstract class BaseHoodieIndexClient {
   public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
                               Map<String, String> tableProperties) throws Exception;
 
-  public abstract void createOrUpdateColStatsIndex(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
+  public abstract void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
 
   /**
    * Drop an index. By default, ignore drop if index does not exist.

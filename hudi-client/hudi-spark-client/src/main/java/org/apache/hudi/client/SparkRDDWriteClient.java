@@ -340,7 +340,7 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    new HoodieSparkIndexClient(config, getEngineContext()).createOrUpdateColStatsIndex(metaClient, columnsToIndex);
+    new HoodieSparkIndexClient(config, getEngineContext()).createOrUpdateColumnStatsIndexDefinition(metaClient, columnsToIndex);
   }
 
   @Override

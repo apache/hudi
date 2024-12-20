@@ -27,12 +27,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
-import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -91,12 +89,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       writeTableMetadata(table, compactionCommitTime, metadata);
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
-      // update table config for cols to Index as applicable
-      HoodieIndexClientUtils.updateColsToIndex(table, config, metadata,
-          (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (val1, val2) -> {
-            updateColumnsToIndexWithColStats(val1, val2);
-            return null;
-          });
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
     }
@@ -148,12 +140,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
           clusteringInstant,
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata),
           table.getActiveTimeline());
-      // update table config for cols to Index as applicable
-      HoodieIndexClientUtils.updateColsToIndex(table, config, metadata,
-          (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (val1, val2) -> {
-            updateColumnsToIndexWithColStats(val1, val2);
-            return null;
-          });
     } catch (IOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);

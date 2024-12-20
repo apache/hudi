@@ -37,25 +37,27 @@ public class HoodieIndexClientUtils {
   public static void updateColsToIndex(HoodieTable dataTable, HoodieWriteConfig config, HoodieCommitMetadata commitMetadata,
                                 Functions.Function2<HoodieTableMetaClient, List<String>, Void> updateColSatsFunc) {
     if (config.getMetadataConfig().isColumnStatsIndexEnabled()) {
-      try {
-        HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-            .setStorage(dataTable.getStorage())
-            .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(dataTable.getMetaClient().getBasePath()))
-            .build();
-        HoodieInstant latestInstant = mdtMetaClient.getActiveTimeline().filterCompletedInstants().getInstantsOrderedByCompletionTime().reduce((a, b) -> b).get();
-
-        final HoodieCommitMetadata mdtCommitMetadata = mdtMetaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(
-            latestInstant,
-            mdtMetaClient.getActiveTimeline().getInstantDetails(latestInstant).get(),
-            HoodieCommitMetadata.class);
-        if (mdtCommitMetadata.getPartitionToWriteStats().containsKey(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
-          // update data table's table config for list of columns indexed.
-          List<String> columnsToIndex = HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig());
-          // if col stats is getting updated, lets also update list of columns indexed if changed.
-          updateColSatsFunc.apply(dataTable.getMetaClient(), columnsToIndex);
+      dataTable.getMetaClient().reloadTableConfig();
+      if (dataTable.getMetaClient().getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
+        try {
+          HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+              .setStorage(dataTable.getStorage())
+              .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(dataTable.getMetaClient().getBasePath()))
+              .build();
+          HoodieInstant latestInstant = mdtMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant().get();
+          final HoodieCommitMetadata mdtCommitMetadata = mdtMetaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(
+              latestInstant,
+              mdtMetaClient.getActiveTimeline().getInstantDetails(latestInstant).get(),
+              HoodieCommitMetadata.class);
+          if (mdtCommitMetadata.getPartitionToWriteStats().containsKey(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
+            // update data table's table config for list of columns indexed.
+            List<String> columnsToIndex = HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig());
+            // if col stats is getting updated, lets also update list of columns indexed if changed.
+            updateColSatsFunc.apply(dataTable.getMetaClient(), columnsToIndex);
+          }
+        } catch (Exception e) {
+          throw new HoodieException("Updating data table config to latest set of columns indexed with col stats failed ", e);
         }
-      } catch (Exception e) {
-        throw new HoodieException("Updating data table config to latest set of columns indexed with col stats failed ", e);
       }
     }
   }

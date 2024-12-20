@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.StringJoiner;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -134,5 +135,24 @@ public class HoodieIndexDefinition implements Serializable {
         .add("sourceFields=" + sourceFields)
         .add("indexOptions=" + indexOptions)
         .toString();
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof HoodieIndexDefinition)) {
+      return false;
+    }
+    HoodieIndexDefinition that = (HoodieIndexDefinition) o;
+    return getIndexName().equals(that.getIndexName()) && getIndexType().equals(that.getIndexType())
+        && getIndexFunction().equals(that.getIndexFunction()) && getSourceFields().equals(that.getSourceFields())
+        && getIndexOptions().equals(that.getIndexOptions());
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getIndexName(), getIndexType(), getIndexFunction(), getSourceFields(), getIndexOptions());
   }
 }

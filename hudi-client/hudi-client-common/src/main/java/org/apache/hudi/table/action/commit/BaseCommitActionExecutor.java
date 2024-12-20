@@ -233,7 +233,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
-      // update table config for cols to Index as applicable
+      // update cols to Index as applicable
       HoodieIndexClientUtils.updateColsToIndex(table, config, metadata,
           (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (val1, val2) -> {
             updateColumnsToIndexWithColStats(val1, val2);
