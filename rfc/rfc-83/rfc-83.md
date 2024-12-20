@@ -151,7 +151,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import java.io.IOException;
 import java.util.List;
 
-public abstract class BaseTableServicePlanStrategy<R,S> {
+public abstract class PartitionBaseTableServicePlanStrategy<R,S> {
 
   /**
    * Generate table service plan based on given instant.
