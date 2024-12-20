@@ -73,7 +73,7 @@ public class HoodieMultiTableStreamer {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMultiTableStreamer.class);
 
   private final List<TableExecutionContext> tableExecutionContexts;
-  private final transient JavaSparkContext jssc;
+  private transient JavaSparkContext jssc;
   private final Set<String> successTables;
   private final Set<String> failedTables;
 

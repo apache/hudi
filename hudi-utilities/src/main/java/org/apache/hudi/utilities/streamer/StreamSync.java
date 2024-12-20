@@ -175,12 +175,12 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Source to pull deltas from.
    */
-  private final transient SourceFormatAdapter formatAdapter;
+  private transient SourceFormatAdapter formatAdapter;
 
   /**
    * User Provided Schema Provider.
    */
-  private final transient SchemaProvider userProvidedSchemaProvider;
+  private transient SchemaProvider userProvidedSchemaProvider;
 
   /**
    * Schema provider that supplies the command for reading the input and writing out the target table.
@@ -190,19 +190,19 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Allows transforming source to target table before writing.
    */
-  private final transient Option<Transformer> transformer;
+  private transient Option<Transformer> transformer;
 
   private final String keyGenClassName;
 
   /**
    * Filesystem used.
    */
-  private final transient HoodieStorage storage;
+  private transient HoodieStorage storage;
 
   /**
    * Spark context Wrapper.
    */
-  private final transient HoodieSparkEngineContext hoodieSparkContext;
+  private transient HoodieSparkEngineContext hoodieSparkContext;
 
   /**
    * Spark Session.
@@ -212,7 +212,7 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Hive Config.
    */
-  private final transient Configuration conf;
+  private transient Configuration conf;
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
@@ -224,7 +224,7 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Callback when write client is instantiated.
    */
-  private final transient Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient;
+  private transient Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient;
 
   /**
    * Timeline with completed commits, including both .commit and .deltacommit.

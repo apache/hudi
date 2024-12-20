@@ -55,10 +55,10 @@ public class TimelineService {
   private int serverPort;
   private final Config timelineServerConf;
   private final StorageConfiguration<?> storageConf;
-  private final transient HoodieEngineContext context;
-  private final transient HoodieStorage storage;
+  private transient HoodieEngineContext context;
+  private transient HoodieStorage storage;
   private transient Javalin app = null;
-  private final transient FileSystemViewManager fsViewsManager;
+  private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
 
   public int getServerPort() {

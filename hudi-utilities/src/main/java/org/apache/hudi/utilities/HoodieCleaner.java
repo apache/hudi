@@ -47,7 +47,7 @@ public class HoodieCleaner {
   /**
    * Spark context.
    */
-  private final transient JavaSparkContext jssc;
+  private transient JavaSparkContext jssc;
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.

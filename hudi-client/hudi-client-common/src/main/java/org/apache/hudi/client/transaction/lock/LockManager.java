@@ -53,7 +53,7 @@ public class LockManager implements Serializable, AutoCloseable {
   private final int maxRetries;
   private final long maxWaitTimeInMs;
   private final RetryHelper<Boolean, HoodieLockException> lockRetryHelper;
-  private final transient HoodieLockMetrics metrics;
+  private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
 
   public LockManager(HoodieWriteConfig writeConfig, HoodieStorage storage) {

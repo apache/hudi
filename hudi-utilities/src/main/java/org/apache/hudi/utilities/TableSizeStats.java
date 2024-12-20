@@ -109,7 +109,7 @@ public class TableSizeStats implements Serializable {
   private static final String[] FILE_SIZE_UNITS = {"B", "KB", "MB", "GB", "TB"};
 
   // Spark context
-  private final transient JavaSparkContext jsc;
+  private transient JavaSparkContext jsc;
   // config
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.

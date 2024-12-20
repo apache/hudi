@@ -200,7 +200,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataTableValidator.class);
 
   // Spark context
-  private final transient JavaSparkContext jsc;
+  private transient JavaSparkContext jsc;
   // config
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.

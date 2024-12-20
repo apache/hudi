@@ -96,7 +96,7 @@ public class MarkerHandler extends Handler {
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
   private final Object firstCreationRequestSeenLock = new Object();
   private final Object earlyConflictDetectionLock = new Object();
-  private final transient HoodieEngineContext hoodieEngineContext;
+  private transient HoodieEngineContext hoodieEngineContext;
   private ScheduledFuture<?> dispatchingThreadFuture;
   private boolean firstCreationRequestSeen;
   private String currentMarkerDir = null;

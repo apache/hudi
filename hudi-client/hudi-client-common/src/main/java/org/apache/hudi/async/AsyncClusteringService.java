@@ -47,7 +47,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
   private static final Logger LOG = LoggerFactory.getLogger(AsyncClusteringService.class);
   private final int maxConcurrentClustering;
   protected transient HoodieEngineContext context;
-  private final transient BaseClusterer clusteringClient;
+  private transient BaseClusterer clusteringClient;
 
   public AsyncClusteringService(HoodieEngineContext context, BaseHoodieWriteClient writeClient) {
     this(context, writeClient, false);

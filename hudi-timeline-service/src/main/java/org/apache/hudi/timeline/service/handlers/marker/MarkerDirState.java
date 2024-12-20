@@ -86,7 +86,7 @@ public class MarkerDirState implements Serializable {
   private final Object markerCreationProcessingLock = new Object();
   // Early conflict detection strategy if enabled
   private final Option<TimelineServerBasedDetectionStrategy> conflictDetectionStrategy;
-  private final transient HoodieEngineContext hoodieEngineContext;
+  private transient HoodieEngineContext hoodieEngineContext;
   // Last underlying file index used, for finding the next file index
   // in a round-robin fashion
   private int lastFileIndexUsed = -1;

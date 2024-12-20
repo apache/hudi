@@ -83,7 +83,7 @@ public class SparkBootstrapCommitActionExecutor<T>
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkBootstrapCommitActionExecutor.class);
   protected String bootstrapSchema = null;
-  private final transient HoodieStorage bootstrapSourceStorage;
+  private transient HoodieStorage bootstrapSourceStorage;
 
   public SparkBootstrapCommitActionExecutor(HoodieSparkEngineContext context,
                                             HoodieWriteConfig config,

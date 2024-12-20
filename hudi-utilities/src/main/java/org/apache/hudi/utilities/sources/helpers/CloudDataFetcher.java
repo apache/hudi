@@ -54,10 +54,10 @@ public class CloudDataFetcher implements Serializable {
 
   private static final String EMPTY_STRING = "";
 
-  private final transient TypedProperties props;
-  private final transient JavaSparkContext sparkContext;
-  private final transient SparkSession sparkSession;
-  private final transient CloudObjectsSelectorCommon cloudObjectsSelectorCommon;
+  private transient TypedProperties props;
+  private transient JavaSparkContext sparkContext;
+  private transient SparkSession sparkSession;
+  private transient CloudObjectsSelectorCommon cloudObjectsSelectorCommon;
 
   private static final Logger LOG = LoggerFactory.getLogger(CloudDataFetcher.class);
 

@@ -32,7 +32,7 @@ public class BaseFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private final transient StoragePathInfo pathInfo;
+  private transient StoragePathInfo pathInfo;
   private final String fullPath;
   protected final String fileName;
   private long fileLen;

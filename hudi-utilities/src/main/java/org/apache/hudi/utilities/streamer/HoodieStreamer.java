@@ -119,7 +119,7 @@ public class HoodieStreamer implements Serializable {
   public static final String CHECKPOINT_KEY = HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
   public static final String CHECKPOINT_RESET_KEY = STREAMER_CHECKPOINT_RESET_KEY_V1;
 
-  protected final transient Config cfg;
+  protected transient Config cfg;
 
   /**
    * NOTE: These properties are already consolidated w/ CLI provided config-overrides.
@@ -655,12 +655,12 @@ public class HoodieStreamer implements Serializable {
     /**
      * Schema provider that supplies the command for reading the input and writing out the target table.
      */
-    private final transient SchemaProvider schemaProvider;
+    private transient SchemaProvider schemaProvider;
 
     /**
      * Spark Session.
      */
-    private final transient SparkSession sparkSession;
+    private transient SparkSession sparkSession;
 
     /**
      * Spark context Wrapper.
@@ -668,9 +668,9 @@ public class HoodieStreamer implements Serializable {
 
     private final transient HoodieSparkEngineContext hoodieSparkContext;
 
-    private final transient HoodieStorage storage;
+    private transient HoodieStorage storage;
 
-    private final transient Configuration hiveConf;
+    private transient Configuration hiveConf;
 
     /**
      * Bag of properties with source, hoodie client, key generator etc.

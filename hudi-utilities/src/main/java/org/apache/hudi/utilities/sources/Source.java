@@ -59,7 +59,7 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   protected transient SparkSession sparkSession;
   protected transient Option<SourceProfileSupplier> sourceProfileSupplier;
   protected int writeTableVersion;
-  private final transient SchemaProvider overriddenSchemaProvider;
+  private transient SchemaProvider overriddenSchemaProvider;
 
   private final SourceType sourceType;
 

@@ -83,12 +83,12 @@ public class BootstrapExecutor implements Serializable {
   /**
    * Schema provider that supplies the command for reading the input and writing out the target table.
    */
-  private final transient SchemaProvider schemaProvider;
+  private transient SchemaProvider schemaProvider;
 
   /**
    * Spark context.
    */
-  private final transient JavaSparkContext jssc;
+  private transient JavaSparkContext jssc;
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
@@ -108,7 +108,7 @@ public class BootstrapExecutor implements Serializable {
   /**
    * FileSystem instance.
    */
-  private final transient FileSystem fs;
+  private transient FileSystem fs;
 
   private final String bootstrapBasePath;
 
