@@ -83,8 +83,6 @@
                   <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.codehaus.jackson:*</include>
                   <include>com.yammer.metrics:metrics-core</include>
-                  <include>com.google.guava:guava</include>
-                  <include>commons-lang:commons-lang</include>
                   <include>commons-io:commons-io</include>
                   <include>com.google.protobuf:protobuf-java</include>
                   <include>org.openjdk.jol:jol-core</include>
