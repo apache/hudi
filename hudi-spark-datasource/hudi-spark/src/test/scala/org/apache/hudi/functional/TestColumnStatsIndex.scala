@@ -156,6 +156,24 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
       HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c7","c8"))
+
+    // update list of columns to explicit list of cols.
+    val metadataOpts3 = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "c1,c2,c3,c5,c7" // ignore c4,c5,c8.
+    )
+    // disable col stats
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts3, commonOpts,
+      dataSourcePath = "index/colstats/update6-input-table-json",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      shouldValidate = false,
+      shouldValidateManually = false))
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    validateNonExistantColumnsToIndexDefn(metaClient)
   }
 
   /**

@@ -32,6 +32,8 @@ import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+
 public class HoodieIndexClientUtils {
 
   public static void updateColsToIndex(HoodieTable dataTable, HoodieWriteConfig config, HoodieCommitMetadata commitMetadata,
@@ -60,5 +62,9 @@ public class HoodieIndexClientUtils {
         }
       }
     }
+  }
+
+  public static void deleteColStatsIndexDefn(HoodieTableMetaClient dataTableMetaClient) {
+    dataTableMetaClient.deleteIndexDefinition(PARTITION_NAME_COLUMN_STATS);
   }
 }

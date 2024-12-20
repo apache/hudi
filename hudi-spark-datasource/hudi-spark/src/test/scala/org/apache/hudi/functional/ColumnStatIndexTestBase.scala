@@ -45,7 +45,7 @@ import org.apache.spark.sql.functions.{lit, struct, typedLit}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.dsl.expressions.StringToAttributeConversionHelper
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.provider.Arguments
 
@@ -232,6 +232,10 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   protected def validateColumnsToIndex(metaClient: HoodieTableMetaClient, expectedColsToIndex: Seq[String]): Unit = {
     val indexDefn = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
     assertEquals(expectedColsToIndex, indexDefn.getSourceFields.asScala.toSeq)
+  }
+
+  protected def validateNonExistantColumnsToIndexDefn(metaClient: HoodieTableMetaClient): Unit = {
+    assertTrue(!metaClient.getIndexMetadata.get().getIndexDefinitions.containsKey(PARTITION_NAME_COLUMN_STATS))
   }
 
   protected def validateColumnStatsIndex(testCase: ColumnStatsTestCase,

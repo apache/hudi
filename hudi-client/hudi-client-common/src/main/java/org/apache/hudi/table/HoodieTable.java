@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.HoodieIndexClientUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -1028,6 +1029,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
           if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType.getPartitionPath())) {
             deleteMetadataPartition(metaClient.getBasePath(), context, partitionType.getPartitionPath());
+          }
+          if (partitionType == MetadataPartitionType.COLUMN_STATS) {
+            // delete index definition as well
+            HoodieIndexClientUtils.deleteColStatsIndexDefn(getMetaClient());
           }
           clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
         } catch (HoodieMetadataException e) {

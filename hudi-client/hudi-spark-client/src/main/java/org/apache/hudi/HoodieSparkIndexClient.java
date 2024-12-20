@@ -65,8 +65,6 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkIndexClient.class);
 
-  private static volatile HoodieSparkIndexClient _instance;
-
   private Option<SparkSession> sparkSessionOpt = Option.empty();
   private Option<HoodieWriteConfig> writeConfigOpt = Option.empty();
   private Option<HoodieEngineContext> engineContextOpt = Option.empty();
@@ -135,15 +133,6 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
           typedProperties.put(k, v);
         }
       });
-
-      /*sparkSessionOpt.get().sqlContext().getAllConfs().foreach(new Function1<Tuple2<String, String>, Void>() {
-        @Override
-        public Void apply(Tuple2<String, String> v1) {
-          if (v1._1.startsWith("hoodie.")) {
-            typedProperties.put(v1._1, v1._2);
-          }
-          return Void;
-        });*/
 
       HoodieWriteConfig localWriteConfig = HoodieWriteConfig.newBuilder()
           .withPath(metaClient.getBasePath())
