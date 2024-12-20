@@ -20,12 +20,15 @@
 package org.apache.hudi;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieIndexingConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -38,6 +41,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.index.functional.BaseHoodieIndexClient;
 
 import org.apache.spark.SparkToJavaUtils;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,9 +49,14 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import scala.collection.JavaConverters;
+
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.index.expression.ExpressionIndexSparkFunctions.IDENTITY_FUNCTION;
@@ -102,7 +111,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     }
 
     LOG.info("Creating index {} of using {}", fullIndexName, indexType);
-    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient)) {
+    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, Option.empty(), Option.of(indexType))) {
       // generate index plan
       Option<String> indexInstantTime = doSchedule(writeClient, metaClient, fullIndexName, MetadataPartitionType.RECORD_INDEX);
       if (indexInstantTime.isPresent()) {
@@ -117,7 +126,8 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     }
   }
 
-  private SparkRDDWriteClient getWriteClient(HoodieTableMetaClient metaClient) {
+  private SparkRDDWriteClient getWriteClient(HoodieTableMetaClient metaClient, Option<HoodieIndexDefinition> indexDefinitionOpt,
+                                             Option<String> indexTypeOpt) {
     if (writeConfigOpt.isPresent()) {
       HoodieWriteConfig localWriteConfig = HoodieWriteConfig.newBuilder()
           .withPath(metaClient.getBasePath())
@@ -133,6 +143,8 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
           typedProperties.put(k, v);
         }
       });
+      typedProperties.putAll(buildWriteConfig(metaClient, indexDefinitionOpt, indexTypeOpt));
+      engineContextOpt = Option.of(new HoodieSparkEngineContext(new JavaSparkContext(sparkSessionOpt.get().sparkContext())));
 
       HoodieWriteConfig localWriteConfig = HoodieWriteConfig.newBuilder()
           .withPath(metaClient.getBasePath())
@@ -182,7 +194,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
     LOG.info("Creating index {} of using {}", fullIndexName, indexType);
     Option<HoodieIndexDefinition> expressionIndexDefinitionOpt = Option.ofNullable(indexDefinition);
-    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient)) {
+    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, expressionIndexDefinitionOpt, Option.of(indexType))) {
       MetadataPartitionType partitionType = indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? MetadataPartitionType.SECONDARY_INDEX : MetadataPartitionType.EXPRESSION_INDEX;
       // generate index plan
       Option<String> indexInstantTime = doSchedule(writeClient, metaClient, fullIndexName, partitionType);
@@ -200,7 +212,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
   private void drop(HoodieTableMetaClient metaClient, String indexName, Option<HoodieIndexDefinition> indexDefinitionOpt) {
     LOG.info("Dropping index {}", indexName);
-    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient)) {
+    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, indexDefinitionOpt, Option.empty())) {
       writeClient.dropIndex(Collections.singletonList(indexName));
     }
   }
@@ -211,7 +223,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     Option<HoodieIndexDefinition> indexDefinitionOpt = metaClient.getIndexMetadata()
         .map(HoodieIndexMetadata::getIndexDefinitions)
         .map(definition -> definition.get(indexName));
-    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient)) {
+    try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, indexDefinitionOpt, Option.empty())) {
       writeClient.dropIndex(Collections.singletonList(indexName));
     }
   }
@@ -228,11 +240,12 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     return metaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(partition -> partition.equals(indexName));
   }
 
-  /*private static Map<String, String> buildWriteConfig(HoodieTableMetaClient metaClient, Option<HoodieIndexDefinition> indexDefinitionOpt, Option<String> indexTypeOpt) {
+  private static Map<String, String> buildWriteConfig(HoodieTableMetaClient metaClient, Option<HoodieIndexDefinition> indexDefinitionOpt,
+                                                      Option<String> indexTypeOpt) {
     Map<String, String> writeConfig = new HashMap<>();
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
-      writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(HoodieCLIUtils.getLockOptions(metaClient.getBasePath().toString(),
+      writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(SparkToJavaUtils.getLockOptions(metaClient.getBasePath().toString(),
           metaClient.getBasePath().toUri().getScheme(), new TypedProperties())).asJava());
 
       // [HUDI-7472] Ensure write-config contains the existing MDT partition to prevent those from getting deleted
@@ -261,7 +274,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     indexDefinitionOpt.ifPresent(indexDefinition ->
         HoodieIndexingConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString())));
     return writeConfig;
-  }*/
+  }
 
   private static boolean isEligibleForIndexing(HoodieTableMetaClient metaClient, String indexType, Map<String, String> options, Map<String, Map<String, String>> columns) throws Exception {
     if (!validateDataTypeForSecondaryIndex(new ArrayList<>(columns.keySet()), new TableSchemaResolver(metaClient).getTableAvroSchema())) {

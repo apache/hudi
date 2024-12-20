@@ -18,11 +18,30 @@
 
 package org.apache.spark
 
+import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
+import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
+import org.apache.hudi.storage.StorageSchemes
+
+import java.util.ArrayList
 import scala.collection.JavaConverters
+import scala.jdk.CollectionConverters.asScalaSetConverter
 
 object SparkToJavaUtils {
 
   def convertToJavaMap(scalaMap: Map[String, String]): java.util.Map[String, String] = {
     JavaConverters.mapAsJavaMap(scalaMap)
+  }
+
+  // basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps()
+  def getLockOptions(tablePath: String, scheme: String, lockConfig: TypedProperties): Map[String, String] = {
+    val customSupportedFSs = lockConfig.getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key, ",", new ArrayList[String])
+    if (scheme == null || customSupportedFSs.contains(scheme) || StorageSchemes.isAtomicCreationSupported(scheme)) {
+      val props = FileSystemBasedLockProvider.getLockConfig(tablePath)
+      props.stringPropertyNames.asScala
+        .map(key => key -> props.getString(key))
+        .toMap
+    } else {
+      Map.empty
+    }
   }
 }
