@@ -46,7 +46,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -76,7 +78,7 @@ import java.util.stream.StreamSupport;
  * </p>
  * This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
-public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
+public class HoodieArchivedTimeline extends HoodieDefaultTimeline implements HoodieInstantReader {
   public static final String MERGE_ARCHIVE_PLAN_NAME = "mergeArchivePlan";
   private static final Pattern ARCHIVE_FILE_PATTERN =
       Pattern.compile("^\\.commits_\\.archive\\.([0-9]+).*");
@@ -98,9 +100,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
     setInstants(this.loadInstants(false));
-    // multiple casts will make this lambda serializable -
-    // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+    this.instantReader = this;
   }
 
   /**
@@ -131,9 +131,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       commitsFilter = record -> true;
     }
     setInstants(loadInstants(timeRangeFilter, logFileFilter, true, commitsFilter));
-    // multiple casts will make this lambda serializable -
-    // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+    this.instantReader = this;
   }
 
   /**
@@ -233,6 +231,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return Option.ofNullable(readCommits.getOrDefault(instant.getTimestamp(), new HashMap<>()).get(instant.getState()));
+  }
+
+  @Override
+  public InputStream getContentStream(HoodieInstant instant) {
+    return new ByteArrayInputStream(getInstantDetails(instant).orElseGet(() -> new byte[0]));
   }
 
   public HoodieArchivedTimeline reload() {
@@ -476,6 +479,6 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(i ->
             readCommits.containsKey(i.getTimestamp()))
-        .filter(s -> validActions.contains(s.getAction())), details);
+        .filter(s -> validActions.contains(s.getAction())), instantReader);
   }
 }

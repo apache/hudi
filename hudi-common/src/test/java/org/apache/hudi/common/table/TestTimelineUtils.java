@@ -375,15 +375,13 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         .thenReturn(mockArchivedTimeline);
     HoodieDefaultTimeline mergedTimeline = new HoodieDefaultTimeline(
         archivedInstants.stream()
-            .filter(instant -> instant.getTimestamp().compareTo(startTs) >= 0),
-        i -> Option.empty())
+            .filter(instant -> instant.getTimestamp().compareTo(startTs) >= 0), null)
         .mergeTimeline(activeTimeline);
     when(mockArchivedTimeline.mergeTimeline(eq(activeTimeline)))
         .thenReturn(mergedTimeline);
     HoodieDefaultTimeline mergedWriteTimeline = new HoodieDefaultTimeline(
         archivedInstants.stream()
-            .filter(instant -> instant.getTimestamp().compareTo(startTs) >= 0),
-        i -> Option.empty())
+            .filter(instant -> instant.getTimestamp().compareTo(startTs) >= 0), null)
         .mergeTimeline(activeTimeline.getWriteTimeline());
     when(mockArchivedTimeline.mergeTimeline(argThat(timeline -> timeline.filter(
         instant -> instant.getAction().equals(ROLLBACK_ACTION)).countInstants() == 0)))

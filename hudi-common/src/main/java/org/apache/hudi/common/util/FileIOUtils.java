@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.table.timeline.HoodieInstantWriter;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -163,7 +164,7 @@ public class FileIOUtils {
     }
   }
 
-  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<byte[]> content, boolean ignoreIOE) {
+  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<HoodieInstantWriter> contentWriter, boolean ignoreIOE) {
     try {
       // If the path does not exist, create it first
       if (!fileSystem.exists(fullPath)) {
@@ -174,9 +175,9 @@ public class FileIOUtils {
         }
       }
 
-      if (content.isPresent()) {
+      if (contentWriter.isPresent()) {
         FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-        fsout.write(content.get());
+        contentWriter.get().writeToStream(fsout);
         fsout.close();
       }
     } catch (IOException e) {
@@ -188,7 +189,7 @@ public class FileIOUtils {
   }
 
   public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<byte[]> content) {
-    createFileInPath(fileSystem, fullPath, content, false);
+    createFileInPath(fileSystem, fullPath, content.map(bytes -> (outputStream) -> outputStream.write(bytes)), false);
   }
 
   public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath, boolean ignoreIOE) {

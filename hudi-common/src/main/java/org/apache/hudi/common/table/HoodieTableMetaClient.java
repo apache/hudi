@@ -67,7 +67,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -629,7 +628,7 @@ public class HoodieTableMetaClient implements Serializable {
             // We reverse the order as the operation against this timeline would be very efficient if
             // we always start from the tail.
             .sorted(HoodieInstant.COMPARATOR.reversed()),
-        (Function<HoodieInstant, Option<byte[]>> & Serializable) timeline::getInstantDetails);
+        timeline.getInstantReader());
   }
 
   /**

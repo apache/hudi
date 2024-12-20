@@ -20,6 +20,7 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstantWriter;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -1014,9 +1015,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
    * true, and then rename it back after the content is written.
    *
    * @param fullPath File Path
-   * @param content Content to be stored
+   * @param contentWriter handles writing the content to the outputstream
    */
-  public void createImmutableFileInPath(Path fullPath, Option<byte[]> content)
+  public void createImmutableFileInPath(Path fullPath, Option<HoodieInstantWriter> contentWriter)
       throws HoodieIOException {
     FSDataOutputStream fsout = null;
     Path tmpPath = null;
@@ -1024,20 +1025,20 @@ public class HoodieWrapperFileSystem extends FileSystem {
     boolean needTempFile = needCreateTempFile();
 
     try {
-      if (!content.isPresent()) {
+      if (!contentWriter.isPresent()) {
         fsout = fileSystem.create(fullPath, false);
       }
 
-      if (content.isPresent() && needTempFile) {
+      if (contentWriter.isPresent() && needTempFile) {
         Path parent = fullPath.getParent();
         tmpPath = new Path(parent, fullPath.getName() + TMP_PATH_POSTFIX);
         fsout = fileSystem.create(tmpPath, false);
-        fsout.write(content.get());
+        contentWriter.get().writeToStream(fsout);
       }
 
-      if (content.isPresent() && !needTempFile) {
+      if (contentWriter.isPresent() && !needTempFile) {
         fsout = fileSystem.create(fullPath, false);
-        fsout.write(content.get());
+        contentWriter.get().writeToStream(fsout);
       }
     } catch (IOException e) {
       String errorMsg = "Failed to create file " + (tmpPath != null ? tmpPath : fullPath);

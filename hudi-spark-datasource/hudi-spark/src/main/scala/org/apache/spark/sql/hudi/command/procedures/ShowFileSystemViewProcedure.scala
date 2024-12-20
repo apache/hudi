@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
+import java.io.InputStream
 import java.util.function.{Function, Supplier}
 import java.util.stream.Collectors
 import scala.collection.JavaConversions
@@ -117,15 +118,9 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       instants = instants.filter(instant => predicate.test(maxInstant, instant.getTimestamp))
     }
 
-    val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
-      with java.io.Serializable {
-      override def apply(instant: HoodieInstant): util.Option[Array[Byte]] = {
-        metaClient.getActiveTimeline.getInstantDetails(instant)
-      }
-    }
-
     val filteredTimeline = new HoodieDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
+      new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(),
+      metaClient.getActiveTimeline.getInstantReader)
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new Array[FileStatus](0)))
   }
 

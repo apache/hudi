@@ -24,6 +24,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.util.List;
 import java.util.function.BiPredicate;
@@ -420,6 +422,17 @@ public interface HoodieTimeline extends Serializable {
    * Read the completed instant details.
    */
   Option<byte[]> getInstantDetails(HoodieInstant instant);
+
+  /**
+   * Read the instant content to an input stream.
+   * @param instant the instant to fetch
+   * @return stream with content for instant
+   */
+  InputStream getInstantContentStream(HoodieInstant instant);
+
+  <T> T deserializeAvroInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException;
+
+  <T> T deserializeJsonInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException;
 
   boolean isEmpty(HoodieInstant instant);
 

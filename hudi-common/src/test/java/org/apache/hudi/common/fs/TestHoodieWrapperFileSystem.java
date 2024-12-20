@@ -70,8 +70,8 @@ class TestHoodieWrapperFileSystem {
     Path testFile = new Path(basePath + Path.SEPARATOR + "clean.00000001");
 
     // create same commit twice
-    fs.createImmutableFileInPath(testFile, Option.of(testContent.getBytes()));
-    fs.createImmutableFileInPath(testFile, Option.of(testContent.getBytes()));
+    fs.createImmutableFileInPath(testFile, Option.of(outputStream -> outputStream.write(testContent.getBytes())));
+    fs.createImmutableFileInPath(testFile, Option.of(outputStream -> outputStream.write(testContent.getBytes())));
 
     assertEquals(1, fs.listStatus(new Path(basePath)).length,
         "create same file twice should only have one file exists, files: " + fs.listStatus(new Path(basePath)));
