@@ -62,7 +62,6 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -117,7 +116,6 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
   private void init(CompactionOperation operation, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.baseFileToMerge = baseFileToMerge.orElse(null);
-    this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     writeStatus.getStat().setTotalLogSizeCompacted(
         operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());

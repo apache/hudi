@@ -59,13 +59,11 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
-import java.util.Set;
 
 @SuppressWarnings("Duplicates")
 /**
@@ -102,7 +100,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
-  protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
   protected boolean preserveMetadata = false;
 
@@ -181,7 +178,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.baseFileToMerge = baseFileToMerge;
-    this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
       String latestValidFilePath = baseFileToMerge.getFileName();
@@ -389,7 +385,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
            */
           copyOldRecord = false;
         }
-        writtenRecordKeys.add(key);
+        // Remove the key-value, this operation will not really delete the record from disk, just mark it as deleted in memory
+        keyToNewRecords.remove(key);
       } catch (Exception e) {
         throw new HoodieUpsertException("Failed to combine/merge new record with old value in storage, for new record {"
             + keyToNewRecords.get(key) + "}, old value {" + oldRecord + "}", e);
@@ -429,9 +426,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> hoodieRecord = newRecordsItr.next();
-      if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-        writeInsertRecord(hoodieRecord);
-      }
+      writeInsertRecord(hoodieRecord);
     }
   }
 
@@ -451,7 +446,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       }
 
       keyToNewRecords = null;
-      writtenRecordKeys = null;
 
       fileWriter.close();
       fileWriter = null;

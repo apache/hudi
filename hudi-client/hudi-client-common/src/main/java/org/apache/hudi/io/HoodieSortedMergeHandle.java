@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -88,14 +89,12 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
       }
 
       // This is a new insert
-      HoodieRecord<T> hoodieRecord = keyToNewRecords.get(keyToPreWrite).newInstance();
-      if (writtenRecordKeys.contains(keyToPreWrite)) {
-        throw new HoodieUpsertException("Insert/Update not in sorted order");
-      }
+      HoodieRecord<T> logRecord = keyToNewRecords.remove(keyToPreWrite);
+      ValidationUtils.checkState(logRecord != null, "No log record found for key " + keyToPreWrite);
+      HoodieRecord<T> hoodieRecord = logRecord.newInstance();
       try {
         writeRecord(hoodieRecord, Option.of(hoodieRecord), newSchema, config.getProps());
         insertRecordsWritten++;
-        writtenRecordKeys.add(keyToPreWrite);
       } catch (IOException e) {
         throw new HoodieUpsertException("Failed to write records", e);
       }
@@ -110,16 +109,17 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
     while (!newRecordKeysSorted.isEmpty()) {
       try {
         String key = newRecordKeysSorted.poll();
-        HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
-        if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-          if (preserveMetadata) {
-            writeRecord(hoodieRecord, Option.of(hoodieRecord), writeSchemaWithMetaFields, config.getProps());
-          } else {
-            writeRecord(hoodieRecord, Option.of(hoodieRecord), writeSchema, config.getProps());
-          }
-          insertRecordsWritten++;
-          writtenRecordKeys.add(hoodieRecord.getRecordKey());
+        HoodieRecord<T> hoodieRecord = keyToNewRecords.remove(key);
+        if (hoodieRecord == null) {
+          // this record has been combined/deleted with old record in HoodieMergeHandle::write
+          continue;
         }
+        if (preserveMetadata) {
+          writeRecord(hoodieRecord, Option.of(hoodieRecord), writeSchemaWithMetaFields, config.getProps());
+        } else {
+          writeRecord(hoodieRecord, Option.of(hoodieRecord), writeSchema, config.getProps());
+        }
+        insertRecordsWritten++;
       } catch (IOException e) {
         throw new HoodieUpsertException("Failed to close UpdateHandle", e);
       }
