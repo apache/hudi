@@ -120,7 +120,7 @@
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.4</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
-    <hive.avro.version>1.8.2</hive.avro.version>
+    <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>390</trino.version>
     <hive.exec.classifier>core</hive.exec.classifier>
@@ -148,7 +148,7 @@
     <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
     <flink.bundle.version>1.20</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
-    <flink.avro.version>1.11.3</flink.avro.version>
+    <flink.avro.version>1.11.4</flink.avro.version>
     <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
     <!-- check kafka version -->
     <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version> 
@@ -168,8 +168,8 @@
     <spark35.version>3.5.3</spark35.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
-    <avro.version>1.8.2</avro.version>
-    <bijection-avro.version>0.9.7</bijection-avro.version>
+    <avro.version>1.11.4</avro.version>
+    <bijection-avro.version>0.9.8</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <commons.io.version>2.11.0</commons.io.version>
     <scala12.version>2.12.15</scala12.version>
@@ -2308,7 +2308,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.13.1</parquet.version>
         <orc.spark.version>1.9.1</orc.spark.version>
-        <avro.version>1.11.2</avro.version>
+        <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
         <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2365,7 +2365,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.2</parquet.version>
         <orc.spark.version>1.7.8</orc.spark.version>
-        <avro.version>1.11.1</avro.version>
+        <avro.version>1.11.4</avro.version>
         <antlr.version>4.8</antlr.version>
         <fasterxml.spark3.version>2.13.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2406,7 +2406,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.12.3</parquet.version>
         <orc.spark.version>1.8.3</orc.spark.version>
-        <avro.version>1.11.1</avro.version>
+        <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
         <fasterxml.spark3.version>2.14.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2457,7 +2457,7 @@
                    synchronized to avoid classpath ambiguity -->
         <parquet.version>1.13.1</parquet.version>
         <orc.spark.version>1.9.1</orc.spark.version>
-        <avro.version>1.11.2</avro.version>
+        <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
         <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -2497,7 +2497,7 @@
       <id>flink1.20</id>
       <properties>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.3</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
       </properties>
       <activation>
@@ -2513,7 +2513,7 @@
         <hudi.flink.module>hudi-flink1.19.x</hudi.flink.module>
         <flink.bundle.version>1.19</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
       </properties>
@@ -2530,7 +2530,7 @@
         <hudi.flink.module>hudi-flink1.18.x</hudi.flink.module>
         <flink.bundle.version>1.18</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
       </properties>
@@ -2547,7 +2547,7 @@
         <hudi.flink.module>hudi-flink1.17.x</hudi.flink.module>
         <flink.bundle.version>1.17</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
       </properties>
@@ -2564,7 +2564,7 @@
         <hudi.flink.module>hudi-flink1.16.x</hudi.flink.module>
         <flink.bundle.version>1.16</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.16.version}</flink.connector.kafka.version>
       </properties>
@@ -2581,7 +2581,7 @@
         <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
         <flink.bundle.version>1.15</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.15.version}</flink.connector.kafka.version>
       </properties>
@@ -2598,7 +2598,7 @@
         <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
         <flink.bundle.version>1.14</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
         <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
         <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
         <flink.parquet.artifactId>flink-parquet_${scala.binary.version}</flink.parquet.artifactId>
