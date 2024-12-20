@@ -1189,8 +1189,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         dataMetaClient,
         getEngineType(),
         indexDefinition)
-        .union(deletedRecords)
-        .distinctWithKey(HoodieRecord::getKey, parallelism);
+        .union(deletedRecords);
   }
 
   /**
