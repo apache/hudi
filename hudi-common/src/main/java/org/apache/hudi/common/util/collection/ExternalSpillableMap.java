@@ -37,6 +37,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -55,7 +56,7 @@ import java.util.stream.Stream;
  * frequently and incur unnecessary disk writes.
  */
 @NotThreadSafe
-public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Serializable, Closeable {
+public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Serializable, Closeable, PredicatePushdownIterable<T, R> {
 
   // Find the actual estimated payload size after inserting N records
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE = 100;
@@ -130,9 +131,17 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   /**
    * A custom iterator to wrap over iterating in-memory + disk spilled data.
    */
-  public Iterator<R> iterator() {
+  @Override
+  public Iterator<R> iterator(Predicate<T> filter) {
+    return diskBasedMap == null ? inMemoryIterator(filter) : new IteratorWrapper<>(inMemoryIterator(filter), diskIterator(filter));
+  }
 
-    return diskBasedMap == null ? inMemoryMap.values().iterator() : new IteratorWrapper<>(inMemoryMap.values().iterator(), diskBasedMap.iterator());
+  private Iterator<R> inMemoryIterator(Predicate<T> filter) {
+    return inMemoryMap.entrySet().stream().filter(entry -> filter.test(entry.getKey())).map(Map.Entry::getValue).iterator();
+  }
+
+  private Iterator<R> diskIterator(Predicate<T> filter) {
+    return diskBasedMap.iterator(filter);
   }
 
   /**

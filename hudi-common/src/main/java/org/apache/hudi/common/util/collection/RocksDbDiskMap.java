@@ -30,9 +30,12 @@ import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Spliterators;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -139,6 +142,13 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
   @Override
   public Iterator<R> iterator() {
     return getRocksDb().iterator(ROCKSDB_COL_FAMILY);
+  }
+
+  @Override
+  public Iterator<R> iterator(Predicate<T> filter) {
+    List<T> filteredKeys = keySet.stream().filter(filter).sorted().collect(Collectors.toList());
+    List<R> values = getRocksDb().multiGet(ROCKSDB_COL_FAMILY, filteredKeys);
+    return values.iterator();
   }
 
   @Override
