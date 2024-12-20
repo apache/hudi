@@ -65,7 +65,6 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -94,7 +93,6 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -337,12 +335,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
-
-  public static final ConfigProperty<String> TABLE_COL_STATS_INDEXED_COLUMNS = ConfigProperty
-      .key("hoodie.table.col.stats.indexed.columns")
-      .noDefaultValue()
-      .sinceVersion("1.0.0")
-      .withDocumentation("Comma-separated list of column names for which stats are indexed");
 
   public static final ConfigProperty<String> SECONDARY_INDEXES_METADATA = ConfigProperty
       .key("hoodie.table.secondary.indexes.metadata")
@@ -1021,12 +1013,6 @@ public class HoodieTableConfig extends HoodieConfig {
             CONFIG_VALUES_DELIMITER));
   }
 
-  public List<String> getTableColStatsIndexedColumns() {
-    return new ArrayList<>(
-        StringUtils.split(getStringOrDefault(TABLE_COL_STATS_INDEXED_COLUMNS, StringUtils.EMPTY_STRING),
-            CONFIG_VALUES_DELIMITER));
-  }
-
   /**
    * @returns the index definition path.
    */
@@ -1074,25 +1060,10 @@ public class HoodieTableConfig extends HoodieConfig {
       partitions.remove(partitionPath);
       partitionsInflight.remove(partitionPath);
     }
-    if (partitionPath.equals(MetadataPartitionType.COLUMN_STATS.getPartitionPath()) && !enabled) {
-      // if we are disabling col stats, lets clear the list of columns to index as well
-      setValue(TABLE_METADATA_PARTITIONS, EMPTY_STRING);
-      LOG.info(String.format("Clearing up the list of columns indexed for table %s", metaClient.getBasePath()));
-    }
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
     LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePath(), partitionPath, enabled ? "enabled" : "disabled"));
-  }
-
-  /**
-   * Updates the list of columns indexed by col stats partition.
-   *
-   */
-  public void setColStatsIndexedColumns(HoodieTableMetaClient metaClient, List<String> indexedColumnNames) {
-    setValue(TABLE_COL_STATS_INDEXED_COLUMNS, indexedColumnNames.stream().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
-    update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
-    LOG.info(String.format("Updated list of columns indexed for table %s to %s", metaClient.getBasePath(), indexedColumnNames.toArray().toString()));
   }
 
   /**

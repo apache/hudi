@@ -215,7 +215,7 @@ public class HoodieTableMetaClient implements Serializable {
   public void buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
     checkState(
-        !indexMetadataOpt.isPresent() || !indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName),
+        !indexMetadataOpt.isPresent() || (!indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)),
         "Index metadata is already present");
     String indexMetaPath = getIndexDefinitionPath();
     if (indexMetadataOpt.isPresent()) {
@@ -230,6 +230,41 @@ public class HoodieTableMetaClient implements Serializable {
     } catch (IOException e) {
       throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
     }
+  }
+
+  /**
+   * Builds expression index definition and writes to index definition file.
+   */
+  public boolean buildColSatsIndexDefinition(HoodieIndexDefinition indexDefinition) {
+    String indexName = indexDefinition.getIndexName();
+    String indexMetaPath = getIndexDefinitionPath();
+    boolean updateIndexDefn = false;
+    if (indexMetadataOpt.isPresent()) {
+      if (indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)) {
+        if (!indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields().equals(indexDefinition.getSourceFields())) {
+          updateIndexDefn = true;
+          LOG.info(String.format("List of columns to index is changing. Old value %s. New value %s",
+              indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields(), indexDefinition.getSourceFields()));
+          indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
+        }
+      } else {
+        indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
+        updateIndexDefn = true;
+      }
+    } else {
+      Map<String, HoodieIndexDefinition> indexDefinitionMap = new HashMap<>();
+      indexDefinitionMap.put(indexName, indexDefinition);
+      indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
+      updateIndexDefn = true;
+    }
+    if (updateIndexDefn) {
+      try {
+        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
+      } catch (IOException e) {
+        throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
+      }
+    }
+    return updateIndexDefn;
   }
 
   /**

@@ -33,14 +33,13 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
-
 import org.apache.spark.sql._
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
 import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
-
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.functions.{lit, struct, typedLit}
 import org.apache.spark.sql.types._
@@ -55,7 +54,6 @@ import java.sql.{Date, Timestamp}
 import java.util
 import java.util.List
 import java.util.stream.Collectors
-
 import scala.collection.JavaConverters._
 import scala.util.Random
 
@@ -232,8 +230,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def validateColumnsToIndex(metaClient: HoodieTableMetaClient, expectedColsToIndex: Seq[String]): Unit = {
-    val actualColsToIndex = metaClient.getTableConfig.getTableColStatsIndexedColumns
-    assertEquals(expectedColsToIndex, actualColsToIndex.asScala.toSeq)
+    val indexDefn = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
+    assertEquals(expectedColsToIndex, indexDefn.getSourceFields.asScala.toSeq)
   }
 
   protected def validateColumnStatsIndex(testCase: ColumnStatsTestCase,

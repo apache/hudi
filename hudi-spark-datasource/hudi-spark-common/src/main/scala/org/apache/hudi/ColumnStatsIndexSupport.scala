@@ -117,10 +117,10 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                         shouldReadInMemory: Boolean,
                         prunedPartitions: Option[Set[String]] = None,
                         prunedFileNamesOpt: Option[Set[String]] = None)(block: DataFrame => T): T = {
-    //cachedColumnStatsIndexViews.get(targetColumns) match {
-      /*case Some(cachedDF) =>
+    cachedColumnStatsIndexViews.get(targetColumns) match {
+      case Some(cachedDF) =>
         block(cachedDF)
-      case None =>*/
+      case None =>
         val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = prunedFileNamesOpt match {
           case Some(prunedFileNames) =>
             val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
@@ -159,7 +159,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
               block(df)
             }
           }
-        //}
+        }
     }
   }
 

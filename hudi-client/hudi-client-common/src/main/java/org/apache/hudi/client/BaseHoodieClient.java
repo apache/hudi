@@ -28,7 +28,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -40,10 +39,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -289,32 +285,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     }
   }
 
-  public static void updateColsToIndex(HoodieTable dataTable, HoodieWriteConfig config, HoodieCommitMetadata commitMetadata) {
-    if (config.getMetadataConfig().isColumnStatsIndexEnabled()) {
-      try {
-        HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-            .setStorage(dataTable.getStorage())
-            .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(dataTable.getMetaClient().getBasePath()))
-            .build();
-        HoodieInstant latestInstant = mdtMetaClient.getActiveTimeline().filterCompletedInstants().getInstantsOrderedByCompletionTime().reduce((a,b) -> b).get();
-
-        final HoodieCommitMetadata mdtCommitMetadata = mdtMetaClient.getTimelineLayout().getCommitMetadataSerDe().deserialize(
-            latestInstant,
-            mdtMetaClient.getActiveTimeline().getInstantDetails(latestInstant).get(),
-            HoodieCommitMetadata.class);
-        if (mdtCommitMetadata.getPartitionToWriteStats().containsKey(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
-          // update data table's table config for list of columns indexed.
-          List<String> columnsToIndex = HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig());
-          // if col stats is getting updated, lets also update list of columns indexed if changed.
-          if (!dataTable.getMetaClient().getTableConfig().getTableColStatsIndexedColumns().equals(columnsToIndex)) {
-            LOG.info(String.format("List of columns to index is changing. Old value %s. New value %s", dataTable.getMetaClient().getTableConfig().getTableColStatsIndexedColumns(),
-                columnsToIndex));
-            dataTable.getMetaClient().getTableConfig().setColStatsIndexedColumns(dataTable.getMetaClient(), columnsToIndex);
-          }
-        }
-      } catch (Exception e) {
-        throw new HoodieException("Updating data table config to latest set of columns indexed with col stats failed ", e);
-      }
-    }
+  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
   }
 }

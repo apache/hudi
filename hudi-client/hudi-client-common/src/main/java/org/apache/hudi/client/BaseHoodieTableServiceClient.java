@@ -50,6 +50,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -345,7 +346,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
       // update table config for cols to Index as applicable
-      updateColsToIndex(table, config, metadata);
+      HoodieIndexClientUtils.updateColsToIndex(table, config, metadata, (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (val1, val2) -> {
+        updateColumnsToIndexWithColStats(val1, val2);
+        return null;
+      });
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
       releaseResources(compactionCommitTime);
@@ -410,7 +414,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
       // update table config for cols to Index as applicable
-      updateColsToIndex(table, config, metadata);
+      HoodieIndexClientUtils.updateColsToIndex(table, config, metadata, (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (val1, val2) -> {
+        updateColumnsToIndexWithColStats(val1, val2);
+        return null;
+      });
     } finally {
       this.txnManager.endTransaction(Option.of(logCompactionInstant));
       releaseResources(logCompactionCommitTime);
@@ -550,7 +557,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(false, clusteringInstant,
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata), table.getActiveTimeline());
       // update table config for cols to Index as applicable
-      updateColsToIndex(table, config, metadata);
+      HoodieIndexClientUtils.updateColsToIndex(table, config, metadata, (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (val1, val2) -> {
+        updateColumnsToIndexWithColStats(val1, val2);
+        return null;
+      });
     } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {

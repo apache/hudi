@@ -110,7 +110,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append))
 
-    metaClient.reloadTableConfig()
     validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
 
     // update list of columns to explicit list of cols.
@@ -132,7 +131,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append))
 
-    metaClient.reloadTableConfig()
     validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
       HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c6","c7","c8"))
 
@@ -156,7 +154,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append))
 
-    metaClient.reloadTableConfig()
     validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
       HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c7","c8"))
   }
@@ -191,7 +188,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite), true)
 
-      metaClient.reloadTableConfig()
       validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
         HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8"))
   }
@@ -308,7 +304,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
-    metaClient.reloadTableConfig()
     validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
   }
 
@@ -387,7 +382,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
 
-    metaClient.reloadTableConfig()
     validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
   }
 

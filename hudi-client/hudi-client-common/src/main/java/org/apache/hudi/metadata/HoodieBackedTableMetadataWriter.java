@@ -483,12 +483,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       bulkCommit(instantTimeForPartition, partitionName, records, fileGroupCount);
       metadataMetaClient.reloadActiveTimeline();
       if (partitionType == COLUMN_STATS) {
+        // initialize Col Stats
         // if col stats, lets also update list of columns indexed if changed.
-        if (!dataMetaClient.getTableConfig().getTableColStatsIndexedColumns().equals(columnsToIndex)) {
+        updateColumnsToIndexWithColStats(columnsToIndex);
+        /*if (!dataMetaClient.getTableConfig().getTableColStatsIndexedColumns().equals(columnsToIndex)) {
           LOG.info(String.format("List of columns to index is changing. Old value %s. New value %s", dataMetaClient.getTableConfig().getTableColStatsIndexedColumns(),
               columnsToIndex));
           dataMetaClient.getTableConfig().setColStatsIndexedColumns(dataMetaClient, columnsToIndex);
-        }
+        }*/
       }
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionName, true);
       // initialize the metadata reader again so the MDT partition can be read after initialization
@@ -496,6 +498,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       long totalInitTime = partitionInitTimer.endTimer();
       LOG.info("Initializing {} index in metadata table took {} in ms", partitionTypeName, totalInitTime);
     }
+  }
+
+  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
   }
 
   /**
