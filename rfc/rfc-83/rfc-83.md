@@ -100,44 +100,8 @@ How to get incremental partitions during cleaning
 newInstantToRetain is computed based on Clean configs such as `hoodie.clean.commits.retained` and will be record in clean meta as new EarliestCommitToRetain
 
 ## Design And Implementation
-
-### Changes in TableService Metadata Schema
-
-Add new column `earliestInstantToRetain` (default null) in Clustering/Compaction plan same as `earliestInstantToRetain` in clean plan
-
-```text
-    {
-      "name": "earliestInstantToRetain",
-      "type":["null", {
-        "type": "record",
-        "name": "HoodieActionInstant",
-        "fields": [
-          {
-            "name": "timestamp",
-            "type": "string"
-          },
-          {
-            "name": "action",
-            "type": "string"
-          },
-          {
-            "name": "state",
-            "type": "string"
-          }
-        ]
-      }],
-      "default" : null
-    },
-```
-
-We also need a unified interface/abstract-class to control the Plan behavior of the TableService including clustering and compaction.
-
 ### Abstraction
-
-Use `PartitionBaseTableServicePlanStrategy` to control the behavior of getting partitions, filter partitions and generate table service plan etc.
-
-Since we want to control the logic of partition acquisition, partition filtering, and plan generation through different strategies, 
-in the first step, we need to use an abstraction to converge the logic of partition acquisition, partition filtering, and plan generation into the base strategy.
+Use `IncrementalPartitionAwareStrategy` to control the behavior of getting partitions, filter partitions, also incremental getting partitions if necessary etc.
 
 ```java
 package org.apache.hudi.table;
@@ -148,37 +112,23 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import java.io.IOException;
 import java.util.List;
 
-public abstract class PartitionBaseTableServicePlanStrategy<R,S> {
-
-  /**
-   * Generate table service plan based on given instant.
-   * @return
-   */
-  public abstract R generateTableServicePlan(Option<String> instant) throws IOException;
-
-  /**
-   * Generate table service plan based on given instant.
-   * @return
-   */
-  public abstract R generateTableServicePlan(List<S> operations) throws IOException;
-
+public interface IncrementalPartitionAwareStrategy {
 
   /**
    * Get partition paths to be performed for current table service.
    * @param metaClient
    * @return
    */
-  public abstract List<String> getPartitionPaths(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient, HoodieEngineContext engineContext);
+  List<String> getPartitionPaths(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient, HoodieEngineContext engineContext);
 
   /**
    * Filter partition path for given fully paths.
    * @param metaClient
    * @return
    */
-  public abstract List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths);
+  List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths);
 
   /**
    * Get incremental partitions from EarliestCommitToRetain to instantToRetain
@@ -188,43 +138,33 @@ public abstract class PartitionBaseTableServicePlanStrategy<R,S> {
    * @return
    * @throws IOException
    */
-  public List<String> getIncrementalPartitionPaths(Option<HoodieInstant> instantToRetain) {
-    throw new UnsupportedOperationException("Not support yet");
-  }
-
-  /**
-   * Returns the earliest commit to retain from instant meta
-   */
-  public Option<HoodieInstant> getEarliestCommitToRetain() {
-    throw new UnsupportedOperationException("Not support yet");
-  }
+  List<String> getIncrementalPartitionPaths(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient);
 }
 
 ```
+Any Strategy implement this `IncrementalPartitionAwareStrategy` could have the ability to perform incremental partitions processing
 
-Default action of `generateTableServicePlan`, `getPartitionPaths` and `filterPartitionPaths` API remains the same as it is now.
-
-Let baseAbstraction `CompactionStrategy` and `ClusteringPlanStrategy` extends this `PartitionBaseTableServicePlanStrategy` which are
-1. `public abstract class CompactionStrategy extends PartitionBaseTableServicePlanStrategy<HoodieCompactionPlan, HoodieCompactionOperation> implements Serializable`
-2. `public abstract class ClusteringPlanStrategy<T,I,K,O> extends PartitionBaseTableServicePlanStrategy<Option<HoodieClusteringPlan>, HoodieClusteringGroup> implements Serializable`
-
-**For Incremental Table Service including clustering and compaction, we will support a new IncrementalCompactionStrategy and 
-new IncrementalClusteringPlanStrategy**
+**For Incremental Table Service including clustering and compaction, we will support a new IncrementalPartitionAwareCompactionStrategy and 
+new IncrementalPartitionAwareClusteringPlanStrategy** to do incremental clustering/compaction data processing.
 
 
 ### Work Flow for Incremental Clustering/Compaction Strategy
 
 Table Service Planner with Incremental Clustering/Compaction Strategy
-1. Retrieve the instant recorded in the last table service `xxxx.requested` as **INSTANT 1**.
+
+1. Retrieve the instant request time based on the last completed table service commit as **INSTANT 1**.
 2. Calculate the current instant(Request time) to be processed as **INSTANT 2**.
 3. Obtain all partitions involved from **INSTANT 1** to **INSTANT 2** as incremental partitions and perform the table service plan operation.
-4. Record **INSTANT 2** in the table service plan.
 
 
 ### About archive
 
-We record `EarliestCommitToRetain` in the TableService Request metadata file and use it as the basis for retrieving incremental partitions. 
-Therefore, when Incremental Table Service is enabled, we should always ensure that there is a Clustering/Compaction request metadata in the active timeline.
+We need to use the request time of the last completed Table Service commit as a time window with the current latest data write commit time to 
+obtain all incremental partitions with data written in the window.
+Then once the last completed Table Service Commit being archived, it may cause problems such as incomplete incremental partitions.
+There are two solutions for this:
+1. Modify the logic of the archive service, that is, when the incremental partition function is turned on, always ensure that there is a completed table service commit in the active timeline
+2. Without modifying the archive logic, add a cover-up design in obtaining incremental partitions. That is, if the last completed table service commit is not obtained, we will fallback tp obtain the full table partitions.
 
 ## Rollout/Adoption Plan
 
