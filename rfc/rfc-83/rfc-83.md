@@ -134,7 +134,7 @@ We also need a unified interface/abstract-class to control the Plan behavior of 
 
 ### Abstraction
 
-Use `BaseTableServicePlanStrategy` to control the behavior of getting partitions, filter partitions and generate table service plan etc.
+Use `PartitionBaseTableServicePlanStrategy` to control the behavior of getting partitions, filter partitions and generate table service plan etc.
 
 Since we want to control the logic of partition acquisition, partition filtering, and plan generation through different strategies, 
 in the first step, we need to use an abstraction to converge the logic of partition acquisition, partition filtering, and plan generation into the base strategy.
@@ -204,9 +204,9 @@ public abstract class PartitionBaseTableServicePlanStrategy<R,S> {
 
 Default action of `generateTableServicePlan`, `getPartitionPaths` and `filterPartitionPaths` API remains the same as it is now.
 
-Let baseAbstraction `CompactionStrategy` and `ClusteringPlanStrategy` extends this `BaseTableServicePlanStrategy` which are
-1. `public abstract class CompactionStrategy extends BaseTableServicePlanStrategy<HoodieCompactionPlan, HoodieCompactionOperation> implements Serializable`
-2. `public abstract class ClusteringPlanStrategy<T,I,K,O> extends BaseTableServicePlanStrategy<Option<HoodieClusteringPlan>, HoodieClusteringGroup> implements Serializable`
+Let baseAbstraction `CompactionStrategy` and `ClusteringPlanStrategy` extends this `PartitionBaseTableServicePlanStrategy` which are
+1. `public abstract class CompactionStrategy extends PartitionBaseTableServicePlanStrategy<HoodieCompactionPlan, HoodieCompactionOperation> implements Serializable`
+2. `public abstract class ClusteringPlanStrategy<T,I,K,O> extends PartitionBaseTableServicePlanStrategy<Option<HoodieClusteringPlan>, HoodieClusteringGroup> implements Serializable`
 
 **For Incremental Table Service including clustering and compaction, we will support a new IncrementalCompactionStrategy and 
 new IncrementalClusteringPlanStrategy**
