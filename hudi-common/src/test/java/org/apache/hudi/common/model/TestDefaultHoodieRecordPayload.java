@@ -119,6 +119,31 @@ public class TestDefaultHoodieRecordPayload {
 
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema, props).get(), delRecord1);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema, props).isPresent());
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "2");
+    record2.put("partition", "partition1");
+    record2.put("ts", 3L);
+    record2.put("_hoodie_is_deleted", false);
+
+    GenericRecord delRecord2 = new GenericData.Record(schema);
+    delRecord2.put("id", "3");
+    delRecord2.put("partition", "partition1");
+    delRecord2.put("ts", 2L);
+    delRecord2.put("_hoodie_is_deleted", true);
+
+    DefaultHoodieRecordPayload payload3 = new DefaultHoodieRecordPayload(record2, 3);
+    DefaultHoodieRecordPayload payload4 = new DefaultHoodieRecordPayload(delRecord2, 2);
+    assertFalse(payload3.isDeleted(schema, props));
+    assertTrue(payload4.isDeleted(schema, props));
+    assertEquals(payload3.preCombine(payload4, props), payload3);
+    assertEquals(payload4.preCombine(payload3, props), payload3);
+
+    assertEquals(record2, payload3.getInsertValue(schema, props).get());
+    assertFalse(payload4.getInsertValue(schema, props).isPresent());
+
+    assertEquals(payload3.combineAndGetUpdateValue(delRecord2, schema, props).get(), record2);
+    assertEquals(payload4.combineAndGetUpdateValue(record2, schema, props).get(), record2);
   }
 
   @Test

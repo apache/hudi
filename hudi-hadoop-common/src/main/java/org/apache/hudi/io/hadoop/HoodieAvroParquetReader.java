@@ -213,4 +213,9 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
       }
     };
   }
+
+  @Override
+  public boolean isSorted() {
+    return parquetUtils.readIsSortedByRecordKeys(storage, path);
+  }
 }
