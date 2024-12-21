@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.HoodieIndexClientUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
@@ -33,12 +34,14 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -230,10 +233,19 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
+      // update cols to Index as applicable
+      HoodieIndexClientUtils.updateColsToIndex(table, config, metadata,
+          (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (val1, val2) -> {
+            updateColumnsToIndexWithColStats(val1, val2);
+            return null;
+          });
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     }
+  }
+
+  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
   }
 
   /**

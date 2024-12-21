@@ -73,4 +73,5 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   protected void releaseResources(String instantTime) {
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
   }
+
 }

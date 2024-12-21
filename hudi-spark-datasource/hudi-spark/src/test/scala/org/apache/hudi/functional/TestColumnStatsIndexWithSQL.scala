@@ -91,7 +91,9 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
     ) ++ metadataOpts
-    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true, useShortSchema = true)
+    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true, useShortSchema = true,
+      validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
+      "c2_minValue", "c3_maxValue", "c3_minValue"))
   }
 
   @ParameterizedTest
@@ -341,7 +343,9 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   }
 
   private def setupTable(testCase: ColumnStatsTestCase, metadataOpts: Map[String, String], commonOpts: Map[String, String],
-                         shouldValidate: Boolean, useShortSchema: Boolean = false): Unit = {
+                         shouldValidate: Boolean, useShortSchema: Boolean = false,
+                         validationSortColumns : Seq[String] = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
+                           "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue")): Unit = {
     val filePostfix = if (useShortSchema) {
       "-short-schema"
     } else {
@@ -352,14 +356,16 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = s"index/colstats/column-stats-index-table${filePostfix}.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       shouldValidateManually = !useShortSchema,
-      saveMode = SaveMode.Overwrite))
+      saveMode = SaveMode.Overwrite,
+      validationSortColumns = validationSortColumns))
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
       expectedColStatsSourcePath = s"index/colstats/updated-column-stats-index-table${filePostfix}.json",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       shouldValidateManually = !useShortSchema,
-      saveMode = SaveMode.Append))
+      saveMode = SaveMode.Append,
+      validationSortColumns = validationSortColumns))
 
     // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
     //       deferred updates), diverging from COW
@@ -375,7 +381,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       shouldValidate,
-      shouldValidateManually = !useShortSchema))
+      shouldValidateManually = !useShortSchema,
+      validationSortColumns = validationSortColumns))
   }
 
   def verifyFileIndexAndSQLQueries(opts: Map[String, String], isTableDataSameAsAfterSecondInstant: Boolean = false, verifyFileCount: Boolean = true): Unit = {
