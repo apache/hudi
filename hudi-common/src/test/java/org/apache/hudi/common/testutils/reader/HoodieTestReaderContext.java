@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.testutils.reader;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -184,26 +183,6 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       }
       return outputRecord;
     };
-  }
-
-  @Override
-  public Comparable castValue(Comparable value, Schema.Type newType) {
-    Schema newSchema = Schema.create(newType);
-    Schema oldType;
-    if (value instanceof Integer) {
-      oldType = Schema.create(Schema.Type.INT);
-    } else if (value instanceof Long) {
-      oldType = Schema.create(Schema.Type.LONG);
-    } else if (value instanceof Float) {
-      oldType = Schema.create(Schema.Type.FLOAT);
-    } else if (value instanceof Double) {
-      oldType = Schema.create(Schema.Type.DOUBLE);
-    } else if (value instanceof String) {
-      oldType = Schema.create(Schema.Type.STRING);
-    } else {
-      throw new UnsupportedOperationException("Cast from " + value.getClass() + " to " + newType + " is not supported");
-    }
-    return (Comparable) HoodieAvroUtils.rewritePrimaryType(value, oldType, newSchema);
   }
 
   private Object getFieldValueFromIndexedRecord(
