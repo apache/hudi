@@ -461,7 +461,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         .map(ClusteringOperation::create).collect(Collectors.toList());
     boolean canUseFileGroupReaderBasedClustering = getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
-        && clusteringOps.stream().allMatch(slice -> StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()))
         && StringUtils.isNullOrEmpty(getWriteConfig().getInternalSchema());
 
     if (canUseFileGroupReaderBasedClustering) {
@@ -574,7 +573,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             getHoodieTable().getMetaClient(),
             getHoodieTable().getMetaClient().getTableConfig().getProps(),
             0,
-            Long.MAX_VALUE,
+            -1,
             usePosition);
         fileGroupReader.initRecordIterators();
         // read records from the FG reader

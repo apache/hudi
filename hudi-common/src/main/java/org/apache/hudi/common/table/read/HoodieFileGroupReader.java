@@ -176,14 +176,17 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     StoragePathInfo baseFileStoragePathInfo = baseFile.getPathInfo();
+    long fileLength = length >= 0 ? length
+        : (baseFileStoragePathInfo != null ? baseFileStoragePathInfo.getLength()
+        : storage.getPathInfo(baseFile.getStoragePath()).getLength());
     if (baseFileStoragePathInfo != null) {
       return readerContext.getFileRecordIterator(
-          baseFileStoragePathInfo, start, length,
+          baseFileStoragePathInfo, start, fileLength,
           readerContext.getSchemaHandler().getDataSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     } else {
       return readerContext.getFileRecordIterator(
-          baseFile.getStoragePath(), start, length,
+          baseFile.getStoragePath(), start, fileLength,
           readerContext.getSchemaHandler().getDataSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
@@ -232,7 +235,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
           readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     } else {
-      return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, file.getFileLen(),
+      long fileLength = file.getFileLen() >= 0
+          ? file.getFileLen() : storage.getPathInfo(file.getStoragePath()).getLength();
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
           readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     }
   }
