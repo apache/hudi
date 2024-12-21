@@ -8,20 +8,21 @@ Hudi community strives to deliver major releases every 3 months, while offering 
 This page captures the forward-looking roadmap of ongoing & upcoming projects and when they are expected to land, broken
 down by areas on our [stack](/docs/hudi_stack).
 
-## Recent Release
+## Recent Releases
+
+[1.0.0](https://hudi.apache.org/releases/release-1.0.0) (Dec 2024)
+
 [0.15.0](https://hudi.apache.org/releases/release-0.15.0) (June 2024)
 
 ## Future Releases
 
-| Release     | Timeline |
-|-------------|----------|
-| 1.0.0-beta2 | July 2024 |
-| 1.0.0 (GA)  | Q4, 2024 |
- | 1.0.1       | Jan 2025 |
-| 1.1.0       | Mar 2025 |
-| 1.2.0       | May 2025 |
-| 1.3.0       | July 2025 |
-| 2.0.0       | Dec 2025 |
+| Release | Timeline  |
+|---------|-----------|
+| 1.0.1   | Jan 2025  |
+| 1.1.0   | Mar 2025  |
+| 1.2.0   | May 2025  |
+| 1.3.0   | July 2025 |
+| 2.0.0   | Dec 2025  |
 
 
 ## Storage Engine
