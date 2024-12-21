@@ -89,3 +89,8 @@ with direct markers because the file system metadata is efficiently cached in me
 | `hoodie.markers.timeline_server_based.batch.num_threads` | 20 | Number of threads to use for batch processing marker creation requests at the timeline server. | 
 | `hoodie.markers.timeline_server_based.batch.interval_ms` | 50 | The batch interval in milliseconds for marker creation batch processing. |
 
+
+## Related Resources
+
+<h3>Blogs</h3>
+[Timeline Server in Apache Hudi](https://medium.com/@simpsons/timeline-server-in-apache-hudi-b5be25f85e47)

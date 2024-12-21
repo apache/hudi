@@ -151,3 +151,8 @@ Flink jobs using the SQL can be configured through the options in WITH clause. T
 
 Refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options) for more details.
 
+## Related Resources
+
+<h3>Blogs</h3>
+* [Apache Hudi Timeline: Foundational pillar for ACID transactions](https://medium.com/@simpsons/hoodie-timeline-foundational-pillar-for-acid-transactions-be871399cbae)
+

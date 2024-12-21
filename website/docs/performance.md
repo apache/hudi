@@ -131,3 +131,9 @@ To enable Data Skipping in your queries make sure to set following properties to
   - `hoodie.enable.data.skipping` (to control data skipping, enabled by default)
   - `hoodie.metadata.enable` (to enable metadata table use on the read path, enabled by default)
   - `hoodie.metadata.index.column.stats.enable` (to enable column stats index use on the read path)
+
+## Related Resources
+
+<h3>Blogs</h3>
+* [Hudi’s Column Stats Index and Data Skipping feature help speed up queries by an orders of magnitude!](https://www.onehouse.ai/blog/hudis-column-stats-index-and-data-skipping-feature-help-speed-up-queries-by-an-orders-of-magnitude)
+* [Top 3 Things You Can Do to Get Fast Upsert Performance in Apache Hudi](https://www.onehouse.ai/blog/top-3-things-you-can-do-to-get-fast-upsert-performance-in-apache-hudi)
