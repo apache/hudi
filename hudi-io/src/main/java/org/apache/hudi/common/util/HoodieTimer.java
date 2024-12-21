@@ -84,6 +84,16 @@ public class HoodieTimer {
   }
 
   /**
+   * like endTimer, but returns an option to prevent failure
+   */
+  public Option<Long> tryEndTimer() {
+    if (timeInfoDeque.isEmpty()) {
+      return Option.empty();
+    }
+    return Option.of(timeInfoDeque.pop().stop());
+  }
+
+  /**
    * Creates an instance of {@link HoodieTimer} already started
    */
   public static HoodieTimer start() {
