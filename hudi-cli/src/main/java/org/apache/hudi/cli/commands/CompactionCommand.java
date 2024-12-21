@@ -31,10 +31,10 @@ import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
 import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
@@ -431,7 +431,7 @@ public class CompactionCommand {
   }
 
   private static String getTmpSerializerFile() {
-    return TMP_DIR + UUID.randomUUID().toString() + ".ser";
+    return TMP_DIR + UUID.randomUUID() + ".ser";
   }
 
   private <T> T deSerializeOperationResult(StoragePath inputPath,

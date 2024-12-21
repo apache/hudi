@@ -32,7 +32,7 @@ import java.util.List;
  */
 public class CompositeCompactionStrategy extends CompactionStrategy {
 
-  private List<CompactionStrategy> strategies;
+  private final List<CompactionStrategy> strategies;
 
   public CompositeCompactionStrategy(List<CompactionStrategy> strategies) {
     this.strategies = strategies;

@@ -259,7 +259,7 @@ public class ParquetSchemaConverter {
                     throw new UnsupportedOperationException(
                         String.format(
                             "List field [%s] in List [%s] has to be required. ",
-                            type.toString(), fieldType.getName()));
+                            type, fieldType.getName()));
                   }
                 }
                 typeInfo =
@@ -286,7 +286,7 @@ public class ParquetSchemaConverter {
                         String.format(
                             "Unrecgonized List schema [%s] according to Parquet"
                                 + " standard",
-                            parquetGroupType.toString()));
+                            parquetGroupType));
                   }
                 }
               }
@@ -515,7 +515,7 @@ public class ParquetSchemaConverter {
                 .named(fieldName);
       } else {
         throw new UnsupportedOperationException(
-            "Unsupported SqlTimeTypeInfo " + typeInfo.toString());
+            "Unsupported SqlTimeTypeInfo " + typeInfo);
       }
 
     } else {

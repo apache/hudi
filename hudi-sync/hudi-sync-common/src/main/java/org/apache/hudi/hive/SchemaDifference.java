@@ -83,9 +83,9 @@ public class SchemaDifference {
 
     private final MessageType storageSchema;
     private final Map<String, String> tableSchema;
-    private List<String> deleteColumns;
-    private Map<String, String> updateColumnTypes;
-    private Map<String, String> addColumnTypes;
+    private final List<String> deleteColumns;
+    private final Map<String, String> updateColumnTypes;
+    private final Map<String, String> addColumnTypes;
 
     public Builder(MessageType storageSchema, Map<String, String> tableSchema) {
       this.storageSchema = storageSchema;

@@ -27,8 +27,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -218,12 +218,12 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static HoodieTimeline filterInstantsTimeline(HoodieTimeline timeline) {
-    HoodieTimeline commitsAndCompactionTimeline = (HoodieTimeline)timeline.getWriteTimeline();
+    HoodieTimeline commitsAndCompactionTimeline = timeline.getWriteTimeline();
     Option<HoodieInstant> pendingCompactionInstant = commitsAndCompactionTimeline
         .filterPendingCompactionTimeline().firstInstant();
     if (pendingCompactionInstant.isPresent()) {
-      HoodieTimeline instantsTimeline = (HoodieTimeline)(commitsAndCompactionTimeline
-          .findInstantsBefore(pendingCompactionInstant.get().requestedTime()));
+      HoodieTimeline instantsTimeline = commitsAndCompactionTimeline
+          .findInstantsBefore(pendingCompactionInstant.get().requestedTime());
       int numCommitsFilteredByCompaction = commitsAndCompactionTimeline.getCommitsTimeline().countInstants()
           - instantsTimeline.getCommitsTimeline().countInstants();
       LOG.info("Earliest pending compaction instant is: " + pendingCompactionInstant.get().requestedTime()

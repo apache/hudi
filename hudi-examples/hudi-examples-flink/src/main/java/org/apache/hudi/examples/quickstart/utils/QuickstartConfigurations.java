@@ -113,12 +113,11 @@ public class QuickstartConfigurations {
   }
 
   public static String getCreateHudiCatalogDDL(final String catalogName, final String catalogPath) {
-    StringBuilder builder = new StringBuilder();
-    builder.append("create catalog ").append(catalogName).append(" with (\n");
-    builder.append("  'type' = 'hudi',\n"
-        + "  'catalog.path' = '").append(catalogPath).append("'");
-    builder.append("\n)");
-    return builder.toString();
+    return "create catalog " + catalogName + " with (\n"
+        + "  'type' = 'hudi',\n"
+        + "  'catalog.path' = '"
+        + catalogPath + "'"
+        + "\n)";
   }
 
   public static String getFileSourceDDL(String tableName) {
@@ -175,8 +174,7 @@ public class QuickstartConfigurations {
       }
       builder.append("\n");
     }
-    final String withProps = ""
-        + ") with (\n"
+    final String withProps = ") with (\n"
         + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
         + ")";
     builder.append(withProps);

@@ -67,7 +67,7 @@ public class SparkRDDReadClient<T> implements Serializable {
    * base path pointing to the table. Until, then just always assume a BloomIndex
    */
   private final transient HoodieIndex<?, ?> index;
-  private HoodieTable hoodieTable;
+  private final HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
   private final transient HoodieSparkEngineContext context;
   private final transient StorageConfiguration<?> storageConf;

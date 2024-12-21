@@ -108,7 +108,7 @@ public enum HFileBlockType {
   INDEX_V1("IDXBLK)+", BlockCategory.INDEX);
 
   public enum BlockCategory {
-    DATA, META, INDEX, BLOOM, ALL_CATEGORIES, UNKNOWN;
+    DATA, META, INDEX, BLOOM, ALL_CATEGORIES, UNKNOWN
   }
 
   private final byte[] magic;

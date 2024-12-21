@@ -32,10 +32,8 @@ public class InsertBucket implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("InsertBucket {");
-    sb.append("bucketNumber=").append(bucketNumber).append(", ");
-    sb.append("weight=").append(weight);
-    sb.append('}');
-    return sb.toString();
+    return "InsertBucket {" + "bucketNumber=" + bucketNumber + ", "
+        + "weight=" + weight
+        + '}';
   }
 }

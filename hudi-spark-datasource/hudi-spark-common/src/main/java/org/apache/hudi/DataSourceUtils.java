@@ -229,7 +229,7 @@ public class DataSourceUtils {
       case INSERT_OVERWRITE_TABLE:
         return client.insertOverwriteTable(hoodieRecords, instantTime);
       default:
-        throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation.toString());
+        throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation);
     }
   }
 

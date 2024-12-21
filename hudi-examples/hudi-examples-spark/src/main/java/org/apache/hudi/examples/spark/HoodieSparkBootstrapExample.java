@@ -34,7 +34,7 @@ import org.apache.spark.sql.SparkSession;
 
 public class HoodieSparkBootstrapExample {
 
-  private static String tableType = HoodieTableType.MERGE_ON_READ.name();
+  private static final String TABLE_TYPE = HoodieTableType.MERGE_ON_READ.name();
 
   public static void main(String[] args) throws Exception {
     if (args.length < 5) {

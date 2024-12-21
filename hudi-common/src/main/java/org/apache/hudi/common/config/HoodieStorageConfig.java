@@ -51,7 +51,7 @@ public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARQUET_PAGE_SIZE = ConfigProperty
       .key("hoodie.parquet.page.size")
-      .defaultValue(String.valueOf(1 * 1024 * 1024))
+      .defaultValue(String.valueOf(1024 * 1024))
       .markAdvanced()
       .withDocumentation("Parquet page size in bytes. Page is the unit of read within a parquet file. "
           + "Within a block, pages are compressed separately.");

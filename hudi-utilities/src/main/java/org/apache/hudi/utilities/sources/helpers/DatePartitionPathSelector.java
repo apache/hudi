@@ -71,7 +71,7 @@ import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.P
  */
 public class DatePartitionPathSelector extends DFSPathSelector {
 
-  private static volatile Logger LOG = LoggerFactory.getLogger(DatePartitionPathSelector.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DatePartitionPathSelector.class);
 
   private final String dateFormat;
   private final int datePartitionDepth;

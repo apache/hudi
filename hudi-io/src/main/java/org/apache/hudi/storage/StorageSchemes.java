@@ -84,11 +84,11 @@ public enum StorageSchemes {
   // Hopsworks File System
   HOPSFS("hopsfs", false, true);
 
-  private String scheme;
+  private final String scheme;
   // null for uncertain if write is transactional, please update this for each FS
-  private Boolean isWriteTransactional;
+  private final Boolean isWriteTransactional;
   // null for uncertain if dfs support atomic create&delete, please update this for each FS
-  private Boolean supportAtomicCreation;
+  private final Boolean supportAtomicCreation;
 
   StorageSchemes(String scheme, Boolean isWriteTransactional, Boolean supportAtomicCreation) {
     this.scheme = scheme;

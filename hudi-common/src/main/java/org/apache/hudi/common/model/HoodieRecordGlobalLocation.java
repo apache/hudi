@@ -47,13 +47,11 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieGlobalRecordLocation {");
-    sb.append("partitionPath=").append(partitionPath).append(", ");
-    sb.append("instantTime=").append(instantTime).append(", ");
-    sb.append("fileId=").append(fileId).append(", ");
-    sb.append("position=").append(position);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieGlobalRecordLocation {" + "partitionPath=" + partitionPath + ", "
+        + "instantTime=" + instantTime + ", "
+        + "fileId=" + fileId + ", "
+        + "position=" + position
+        + '}';
   }
 
   @Override
