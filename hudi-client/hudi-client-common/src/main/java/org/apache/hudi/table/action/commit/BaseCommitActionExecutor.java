@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.BaseHoodieClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
@@ -230,6 +231,8 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
+      // update table config for cols to Index as applicable
+      BaseHoodieClient.updateColsToIndex(table, config, metadata);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
