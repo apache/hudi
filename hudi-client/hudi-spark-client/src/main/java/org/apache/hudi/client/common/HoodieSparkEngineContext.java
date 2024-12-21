@@ -66,8 +66,8 @@ import scala.Tuple2;
 @ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
-  private final JavaSparkContext javaSparkContext;
-  private final SQLContext sqlContext;
+  private final transient JavaSparkContext javaSparkContext;
+  private final transient SQLContext sqlContext;
   private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
