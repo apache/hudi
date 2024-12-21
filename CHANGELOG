@@ -496,3 +496,9 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2024-12-19 16:04:01] [release-v1.61.0] ---
 [ENG-10945][INTERNAL] Spark3.4 release workflow (#1095)
 [AUDIT-1071]: Changelog for release-v1.60.0 (#1097)
+
+--- [2024-12-21 16:03:45] [release-v1.62.0] ---
+[ENG-13584][INTERNAL] Fix jenkins compile issue (#1101)
+[ENG-18492][HUDI-8701] prevent lock metrics failure from failing process (#1079)
+[ENG-13584][INTERNAL] Initial changes to allow us to use streams instead of byte arrays (#1098)
+[AUDIT-1071]: Changelog for release-v1.61.0 (#1099)
