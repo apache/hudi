@@ -1062,7 +1062,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient,
               dataWriteConfig.getMetadataConfig(),
               enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
-              dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding());
+              dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding(), getEngineType());
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
@@ -1083,7 +1083,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       Map<String, HoodieData<HoodieRecord>> partitionToRecordMap =
           HoodieTableMetadataUtil.convertMetadataToRecords(
               engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient, dataWriteConfig.getMetadataConfig(),
-              enabledPartitionTypes, dataWriteConfig.getBloomFilterType(), dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding());
+              enabledPartitionTypes, dataWriteConfig.getBloomFilterType(), dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding(), getEngineType());
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(records, commitMetadata);
       partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), records.union(additionalUpdates));
       updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
@@ -1163,7 +1163,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Build a list of keys that need to be removed. A 'delete' record will be emitted into the respective FileGroup of
     // the secondary index partition for each of these keys.
     List<String> keysToRemove = HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(engineContext, commitMetadata, dataWriteConfig.getMetadataConfig(),
-        dataMetaClient, instantTime);
+        dataMetaClient, instantTime, getEngineType());
 
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
     // Fetch the secondary keys that each of the record keys ('keysToRemove') maps to
@@ -1181,6 +1181,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     long targetPartitionSize = 100 * 1024 * 1024;
     int parallelism = (int) Math.max(1, (totalWriteBytesForSecondaryIndex + targetPartitionSize - 1) / targetPartitionSize);
 
+    // Load file system view for only the affected partitions on the driver.
+    // By loading on the driver one time, we avoid loading the same metadata multiple times on the executors.
+    HoodieMetadataFileSystemView fsView = getMetadataView();
+    fsView.loadPartitions(partitionFilePairs.stream().map(Pair::getKey).collect(Collectors.toList()));
+
     return readSecondaryKeysFromBaseFiles(
         engineContext,
         partitionFilePairs,
@@ -1188,7 +1193,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         this.getClass().getSimpleName(),
         dataMetaClient,
         getEngineType(),
-        indexDefinition)
+        indexDefinition,
+        fsView)
         .union(deletedRecords)
         .distinctWithKey(HoodieRecord::getKey, parallelism);
   }
