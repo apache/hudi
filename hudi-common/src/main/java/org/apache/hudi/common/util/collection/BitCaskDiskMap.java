@@ -50,6 +50,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
@@ -152,11 +154,12 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   }
 
   /**
-   * Custom iterator to iterate over values written to disk.
+   * Custom iterator to iterate over values written to disk with pushdown predicate.
    */
   @Override
-  public Iterator<R> iterator() {
-    ClosableIterator<R> iterator = new LazyFileIterable(filePath, valueMetadataMap, isCompressionEnabled).iterator();
+  public Iterator<R> iterator(Predicate<T> filter) {
+    Map<T, ValueMetadata> needMetadata = valueMetadataMap.entrySet().stream().filter(e -> filter.test(e.getKey())).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+    ClosableIterator<R> iterator = new LazyFileIterable(filePath, needMetadata, isCompressionEnabled).iterator();
     this.iterators.add(iterator);
     return iterator;
   }

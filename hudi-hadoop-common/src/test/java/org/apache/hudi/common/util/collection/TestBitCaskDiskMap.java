@@ -119,6 +119,19 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
       assert recordKeys.contains(rec.getRecordKey());
     }
 
+
+    // test iterator with predicate
+    String firstKey = recordKeys.stream().findFirst().get();
+    recordKeys.remove(firstKey);
+    itr = records.iterator(key -> !key.equals(firstKey));
+    int cntSize = 0;
+    while (itr.hasNext()) {
+      HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
+      cntSize++;
+      assert recordKeys.contains(rec.getRecordKey());
+    }
+    assertEquals(recordKeys.size(), cntSize);
+
     verifyCleanup(records);
   }
 
