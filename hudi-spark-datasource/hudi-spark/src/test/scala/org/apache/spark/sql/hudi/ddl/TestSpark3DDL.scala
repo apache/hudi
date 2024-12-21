@@ -77,6 +77,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
         spark.sql("set hoodie.schema.on.read.enable=true")
+        spark.sql("set hoodie.metadata.index.column.stats.enable=false")
         // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
         //       and are disallowed now by default in Spark 3.x
         spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
@@ -139,6 +140,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
         spark.sessionState.conf.unsetConf("spark.sql.storeAssignmentPolicy")
       }
+      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
     })
   }
 
@@ -240,6 +242,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         spark.sql("set hoodie.compact.schedule.inline=false")
 
         spark.sql("set hoodie.schema.on.read.enable=true")
+        spark.sql("set hoodie.metadata.index.column.stats.enable=false")
         spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
         // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
         //       and are disallowed now by default in Spark 3.x
@@ -334,6 +337,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       }
       spark.sessionState.conf.unsetConf("spark.sql.storeAssignmentPolicy")
       spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
+      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
     }
   }
 

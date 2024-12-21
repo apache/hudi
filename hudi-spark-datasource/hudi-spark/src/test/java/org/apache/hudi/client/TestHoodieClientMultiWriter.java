@@ -299,9 +299,47 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     client4.close();
   }
 
-  @ParameterizedTest
-  @MethodSource("providerClassResolutionStrategyAndTableType")
-  public void testHoodieClientBasicMultiWriter(HoodieTableType tableType, Class providerClass,
+  @Test
+  public void testHoodieClientBasicMultiWriterCOW_InProcessLP_SimpleCRS() throws Exception {
+    testHoodieClientBasicMultiWriter(HoodieTableType.COPY_ON_WRITE, InProcessLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testHoodieClientBasicMultiWriterCOW_FSBasedLP_SimpleCRS() throws Exception {
+    testHoodieClientBasicMultiWriter(HoodieTableType.COPY_ON_WRITE, FileSystemBasedLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testHoodieClientBasicMultiWriterCOW_FSBasedLP_PreferWriterCRS() throws Exception {
+    testHoodieClientBasicMultiWriter(HoodieTableType.COPY_ON_WRITE, FileSystemBasedLockProvider.class, new PreferWriterConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testHoodieClientBasicMultiWriterCOW_InProcessLP_PreferWriterCRS() throws Exception {
+    testHoodieClientBasicMultiWriter(HoodieTableType.COPY_ON_WRITE, InProcessLockProvider.class, new PreferWriterConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testHoodieClientBasicMultiWriterMOR_InProcessLP_SimpleCRS() throws Exception {
+    testHoodieClientBasicMultiWriter(HoodieTableType.MERGE_ON_READ, InProcessLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testHoodieClientBasicMultiWriterMOR_FSBasedLP_SimpleCRS() throws Exception {
+    testHoodieClientBasicMultiWriter(HoodieTableType.MERGE_ON_READ, FileSystemBasedLockProvider.class, new SimpleConcurrentFileWritesConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testHoodieClientBasicMultiWriterMOR_FSBasedLP_PreferWriterCRS() throws Exception {
+    testHoodieClientBasicMultiWriter(HoodieTableType.MERGE_ON_READ, FileSystemBasedLockProvider.class, new PreferWriterConflictResolutionStrategy());
+  }
+
+  @Test
+  public void testHoodieClientBasicMultiWriterMOR_InProcessLP_PreferWriterCRS() throws Exception {
+    testHoodieClientBasicMultiWriter(HoodieTableType.MERGE_ON_READ, InProcessLockProvider.class, new PreferWriterConflictResolutionStrategy());
+  }
+
+  private void testHoodieClientBasicMultiWriter(HoodieTableType tableType, Class providerClass,
                                                ConflictResolutionStrategy resolutionStrategy) throws Exception {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
