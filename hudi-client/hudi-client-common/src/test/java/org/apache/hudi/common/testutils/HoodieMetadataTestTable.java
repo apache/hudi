@@ -164,10 +164,10 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
       String instantTime,
       Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata,
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
-      HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
+      Option<HoodieReplaceCommitMetadata> completeReplaceMetadata) throws Exception {
     super.addReplaceCommit(instantTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
     if (writer != null) {
-      writer.updateFromWriteStatuses(completeReplaceMetadata, context.get().emptyHoodieData(), instantTime);
+      writer.updateFromWriteStatuses(completeReplaceMetadata.get(), context.get().emptyHoodieData(), instantTime);
     }
     return this;
   }

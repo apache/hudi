@@ -18,9 +18,8 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -72,7 +71,7 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
       throw new HoodieException(s"Commit $instantTime not found in Commits $timeline.")
     }
 
-    val commitMetadataOptional = getHoodieCommitMetadata(timeline, hoodieInstantOption)
+    val commitMetadataOptional = hoodieInstantOption.map(instant => TimelineUtils.getCommitMetadata(instant, timeline))
 
     if (commitMetadataOptional.isEmpty) {
       throw new HoodieException(s"Commit $instantTime not found commitMetadata in Commits $timeline.")
@@ -112,20 +111,6 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
 
     val hoodieInstant: Option[HoodieInstant] = instants.find((i: HoodieInstant) => timeline.containsInstant(i))
     hoodieInstant
-  }
-
-  private def getHoodieCommitMetadata(timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
-    if (hoodieInstant.isDefined) {
-      if (hoodieInstant.get.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION) {
-        Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieReplaceCommitMetadata]))
-      } else {
-        Option(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieCommitMetadata]))
-      }
-    } else {
-      Option.empty
-    }
   }
 }
 

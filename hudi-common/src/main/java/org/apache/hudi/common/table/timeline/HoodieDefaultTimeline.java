@@ -23,13 +23,16 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import org.apache.avro.file.DataFileStream;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.specific.SpecificDatumReader;
+import org.apache.avro.specific.SpecificRecord;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -539,19 +542,23 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public <T> T deserializeAvroInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
-    try (InputStream inputStream = getInstantContentStream(instant)) {
-      DatumReader<T> reader = new SpecificDatumReader<>(clazz);
-      DataFileStream<T> fileReader = new DataFileStream<>(inputStream, reader);
-      ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
-      return fileReader.next();
-    }
-  }
-
-  @Override
-  public <T> T deserializeJsonInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
-    try (InputStream inputStream = getInstantContentStream(instant)) {
-      return JsonUtils.getObjectMapper().readValue(inputStream, clazz);
+  public <T> T deserializeInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
+    if (SpecificRecord.class.isAssignableFrom(clazz)) {
+      try (InputStream inputStream = getInstantContentStream(instant)) {
+        DatumReader<T> reader = new SpecificDatumReader<>(clazz);
+        DataFileStream<T> fileReader = new DataFileStream<>(inputStream, reader);
+        ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
+        return fileReader.next();
+      }
+    } else {
+      try (InputStream inputStream = getInstantContentStream(instant)) {
+        return JsonUtils.getObjectMapper().readValue(inputStream, clazz);
+      } catch (MismatchedInputException ex) {
+        if (ex.getMessage().startsWith("No content to map")) {
+          return ReflectionUtils.loadClass(clazz.getName());
+        }
+        throw ex;
+      }
     }
   }
 

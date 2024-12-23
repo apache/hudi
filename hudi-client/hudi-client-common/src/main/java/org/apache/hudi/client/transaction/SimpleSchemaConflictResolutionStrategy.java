@@ -203,18 +203,15 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
         .filter(s -> !s.getAction().equals(REPLACE_COMMIT_ACTION)
             || !isClusteringInstantMap.computeIfAbsent(s, s1 -> ClusteringUtils.isClusteringInstant(reversedTimeline, s1)))
         // Make sure the commit metadata has a valid schema inside. Same caching the result for expensive operation.
-        .filter(s -> {
-          instantContainsValidSchemaMap.computeIfAbsent(s, s1 -> {
-            try {
-              return !StringUtils.isNullOrEmpty(
-                  HoodieCommitMetadata.fromBytes(reversedTimeline.getInstantDetails(s1).get(), HoodieCommitMetadata.class)
-                  .getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          });
-          return instantContainsValidSchemaMap.get(s);
-        }).findFirst());
+        .filter(s -> instantContainsValidSchemaMap.computeIfAbsent(s, s1 -> {
+          try {
+            return !StringUtils.isNullOrEmpty(reversedTimeline.deserializeInstantContent(s1, HoodieCommitMetadata.class)
+                .getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        }))
+        .findFirst());
 
     if (instantWithTableSchema.isPresent()) {
       // If there is a qualified instant, parse the table schema out of it.

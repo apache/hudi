@@ -36,13 +36,13 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -124,8 +124,7 @@ public class InternalSchemaCache {
       if (instants.isEmpty()) {
         return Option.empty();
       }
-      byte[] data = timeline.getInstantDetails(instants.get(0)).get();
-      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = timeline.deserializeInstantContent(instants.get(0), HoodieCommitMetadata.class);
       String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
       return SerDeHelper.fromJson(latestInternalSchemaStr);
     } catch (Exception e) {
@@ -146,10 +145,9 @@ public class InternalSchemaCache {
     Option<HoodieInstant> lastInstantBeforeCurrentCompaction =  timelineBeforeCurrentCompaction.lastInstant();
     if (lastInstantBeforeCurrentCompaction.isPresent()) {
       // try to find internalSchema
-      byte[] data = timelineBeforeCurrentCompaction.getInstantDetails(lastInstantBeforeCurrentCompaction.get()).get();
       HoodieCommitMetadata metadata;
       try {
-        metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+        metadata = timelineBeforeCurrentCompaction.deserializeInstantContent(lastInstantBeforeCurrentCompaction.get(), HoodieCommitMetadata.class);
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot read metadata from commit: %s", lastInstantBeforeCurrentCompaction.get()), e);
       }
@@ -192,13 +190,12 @@ public class InternalSchemaCache {
         .findFirst().map(f -> new Path(hoodieMetaPath, f)).orElse(null);
     if (candidateCommitFile != null) {
       try {
-        byte[] data;
-        try (FSDataInputStream is = fs.open(candidateCommitFile)) {
-          data = FileIOUtils.readAsByteArray(is);
+        HoodieCommitMetadata metadata;
+        try (InputStream is = fs.open(candidateCommitFile)) {
+          metadata = JsonUtils.getObjectMapper().readValue(is, HoodieCommitMetadata.class);
         } catch (IOException e) {
           throw e;
         }
-        HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
         String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
         avroSchema = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
         if (latestInternalSchemaStr != null) {

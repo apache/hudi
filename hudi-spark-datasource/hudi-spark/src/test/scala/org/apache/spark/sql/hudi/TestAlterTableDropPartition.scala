@@ -476,8 +476,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         val metaClient = HoodieTableMetaClient.builder().setBasePath(s"${tmp.getCanonicalPath}/$tableName")
           .setConf(hadoopConf).build()
         val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.lastInstant()
-        val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(
-          lastInstant.get()).get(), classOf[HoodieCommitMetadata])
+        val commitMetadata = metaClient.getActiveTimeline.deserializeInstantContent(lastInstant.get(), classOf[HoodieCommitMetadata])
         val schemaStr = commitMetadata.getExtraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY)
         Assertions.assertFalse(StringUtils.isNullOrEmpty(schemaStr))
 

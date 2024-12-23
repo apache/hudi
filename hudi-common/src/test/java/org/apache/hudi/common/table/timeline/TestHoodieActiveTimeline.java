@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -34,6 +35,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.shaded.org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -798,7 +800,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
-    assertEquals(commitMetadata, timelineAfterFirstInstant.deserializeJsonInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
+    assertEquals(commitMetadata, timelineAfterFirstInstant.deserializeInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
 
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan();
     cleanerPlan.setLastCompletedCommitTimestamp("1");
@@ -807,12 +809,54 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     cleanerPlan.setPartitionsToBeDeleted(Collections.singletonList("partition1"));
     timeline.saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
 
-    assertEquals(cleanerPlan, timeline.deserializeAvroInstantContent(cleanInstant, HoodieCleanerPlan.class));
+    assertEquals(cleanerPlan, timeline.deserializeInstantContent(cleanInstant, HoodieCleanerPlan.class));
 
-    HoodieDefaultTimeline mergedTimeline = timelineAfterFirstInstant.mergeTimeline(timeline.reload());
-    assertEquals(commitMetadata, mergedTimeline.deserializeJsonInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
-    assertEquals(cleanerPlan, mergedTimeline.deserializeAvroInstantContent(cleanInstant, HoodieCleanerPlan.class));
-    assertEquals(commitMetadata, HoodieCommitMetadata.fromBytes(mergedTimeline.getInstantDetails(completedCommitInstant).get(), HoodieCommitMetadata.class));
+    HoodieActiveTimeline refreshedTimeline = timeline.reload();
+    HoodieDefaultTimeline mergedTimeline = timelineAfterFirstInstant.mergeTimeline(refreshedTimeline);
+    assertEquals(commitMetadata, mergedTimeline.deserializeInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
+    assertEquals(cleanerPlan, mergedTimeline.deserializeInstantContent(cleanInstant, HoodieCleanerPlan.class));
+    assertEquals(Option.of(Pair.of(completedCommitInstant, commitMetadata)), refreshedTimeline.getLastCommitMetadataWithValidData());
+  }
+
+  @Test
+  void malformedCommitThrowsError() {
+    HoodieInstant commitInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(commitInstant);
+    timeline.transitionRequestedToInflight(commitInstant, Option.empty());
+    HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
+    // save a valid object that does not match the expected schema
+    timeline.saveAsComplete(completeCommitInstant,
+        Option.of("{\"partitionToWriteStats\":\"not a map\"}".getBytes(StandardCharsets.UTF_8)));
+    HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
+
+    HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
+    assertThrows(IOException.class, () -> timelineAfterFirstInstant.deserializeInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
+  }
+
+  @Test
+  void emptyCommitReturnsDefaultInstance() throws IOException {
+    HoodieInstant commitInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(commitInstant);
+    timeline.transitionRequestedToInflight(commitInstant, Option.empty());
+    HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
+    timeline.saveAsComplete(completeCommitInstant, Option.of(new byte[0]));
+    HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
+
+    HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
+    assertEquals(new HoodieCommitMetadata(), timelineAfterFirstInstant.deserializeInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
+
+    HoodieInstant replaceCommitInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "2");
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(replaceCommitInstant);
+    timeline.transitionRequestedToInflight(replaceCommitInstant, Option.empty());
+    HoodieInstant completeReplaceCommitInstant = new HoodieInstant(true, replaceCommitInstant.getAction(), replaceCommitInstant.getTimestamp());
+    timeline.saveAsComplete(completeReplaceCommitInstant, Option.of(new byte[0]));
+    HoodieActiveTimeline timelineAfterSecondInstant = timeline.reload();
+
+    HoodieInstant completedReplaceCommitInstant = timelineAfterSecondInstant.lastInstant().get();
+    assertEquals(new HoodieReplaceCommitMetadata(), timelineAfterSecondInstant.deserializeInstantContent(completedReplaceCommitInstant, HoodieReplaceCommitMetadata.class));
   }
 
   @Test

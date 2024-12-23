@@ -924,8 +924,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Option<HoodieInstant> firstReplaceHoodieInstant = replacedTimeline.nthFromLastInstant(1);
     assertTrue(firstReplaceHoodieInstant.isPresent());
 
-    Option<byte[]> firstReplaceHoodieInstantDetails = replacedTimeline.getInstantDetails(firstReplaceHoodieInstant.get());
-    HoodieReplaceCommitMetadata firstReplaceMetadata = HoodieReplaceCommitMetadata.fromBytes(firstReplaceHoodieInstantDetails.get(), HoodieReplaceCommitMetadata.class);
+    HoodieReplaceCommitMetadata firstReplaceMetadata = replacedTimeline.deserializeInstantContent(firstReplaceHoodieInstant.get(), HoodieReplaceCommitMetadata.class);
     Map<String, List<String>> partitionToReplaceFileIds = firstReplaceMetadata.getPartitionToReplaceFileIds();
     String partitionName = null;
     List replacedFileIDs = null;
@@ -1768,8 +1767,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             lastFinished.getTimestamp()));
 
     // Ensure it is empty
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-        .fromBytes(mClient.getActiveTimeline().getInstantDetails(newLastFinished).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = mClient.getActiveTimeline().deserializeInstantContent(newLastFinished, HoodieCommitMetadata.class);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
 
 
@@ -1891,8 +1889,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                                                                  HoodieTableMetaClient metaClient,
                                                                  WriteOperationType operationType) {
     try {
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().deserializeInstantContent(instant, HoodieCommitMetadata.class);
       assertFalse(StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)));
       assertEquals(operationType, commitMetadata.getOperationType());
     } catch (IOException ioException) {
@@ -2139,21 +2136,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     List<HoodieInstant> instants = metaClient.getCommitsTimeline().getInstants();
 
     ObjectMapper objectMapper = new ObjectMapper();
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-        .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(0)).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = metaClient.getCommitsTimeline().deserializeInstantContent(instants.get(0), HoodieCommitMetadata.class);
     Map<String, String> checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
 
     String parquetFirstcheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetFirstcheckpoint);
-    commitMetadata = HoodieCommitMetadata
-        .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(1)).get(), HoodieCommitMetadata.class);
+    commitMetadata = metaClient.getCommitsTimeline().deserializeInstantContent(instants.get(1), HoodieCommitMetadata.class);
     checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
     String kafkaCheckpoint = checkpointVals.get("kafka");
     assertNotNull(kafkaCheckpoint);
     assertEquals(parquetFirstcheckpoint, checkpointVals.get("parquet"));
 
-    commitMetadata = HoodieCommitMetadata
-        .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(2)).get(), HoodieCommitMetadata.class);
+    commitMetadata = metaClient.getCommitsTimeline().deserializeInstantContent(instants.get(2), HoodieCommitMetadata.class);
     checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
     String parquetSecondCheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetSecondCheckpoint);

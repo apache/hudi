@@ -96,7 +96,6 @@ public class TestHoodieFileGroup {
     writeStat.setPath(relativePath);
     writeStat.setFileId(groupId);
     commitMetadata.addWriteStat(partition, writeStat);
-    byte[] commitDetails = commitMetadata.toJsonString().getBytes();
 
     HoodieCommitMetadata unPartitionedCommitMetadata = new HoodieCommitMetadata();
     unPartitionedCommitMetadata.addWriteStat("", writeStat);
@@ -104,16 +103,16 @@ public class TestHoodieFileGroup {
     HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
     replaceCommitMetadata.addWriteStat(partition, writeStat);
     return Stream.of(
-        Arguments.of(partition, groupId, relativePath, HoodieTimeline.COMMIT_ACTION, commitDetails),
-        Arguments.of(partition, groupId, relativePath, HoodieTimeline.DELTA_COMMIT_ACTION, commitDetails),
-        Arguments.of("", groupId, relativePath, HoodieTimeline.DELTA_COMMIT_ACTION, unPartitionedCommitMetadata.toJsonString().getBytes()),
-        Arguments.of(partition, groupId, relativePath, HoodieTimeline.REPLACE_COMMIT_ACTION, replaceCommitMetadata.toJsonString().getBytes())
+        Arguments.of(partition, groupId, relativePath, HoodieTimeline.COMMIT_ACTION, commitMetadata),
+        Arguments.of(partition, groupId, relativePath, HoodieTimeline.DELTA_COMMIT_ACTION, commitMetadata),
+        Arguments.of("", groupId, relativePath, HoodieTimeline.DELTA_COMMIT_ACTION, unPartitionedCommitMetadata),
+        Arguments.of(partition, groupId, relativePath, HoodieTimeline.REPLACE_COMMIT_ACTION, replaceCommitMetadata)
     );
   }
 
   @ParameterizedTest
   @MethodSource("multipleBaseFileCases")
-  void handleMultipleBaseFilesForSameFileSlice(String partition, String groupId, String relativePath, String action, byte[] commitMetadata) {
+  void handleMultipleBaseFilesForSameFileSlice(String partition, String groupId, String relativePath, String action, Object commitMetadata) throws IOException {
     String commitTime = "01";
     String actualActiveBaseFilePath = "/tmp/" + relativePath;
 
@@ -125,7 +124,11 @@ public class TestHoodieFileGroup {
     when(mockTimeline.lastInstant()).thenReturn(Option.of(instant));
     when(mockTimeline.containsOrBeforeTimelineStarts(instant.getTimestamp())).thenReturn(true);
 
-    when(mockTimeline.getInstantDetails(instant)).thenReturn(Option.of(commitMetadata));
+    if (action.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      when(mockTimeline.deserializeInstantContent(instant, HoodieReplaceCommitMetadata.class)).thenReturn((HoodieReplaceCommitMetadata) commitMetadata);
+    } else {
+      when(mockTimeline.deserializeInstantContent(instant, HoodieCommitMetadata.class)).thenReturn((HoodieCommitMetadata) commitMetadata);
+    }
 
     HoodieFileGroup fileGroup = new HoodieFileGroup(partition, groupId, mockTimeline);
 

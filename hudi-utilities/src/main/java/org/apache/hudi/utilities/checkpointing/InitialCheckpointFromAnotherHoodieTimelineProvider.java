@@ -53,9 +53,7 @@ public class InitialCheckpointFromAnotherHoodieTimelineProvider extends InitialC
     return anotherDsHoodieMetaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants()
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(anotherDsHoodieMetaClient.getActiveTimeline().getInstantDetails(instant).get(),
-                    HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = anotherDsHoodieMetaClient.getActiveTimeline().deserializeInstantContent(instant, HoodieCommitMetadata.class);
             return commitMetadata.getMetadata(CHECKPOINT_KEY);
           } catch (IOException e) {
             return null;

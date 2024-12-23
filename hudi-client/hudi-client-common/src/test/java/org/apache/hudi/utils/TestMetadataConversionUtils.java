@@ -36,13 +36,16 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -64,12 +67,12 @@ import org.junit.jupiter.api.Test;
 public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
 
   @BeforeEach
-  public void init() throws IOException {
+  void init() throws IOException {
     initMetaClient();
   }
 
   @Test
-  public void testCompletedClean() throws Exception {
+  void testCompletedClean() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createCleanMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
@@ -79,9 +82,19 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCompletedReplace() throws Exception {
+  void testCleanerPlan() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
-    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE, true);
+    createCleanMetadata(newCommitTime);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, newCommitTime), metaClient);
+    assertEquals(State.INFLIGHT.toString(), metaEntry.getActionState());
+    assertEquals(2, metaEntry.getHoodieCleanerPlan().getVersion());
+  }
+
+  @Test
+  void testCompletedReplace() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE, true, false);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
@@ -89,9 +102,24 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testEmptyRequestedReplace() throws Exception {
+  void testEmptyCompletedReplace() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
-    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, false);
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE, true, true);
+    HoodieInstant hoodieInstant = new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+
+    HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
+    archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
+    archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
+    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getStateTransitionTime());
+    archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
+    assertEquals(archivedMetaWrapper, metaEntry);
+  }
+
+  @Test
+  void testEmptyRequestedReplace() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, false, true);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
             new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.REQUESTED.toString());
@@ -99,9 +127,9 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testEmptyInflightReplace() throws Exception {
+  void testEmptyInflightReplace() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
-    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, true);
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, true, true);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
             new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.INFLIGHT.toString());
@@ -109,9 +137,9 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testNonEmptyInflightReplace() throws Exception {
+  void testNonEmptyInflightReplace() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
-    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, false);
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, false, false);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.INFLIGHT.toString());
@@ -119,9 +147,9 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCompletedCommit() throws Exception {
+  void testCompletedCommit() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
-    createCommitMetadata(newCommitTime);
+    createCommitMetadata(newCommitTime, false);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
@@ -129,7 +157,22 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCompletedDeltaCommit() throws Exception {
+  void testEmptyCompletedCommit() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createCommitMetadata(newCommitTime, true);
+    HoodieInstant hoodieInstant = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+
+    HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
+    archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
+    archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
+    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getStateTransitionTime());
+    archivedMetaWrapper.setActionType(ActionType.commit.name());
+    assertEquals(archivedMetaWrapper, metaEntry);
+  }
+
+  @Test
+  void testCompletedDeltaCommit() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createDeltaCommitMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
@@ -139,9 +182,9 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCompletedRollback() throws Exception {
+  void testCompletedRollback() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
-    createRollbackMetadata(newCommitTime);
+    createRollbackMetadata(newCommitTime, false);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
@@ -149,7 +192,22 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCompletedCompaction() throws Exception {
+  void testEmptyCompletedRollback() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createRollbackMetadata(newCommitTime, true);
+    HoodieInstant hoodieInstant = new HoodieInstant(State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, newCommitTime);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+
+    HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
+    archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
+    archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
+    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getStateTransitionTime());
+    archivedMetaWrapper.setActionType(ActionType.rollback.name());
+    assertEquals(archivedMetaWrapper, metaEntry);
+  }
+
+  @Test
+  void testCompletedCompaction() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createCompactionMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
@@ -159,7 +217,46 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testConvertCommitMetadata() {
+  void testInflightCompaction() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createCompactionPlanMetadata(newCommitTime);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, newCommitTime), metaClient);
+    assertEquals(State.REQUESTED.toString(), metaEntry.getActionState());
+    assertEquals(2, metaEntry.getHoodieCompactionPlan().getVersion());
+  }
+
+  @Test
+  void testInflightLogCompaction() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createLogCompactionPlanMetadata(newCommitTime);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.LOG_COMPACTION_ACTION, newCommitTime), metaClient);
+    assertEquals(State.REQUESTED.toString(), metaEntry.getActionState());
+    assertEquals(2, metaEntry.getHoodieCompactionPlan().getVersion());
+  }
+  
+  @Test
+  void testSavepoint() throws Exception {
+    String instantTime = HoodieTestTable.makeNewCommitTime();
+    HoodieSavepointMetadata savepointMetadata = new HoodieSavepointMetadata();
+    long time = System.currentTimeMillis();
+    savepointMetadata.setSavepointedAt(time);
+    savepointMetadata.setSavepointedBy("user");
+    savepointMetadata.setVersion(1);
+    savepointMetadata.setPartitionMetadata(Collections.emptyMap());
+    savepointMetadata.setComments("");
+    HoodieTestTable.of(metaClient)
+        .addSavepoint(instantTime, savepointMetadata);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, instantTime), metaClient);
+    assertEquals(State.COMPLETED.toString(), metaEntry.getActionState());
+    assertEquals(time, metaEntry.getHoodieSavePointMetadata().getSavepointedAt());
+    assertEquals("user", metaEntry.getHoodieSavePointMetadata().getSavepointedBy());
+  }
+
+  @Test
+  void testConvertCommitMetadata() {
     HoodieCommitMetadata hoodieCommitMetadata = new HoodieCommitMetadata();
     hoodieCommitMetadata.setOperationType(WriteOperationType.INSERT);
     org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = MetadataConversionUtils
@@ -180,7 +277,21 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  private void createRollbackMetadata(String instantTime) throws Exception {
+  private void createCompactionPlanMetadata(String instantTime) throws Exception {
+    HoodieCompactionPlan plan = new HoodieCompactionPlan();
+    plan.setVersion(2);
+    HoodieTestTable.of(metaClient)
+        .addRequestedCompaction(instantTime, plan);
+  }
+  
+  private void createLogCompactionPlanMetadata(String instantTime) throws Exception {
+    HoodieCompactionPlan plan = new HoodieCompactionPlan();
+    plan.setVersion(2);
+    HoodieTestTable.of(metaClient)
+        .addRequestedLogCompaction(instantTime, plan);
+  }
+
+  private void createRollbackMetadata(String instantTime, boolean isEmpty) throws Exception {
     HoodieRollbackMetadata rollbackMetadata = new HoodieRollbackMetadata();
     rollbackMetadata.setCommitsRollback(Arrays.asList(instantTime));
     rollbackMetadata.setStartRollbackTime(instantTime);
@@ -196,10 +307,10 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     HoodieTestTable.of(metaClient)
         .addRollback(instantTime, rollbackMetadata, null);
     HoodieTestTable.of(metaClient)
-        .addRollbackCompleted(instantTime, rollbackMetadata, false);
+        .addRollbackCompleted(instantTime, rollbackMetadata, isEmpty);
   }
 
-  private void createCommitMetadata(String instantTime) throws Exception {
+  private void createCommitMetadata(String instantTime, boolean isEmpty) throws Exception {
     String fileId1 = "file-" + instantTime + "-1";
     String fileId2 = "file-" + instantTime + "-2";
 
@@ -207,7 +318,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.addMetadata("test", "test");
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, Option.of(commitMetadata))
+        .addCommit(instantTime, isEmpty ? Option.empty() : Option.of(commitMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -219,7 +330,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
             .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  private void createReplace(String instantTime, WriteOperationType writeOperationType, Boolean isClustering)
+  private void createReplace(String instantTime, WriteOperationType writeOperationType, boolean isClustering, boolean isEmpty)
           throws Exception {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
@@ -255,13 +366,13 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
       inflightReplaceMetadata.setCompacted(false);
     }
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, Option.ofNullable(requestedReplaceMetadata), Option.ofNullable(inflightReplaceMetadata), replaceMetadata)
+        .addReplaceCommit(instantTime, Option.ofNullable(requestedReplaceMetadata), Option.ofNullable(inflightReplaceMetadata), isEmpty ? Option.empty() : Option.of(replaceMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
   private void createCleanMetadata(String instantTime) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
-        "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
+        "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
     HoodieCleanStat cleanStats = new HoodieCleanStat(
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
         HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
@@ -270,7 +381,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
         Collections.emptyList(),
         instantTime,
         "");
-    HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats), Collections.EMPTY_MAP);
+    HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats), Collections.emptyMap());
     HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
   }
 }

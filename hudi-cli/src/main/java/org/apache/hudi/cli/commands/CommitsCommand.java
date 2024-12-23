@@ -69,9 +69,7 @@ public class CommitsCommand {
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            timeline.getInstantDetails(commit).get(),
-            HoodieCommitMetadata.class);
+        final HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(commit, HoodieCommitMetadata.class);
         rows.add(new Comparable[] {commit.getTimestamp(),
             commitMetadata.fetchTotalBytesWritten(),
             commitMetadata.fetchTotalFilesInsert(),
@@ -107,9 +105,7 @@ public class CommitsCommand {
 
     for (final HoodieInstant commit : commits) {
       if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            timeline.getInstantDetails(commit).get(),
-            HoodieCommitMetadata.class);
+        final HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(commit, HoodieCommitMetadata.class);
 
         for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
             commitMetadata.getPartitionToWriteStats().entrySet()) {

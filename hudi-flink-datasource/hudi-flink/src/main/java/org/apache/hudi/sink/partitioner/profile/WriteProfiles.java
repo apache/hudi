@@ -166,8 +166,7 @@ public class WriteProfiles {
       HoodieInstant instant,
       HoodieTimeline timeline) {
     try {
-      byte[] data = timeline.getInstantDetails(instant).get();
-      return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
+      return Option.of(timeline.deserializeInstantContent(instant, HoodieCommitMetadata.class));
     } catch (FileNotFoundException fe) {
       // make this fail safe.
       LOG.warn("Instant {} was deleted by the cleaner, ignore", instant.getTimestamp());

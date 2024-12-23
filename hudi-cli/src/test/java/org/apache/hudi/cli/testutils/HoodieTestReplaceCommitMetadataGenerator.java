@@ -43,7 +43,7 @@ public class HoodieTestReplaceCommitMetadataGenerator extends HoodieTestCommitMe
         UUID.randomUUID().toString(), writes, updates);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = getHoodieRequestedReplaceMetadata();
 
-    HoodieTestTable.of(metaclient).addReplaceCommit(commitTime, Option.ofNullable(requestedReplaceMetadata), Option.empty(), replaceMetadata);
+    HoodieTestTable.of(metaclient).addReplaceCommit(commitTime, Option.ofNullable(requestedReplaceMetadata), Option.empty(), Option.of(replaceMetadata));
   }
 
   private static HoodieRequestedReplaceMetadata getHoodieRequestedReplaceMetadata() {

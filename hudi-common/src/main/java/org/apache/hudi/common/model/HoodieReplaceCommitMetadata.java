@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -68,7 +67,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     return partitionToReplaceFileIds;
   }
 
-  @Override
   public String toJsonString() throws IOException {
     if (partitionToWriteStats.containsKey(null)) {
       LOG.info("partition path is null for " + partitionToWriteStats.get(null));
@@ -79,14 +77,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
       partitionToReplaceFileIds.remove(null);
     }
     return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
-  }
-
-  public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
-    if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file (no data or somethings bad happen).
-      return clazz.newInstance();
-    }
-    return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
   }
 
   @Override
@@ -112,14 +102,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     int result = partitionToWriteStats.hashCode();
     result = 31 * result + compacted.hashCode();
     return result;
-  }
-
-  public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
-    try {
-      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
-    } catch (Exception e) {
-      throw new IOException("unable to read commit metadata", e);
-    }
   }
 
   @Override

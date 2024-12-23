@@ -191,8 +191,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
           // compute all the versions of all files, from time 0
           HashMap<String, TreeSet<String>> fileIdToVersions = new HashMap<>();
           for (HoodieInstant entry : timeline.getInstants()) {
-            HoodieCommitMetadata commitMetadata =
-                HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(entry).get(), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(entry, HoodieCommitMetadata.class);
 
             for (HoodieWriteStat wstat : commitMetadata.getWriteStats(partitionPath)) {
               if (!fileIdToVersions.containsKey(wstat.getFileId())) {

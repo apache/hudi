@@ -261,12 +261,11 @@ public class HoodieFileGroup implements Serializable {
       switch (instant.getAction()) {
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+          HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
           writeStats = commitMetadata.getWriteStats(fileGroupId.getPartitionPath());
           break;
         case REPLACE_COMMIT_ACTION:
-          HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-              timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+          HoodieReplaceCommitMetadata replaceCommitMetadata = timeline.deserializeInstantContent(instant, HoodieReplaceCommitMetadata.class);
           writeStats = replaceCommitMetadata.getWriteStats(fileGroupId.getPartitionPath());
           break;
         default:

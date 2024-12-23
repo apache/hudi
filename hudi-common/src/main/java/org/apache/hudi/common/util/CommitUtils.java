@@ -167,8 +167,7 @@ public class CommitUtils {
     return (Option<String>) timeline.getWriteTimeline().filterCompletedInstants().getReverseOrderedInstants()
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
             // process commits only with checkpoint entries
             String checkpointValue = commitMetadata.getMetadata(checkpointKey);
             if (StringUtils.nonEmpty(checkpointValue)) {

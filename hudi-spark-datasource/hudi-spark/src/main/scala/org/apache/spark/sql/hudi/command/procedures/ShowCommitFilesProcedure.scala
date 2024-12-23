@@ -18,13 +18,11 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata, HoodieWriteStat}
+import org.apache.hudi.common.model.HoodieWriteStat
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
@@ -68,7 +66,7 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
     val activeTimeline = metaClient.getActiveTimeline
     val timeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
     val hoodieInstantOption = getCommitForInstant(timeline, instantTime)
-    val commitMetadataOptional = getHoodieCommitMetadata(timeline, hoodieInstantOption)
+    val commitMetadataOptional = hoodieInstantOption.map(instant => TimelineUtils.getCommitMetadata(instant, timeline))
 
     if (commitMetadataOptional.isEmpty) {
       throw new HoodieException(s"Commit $instantTime not found in Commits $timeline.")
@@ -98,20 +96,6 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
 
     val hoodieInstant: Option[HoodieInstant] = instants.find((i: HoodieInstant) => timeline.containsInstant(i))
     hoodieInstant
-  }
-
-  private def getHoodieCommitMetadata(timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
-    if (hoodieInstant.isDefined) {
-      if (hoodieInstant.get.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION) {
-        Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieReplaceCommitMetadata]))
-      } else {
-        Option(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieCommitMetadata]))
-      }
-    } else {
-      Option.empty
-    }
   }
 }
 

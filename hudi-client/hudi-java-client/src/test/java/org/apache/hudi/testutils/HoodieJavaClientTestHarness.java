@@ -928,8 +928,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                                                     List<HoodieInstant> commitsToReturn) throws IOException {
     HashMap<String, String> fileIdToFullPath = new HashMap<>();
     for (HoodieInstant commit : commitsToReturn) {
-      HoodieCommitMetadata metadata =
-          HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = commitTimeline.deserializeInstantContent(commit, HoodieCommitMetadata.class);
       fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(new Path(basePath)));
     }
     return fileIdToFullPath;

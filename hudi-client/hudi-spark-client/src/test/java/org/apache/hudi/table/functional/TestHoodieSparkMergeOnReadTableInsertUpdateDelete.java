@@ -409,9 +409,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       }
       // check log file number in file system to cover all log files including additional log files created with spark task retries
       assertEquals(expectedLogFileNum + 1, numLogFiles);
-      Option<byte[]> bytes = table.getActiveTimeline().getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get());
       // check log file number in commit metadata cover all log files mentioned above
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(bytes.get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = table.getActiveTimeline().deserializeInstantContent(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get(), HoodieCommitMetadata.class);
       assertEquals(expectedLogFileNum + 1, commitMetadata.getWriteStats().size());
       // Do a compaction
       String instantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();

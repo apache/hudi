@@ -58,8 +58,7 @@ public class RecordBasedIndexingCatchupTask extends AbstractIndexingCatchupTask 
 
   @Override
   public void updateIndexForWriteAction(HoodieInstant instant) throws IOException {
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-        metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().deserializeInstantContent(instant, HoodieCommitMetadata.class);
     HoodieData<HoodieRecord> records = readRecordKeysFromFileSlices(instant);
     metadataWriter.update(commitMetadata, records, instant.getTimestamp());
   }

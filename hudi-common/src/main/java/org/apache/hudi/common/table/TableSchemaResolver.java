@@ -382,8 +382,7 @@ public class TableSchemaResolver {
         "Could not read schema from last compaction, no compaction commits found on path " + metaClient));
 
     // Read from the compacted file wrote
-    HoodieCommitMetadata compactionMetadata = HoodieCommitMetadata
-        .fromBytes(activeTimeline.getInstantDetails(lastCompactionCommit).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata compactionMetadata = activeTimeline.deserializeInstantContent(lastCompactionCommit, HoodieCommitMetadata.class);
     String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().stream().findAny()
         .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
             + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
@@ -425,8 +424,7 @@ public class TableSchemaResolver {
     HoodieTimeline timeline = completedInstants
         .filter(instant -> { // consider only instants that can update/change schema.
           try {
-            HoodieCommitMetadata commitMetadata =
-                HoodieCommitMetadata.fromBytes(completedInstants.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = completedInstants.deserializeInstantContent(instant, HoodieCommitMetadata.class);
             return WriteOperationType.canUpdateSchema(commitMetadata.getOperationType());
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
@@ -537,9 +535,8 @@ public class TableSchemaResolver {
     return commitMetadataCache.get()
         .computeIfAbsent(instant, (missingInstant) -> {
           HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-          byte[] data = timeline.getInstantDetails(missingInstant).get();
           try {
-            return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+            return timeline.deserializeInstantContent(missingInstant, HoodieCommitMetadata.class);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", missingInstant), e);
           }

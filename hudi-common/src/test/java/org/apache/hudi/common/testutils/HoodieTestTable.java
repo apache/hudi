@@ -288,7 +288,7 @@ public class HoodieTestTable implements AutoCloseable {
       String instantTime,
       Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata,
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
-      HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
+      Option<HoodieReplaceCommitMetadata> completeReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
     createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
     createReplaceCommit(basePath, instantTime, completeReplaceMetadata);
@@ -474,6 +474,13 @@ public class HoodieTestTable implements AutoCloseable {
     return addRequestedCompaction(instantTime);
   }
 
+  public HoodieTestTable addRequestedLogCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
+    HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
+    metaClient.getActiveTimeline().saveToLogCompactionRequested(compactionInstant,
+        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+    return addRequestedCompaction(instantTime);
+  }
+
   public HoodieTestTable addRequestedCompaction(String instantTime, FileSlice... fileSlices) throws IOException {
     HoodieCompactionPlan plan = CompactionUtils
         .buildFromFileSlices(Arrays.stream(fileSlices).map(fs -> Pair.of(fs.getPartitionPath(), fs))
@@ -506,7 +513,7 @@ public class HoodieTestTable implements AutoCloseable {
     WriteOperationType operationType = WriteOperationType.DELETE_PARTITION;
     Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> metas =
         generateReplaceCommitMetadata(instantTime, partition, fileIds, Option.empty(), operationType);
-    return addReplaceCommit(instantTime, Option.of(metas.getLeft()), Option.empty(), metas.getRight());
+    return addReplaceCommit(instantTime, Option.of(metas.getLeft()), Option.empty(), Option.of(metas.getRight()));
   }
 
   private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(
@@ -923,7 +930,7 @@ public class HoodieTestTable implements AutoCloseable {
     HoodieReplaceCommitMetadata replaceMetadata =
         (HoodieReplaceCommitMetadata) buildMetadata(writeStats, partitionToReplaceFileIds, Option.empty(), CLUSTER, PHONY_TABLE_SCHEMA,
             REPLACE_COMMIT_ACTION);
-    addReplaceCommit(commitTime, Option.empty(), Option.empty(), replaceMetadata);
+    addReplaceCommit(commitTime, Option.empty(), Option.empty(), Option.of(replaceMetadata));
     return replaceMetadata;
   }
 
@@ -1114,13 +1121,11 @@ public class HoodieTestTable implements AutoCloseable {
   private Option<HoodieCommitMetadata> getCommitMeta(HoodieInstant hoodieInstant) throws IOException {
     switch (hoodieInstant.getAction()) {
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
-        HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-            .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata replaceCommitMetadata = metaClient.getActiveTimeline().deserializeInstantContent(hoodieInstant, HoodieReplaceCommitMetadata.class);
         return Option.of(replaceCommitMetadata);
       case HoodieTimeline.DELTA_COMMIT_ACTION:
       case HoodieTimeline.COMMIT_ACTION:
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().deserializeInstantContent(hoodieInstant, HoodieCommitMetadata.class);
         return Option.of(commitMetadata);
       default:
         throw new IllegalArgumentException("Unknown instant action" + hoodieInstant.getAction());

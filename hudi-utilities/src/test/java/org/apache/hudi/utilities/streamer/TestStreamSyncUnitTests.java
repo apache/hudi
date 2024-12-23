@@ -42,12 +42,14 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -60,6 +62,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -72,6 +75,7 @@ import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
@@ -195,6 +199,31 @@ public class TestStreamSyncUnitTests {
             // Ignore checkpoint set, existing checkpoints will be ignored (reset-checkpoint ignored)
             Arguments.of(generateDeltaStreamerConfig("new-reset-checkpoint","123445"),generateCommitMetadata("old-reset-checkpoint","123422","checkpoint-prev-run"),Option.empty())
     );
+  }
+
+  @Test
+  void testGetCheckpointToResumeFailsIfNoValidOption() throws IOException {
+    HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
+    FileSystem fs = mock(FileSystem.class);
+    TypedProperties props = new TypedProperties();
+    SparkSession sparkSession = mock(SparkSession.class);
+    Configuration configuration = mock(Configuration.class);
+    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
+    HoodieInstant hoodieInstant = mock(HoodieInstant.class);
+
+    when(commitsTimeline.filter(any())).thenReturn(commitsTimeline);
+    when(commitsTimeline.lastInstant()).thenReturn(Option.of(hoodieInstant));
+    when(hoodieInstant.getTimestamp()).thenReturn("100");
+
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.tableType = "MERGE_ON_READ";
+    StreamSync streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkEngineContext,
+        fs, configuration, client -> true, null, Option.empty(), null, Option.empty(), true);
+    StreamSync spy = spy(streamSync);
+    HoodieCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
+    doReturn(Option.of(commitMetadata)).when(spy).getLatestCommitMetadataWithValidCheckpointInfo(any());
+
+    assertThrows(HoodieStreamerException.class, () -> spy.getCheckpointToResume(Option.of(commitsTimeline)));
   }
 
   private static HoodieStreamer.Config generateDeltaStreamerConfig(String checkpoint, String ignoreCheckpoint) {

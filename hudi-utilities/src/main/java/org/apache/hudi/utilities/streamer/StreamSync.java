@@ -809,8 +809,7 @@ public class StreamSync implements Serializable, Closeable {
           throw new HoodieStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
                   + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                  + commitsTimelineOpt.get().getInstants() + ", CommitMetadata="
-                  + commitMetadata.toJsonString());
+                  + commitsTimelineOpt.get().getInstants() + ", CommitMetadata=" + commitMetadata);
         }
         // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
@@ -824,14 +823,13 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   protected Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
-    return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
+    return timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY)) || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
           return Option.of(Pair.of(instant.toString(), commitMetadata));
         } else {
-          return Option.empty();
+          return Option.<Pair<String, HoodieCommitMetadata>>empty();
         }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);

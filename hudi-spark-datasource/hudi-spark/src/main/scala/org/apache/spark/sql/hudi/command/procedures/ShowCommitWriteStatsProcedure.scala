@@ -95,11 +95,9 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
   private def getHoodieCommitMetadata(timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
     if (hoodieInstant.isDefined) {
       if (hoodieInstant.get.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION) {
-        Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieReplaceCommitMetadata]))
+        Option(timeline.deserializeInstantContent(hoodieInstant.get, classOf[HoodieReplaceCommitMetadata]))
       } else {
-        Option(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
-          classOf[HoodieCommitMetadata]))
+        Option(timeline.deserializeInstantContent(hoodieInstant.get, classOf[HoodieCommitMetadata]))
       }
     } else {
       Option.empty

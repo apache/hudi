@@ -192,7 +192,7 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
     var totalNew: Long = 0
     val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitTimeline.filterCompletedInstants
     for (commit <- commitsToCatchup) {
-      val c: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit)).get, classOf[HoodieCommitMetadata])
+      val c: HoodieCommitMetadata = timeline.deserializeInstantContent(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit), classOf[HoodieCommitMetadata])
       totalNew += c.fetchTotalRecordsWritten - c.fetchTotalUpdateRecordsWritten
     }
     totalNew

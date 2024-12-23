@@ -38,9 +38,7 @@ public class CommitUtil {
     long totalNew = 0;
     HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
     for (String commit : commitsToCatchup) {
-      HoodieCommitMetadata c = HoodieCommitMetadata.fromBytes(
-          timeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit)).get(),
-          HoodieCommitMetadata.class);
+      HoodieCommitMetadata c = timeline.deserializeInstantContent(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit), HoodieCommitMetadata.class);
       totalNew += c.fetchTotalRecordsWritten() - c.fetchTotalUpdateRecordsWritten();
     }
     return totalNew;

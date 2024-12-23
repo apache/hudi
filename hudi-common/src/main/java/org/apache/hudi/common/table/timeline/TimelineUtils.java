@@ -91,8 +91,7 @@ public class TimelineUtils {
     Map<String, String> partitionToLatestDeleteTimestamp = replaceCommitTimeline.getInstantsAsStream()
         .map(instant -> {
           try {
-            HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-                replaceCommitTimeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+            HoodieReplaceCommitMetadata commitMetadata = replaceCommitTimeline.deserializeInstantContent(instant, HoodieReplaceCommitMetadata.class);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions modified at " + instant, e);
@@ -137,15 +136,14 @@ public class TimelineUtils {
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
           try {
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(s).get(), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(s, HoodieCommitMetadata.class);
             return commitMetadata.getPartitionToWriteStats().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions written at " + s, e);
           }
         case REPLACE_COMMIT_ACTION:
           try {
-            HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-                timeline.getInstantDetails(s).get(), HoodieReplaceCommitMetadata.class);
+            HoodieReplaceCommitMetadata commitMetadata = timeline.deserializeInstantContent(s, HoodieReplaceCommitMetadata.class);
             Set<String> partitions = new HashSet<>();
             partitions.addAll(commitMetadata.getPartitionToReplaceFileIds().keySet());
             partitions.addAll(commitMetadata.getPartitionToWriteStats().keySet());
@@ -223,8 +221,7 @@ public class TimelineUtils {
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
       LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-          metaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = metaClient.getCommitsTimeline().deserializeInstantContent(instant, HoodieCommitMetadata.class);
 
       return Option.ofNullable(commitMetadata.getExtraMetadata().get(extraMetadataKey));
     } catch (IOException e) {
@@ -237,8 +234,7 @@ public class TimelineUtils {
       if (REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
         // replacecommit is used for multiple operations: insert_overwrite/cluster etc. 
         // Check operation type to see if this instant is related to clustering.
-        HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(
-            metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata replaceMetadata = metaClient.getActiveTimeline().deserializeInstantContent(instant, HoodieReplaceCommitMetadata.class);
         return WriteOperationType.CLUSTER.equals(replaceMetadata.getOperationType());
       }
 
@@ -299,11 +295,10 @@ public class TimelineUtils {
   public static HoodieCommitMetadata getCommitMetadata(
       HoodieInstant instant,
       HoodieTimeline timeline) throws IOException {
-    byte[] data = timeline.getInstantDetails(instant).get();
     if (instant.getAction().equals(REPLACE_COMMIT_ACTION)) {
-      return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
+      return timeline.deserializeInstantContent(instant, HoodieReplaceCommitMetadata.class);
     } else {
-      return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+      return timeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
     }
   }
 

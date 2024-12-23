@@ -119,7 +119,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
-      val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
+      val commitMetadata = timeline.deserializeInstantContent(commit, classOf[HoodieCommitMetadata])
       for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet) {
         for (hoodieWriteStat <- partitionWriteStat.getValue) {
           rows.add(Row(
@@ -152,7 +152,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
-      val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
+      val commitMetadata = timeline.deserializeInstantContent(commit, classOf[HoodieCommitMetadata])
       rows.add(Row(commit.getTimestamp, commit.getStateTransitionTime, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
         commitMetadata.fetchTotalFilesUpdated, commitMetadata.fetchTotalPartitionsWritten,
         commitMetadata.fetchTotalRecordsWritten, commitMetadata.fetchTotalUpdateRecordsWritten,

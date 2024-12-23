@@ -184,8 +184,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
 
     // For all the file groups compacted by the compaction commit, the file system view
     // should return the latest file slices which is written by the latest commit
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-        timeline.getInstantDetails(compactionCommit).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(compactionCommit, HoodieCommitMetadata.class);
     List<Pair<String, String>> partitionFileIdPairList =
         commitMetadata.getPartitionToWriteStats().entrySet().stream().flatMap(
             entry -> {

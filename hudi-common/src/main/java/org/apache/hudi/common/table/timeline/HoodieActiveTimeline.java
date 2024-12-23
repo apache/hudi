@@ -164,8 +164,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
       throw new HoodieIOException("Failed to scan metadata", e);
     }
     this.metaClient = metaClient;
-    // multiple casts will make this lambda serializable -
-    // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.instantReader = this;
     LOG.info("Loaded instants upto : " + lastInstant());
   }
@@ -309,6 +307,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
     return readDataFromPath(detailPath);
   }
 
+  @Override
+  public InputStream getInstantContentStream(HoodieInstant instant) {
+    return getContentStream(instant);
+  }
+
   private Option<byte[]> readDataFromPath(Path filePath) {
     try (InputStream inputStream = readDataStreamFromPath(filePath)) {
       return Option.of(FileIOUtils.readAsByteArray(inputStream));
@@ -359,8 +362,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
         .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata =
-                HoodieCommitMetadata.fromBytes(getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = deserializeInstantContent(instant, HoodieCommitMetadata.class);
             return Pair.of(instant, commitMetadata);
           } catch (IOException e) {
             throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);

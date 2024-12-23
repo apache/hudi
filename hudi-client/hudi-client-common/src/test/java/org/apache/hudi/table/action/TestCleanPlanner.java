@@ -31,7 +31,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -629,16 +629,20 @@ public class TestCleanPlanner {
       instantstoProcess.putAll(savepointedCommitsToAdd);
     }
     instantstoProcess.forEach((k, v) -> {
-      HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, k);
+      boolean useReplaceInstant = instants.size() % 2 == 0;
+      HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, useReplaceInstant ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, k);
       instants.add(hoodieInstant);
-      Map<String, List<HoodieWriteStat>> partitionToWriteStats = new HashMap<>();
-      v.forEach(partition -> partitionToWriteStats.put(partition, Collections.emptyList()));
-      HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-      v.forEach(partition -> {
-        commitMetadata.getPartitionToWriteStats().put(partition, Collections.emptyList());
-      });
       try {
-        when(hoodieTable.getActiveTimeline().getInstantDetails(hoodieInstant)).thenReturn(Option.of(StringUtils.getUTF8Bytes(commitMetadata.toJsonString())));
+        if (useReplaceInstant) {
+          HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+          replaceCommitMetadata.addReplaceFileId(v.get(0), UUID.randomUUID().toString());
+          v.stream().skip(1).forEach(partition -> replaceCommitMetadata.getPartitionToWriteStats().put(partition, Collections.emptyList()));
+          when(hoodieTable.getActiveTimeline().deserializeInstantContent(hoodieInstant, HoodieReplaceCommitMetadata.class)).thenReturn(replaceCommitMetadata);
+        } else {
+          HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+          v.forEach(partition -> commitMetadata.getPartitionToWriteStats().put(partition, Collections.emptyList()));
+          when(hoodieTable.getActiveTimeline().deserializeInstantContent(hoodieInstant, HoodieCommitMetadata.class)).thenReturn(commitMetadata);
+        }
       } catch (IOException e) {
         throw new RuntimeException("Should not have failed", e);
       }

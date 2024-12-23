@@ -65,7 +65,6 @@ import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -96,7 +95,6 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.jetbrains.annotations.NotNull;
@@ -537,10 +535,8 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     String basePathStr = basePath;
     HoodieTable table = getHoodieTable(metaClient, cfg);
     String extension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline().getInstantDetails(
-                metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get()).get(),
-            HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().deserializeInstantContent(
+        metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get(), HoodieCommitMetadata.class);
     String filePath = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(w -> w.stream()).filter(s -> s.getPath().endsWith(extension)).findAny()
         .map(ee -> ee.getPath()).orElse(null);
@@ -799,8 +795,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieInstant replaceCommitInstant = metaClient.getActiveTimeline().getCompletedReplaceTimeline().firstInstant().get();
-      HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-          .fromBytes(metaClient.getActiveTimeline().getInstantDetails(replaceCommitInstant).get(), HoodieReplaceCommitMetadata.class);
+      HoodieReplaceCommitMetadata replaceCommitMetadata = metaClient.getActiveTimeline().deserializeInstantContent(replaceCommitInstant, HoodieReplaceCommitMetadata.class);
 
       List<String> filesFromReplaceCommit = new ArrayList<>();
       replaceCommitMetadata.getPartitionToWriteStats()
@@ -1135,20 +1130,16 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       String actionType = metaClient.getCommitActionType();
       HoodieInstant commitInstant = new HoodieInstant(false, actionType, instantTime);
       HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-          .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata = commitTimeline.deserializeInstantContent(commitInstant, HoodieCommitMetadata.class);
       String basePath = table.getMetaClient().getBasePath();
       Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(new Path(basePath)).values();
 
       // Read from commit file
-      try (FSDataInputStream inputStream = fs.open(testTable.getCommitFilePath(instantTime))) {
-        String everything = FileIOUtils.readAsUTFString(inputStream);
-        HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-        HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new Path(basePath));
-        // Compare values in both to make sure they are equal.
-        for (String pathName : paths.values()) {
-          assertTrue(commitPathNames.contains(pathName));
-        }
+      HoodieCommitMetadata metadata = metaClient.reloadActiveTimeline().deserializeInstantContent(commitInstant, HoodieCommitMetadata.class);
+      HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new Path(basePath));
+      // Compare values in both to make sure they are equal.
+      for (String pathName : paths.values()) {
+        assertTrue(commitPathNames.contains(pathName));
       }
     }
   }
@@ -1174,18 +1165,15 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         "After explicit commit, commit file should be created");
 
     // Read from commit file
-    try (FSDataInputStream inputStream = fs.open(testTable.getCommitFilePath(instantTime0))) {
-      String everything = FileIOUtils.readAsUTFString(inputStream);
-      HoodieCommitMetadata metadata =
-          HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-      int inserts = 0;
-      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
-        for (HoodieWriteStat stat : pstat.getValue()) {
-          inserts += stat.getNumInserts();
-        }
+    HoodieInstant instant0 = new HoodieInstant(false, metaClient.getCommitActionType(), instantTime0);
+    HoodieCommitMetadata metadata0 = metaClient.reloadActiveTimeline().deserializeInstantContent(instant0, HoodieCommitMetadata.class);
+    int inserts = 0;
+    for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata0.getPartitionToWriteStats().entrySet()) {
+      for (HoodieWriteStat stat : pstat.getValue()) {
+        inserts += stat.getNumInserts();
       }
-      assertEquals(200, inserts);
     }
+    assertEquals(200, inserts);
 
     // Update + Inserts such that they just expand file1
     String instantTime1 = "001";
@@ -1199,20 +1187,18 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         "After explicit commit, commit file should be created");
 
     // Read from commit file
-    try (FSDataInputStream inputStream = fs.open(testTable.getCommitFilePath(instantTime1))) {
-      String everything = FileIOUtils.readAsUTFString(inputStream);
-      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-      int inserts = 0;
-      int upserts = 0;
-      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
-        for (HoodieWriteStat stat : pstat.getValue()) {
-          inserts += stat.getNumInserts();
-          upserts += stat.getNumUpdateWrites();
-        }
+    HoodieInstant instant1 = new HoodieInstant(false, metaClient.getCommitActionType(), instantTime1);
+    HoodieCommitMetadata metadata1 = metaClient.reloadActiveTimeline().deserializeInstantContent(instant1, HoodieCommitMetadata.class);
+    inserts = 0;
+    int upserts = 0;
+    for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata1.getPartitionToWriteStats().entrySet()) {
+      for (HoodieWriteStat stat : pstat.getValue()) {
+        inserts += stat.getNumInserts();
+        upserts += stat.getNumUpdateWrites();
       }
-      assertEquals(0, inserts);
-      assertEquals(200, upserts);
     }
+    assertEquals(0, inserts);
+    assertEquals(200, upserts);
   }
 
   /**

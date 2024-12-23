@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.NumericUtils;
-import org.apache.hudi.common.util.Option;
 
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
@@ -113,14 +112,11 @@ public class DiffCommand {
         .getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      Option<byte[]> instantDetails = timeline.getInstantDetails(commit);
-      if (instantDetails.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(instantDetails.get(), HoodieCommitMetadata.class);
-        for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
-            commitMetadata.getPartitionToWriteStats().entrySet()) {
-          for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
-            populateRows(rows, commit, hoodieWriteStat, diffEntity, diffEntityChecker);
-          }
+      HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(commit, HoodieCommitMetadata.class);
+      for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
+          commitMetadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
+          populateRows(rows, commit, hoodieWriteStat, diffEntity, diffEntityChecker);
         }
       }
     }

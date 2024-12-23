@@ -1290,13 +1290,8 @@ public class HoodieMetadataTableValidator implements Serializable {
             // The instant is completed, in active timeline
             // Checking commit metadata only as log files can only be written by COMMIT or DELTA_COMMIT
             if (!committedFilesMap.containsKey(instantTime)) {
-              HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                  completedInstantsTimeline.getInstantDetails(
-                      completedInstantsTimeline.filter(i -> i.getTimestamp().equals(instantTime))
-                          .firstInstant().get()
-                  ).get(),
-                  HoodieCommitMetadata.class
-              );
+              HoodieCommitMetadata commitMetadata = completedInstantsTimeline.deserializeInstantContent(
+                  completedInstantsTimeline.filter(i -> i.getTimestamp().equals(instantTime)).firstInstant().get(), HoodieCommitMetadata.class);
               committedFilesMap.put(
                   instantTime,
                   commitMetadata.getWriteStats().stream()

@@ -210,12 +210,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
     for (HoodieInstant instant : commitsTimeline.getReverseOrderedInstants().collect(Collectors.toList())) {
       List<HoodieWriteStat> hoodieWriteStatList = commitWriteStatsMap.computeIfAbsent(instant.getTimestamp(), newInstant -> {
         try {
-          return HoodieCommitMetadata.fromBytes(
-                  timeline.getInstantDetails(
-                      timeline.filter(inst -> inst.getTimestamp().equals(newInstant))
-                          .firstInstant().get()).get(),
-                  HoodieCommitMetadata.class)
-              .getWriteStats();
+          return timeline.deserializeInstantContent(timeline.filter(inst -> inst.getTimestamp().equals(newInstant)).firstInstant().get(), HoodieCommitMetadata.class).getWriteStats();
         } catch (IOException e) {
           return Collections.EMPTY_LIST;
         }

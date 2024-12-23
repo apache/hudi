@@ -272,7 +272,7 @@ public class MarkerUtils {
     currentInstants.removeAll(completedCommitInstants);
     Set<String> missingFileIDs = currentInstants.stream().flatMap(instant -> {
       try {
-        return HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class)
+        return activeTimeline.deserializeInstantContent(instant, HoodieCommitMetadata.class)
             .getFileIdAndRelativePaths().keySet().stream();
       } catch (Exception e) {
         return Stream.empty();

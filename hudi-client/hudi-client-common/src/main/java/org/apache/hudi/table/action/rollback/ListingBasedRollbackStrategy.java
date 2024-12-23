@@ -169,9 +169,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // (B.3) Rollback triggered for first commit - Same as (B.1)
               // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
               // as well if the base file gets deleted.
-              HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                  table.getMetaClient().getCommitsTimeline().getInstantDetails(instantToRollback).get(),
-                  HoodieCommitMetadata.class);
+              HoodieCommitMetadata commitMetadata = table.getMetaClient().getCommitsTimeline().deserializeInstantContent(instantToRollback, HoodieCommitMetadata.class);
 
               // In case all data was inserts and the commit failed, delete the file belonging to that commit
               // We do not know fileIds for inserts (first inserts are either log files or base files),

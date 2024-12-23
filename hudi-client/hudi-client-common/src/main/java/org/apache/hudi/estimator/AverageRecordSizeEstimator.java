@@ -77,8 +77,7 @@ public class AverageRecordSizeEstimator extends RecordSizeEstimator {
             .forEach(instant -> {
               HoodieCommitMetadata commitMetadata;
               try {
-                commitMetadata = HoodieCommitMetadata
-                    .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+                commitMetadata = commitTimeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
                 if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
                   // let's consider only base files in case of delta commits
                   commitMetadata.getWriteStats().stream().parallel()

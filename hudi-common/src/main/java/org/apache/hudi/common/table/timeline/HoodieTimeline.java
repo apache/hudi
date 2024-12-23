@@ -430,9 +430,7 @@ public interface HoodieTimeline extends Serializable {
    */
   InputStream getInstantContentStream(HoodieInstant instant);
 
-  <T> T deserializeAvroInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException;
-
-  <T> T deserializeJsonInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException;
+  <T> T deserializeInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException;
 
   boolean isEmpty(HoodieInstant instant);
 

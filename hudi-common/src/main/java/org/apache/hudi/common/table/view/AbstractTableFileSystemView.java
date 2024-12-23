@@ -235,8 +235,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     HoodieTimeline replacedTimeline = timeline.getCompletedReplaceTimeline();
     Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = replacedTimeline.getInstantsAsStream().flatMap(instant -> {
       try {
-        HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),
-            HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata replaceMetadata = metaClient.getActiveTimeline().deserializeInstantContent(instant, HoodieReplaceCommitMetadata.class);
 
         // get replace instant mapping for each partition, fileId
         return replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().flatMap(entry -> entry.getValue().stream().map(e ->

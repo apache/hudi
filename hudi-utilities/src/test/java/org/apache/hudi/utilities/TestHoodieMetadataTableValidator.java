@@ -285,7 +285,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     // let's add a log file entry to the commit history and filesystem by directly modifying the commit so FS based listing and MDT based listing diverges.
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     HoodieInstant instantToOverwrite = timeline.getInstants().get(1);
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(instantToOverwrite).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(instantToOverwrite, HoodieCommitMetadata.class);
     HoodieWriteStat writeStatToCopy = commitMetadata.getPartitionToWriteStats().entrySet().stream().flatMap(entry -> entry.getValue().stream())
         .filter(writeStat -> FSUtils.isLogFile(writeStat.getPath())).findFirst().get();
     String newLogFilePath = writeStatToCopy.getPath() + "1";

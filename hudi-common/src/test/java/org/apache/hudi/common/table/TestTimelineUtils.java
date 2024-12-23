@@ -41,6 +41,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
@@ -102,6 +103,33 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   @AfterEach
   public void tearDown() throws Exception {
     cleanMetaClient();
+  }
+
+  @Test
+  public void testGetCommitMetadata() throws IOException {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    assertTrue(activeCommitTimeline.empty());
+
+    String ts1 = "1";
+    String replacePartition = "2021/01/01";
+    String newFilePartition = "2021/01/02";
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts1);
+    activeTimeline.createNewInstant(instant1);
+    // create replace metadata only with replaced file Ids (no new files created)
+    activeTimeline.saveAsComplete(instant1,
+        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
+            newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+
+    String ts2 = "2";
+    HoodieInstant instant2 = new HoodieInstant(true, COMMIT_ACTION, ts2);
+    activeTimeline.createNewInstant(instant2);
+    activeTimeline.saveAsComplete(instant2, Option.of(getCommitMetadata(basePath, ts2, ts2, 2, Collections.emptyMap())));
+
+    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+    assertTrue(TimelineUtils.getCommitMetadata(instant1, timeline) instanceof HoodieReplaceCommitMetadata);
+    assertTrue(TimelineUtils.getCommitMetadata(instant2, timeline) instanceof HoodieCommitMetadata);
+    assertFalse(TimelineUtils.getCommitMetadata(instant2, timeline) instanceof HoodieReplaceCommitMetadata);
   }
 
   @Test
@@ -208,6 +236,36 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
 
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertTrue(partitions.isEmpty());
+  }
+
+  @Test
+  public void testGetDroppedPartitions() throws IOException {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    // drop a partition
+    HoodieInstant replace1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, "001");
+    activeTimeline.createNewInstant(replace1);
+    HoodieReplaceCommitMetadata replaceCommitMetadata1 = new HoodieReplaceCommitMetadata();
+    replaceCommitMetadata1.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    String partition1 = "partition1";
+    replaceCommitMetadata1.setPartitionToReplaceFileIds(Collections.singletonMap(partition1, Collections.emptyList()));
+    activeTimeline.saveAsComplete(replace1, Option.of(replaceCommitMetadata1.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    // re-add dropped partition
+    HoodieInstant instant = new HoodieInstant(true, COMMIT_ACTION, "002");
+    activeTimeline.createNewInstant(instant);
+    activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, partition1, "002", 2, Collections.emptyMap())));
+
+    // drop a second partition
+    HoodieInstant replace2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, "003");
+    activeTimeline.createNewInstant(replace2);
+    HoodieReplaceCommitMetadata replaceCommitMetadata2 = new HoodieReplaceCommitMetadata();
+    replaceCommitMetadata2.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    String partition2 = "partition2";
+    replaceCommitMetadata2.setPartitionToReplaceFileIds(Collections.singletonMap(partition2, Collections.emptyList()));
+    activeTimeline.saveAsComplete(replace2, Option.of(replaceCommitMetadata2.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    assertEquals(Collections.singletonList(partition2), TimelineUtils.getDroppedPartitions(activeTimeline.reload()));
   }
 
   @Test
@@ -521,7 +579,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
-    return commit.toJsonString().getBytes(StandardCharsets.UTF_8);
+    return JsonUtils.getObjectMapper().writeValueAsBytes(commit);
   }
 
   private byte[] getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,

@@ -507,14 +507,6 @@ public class HoodieCommitMetadata implements Serializable {
     return result;
   }
 
-  public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
-    try {
-      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
-    } catch (Exception e) {
-      throw new IOException("unable to read commit metadata", e);
-    }
-  }
-
   @Override
   public String toString() {
     return "HoodieCommitMetadata{" + "partitionToWriteStats=" + partitionToWriteStats

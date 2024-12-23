@@ -247,13 +247,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private Stream<String> getPartitionsForInstants(HoodieInstant instant) {
     try {
       if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
-        HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-            hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        HoodieReplaceCommitMetadata replaceCommitMetadata = hoodieTable.getActiveTimeline().deserializeInstantContent(instant, HoodieReplaceCommitMetadata.class);
         return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());
       } else {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(),
-                HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = hoodieTable.getActiveTimeline().deserializeInstantContent(instant, HoodieCommitMetadata.class);
         return commitMetadata.getPartitionToWriteStats().keySet().stream();
       }
     } catch (IOException e) {

@@ -41,7 +41,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -140,7 +139,7 @@ public class TestSimpleSchemaConflictResolutionStrategy extends SimpleSchemaConf
     when(config.getWriteSchema()).thenReturn(writerSchemaOfTxn);
 
     // Setup commit metadata with schema
-    when(schemaEvolutionTimeline.getInstantDetails(any(HoodieInstant.class)))
+    when(schemaEvolutionTimeline.deserializeInstantContent(any(HoodieInstant.class), eq(HoodieCommitMetadata.class)))
         .thenAnswer(invocation -> {
           HoodieInstant instant = invocation.getArgument(0);
           String schema;
@@ -154,7 +153,7 @@ public class TestSimpleSchemaConflictResolutionStrategy extends SimpleSchemaConf
 
           HoodieCommitMetadata metadata = new HoodieCommitMetadata();
           metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schema);
-          return Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+          return metadata;
         });
 
     // Mock the timeline to ensure filtering works correctly
