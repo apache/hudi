@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -351,24 +352,19 @@ public class RocksDBDAO {
     }
   }
 
-  private byte[] getKeyBytes(String key) {
-    return getUTF8Bytes(key);
-  }
-
-  private <K extends Serializable> byte[] getKeyBytes(K key) {
-    try {
-      return SerializationUtils.serialize(key);
-    } catch (IOException e) {
-      throw new HoodieException(e);
-    }
-  }
-
-  public <K extends Serializable, T extends Serializable> List<T> multiGet(String columnFamilyName, List<K> keys) {
+  /**
+   * Retrieve values for the given keys in a column family.
+   *
+   * @param columnFamilyName Column Family Name
+   * @param keys Keys to be retrieved
+   * @param <T> Type of object stored.
+   */
+  public <K extends Serializable, T extends Serializable> List<T> multiGetAsList(String columnFamilyName, List<K> keys) {
     List<byte[]> byteKeys = keys.stream().map(this::getKeyBytes).collect(Collectors.toList());
     ColumnFamilyHandle handle = managedHandlesMap.get(columnFamilyName);
     ValidationUtils.checkArgument(handle != null, "Column Family not found :" + columnFamilyName);
     List<ColumnFamilyHandle> columnFamilyHandles = byteKeys.stream().map(key -> handle).collect(Collectors.toList());
-    return multiGet(columnFamilyHandles, byteKeys);
+    return multiGetAsList(columnFamilyHandles, byteKeys);
   }
 
   /**
@@ -378,11 +374,11 @@ public class RocksDBDAO {
    * @param keys Keys to be retrieved
    * @param <T> Type of object stored.
    */
-  public <T extends Serializable>  List<T> multiGet(List<ColumnFamilyHandle> columnFamilyHandles, List<byte[]> keys) {
+  private  <T extends Serializable>  List<T> multiGetAsList(List<ColumnFamilyHandle> columnFamilyHandles, List<byte[]> keys) {
     ValidationUtils.checkArgument(!closed);
     try {
       return getRocksDB().multiGetAsList(columnFamilyHandles, keys)
-          .stream().filter(val -> val != null).map(val -> (T) SerializationUtils.deserialize(val)).collect(Collectors.toList());
+          .stream().filter(Objects::nonNull).map(val -> (T) SerializationUtils.deserialize(val)).collect(Collectors.toList());
     } catch (RocksDBException e) {
       throw new HoodieException(e);
     }
@@ -531,6 +527,18 @@ public class RocksDBDAO {
     byte[] payload = SerializationUtils.serialize(value);
     totalBytesWritten += payload.length;
     return payload;
+  }
+
+  private byte[] getKeyBytes(String key) {
+    return getUTF8Bytes(key);
+  }
+
+  private <K extends Serializable> byte[] getKeyBytes(K key) {
+    try {
+      return SerializationUtils.serialize(key);
+    } catch (IOException e) {
+      throw new HoodieException(e);
+    }
   }
 
   String getRocksDBBasePath() {

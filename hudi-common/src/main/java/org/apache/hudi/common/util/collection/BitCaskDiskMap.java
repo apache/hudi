@@ -154,12 +154,22 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   }
 
   /**
-   * Custom iterator to iterate over values written to disk with pushdown predicate.
+   * Custom iterator to iterate over values written to disk.
+   */
+  @Override
+  public Iterator<R> iterator() {
+    ClosableIterator<R> iterator = new LazyFileIterable(filePath, valueMetadataMap, isCompressionEnabled).iterator();
+    this.iterators.add(iterator);
+    return iterator;
+  }
+
+  /**
+   * Custom iterator to iterate over values written to disk with a key filter.
    */
   @Override
   public Iterator<R> iterator(Predicate<T> filter) {
-    Map<T, ValueMetadata> needMetadata = valueMetadataMap.entrySet().stream().filter(e -> filter.test(e.getKey())).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-    ClosableIterator<R> iterator = new LazyFileIterable(filePath, needMetadata, isCompressionEnabled).iterator();
+    Map<T, ValueMetadata> filteredValueMetadata = valueMetadataMap.entrySet().stream().filter(e -> filter.test(e.getKey())).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+    ClosableIterator<R> iterator = new LazyFileIterable(filePath, filteredValueMetadata, isCompressionEnabled).iterator();
     this.iterators.add(iterator);
     return iterator;
   }

@@ -144,10 +144,13 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
     return getRocksDb().iterator(ROCKSDB_COL_FAMILY);
   }
 
+  /**
+   * Custom iterator to iterate over values written to disk with a key filter.
+   */
   @Override
   public Iterator<R> iterator(Predicate<T> filter) {
     List<T> filteredKeys = keySet.stream().filter(filter).sorted().collect(Collectors.toList());
-    List<R> values = getRocksDb().multiGet(ROCKSDB_COL_FAMILY, filteredKeys);
+    List<R> values = getRocksDb().multiGetAsList(ROCKSDB_COL_FAMILY, filteredKeys);
     return values.iterator();
   }
 

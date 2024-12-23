@@ -21,19 +21,19 @@ package org.apache.hudi.common.util.collection;
 import java.util.Iterator;
 import java.util.function.Predicate;
 
-public interface PredicatePushdownIterable<K, V> extends Iterable<V> {
-
-  @Override
-  default Iterator<V> iterator() {
-    return iterator(k -> true);
-  }
-
+/**
+ * An iterable that allows filtering on the element keys.
+ *
+ * @param <K> the type of element keys
+ * @param <V> the type of elements returned by the iterator
+ */
+public interface KeyFilteringIterable<K, V> extends Iterable<V> {
   /**
-   * Filter the values based on the given key-filter.
+   * Returns an iterator over elements of type {@code V}.
    *
-   * @param filter The filter to apply
-   * @return The iterator after applying the filter
+   * @param filter The filter on the key of type {@code K}.
+   *
+   * @return an Iterator.
    */
   Iterator<V> iterator(Predicate<K> filter);
-
 }
