@@ -139,4 +139,17 @@ public class HoodieStreamerConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.15.0")
       .withDocumentation("When enabled, the dataframe generated from reading source data is wrapped with an exception handler to explicitly surface exceptions.");
+
+  public static final ConfigProperty<Integer> FAILED_TABLE_LIMIT = ConfigProperty
+          .key(STREAMER_CONFIG_PREFIX + "failed.table.limit")
+          .defaultValue(0)
+          .markAdvanced()
+          .sinceVersion("1.1.0")
+          .withDocumentation("Checks the size of failed tables and limit if the failed size has went beyond then it will fail");
+  public static final ConfigProperty<Boolean> FAILED_TABLE_LIMIT_ENABLED = ConfigProperty
+          .key(STREAMER_CONFIG_PREFIX + "failed.table.limit.enabled")
+          .defaultValue(false)
+          .markAdvanced()
+          .sinceVersion("1.1.0")
+          .withDocumentation("When enabled,if the failed table limit goes beyond the limit then it starts failing");
 }

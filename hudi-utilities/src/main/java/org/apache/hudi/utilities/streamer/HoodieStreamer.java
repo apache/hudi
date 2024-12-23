@@ -266,6 +266,9 @@ public class HoodieStreamer implements Serializable {
             + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
     public String sourceClassName = JsonDFSSource.class.getName();
 
+    @Parameter(names = {"--critical-table"}, description = "marks a table as critial table", required = false)
+    public boolean criticalTable = false;
+
     @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
         + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
     public String sourceOrderingField = "ts";
@@ -278,7 +281,7 @@ public class HoodieStreamer implements Serializable {
 
     @Parameter(names = {"--merge-mode", "--record-merge-mode"}, description = "mode to merge records with")
     public RecordMergeMode recordMergeMode = null;
-    
+
     @Parameter(names = {"--merge-strategy-id", "--record-merge-strategy-id"}, description = "only set this if you are using custom merge mode")
     public String recordMergeStrategyId = null;
 
