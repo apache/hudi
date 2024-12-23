@@ -19,7 +19,6 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -37,12 +36,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Serializable;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
+import java.util.function.Function;
 
 /**
  * Consistent hashing bucket index implementation, with auto-adjust bucket number.
@@ -76,45 +70,24 @@ public class HoodieConsistentBucketIndex extends HoodieBucketIndex {
   }
 
   @Override
-  public <R> HoodieData<HoodieRecord<R>> tagLocation(
-      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable)
-      throws HoodieIndexException {
-    // Get bucket location mapper for the given partitions
-    List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collectAsList();
-    LOG.info("Get BucketIndexLocationMapper for partitions: " + partitions);
-    ConsistentBucketIndexLocationMapper mapper = new ConsistentBucketIndexLocationMapper(hoodieTable, partitions);
-
-    return records.mapPartitions(iterator ->
-            new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
-      @Override
-      protected HoodieRecord<R> computeNext() {
-        // TODO maybe batch the operation to improve performance
-        HoodieRecord record = inputItr.next();
-        Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey());
-        return tagAsNewRecordIfNeeded(record, loc);
-      }
-      }, false);
+  protected Function<HoodieRecord, Option<HoodieRecordLocation>> getIndexLocationFunctionForPartition(HoodieTable table, String partitionPath) {
+    return new ConsistentBucketIndexLocationFunction(table, partitionPath);
   }
 
-  public class ConsistentBucketIndexLocationMapper implements Serializable {
+  private class ConsistentBucketIndexLocationFunction implements Function<HoodieRecord, Option<HoodieRecordLocation>> {
+    private final String partitionPath;
+    private final ConsistentBucketIdentifier identifier;
 
-    /**
-     * Mapping from partitionPath -> bucket identifier
-     */
-    private final Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
-
-    public ConsistentBucketIndexLocationMapper(HoodieTable table, List<String> partitions) {
-      // TODO maybe parallel
-      partitionToIdentifier = partitions.stream().collect(Collectors.toMap(p -> p, p -> {
-        HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(table, p, getNumBuckets());
-        return new ConsistentBucketIdentifier(metadata);
-      }));
+    public ConsistentBucketIndexLocationFunction(HoodieTable table, String partition) {
+      this.partitionPath = partition;
+      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(table, partition, getNumBuckets());
+      this.identifier = new ConsistentBucketIdentifier(metadata);
     }
 
-    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key) {
-      String partitionPath = key.getPartitionPath();
-      ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(key, indexKeyFields);
+    @Override
+    public Option<HoodieRecordLocation> apply(HoodieRecord record) {
+      HoodieKey recordKey = record.getKey();
+      ConsistentHashingNode node = identifier.getBucket(recordKey, indexKeyFields);
       if (!StringUtils.isNullOrEmpty(node.getFileIdPrefix())) {
         // Dynamic Bucket Index doesn't need the instant time of the latest file group.
         // We add suffix 0 here to the file uuid, following the naming convention, i.e., fileId = [uuid]_[numWrites]
@@ -122,7 +95,7 @@ public class HoodieConsistentBucketIndex extends HoodieBucketIndex {
       }
 
       LOG.error("Consistent hashing node has no file group, partition: {}, meta: {}, record_key: {}",
-          partitionPath, partitionToIdentifier.get(partitionPath).getMetadata().getFilename(), key.toString());
+          partitionPath, identifier.getMetadata().getFilename(), recordKey);
       throw new HoodieIndexException("Failed to getBucket as hashing node has no file group");
     }
   }

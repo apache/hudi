@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -31,7 +30,7 @@ import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.BucketSortBulkInsertPartitioner;
 import org.apache.hudi.table.ConsistentHashingBucketInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
@@ -56,13 +55,9 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  * Bulk_insert partitioner of Spark row using consistent hashing bucket index.
  */
 public class ConsistentBucketIndexBulkInsertPartitionerWithRows
-    implements BulkInsertPartitioner<Dataset<Row>>, ConsistentHashingBucketInsertPartitioner {
-
-  private final HoodieTable table;
+    extends BucketSortBulkInsertPartitioner<Dataset<Row>> implements ConsistentHashingBucketInsertPartitioner {
 
   private final String indexKeyFields;
-
-  private final String[] sortColumnNames;
 
   private final List<String> fileIdPfxList = new ArrayList<>();
 
@@ -81,20 +76,14 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
   public ConsistentBucketIndexBulkInsertPartitionerWithRows(HoodieTable table,
                                                             Map<String, String> strategyParams,
                                                             boolean populateMetaFields) {
+    super(table, strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), ""));
     this.indexKeyFields = table.getConfig().getBucketIndexHashField();
-    this.table = table;
     this.hashingChildrenNodes = new HashMap<>();
     this.populateMetaFields = populateMetaFields;
     if (!populateMetaFields) {
       this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(table.getConfig().getProps());
     } else {
       this.keyGeneratorOpt = Option.empty();
-    }
-    String sortString = strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), "");
-    if (!StringUtils.isNullOrEmpty(sortString)) {
-      this.sortColumnNames = sortString.split(",");
-    } else {
-      this.sortColumnNames = null;
     }
     this.extractor = RowRecordKeyExtractor.getRowRecordKeyExtractor(populateMetaFields, keyGeneratorOpt);
     ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
@@ -131,10 +120,10 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
         })
         .values(), rows.schema());
 
-    if (sortColumnNames != null && sortColumnNames.length > 0) {
+    if (isCustomSorted()) {
       partitionedRows = partitionedRows
           .sortWithinPartitions(Arrays.stream(sortColumnNames).map(Column::new).toArray(Column[]::new));
-    } else if (table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE) {
+    } else if (isRecordKeySorted()) {
       if (populateMetaFields) {
         partitionedRows = partitionedRows.sortWithinPartitions(HoodieRecord.RECORD_KEY_METADATA_FIELD);
       } else {
@@ -172,12 +161,6 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
     ValidationUtils.checkState(nodes.stream().noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL),
         "children nodes should not be tagged as NORMAL");
     hashingChildrenNodes.put(partition, nodes);
-  }
-
-  @Override
-  public boolean arePartitionRecordsSorted() {
-    return (sortColumnNames != null && sortColumnNames.length > 0)
-        || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE;
   }
 
   private int getBucketId(Row row) {

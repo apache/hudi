@@ -17,9 +17,8 @@
  * under the License.
  */
 
-package org.apache.hudi.index.functional;
+package org.apache.hudi.index.expression;
 
-import org.apache.hudi.HoodieSparkExpressionIndex;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.spark.sql.Column;
