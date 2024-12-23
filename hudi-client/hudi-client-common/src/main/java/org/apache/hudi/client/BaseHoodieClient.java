@@ -286,11 +286,10 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   /**
-   * Updates the cols being indexed with column stats. This is for tracking purpose to that queries can leverage col stats from MDT only for
-   * indexed columns.
+   * Updates the cols being indexed with column stats. This is for tracking purpose so that queries can leverage col stats
+   * from MDT only for indexed columns.
    * @param metaClient instance of {@link HoodieTableMetaClient} of interest.
    * @param columnsToIndex list of columns to index.
    */
-  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-  }
+  protected abstract void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
 }

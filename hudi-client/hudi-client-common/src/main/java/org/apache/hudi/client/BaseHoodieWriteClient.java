@@ -298,7 +298,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     activeTimeline.saveAsComplete(false, table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime),
         serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata));
     // update cols to Index as applicable
-    HoodieIndexClientUtils.updateColsToIndex(table, config, metadata,
+    HoodieColStatsIndexUtils.updateColsToIndex(table, config, metadata,
         (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (val1, val2) -> {
           updateColumnsToIndexWithColStats(val1, val2);
           return null;

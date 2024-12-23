@@ -212,11 +212,15 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Builds expression index definition and writes to index definition file.
+   * Support mutable and immutable index definition. Only col stats is mutable, while all others are immutable.
+   * Inacse of immutable index definition, we could only create or delete the definition.
+   * Incase of mutable (col stats), list of source columns (or list of columns to index) could also change.
+   * @return true if index definition is updated.
    */
   public boolean buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
-    boolean isIndexDefnMutable = indexDefinition.getIndexName().equals(PARTITION_NAME_COLUMN_STATS);
-    if (!isIndexDefnMutable) {
+    boolean isIndexDefnImmutable = !indexDefinition.getIndexName().equals(PARTITION_NAME_COLUMN_STATS); // only col stats is mutable.
+    if (isIndexDefnImmutable) {
       checkState(
           !indexMetadataOpt.isPresent() || (!indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)),
           "Index metadata is already present");
@@ -224,7 +228,7 @@ public class HoodieTableMetaClient implements Serializable {
     String indexMetaPath = getIndexDefinitionPath();
     boolean updateIndexDefn = true;
     if (indexMetadataOpt.isPresent()) {
-      if (!isIndexDefnMutable) {
+      if (isIndexDefnImmutable) {
         indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
       } else {
         // if index defn is mutable, lets check for difference and only update if required.
@@ -244,41 +248,6 @@ public class HoodieTableMetaClient implements Serializable {
       Map<String, HoodieIndexDefinition> indexDefinitionMap = new HashMap<>();
       indexDefinitionMap.put(indexName, indexDefinition);
       indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
-    }
-    if (updateIndexDefn) {
-      try {
-        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
-      } catch (IOException e) {
-        throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
-      }
-    }
-    return updateIndexDefn;
-  }
-
-  /**
-   * Builds expression index definition and writes to index definition file.
-   */
-  public boolean buildColSatsIndexDefinition(HoodieIndexDefinition indexDefinition) {
-    String indexName = indexDefinition.getIndexName();
-    String indexMetaPath = getIndexDefinitionPath();
-    boolean updateIndexDefn = false;
-    if (indexMetadataOpt.isPresent()) {
-      if (indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)) {
-        if (!indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields().equals(indexDefinition.getSourceFields())) {
-          updateIndexDefn = true;
-          LOG.info(String.format("List of columns to index is changing. Old value %s. New value %s",
-              indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields(), indexDefinition.getSourceFields()));
-          indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
-        }
-      } else {
-        indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
-        updateIndexDefn = true;
-      }
-    } else {
-      Map<String, HoodieIndexDefinition> indexDefinitionMap = new HashMap<>();
-      indexDefinitionMap.put(indexName, indexDefinition);
-      indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
-      updateIndexDefn = true;
     }
     if (updateIndexDefn) {
       try {

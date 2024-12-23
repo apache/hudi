@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -34,8 +35,19 @@ import java.util.List;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 
-public class HoodieIndexClientUtils {
+/**
+ * Utils to assist with updating columns to index with col stats.
+ */
+public class HoodieColStatsIndexUtils {
 
+  /**
+   * Updates the list of columns to index with col stats partition in MDT.
+   * @param dataTable {@link HoodieTable} of interest.
+   * @param config {@link HoodieWriteConfig} of interest.
+   * @param commitMetadata commit metadata of interest.
+   * @param updateColSatsFunc function to assist with updating columns to index.
+   */
+  @VisibleForTesting
   public static void updateColsToIndex(HoodieTable dataTable, HoodieWriteConfig config, HoodieCommitMetadata commitMetadata,
                                 Functions.Function2<HoodieTableMetaClient, List<String>, Void> updateColSatsFunc) {
     if (config.getMetadataConfig().isColumnStatsIndexEnabled()) {
@@ -64,6 +76,11 @@ public class HoodieIndexClientUtils {
     }
   }
 
+  /**
+   * Deletes col stats index definition for the given table of interest.
+   * @param dataTableMetaClient {@link HoodieTableMetaClient} instance for the data table.
+   */
+  @VisibleForTesting
   public static void deleteColStatsIndexDefn(HoodieTableMetaClient dataTableMetaClient) {
     dataTableMetaClient.deleteIndexDefinition(PARTITION_NAME_COLUMN_STATS);
   }

@@ -98,6 +98,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
+  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+    throw new HoodieNotSupportedException("Col stats integration with flink is not yet supported");
+  }
+
+  @Override
   protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }

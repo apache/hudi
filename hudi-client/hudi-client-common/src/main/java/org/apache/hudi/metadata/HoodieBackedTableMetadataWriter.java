@@ -483,14 +483,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       bulkCommit(instantTimeForPartition, partitionName, records, fileGroupCount);
       metadataMetaClient.reloadActiveTimeline();
       if (partitionType == COLUMN_STATS) {
-        // initialize Col Stats
-        // if col stats, lets also update list of columns indexed if changed.
+        // initialize Col Stats index definition
         updateColumnsToIndexWithColStats(columnsToIndex);
-        /*if (!dataMetaClient.getTableConfig().getTableColStatsIndexedColumns().equals(columnsToIndex)) {
-          LOG.info(String.format("List of columns to index is changing. Old value %s. New value %s", dataMetaClient.getTableConfig().getTableColStatsIndexedColumns(),
-              columnsToIndex));
-          dataMetaClient.getTableConfig().setColStatsIndexedColumns(dataMetaClient, columnsToIndex);
-        }*/
       }
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionName, true);
       // initialize the metadata reader again so the MDT partition can be read after initialization
@@ -500,8 +494,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
-  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
-  }
+  /**
+   * Updates the list of columns to index with col stats index.
+   * @param columnsToIndex list of columns to index.
+   */
+  protected abstract void updateColumnsToIndexWithColStats(List<String> columnsToIndex);
 
   /**
    * Returns a unique timestamp to use for initializing a MDT partition.
@@ -541,8 +538,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     final List<String> columnsToIndex = HoodieTableMetadataUtil.getColumnsToIndex(dataMetaClient.getTableConfig(),
         dataWriteConfig.getMetadataConfig(), Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient)));
     if (columnsToIndex.isEmpty()) {
-      // atleast meta fields will be chosen for indexing. So, we should not reach this state.
-      LOG.warn("No columns to index for column stats index.");
+      // atleast meta fields will be chosen for indexing. So, we should not reach this state unless virtual keys are enabled and
+      // all col types are unsupported among the ones configured.
       throw new HoodieException("No columns are found eligible to be indexed. Can you try setting right value for " + COLUMN_STATS_INDEX_FOR_COLUMNS.key()
           + ". Current value set : " + dataWriteConfig.getMetadataConfig().getColumnsEnabledForColumnStatsIndex());
     }
