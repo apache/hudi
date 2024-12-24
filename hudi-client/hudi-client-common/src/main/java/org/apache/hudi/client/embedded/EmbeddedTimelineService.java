@@ -200,21 +200,21 @@ public class EmbeddedTimelineService {
   /**
    * Retrieves proper view storage configs for remote clients to access this service.
    */
-  public FileSystemViewStorageConfig getRemoteFileSystemViewConfig() {
-    FileSystemViewStorageType viewStorageType = writeConfig.getClientSpecifiedViewStorageConfig()
+  public FileSystemViewStorageConfig getRemoteFileSystemViewConfig(HoodieWriteConfig clientWriteConfig) {
+    FileSystemViewStorageType viewStorageType = clientWriteConfig.getClientSpecifiedViewStorageConfig()
         .shouldEnableBackupForRemoteFileSystemView()
         ? FileSystemViewStorageType.REMOTE_FIRST : FileSystemViewStorageType.REMOTE_ONLY;
     return FileSystemViewStorageConfig.newBuilder()
         .withStorageType(viewStorageType)
         .withRemoteServerHost(hostAddr)
         .withRemoteServerPort(serverPort)
-        .withRemoteTimelineClientTimeoutSecs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientTimeoutSecs())
-        .withRemoteTimelineClientRetry(writeConfig.getClientSpecifiedViewStorageConfig().isRemoteTimelineClientRetryEnabled())
-        .withRemoteTimelineClientMaxRetryNumbers(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryNumbers())
-        .withRemoteTimelineInitialRetryIntervalMs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineInitialRetryIntervalMs())
-        .withRemoteTimelineClientMaxRetryIntervalMs(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryIntervalMs())
-        .withRemoteTimelineClientRetryExceptions(writeConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientRetryExceptions())
-        .withRemoteInitTimeline(writeConfig.getClientSpecifiedViewStorageConfig().isRemoteInitEnabled())
+        .withRemoteTimelineClientTimeoutSecs(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientTimeoutSecs())
+        .withRemoteTimelineClientRetry(clientWriteConfig.getClientSpecifiedViewStorageConfig().isRemoteTimelineClientRetryEnabled())
+        .withRemoteTimelineClientMaxRetryNumbers(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryNumbers())
+        .withRemoteTimelineInitialRetryIntervalMs(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineInitialRetryIntervalMs())
+        .withRemoteTimelineClientMaxRetryIntervalMs(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryIntervalMs())
+        .withRemoteTimelineClientRetryExceptions(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientRetryExceptions())
+        .withRemoteInitTimeline(clientWriteConfig.getClientSpecifiedViewStorageConfig().isRemoteInitEnabled())
         .build();
   }
 

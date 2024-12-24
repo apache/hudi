@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -88,11 +89,18 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
         .withPath(tempDir.resolve("table2").toString())
         .withEmbeddedTimelineServerEnabled(true)
         .withEmbeddedTimelineServerReuseEnabled(true)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteTimelineClientRetry(true)
+            .build())
         .build();
     EmbeddedTimelineService.TimelineServiceCreator mockCreator2 = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
     // do not mock the create method since that should never be called
     EmbeddedTimelineService service2 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig2, mockCreator2);
     assertSame(service1, service2);
+
+    // Test client properties are not overridden
+    assertFalse(service1.getRemoteFileSystemViewConfig(writeConfig1).isRemoteTimelineClientRetryEnabled());
+    assertTrue(service1.getRemoteFileSystemViewConfig(writeConfig2).isRemoteTimelineClientRetryEnabled());
 
     // test shutdown happens after the last path is removed
     service1.stopForBasePath(writeConfig2.getBasePath());
@@ -231,7 +239,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
     // Start two services and having assert they have different views for same table.
     HoodieTableMetaClient.initTableAndGetMetaClient(new Configuration(), basePath, writeConfig1.getProps());
     EmbeddedTimelineService service1 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, "localhost", writeConfig1);
-    assertFalse(service1.getRemoteFileSystemViewConfig().isRemoteInitEnabled());
+    assertFalse(service1.getRemoteFileSystemViewConfig(writeConfig1).isRemoteInitEnabled());
     service1.getViewManager().getFileSystemView(basePath);
     // Write commits to basePath.
     String partitionPath = "partition1";
