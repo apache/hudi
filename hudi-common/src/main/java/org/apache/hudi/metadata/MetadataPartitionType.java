@@ -24,10 +24,12 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -297,8 +299,8 @@ public enum MetadataPartitionType {
           String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
     } else {
       try {
-        boolean isMinValueDateWrapper = getIsDateWrapper(record, COLUMN_STATS_FIELD_MIN_VALUE);
-        boolean isMaxValueDateWrapper = getIsDateWrapper(record, COLUMN_STATS_FIELD_MAX_VALUE);
+        Pair<Boolean, String> isMinValueWrapperObfuscated = getIsValueWrapperObfuscated(record, COLUMN_STATS_FIELD_MIN_VALUE);
+        Pair<Boolean, String> isMaxValueWrapperObfuscated = getIsValueWrapperObfuscated(record, COLUMN_STATS_FIELD_MAX_VALUE);
         payload.columnStatMetadata = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())
             .setFileName(columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME).toString())
             .setColumnName(columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME).toString())
@@ -306,9 +308,11 @@ public enum MetadataPartitionType {
             // This causes Kryo to fail when deserializing a GenericRecord, See HUDI-5484.
             // We should avoid using GenericRecord and convert GenericRecord into a serializable type.
             .setMinValue(wrapValueIntoAvro(
-                isMinValueDateWrapper ? unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE), DateWrapper.class.getSimpleName())
+                isMinValueWrapperObfuscated.getKey() ? unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE),
+                    isMinValueWrapperObfuscated.getValue())
                     : unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))))
-            .setMaxValue(wrapValueIntoAvro(isMaxValueDateWrapper ? unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE), DateWrapper.class.getSimpleName())
+            .setMaxValue(wrapValueIntoAvro(isMaxValueWrapperObfuscated.getKey() ? unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE),
+                isMaxValueWrapperObfuscated.getValue())
                 : unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))))
             .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
             .setNullCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_NULL_COUNT))
@@ -324,12 +328,16 @@ public enum MetadataPartitionType {
     }
   }
 
-  private static boolean getIsDateWrapper(GenericRecord record, String subFieldName) {
+  private static Pair<Boolean, String> getIsValueWrapperObfuscated(GenericRecord record, String subFieldName) {
     Object minValue = ((GenericRecord) record.get(SCHEMA_FIELD_ID_COLUMN_STATS)).get(subFieldName);
     if (minValue != null) {
-      return ((GenericRecord) minValue).getSchema().getName().equals(DateWrapper.class.getSimpleName());
+      boolean toReturn = ((GenericRecord) minValue).getSchema().getName().equals(DateWrapper.class.getSimpleName())
+          || ((GenericRecord) minValue).getSchema().getName().equals(TimestampMicrosWrapper.class.getSimpleName());
+      if (toReturn) {
+        return Pair.of(true, ((GenericRecord) minValue).getSchema().getName());
+      }
     }
-    return false;
+    return Pair.of(false, null);
   }
 
   /**

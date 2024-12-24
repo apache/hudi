@@ -116,6 +116,11 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
 public class HoodieAvroUtils {
 
   public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
+
+  public static final String FIXED_TYPE_SCHEMA_STR = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ {\"name\":\"data_fixed_type\",\"type\":{\"type\":\"fixed\","
+      + "\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}}]}";
+  public static final Schema FIXED_TYPE_SCHEMA = new Schema.Parser().parse(FIXED_TYPE_SCHEMA_STR);
+
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
 
@@ -1415,7 +1420,7 @@ public class HoodieAvroUtils {
           .setValue((int) localDate.toEpochDay())
           .build();
     } else if (value instanceof BigDecimal) {
-      Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
+      Schema valueSchema = FIXED_TYPE_SCHEMA.getField("data_fixed_type").schema();
       BigDecimal upcastDecimal = tryUpcastDecimal((BigDecimal) value, (LogicalTypes.Decimal) valueSchema.getLogicalType());
       return DecimalWrapper.newBuilder(DECIMAL_WRAPPER_BUILDER_STUB.get())
           .setValue(AVRO_DECIMAL_CONVERSION.toBytes(upcastDecimal, valueSchema, valueSchema.getLogicalType()))
@@ -1459,7 +1464,7 @@ public class HoodieAvroUtils {
     } else if (avroValueWrapper instanceof DateWrapper) {
       return LocalDate.ofEpochDay(((DateWrapper) avroValueWrapper).getValue());
     } else if (avroValueWrapper instanceof DecimalWrapper) {
-      Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
+      Schema valueSchema = FIXED_TYPE_SCHEMA.getField("data_fixed_type").schema();
       return AVRO_DECIMAL_CONVERSION.fromBytes(((DecimalWrapper) avroValueWrapper).getValue(), valueSchema, valueSchema.getLogicalType());
     } else if (avroValueWrapper instanceof TimestampMicrosWrapper) {
       return microsToInstant(((TimestampMicrosWrapper) avroValueWrapper).getValue());
@@ -1493,6 +1498,9 @@ public class HoodieAvroUtils {
       return null;
     } else if (DateWrapper.class.getSimpleName().equals(wrapperClassName)) {
       return LocalDate.ofEpochDay((Integer)((Record) avroValueWrapper).get(0));
+    } else if (TimestampMicrosWrapper.class.getSimpleName().equals(wrapperClassName)) {
+      Instant instant = microsToInstant((Long)((Record) avroValueWrapper).get(0));
+      return Timestamp.from(instant);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
     }
