@@ -3,7 +3,7 @@ title: "Apache Hudi 2024: A Year In Review"
 excerpt: "Reflect on and celebrate the myriad of exciting developments and accomplishments that have defined the year 2024 for the Hudi community."
 author: Shiyan Xu
 category: blog
-image: /assets/images/blog/2024-12-29-a-year-in-review-2024/00.cover.jpg
+image: /assets/images/blog/2024-12-29-a-year-in-review-2024/cover.jpg
 tags:
 - apache hudi
 - community
@@ -11,13 +11,17 @@ tags:
 
 import SlackCommunity from '@site/src/components/SlackCommunity';
 
-<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/00.cover.jpg" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/cover.jpg" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
 
 As we wrap up another remarkable year for Apache Hudi, I am thrilled to reflect on the tremendous achievements and milestones that have defined 2024. This year has been particularly special as we achieved several significant milestones, including the landmark release of Hudi 1.0, the publication of comprehensive books, and the introduction of new tools that expand Hudi's ecosystem.
 
 ## Community Growth and Engagement
 
-The Apache Hudi community continued its impressive growth trajectory in 2024. Our community presence expanded significantly across various platforms:
+The Apache Hudi community continued its impressive growth trajectory in 2024. The number of new PRs has remained stable, indicating a consistent level of development activities:
+
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/pr-history.svg" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+Our community presence expanded significantly across various platforms:
 
 - The community grew to over 10,500 followers on LinkedIn
 - Added 8,755 new followers in the last 365 days
@@ -31,7 +35,7 @@ The Apache Hudi community continued its impressive growth trajectory in 2024. Ou
 
 2024 marked a historic moment with the [release of Apache Hudi 1.0](https://hudi.apache.org/releases/release-1.0.0), representing a major evolution in data lakehouse technology. This release brought several groundbreaking features:
 
-- **Secondary Indexing**: Enabling database-like query acceleration with demonstrated 95% latency reduction on 10TB TPC-DS for low-moderate selectivity queries
+- **Secondary Indexing**: First of its kind in lakehouses, enabling database-like query acceleration with demonstrated 95% latency reduction on 10TB TPC-DS for low-moderate selectivity queries
 - **Logical Partitioning via Expression Indexes**: Introducing PostgreSQL-style expression indexes for more efficient partition management
 - **Partial Updates**: Achieving 2.6x performance improvement and 85% reduction in bytes written for update-heavy workloads
 - **Non-blocking Concurrency Control (NBCC)**: An industry-first feature allowing simultaneous writing from multiple writers
