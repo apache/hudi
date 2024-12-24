@@ -77,8 +77,8 @@ public class HBaseHFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
   private final String indexByFileIdPath;
 
   // Index Readers
-  private transient HFile.Reader indexByPartitionReader;
-  private transient HFile.Reader indexByFileIdReader;
+  private transient volatile HFile.Reader indexByPartitionReader;
+  private transient volatile HFile.Reader indexByFileIdReader;
 
   // Bootstrap Index Info
   private transient HoodieBootstrapIndexInfo bootstrapIndexInfo;
@@ -139,7 +139,7 @@ public class HBaseHFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
     if (null == indexByPartitionReader) {
       synchronized (this) {
         if (null == indexByPartitionReader) {
-          LOG.info("Opening partition index :" + indexByPartitionPath);
+          LOG.info("Opening partition index :{}", indexByPartitionPath);
           this.indexByPartitionReader = createReader(
               indexByPartitionPath, metaClient.getStorageConf().unwrapAs(Configuration.class), (FileSystem) metaClient.getStorage().getFileSystem());
         }
@@ -152,7 +152,7 @@ public class HBaseHFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
     if (null == indexByFileIdReader) {
       synchronized (this) {
         if (null == indexByFileIdReader) {
-          LOG.info("Opening fileId index :" + indexByFileIdPath);
+          LOG.info("Opening fileId index :{}", indexByFileIdPath);
           this.indexByFileIdReader = createReader(
               indexByFileIdPath, metaClient.getStorageConf().unwrapAs(Configuration.class), (FileSystem) metaClient.getStorage().getFileSystem());
         }
@@ -204,7 +204,7 @@ public class HBaseHFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
             .map(e -> new BootstrapFileMapping(bootstrapBasePath, metadata.getBootstrapPartitionPath(),
                 partition, e.getValue(), e.getKey())).collect(Collectors.toList());
       } else {
-        LOG.warn("No value found for partition key (" + partition + ")");
+        LOG.warn("No value found for partition key ({})", partition);
         return new ArrayList<>();
       }
     } catch (IOException ioe) {

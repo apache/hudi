@@ -38,6 +38,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_SESSION_TIMEOUT_MS;
@@ -58,7 +59,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
   private static final Logger LOG = LoggerFactory.getLogger(BaseZookeeperBasedLockProvider.class);
 
   private final transient CuratorFramework curatorFrameworkClient;
-  private volatile InterProcessMutex lock = null;
+  private AtomicReference<InterProcessMutex> lockRef = null;
   protected final LockConfiguration lockConfiguration;
   protected final String zkBasePath;
   protected final String lockKey;
@@ -136,18 +137,18 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
     } catch (Exception e) {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()), e);
     }
-    return lock != null && lock.isAcquiredInThisProcess();
+    return lockRef.get() != null && lockRef.get().isAcquiredInThisProcess();
   }
 
   @Override
   public void unlock() {
     try {
       LOG.info(generateLogStatement(LockState.RELEASING, generateLogSuffixString()));
-      if (lock == null || !lock.isAcquiredInThisProcess()) {
+      if (lockRef.get() == null || !lockRef.get().isAcquiredInThisProcess()) {
         return;
       }
-      lock.release();
-      lock = null;
+      lockRef.get().release();
+      lockRef.set(null);
       LOG.info(generateLogStatement(LockState.RELEASED, generateLogSuffixString()));
     } catch (Exception e) {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()), e);
@@ -157,9 +158,9 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
   @Override
   public void close() {
     try {
-      if (lock != null) {
-        lock.release();
-        lock = null;
+      if (lockRef.get() != null) {
+        lockRef.get().release();
+        lockRef.set(null);
       }
       this.curatorFrameworkClient.close();
     } catch (Exception e) {
@@ -169,11 +170,11 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
 
   @Override
   public InterProcessMutex getLock() {
-    return this.lock;
+    return this.lockRef.get();
   }
 
   private void acquireLock(long time, TimeUnit unit) throws Exception {
-    ValidationUtils.checkArgument(this.lock == null, generateLogStatement(LockState.ALREADY_ACQUIRED, generateLogSuffixString()));
+    ValidationUtils.checkArgument(this.lockRef.get() == null, generateLogStatement(LockState.ALREADY_ACQUIRED, generateLogSuffixString()));
     InterProcessMutex newLock = new InterProcessMutex(
         this.curatorFrameworkClient, getLockPath());
     boolean acquired = newLock.acquire(time, unit);
@@ -181,7 +182,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()));
     }
     if (newLock.isAcquiredInThisProcess()) {
-      lock = newLock;
+      lockRef.set(newLock);
     } else {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()));
     }
