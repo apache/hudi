@@ -51,7 +51,7 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
   private static final Logger LOG = LoggerFactory.getLogger(RocksDbDiskMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Set<T> keySet;
-  private RocksDBDAO rocksDb;
+  private volatile RocksDBDAO rocksDb;
 
   public RocksDbDiskMap(String rocksDbStoragePath) throws IOException {
     super(rocksDbStoragePath, ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
