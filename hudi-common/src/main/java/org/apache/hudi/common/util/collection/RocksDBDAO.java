@@ -416,9 +416,10 @@ public class RocksDBDAO {
    * Return Iterator of key-value pairs from RocksIterator.
    *
    * @param columnFamilyName Column Family Name
-   * @param <T>              Type of value stored
+   * @param <T>              Type of key stored
+   * @param <R>              Type of value stored
    */
-  public <T extends Serializable> Iterator<T> iterator(String columnFamilyName) {
+  public <T extends Serializable, R extends Serializable> Iterator<Pair<T, R>> iterator(String columnFamilyName) {
     return new IteratorWrapper<>(getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName)));
   }
 
@@ -548,7 +549,7 @@ public class RocksDBDAO {
   /**
    * {@link Iterator} wrapper for RocksDb Iterator {@link RocksIterator}.
    */
-  private static class IteratorWrapper<R> implements Iterator<R> {
+  private static class IteratorWrapper<T, R> implements Iterator<Pair<T, R>> {
 
     private final RocksIterator iterator;
 
@@ -563,13 +564,14 @@ public class RocksDBDAO {
     }
 
     @Override
-    public R next() {
+    public Pair<T, R> next() {
       if (!hasNext()) {
         throw new IllegalStateException("next() called on rocksDB with no more valid entries");
       }
+      T key = SerializationUtils.deserialize(iterator.key());
       R val = SerializationUtils.deserialize(iterator.value());
       iterator.next();
-      return val;
+      return Pair.of(key, val);
     }
   }
 
