@@ -60,9 +60,6 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSo
 
   private Map<String/*partition*/, List<ConsistentHashingNode>/*pending resizing related child nodes*/> hashingChildrenNodes;
 
-  // mark if this partitioner is used for writing to uncommitted buckets. Only for case that clustering service executes bucket resizing.
-  private boolean isExecutingClustering = false;
-
   private Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
 
   private final Option<BuiltinKeyGenerator> keyGeneratorOpt;
@@ -105,7 +102,6 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSo
       ValidationUtils.checkArgument(hashingChildrenNodes.values().stream().flatMap(List::stream).noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL),
           "children nodes should not be tagged as NORMAL");
       this.hashingChildrenNodes = hashingChildrenNodes;
-      this.isExecutingClustering = true;
     }
   }
 
@@ -113,13 +109,10 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSo
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
     HoodieConsistentHashingMetadata metadata =
         ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
-    if (isExecutingClustering) {
+    if (hashingChildrenNodes != null) {
       // for executing bucket resizing
       ValidationUtils.checkState(hashingChildrenNodes.containsKey(partition), "children nodes should be provided for clustering");
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
-    } else {
-      // for normal bulk insert
-      ValidationUtils.checkState(hashingChildrenNodes == null, "children nodes should not be provided for normal bulk insert");
     }
     return new ConsistentBucketIdentifier(metadata);
   }
@@ -176,7 +169,7 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSo
    * the mapping from partition to its bucket identifier is constructed.
    */
   private Map<String, ConsistentBucketIdentifier> initializeBucketIdentifier(JavaRDD<Row> rows) {
-    if (isExecutingClustering) {
+    if (hashingChildrenNodes != null) {
       return hashingChildrenNodes.keySet().stream().collect(Collectors.toMap(p -> p, this::getBucketIdentifier));
     }
     return rows.map(this.extractor::getPartitionPath).distinct().collect().stream()

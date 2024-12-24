@@ -52,9 +52,6 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
 
   private Map<String/*partition*/, List<ConsistentHashingNode/*pending resizing related child nodes*/>> hashingChildrenNodes;
 
-  // mark if this partitioner is used for writing to uncommitted buckets. Only for case that clustering service executes bucket resizing.
-  private boolean isExecutingClustering = false;
-
   public RDDConsistentBucketBulkInsertPartitioner(HoodieTable table) {
     this(table, Collections.emptyMap(), false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSparkConsistentBucketIndex,
@@ -88,7 +85,6 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
       ValidationUtils.checkArgument(hashingChildrenNodes.values().stream().flatMap(List::stream).noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL),
           "children nodes should not be tagged as NORMAL");
       this.hashingChildrenNodes = hashingChildrenNodes;
-      this.isExecutingClustering = true;
     }
   }
 
@@ -127,7 +123,7 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
     HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
-    if (isExecutingClustering) {
+    if (hashingChildrenNodes != null) {
       // for executing bucket resizing
       ValidationUtils.checkState(hashingChildrenNodes.containsKey(partition), "children nodes should be provided for clustering");
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
@@ -143,7 +139,7 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
    * the mapping from partition to its bucket identifier is constructed.
    */
   private Map<String, ConsistentBucketIdentifier> initializeBucketIdentifier(JavaRDD<HoodieRecord<T>> records) {
-    if (isExecutingClustering) {
+    if (hashingChildrenNodes != null) {
       return hashingChildrenNodes.keySet().stream().collect(Collectors.toMap(p -> p, this::getBucketIdentifier));
     }
     return records.map(HoodieRecord::getPartitionPath).distinct().collect().stream()
