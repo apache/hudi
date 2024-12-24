@@ -502,3 +502,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-18492][HUDI-8701] prevent lock metrics failure from failing process (#1079)
 [ENG-13584][INTERNAL] Initial changes to allow us to use streams instead of byte arrays (#1098)
 [AUDIT-1071]: Changelog for release-v1.61.0 (#1099)
+
+--- [2024-12-24 16:03:34] [release-v1.63.0] ---
+[ENG-19380][HUDI-8792] Fix bug with timeline server reuse overriding client properties (#1104)
+[ENG-13584][INTERNAL] Migrate HoodieCommitMetadata and HoodieReplaceCommitMetadata reading (#1100)
+[AUDIT-1071]: Changelog for release-v1.62.0 (#1102)
