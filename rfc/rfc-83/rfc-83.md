@@ -62,7 +62,7 @@ In the design of Incremental Table service, the following principles are followe
 ### Strategy Interface
 Add a new marked strategy interface `IncrementalPartitionAwareStrategy`. Any Strategy implement this `IncrementalPartitionAwareStrategy` 
 could have the ability to perform incremental partitions processing. At this time, the incremental partitions should be 
-passed externally to the current strategy.
+passed to the current strategy.
 
 ```java
 package org.apache.hudi.table;
