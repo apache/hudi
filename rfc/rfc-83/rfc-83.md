@@ -61,7 +61,7 @@ In the design of Incremental Table service, the following principles are followe
 
 ### Strategy Interface
 Add a new marked strategy interface `IncrementalPartitionAwareStrategy`. Any Strategy implement this `IncrementalPartitionAwareStrategy` 
-could have the ability to perform incremental partitions processing. At this time, the incremental partitions should be 
+could have the ability to perform incremental partitions processing. At this time, Incremental partitions should be 
 passed to the current strategy.
 
 ```java
@@ -122,8 +122,7 @@ Then the inheritance relationship between `ScheduleCompactionActionExecutor` and
 1. `public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServicePlanActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>>`
 2. `public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseTableServicePlanActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>>`
 
-Table services to be added later directly extends `BaseTableServicePlanActionExecutor` to quickly get incremental partition 
-processing capabilities.
+Table services to be added later directly extends `BaseTableServicePlanActionExecutor` to quickly get incremental partitions.
 
 ### Clustering/Compaction Plan Metadata
 In order to prevent the loss of certain partitions during incremental partition processing, being consistent with the current behavior.
@@ -131,7 +130,7 @@ In order to prevent the loss of certain partitions during incremental partition 
 We decide to add a new column `missingSchedulePartitions` in `HoodieClusteringPlan.asvc` and `HoodieCompactionPlan.asvc`. 
 ,default value is null, to record ignored partitions during current table service planning.
 
-Missing partitions corresponding to scenarios such as 
+Scenarios where partitions are missing or incomplete, such as
 1. Being filtered.
 2. The partition related file groups is not fully processed due to Target IO.
 
@@ -164,16 +163,16 @@ T10.deltacommit.requested
 ```
 
 1. Construct a time window, obtain the instant time (T3) of the last completed TableService as the left boundary, and the instant time of the current compaction plan as the right boundary, that is, [T3, T11)
-2. Traverse the completion time of the commit instants of the active timeline line, and select all the instants whose completion time is within the time window as incremental instants, that is, T2 and T5.
+2. Traverse the completion time of the active commit instants, and select all the instants whose completion time is within the time window as incremental instants, that is, T2 and T5.
 3. Get all incremental partitions involved in incremental instants as *PARTITIONS 1*
 4. Get the missing partitions recorded in T3.compaction.requested as *PARTITIONS 2*
 5. Merge and deduplicate *PARTITIONS 1* with *PARTITIONS 2* as final incremental partitions as *INCREMENTAL PARTITIONS 1*
-6. Based on *INCREMENTAL PARTITIONS 1*, perform strategy custom partition filtering logic to obtain the final partition information *INCREMENTAL PARTITIONS 2* and the filtered *MISSING PARTITIONS*
+6. Based on *INCREMENTAL PARTITIONS 1*, perform strategy custom partition filtering logic to obtain the final partition List *INCREMENTAL PARTITIONS 2* and the filtered *MISSING PARTITIONS*
 7. Perform normal Table Service scheduling based on *INCREMENTAL PARTITIONS 2*. If partition scheduling is incomplete due to Target IO and other factors, add the corresponding partition to *MISSING PARTITIONS*
 8. Finally generate the Table Service Plan and record *MISSING PARTITIONS* in it
 
 Note: If the instant time of the last completed TableService cannot be obtained due to reasons such as archive, the partition 
-acquisition operation will be rolled back to obtain all table partitions.
+acquisition operation will be rollback to obtain all table partitions.
 
 ## Rollout/Adoption Plan
 
