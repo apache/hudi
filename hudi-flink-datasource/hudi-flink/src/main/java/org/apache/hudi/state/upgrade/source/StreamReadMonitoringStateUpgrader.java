@@ -48,6 +48,7 @@ public class StreamReadMonitoringStateUpgrader implements StateUpgrader<String> 
         if (toVersion == StateVersion.V2) {
           return upgradeV1ToV2(oldState);
         }
+        throw new IllegalStateException("Unsupported version upgrade path");
       case V2:
         // Do nothing
         return oldState;

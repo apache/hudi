@@ -22,5 +22,6 @@ import java.util.List;
 
 public interface StateUpgrader<T> {
   List<T> upgrade(List<T> oldState, StateVersion fromVersion, StateVersion toVersion);
+  
   boolean canUpgrade(StateVersion fromVersion, StateVersion toVersion);
 }
