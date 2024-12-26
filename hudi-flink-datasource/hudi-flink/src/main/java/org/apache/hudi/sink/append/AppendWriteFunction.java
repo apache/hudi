@@ -20,6 +20,7 @@ package org.apache.hudi.sink.append;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
@@ -68,6 +69,8 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    */
   private FlinkStreamWriteMetrics writeMetrics;
 
+  private final boolean isBucketIndex;
+
   /**
    * Constructs an AppendWriteFunction.
    *
@@ -76,6 +79,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   public AppendWriteFunction(Configuration config, RowType rowType) {
     super(config);
     this.rowType = rowType;
+    this.isBucketIndex = OptionsResolver.isBucketIndexType(config);
   }
 
   @Override
@@ -140,9 +144,15 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       // in case there are empty checkpoints that has no input data
       throw new HoodieException("No inflight instant when flushing data!");
     }
-    this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
-        instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-        this.rowType, false, Option.of(writeMetrics));
+    if (isBucketIndex) {
+      this.writerHelper = new BucketAppendWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
+          instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
+          this.rowType);
+    } else {
+      this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
+          instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
+          this.rowType, false, Option.of(writeMetrics));
+    }
   }
 
   private void flushData(boolean endInput) {
