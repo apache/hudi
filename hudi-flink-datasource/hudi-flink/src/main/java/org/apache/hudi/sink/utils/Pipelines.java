@@ -207,8 +207,11 @@ public class Pipelines {
       Configuration conf,
       RowType rowType,
       DataStream<RowData> dataStream) {
-    WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
+    if (OptionsResolver.isBucketIndexType(conf)) {
+      throw new HoodieNotSupportedException("Bucket index is not supported for insert operation. Please, use upsert operation or switch to another index type.");
+    }
 
+    WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
     return dataStream
         .transform(opName("hoodie_append_write", conf), TypeInformation.of(Object.class), operatorFactory)
         .uid(opUID("hoodie_stream_write", conf))
