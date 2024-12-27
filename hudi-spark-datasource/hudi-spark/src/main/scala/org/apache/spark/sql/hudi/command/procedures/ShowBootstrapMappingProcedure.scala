@@ -83,6 +83,7 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
         mappingList.addAll(indexReader.getSourceFileMappingForPartition(part))
       }
     }
+    indexReader.close()
 
     val rows: java.util.List[Row] = mappingList.asScala
       .map(mapping => Row(mapping.getPartitionPath, mapping.getFileId, mapping.getBootstrapBasePath,

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
@@ -470,19 +470,23 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         metaClient.getStorage, new HoodieLogFile(logFilePathList.get(i)),
         avroSchema, 1024 * 1024, false, false,
         "id", null)
-      assertTrue(logReader.hasNext)
-      val logBlockHeader = logReader.next().getLogBlockHeader
-      assertTrue(logBlockHeader.containsKey(HeaderMetadataType.SCHEMA))
-      if (isPartial) {
-        assertTrue(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
-        assertTrue(logBlockHeader.get(HeaderMetadataType.IS_PARTIAL).toBoolean)
-      } else {
-        assertFalse(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
+      try {
+        assertTrue(logReader.hasNext)
+        val logBlockHeader = logReader.next().getLogBlockHeader
+        assertTrue(logBlockHeader.containsKey(HeaderMetadataType.SCHEMA))
+        if (isPartial) {
+          assertTrue(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
+          assertTrue(logBlockHeader.get(HeaderMetadataType.IS_PARTIAL).toBoolean)
+        } else {
+          assertFalse(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
+        }
+        val actualSchema = new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
+        val expectedSchema = HoodieAvroUtils.addMetadataFields(HoodieAvroUtils.generateProjectionSchema(
+          avroSchema, changedFields(i).asJava), false)
+        assertEquals(expectedSchema, actualSchema)
+      } finally {
+        logReader.close()
       }
-      val actualSchema = new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
-      val expectedSchema = HoodieAvroUtils.addMetadataFields(HoodieAvroUtils.generateProjectionSchema(
-        avroSchema, changedFields(i).asJava), false)
-      assertEquals(expectedSchema, actualSchema)
     }
   }
 

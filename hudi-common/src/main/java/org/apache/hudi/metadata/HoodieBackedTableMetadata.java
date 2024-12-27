@@ -867,20 +867,23 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
   }
 
-  private Map<String, HoodieRecord<HoodieMetadataPayload>> fetchBaseFileAllRecordsByPayloadForSecIndex(HoodieSeekingFileReader reader, Set<String> keySet, String partitionName) throws IOException {
+  private Map<String, HoodieRecord<HoodieMetadataPayload>> fetchBaseFileAllRecordsByPayloadForSecIndex(
+      HoodieSeekingFileReader<?> reader, Set<String> keySet, String partitionName) throws IOException {
     if (reader == null) {
       // No base file at all
       return Collections.emptyMap();
     }
 
-    ClosableIterator<HoodieRecord<?>> recordIterator = reader.getRecordIterator();
-
-    return toStream(recordIterator).map(record -> {
-      GenericRecord data = (GenericRecord) record.getData();
-      return composeRecord(data, partitionName);
-    }).filter(record -> {
-      return keySet.contains(SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey()));
-    }).collect(Collectors.toMap(HoodieRecord::getRecordKey, record -> record));
+    try (ClosableIterator<? extends HoodieRecord<?>> recordIterator = reader.getRecordIterator()) {
+      return toStream(recordIterator).map(record -> {
+        GenericRecord data = (GenericRecord) record.getData();
+        return composeRecord(data, partitionName);
+      }).filter(record -> keySet.contains(SecondaryIndexKeyUtils
+              .getRecordKeyFromSecondaryIndexKey(record.getRecordKey())))
+          .collect(Collectors.toMap(record ->
+                  SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey()),
+              record -> record));
+    }
   }
 
   @VisibleForTesting

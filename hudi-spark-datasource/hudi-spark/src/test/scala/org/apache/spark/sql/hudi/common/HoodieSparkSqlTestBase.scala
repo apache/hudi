@@ -29,23 +29,25 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
-import org.apache.spark.SparkConf
+import org.apache.spark.{DebugFilesystem, SparkConf}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
 import org.scalactic.source
-import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+import org.scalatest.concurrent.Eventually.eventually
+import org.scalatest.concurrent.Waiters.{interval, timeout}
+import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuite, Tag}
 import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
-import scala.util.matching.Regex
 
-class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
+class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll with BeforeAndAfterEach {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
   private val LOG = LoggerFactory.getLogger(getClass)
 
@@ -63,6 +65,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
   protected lazy val spark: SparkSession = SparkSession.builder()
+    .config("spark.hadoop.fs.file.impl", classOf[DebugFilesystem].getName)
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .config("spark.sql.session.timeZone", "UTC")
     .config("hoodie.insert.shuffle.parallelism", "4")
@@ -115,6 +118,22 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   protected def generateTableName: String = {
     s"h${tableId.incrementAndGet()}"
+  }
+
+  protected override def beforeEach(): Unit = {
+    super.beforeEach()
+    DebugFilesystem.clearOpenStreams()
+  }
+
+  protected override def afterEach(): Unit = {
+    super.afterEach()
+    // Clear all persistent datasets after each test
+    spark.sharedState.cacheManager.clearCache()
+    // files can be closed from other threads, so wait a bit
+    // normally this doesn't take more than 1s
+    eventually(timeout(10.seconds), interval(2.seconds)) {
+      DebugFilesystem.assertNoOpenStreams()
+    }
   }
 
   override protected def afterAll(): Unit = {
