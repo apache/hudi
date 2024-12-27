@@ -117,7 +117,7 @@ public class CloudSourceConfig extends HoodieConfig {
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.datasource.options")
       .markAdvanced()
       .withDocumentation("A JSON string passed to the Spark DataFrameReader while loading the dataset. "
-          + "Example: hoodie.streamer.gcp.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}\n");
+          + "Example: `hoodie.streamer.gcp.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}`\n");
 
   public static final ConfigProperty<String> CLOUD_DATAFILE_EXTENSION = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.select.file.extension")
@@ -146,9 +146,11 @@ public class CloudSourceConfig extends HoodieConfig {
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.14.1")
-      .withDocumentation("Boolean value for specifying path format in load args of spark.read.format(\"..\").load(\"a.xml,b.xml,c.xml\"),\n"
-          + "   * set true if path format needs to be comma separated string value, if false it's passed as array of strings like\n"
-          + "   * spark.read.format(\"..\").load(new String[]{a.xml,b.xml,c.xml})");
+      .withDocumentation("Boolean value for specifying path format in load args of "
+          + "`spark.read.format(\"..\").load(\"a.xml,b.xml,c.xml\")`. "
+          + "Set true if path format needs to be comma separated string value; "
+          + "false if it's passed as array of strings like"
+          + "`spark.read.format(\"..\").load(new String[]{a.xml,b.xml,c.xml})`");
 
   public static final ConfigProperty<String> SOURCE_MAX_BYTES_PER_PARTITION = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.partition.max.size")

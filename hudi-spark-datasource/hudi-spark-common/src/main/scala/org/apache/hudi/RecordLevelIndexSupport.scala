@@ -31,7 +31,7 @@ import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, In, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Cast, EqualTo, Expression, In, Literal}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
 import scala.collection.JavaConverters._
@@ -165,7 +165,7 @@ object RecordLevelIndexSupport {
           val literal = attributeLiteralTuple._2
           if (attribute != null && attribute.name != null && attributeMatchesRecordKey(attribute.name, recordKeyOpt)) {
             val recordKeyLiteral = literalGenerator.apply(attribute, literal)
-            (Option.apply(equalToQuery, List.apply(recordKeyLiteral)), true)
+            (Option.apply(EqualTo(attribute, literal), List.apply(recordKeyLiteral)), true)
           } else {
             (Option.empty, true)
           }
@@ -196,7 +196,7 @@ object RecordLevelIndexSupport {
           case _ => validINQuery = false
         }
         if (validINQuery) {
-          (Option.apply(inQuery, literals), true)
+          (Option.apply(In(attributeOpt.get, inQuery.list), literals), true)
         } else {
           (Option.empty, true)
         }
@@ -351,6 +351,14 @@ object RecordLevelIndexSupport {
       case literal: Literal => expression2 match {
         case attr: AttributeReference =>
           Option.apply(attr, literal)
+        case cast: Cast if cast.child.isInstanceOf[AttributeReference] =>
+          Option.apply(cast.child.asInstanceOf[AttributeReference], literal)
+        case _ =>
+          Option.empty
+      }
+      case cast: Cast if cast.child.isInstanceOf[AttributeReference] => expression2 match {
+        case literal: Literal =>
+          Option.apply(cast.child.asInstanceOf[AttributeReference], literal)
         case _ =>
           Option.empty
       }

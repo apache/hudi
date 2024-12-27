@@ -27,12 +27,12 @@ import org.slf4j.LoggerFactory;
 /**
  * Handle responses to requests to Datahub Metastore. Just logs them.
  */
-public class DatahubResponseLogger implements Callback {
-  private static final Logger LOG = LoggerFactory.getLogger(DatahubResponseLogger.class);
+public class DataHubResponseLogger implements Callback {
+  private static final Logger LOG = LoggerFactory.getLogger(DataHubResponseLogger.class);
 
   @Override
   public void onCompletion(MetadataWriteResponse response) {
-    LOG.info("Completed Datahub RestEmitter request. "
+    LOG.info("Completed DataHub RestEmitter request. "
             + "Status: " + (response.isSuccess() ? " succeeded" : " failed"));
     if (!response.isSuccess()) {
       LOG.error("Request failed. " + response);

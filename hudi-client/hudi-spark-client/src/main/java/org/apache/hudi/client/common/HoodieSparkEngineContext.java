@@ -108,6 +108,10 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     return HoodieJavaRDD.of(javaSparkContext.emptyRDD());
   }
 
+  public boolean supportsFileGroupReader() {
+    return true;
+  }
+
   @Override
   public <T> HoodieData<T> parallelize(List<T> data, int parallelism) {
     return HoodieJavaRDD.of(javaSparkContext.parallelize(data, parallelism));

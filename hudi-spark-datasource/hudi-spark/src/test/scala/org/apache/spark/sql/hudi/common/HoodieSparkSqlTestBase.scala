@@ -17,7 +17,9 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.DefaultSparkRecordMerger
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -27,13 +29,10 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
-import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
-
-import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
 import org.scalactic.source
@@ -44,6 +43,7 @@ import java.io.File
 import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
+import scala.util.matching.Regex
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
@@ -130,6 +130,26 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     assertResult(expects.map(row => Row(row: _*)).toArray)(array)
   }
 
+  protected def checkNestedExceptionContains(sql: String)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        var t = e
+        while (t != null) {
+          if (t.getMessage.trim.contains(errorMsg.trim)) {
+            hasException = true
+          }
+          t = t.getCause
+        }
+        if (!hasException) {
+          e.printStackTrace(System.err)
+        }
+    }
+    assertResult(true)(hasException)
+  }
+
   protected def checkExceptions(sql: String)(errorMsgs: Seq[String]): Unit = {
     var hasException = false
     try {
@@ -207,6 +227,20 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
       case f: Throwable =>
         fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def checkExceptionMatch(sql: String)(errorMsgRegex: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable if getRootCause(e).getMessage.matches(errorMsgRegex) =>
+        hasException = true
+
+      case f: Throwable =>
+        fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + getRootCause(f).getMessage, f)
     }
     assertResult(true)(hasException)
   }
