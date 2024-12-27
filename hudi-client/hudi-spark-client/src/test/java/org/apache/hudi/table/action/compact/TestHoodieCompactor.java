@@ -110,7 +110,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
   private long getCompactionMetricCount(String metric) {
     HoodieMetrics metrics = writeClient.getMetrics();
-    String metricName = metrics.getMetricsName("counter", metric);
+    String metricName = metrics.getMetricsName(HoodieTimeline.COMPACTION_ACTION, metric + ".counter");
     SortedMap<String, Counter> counters = metrics.getMetrics().getRegistry().getCounters();
 
     return counters.containsKey(metricName) ? counters.get(metricName).getCount() : 0;

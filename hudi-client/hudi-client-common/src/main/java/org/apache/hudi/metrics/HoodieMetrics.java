@@ -63,8 +63,6 @@ public class HoodieMetrics {
   public static final String COMMIT_LATENCY_IN_MS_STR = "commitLatencyInMs";
   public static final String COMMIT_FRESHNESS_IN_MS_STR = "commitFreshnessInMs";
   public static final String COMMIT_TIME_STR = "commitTime";
-  public static final String SUCCESS_EXTENSION = ".success";
-  public static final String FAILURE_EXTENSION = ".failure";
 
   public static final String TIMER_METRIC = "timer";
   public static final String COUNTER_METRIC = "counter";
@@ -72,6 +70,10 @@ public class HoodieMetrics {
   public static final String FINALIZE_ACTION = "finalize";
   public static final String INDEX_ACTION = "index";
   public static final String SOURCE_READ_AND_INDEX_ACTION = "source_read_and_index";
+
+  public static final String COUNTER_METRIC_EXTENSION = "." + COUNTER_METRIC;
+  public static final String SUCCESS_COUNTER = "success" + COUNTER_METRIC_EXTENSION;
+  public static final String FAILURE_COUNTER = "failure" + COUNTER_METRIC_EXTENSION;
 
   private Metrics metrics;
   // Some timers
@@ -127,10 +129,10 @@ public class HoodieMetrics {
       this.indexTimerName = getMetricsName(INDEX_ACTION, TIMER_METRIC);
       this.sourceReadAndIndexTimerName = getMetricsName(SOURCE_READ_AND_INDEX_ACTION, TIMER_METRIC);
       this.conflictResolutionTimerName = getMetricsName(CONFLICT_RESOLUTION_STR, TIMER_METRIC);
-      this.conflictResolutionSuccessCounterName = getMetricsName(CONFLICT_RESOLUTION_STR, COUNTER_METRIC + SUCCESS_EXTENSION);
-      this.conflictResolutionFailureCounterName = getMetricsName(CONFLICT_RESOLUTION_STR, COUNTER_METRIC + FAILURE_EXTENSION);
-      this.compactionRequestedCounterName = getMetricsName(HoodieTimeline.COMPACTION_ACTION, COUNTER_METRIC + HoodieTimeline.REQUESTED_EXTENSION);
-      this.compactionCompletedCounterName = getMetricsName(HoodieTimeline.COMPACTION_ACTION, COUNTER_METRIC + HoodieTimeline.COMPLETED_EXTENSION);
+      this.conflictResolutionSuccessCounterName = getMetricsName(CONFLICT_RESOLUTION_STR, SUCCESS_COUNTER);
+      this.conflictResolutionFailureCounterName = getMetricsName(CONFLICT_RESOLUTION_STR, FAILURE_COUNTER);
+      this.compactionRequestedCounterName = getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REQUESTED_COMPACTION_SUFFIX + COUNTER_METRIC_EXTENSION);
+      this.compactionCompletedCounterName = getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMPLETED_COMPACTION_SUFFIX + COUNTER_METRIC_EXTENSION);
     }
   }
 
