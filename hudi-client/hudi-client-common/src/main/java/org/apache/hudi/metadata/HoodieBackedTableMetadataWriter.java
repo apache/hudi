@@ -1189,7 +1189,16 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         dataMetaClient,
         getEngineType(),
         indexDefinition)
-        .union(deletedRecords);
+        .union(deletedRecords)
+        .mapToPair(i -> Pair.of(i.getRecordKey(), i))
+        .reduceByKey((value1, value2) -> {
+          if (((HoodieMetadataPayload) value1.getData()).isDeleted()) {
+            return value2;
+          } else {
+            return value1;
+          }
+        }, parallelism)
+        .values();
   }
 
   /**
