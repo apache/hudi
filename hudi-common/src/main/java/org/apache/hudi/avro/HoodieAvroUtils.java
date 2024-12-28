@@ -1501,6 +1501,9 @@ public class HoodieAvroUtils {
     } else if (TimestampMicrosWrapper.class.getSimpleName().equals(wrapperClassName)) {
       Instant instant = microsToInstant((Long)((Record) avroValueWrapper).get(0));
       return Timestamp.from(instant);
+    } else if (DecimalWrapper.class.getSimpleName().equals(wrapperClassName)) {
+      Schema valueSchema = FIXED_TYPE_SCHEMA.getField("data_fixed_type").schema();
+      return AVRO_DECIMAL_CONVERSION.fromBytes((ByteBuffer) ((Record) avroValueWrapper).get(0), valueSchema, valueSchema.getLogicalType());
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
     }
