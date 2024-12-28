@@ -72,6 +72,6 @@ public enum HoodieCDCInferenceCase {
   BASE_FILE_INSERT,
   BASE_FILE_DELETE,
   LOG_FILE,
-  REPLACE_COMMIT;
+  REPLACE_COMMIT
 
 }

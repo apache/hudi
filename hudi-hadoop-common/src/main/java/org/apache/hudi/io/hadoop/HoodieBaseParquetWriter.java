@@ -100,7 +100,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     hadoopConf.forEach(conf -> {
       String key = conf.getKey();
       if (key.startsWith(BLOOM_FILTER_ENABLED)) {
-        String column = key.substring(BLOOM_FILTER_ENABLED.length() + 1, key.length());
+        String column = key.substring(BLOOM_FILTER_ENABLED.length() + 1);
         try {
           Method method = parquetWriterbuilder.getClass().getMethod("withBloomFilterEnabled", String.class, boolean.class);
           method.invoke(parquetWriterbuilder, column, Boolean.valueOf(conf.getValue()).booleanValue());
@@ -109,7 +109,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
         }
       }
       if (key.startsWith(BLOOM_FILTER_EXPECTED_NDV)) {
-        String column = key.substring(BLOOM_FILTER_EXPECTED_NDV.length() + 1, key.length());
+        String column = key.substring(BLOOM_FILTER_EXPECTED_NDV.length() + 1);
         try {
           Method method = parquetWriterbuilder.getClass().getMethod("withBloomFilterNDV", String.class, long.class);
           method.invoke(parquetWriterbuilder, column, Long.valueOf(conf.getValue()).longValue());

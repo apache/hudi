@@ -41,7 +41,7 @@ import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOU
  */
 public class JdbcbasedSchemaProvider extends SchemaProvider {
   private Schema sourceSchema;
-  private Map<String, String> options = new HashMap<>();
+  private final Map<String, String> options = new HashMap<>();
 
   public JdbcbasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);

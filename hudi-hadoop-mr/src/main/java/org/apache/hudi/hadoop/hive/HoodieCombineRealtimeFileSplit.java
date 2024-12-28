@@ -51,11 +51,11 @@ public class HoodieCombineRealtimeFileSplit extends CombineFileSplit {
 
   public HoodieCombineRealtimeFileSplit(JobConf jobConf, List<FileSplit> realtimeFileSplits) {
     super(jobConf, realtimeFileSplits.stream().map(p ->
-            ((HoodieRealtimeFileSplit) p).getPath()).collect(Collectors.toList()).toArray(new
+            p.getPath()).collect(Collectors.toList()).toArray(new
             Path[realtimeFileSplits.size()]),
-        ArrayUtils.toPrimitive(realtimeFileSplits.stream().map(p -> ((HoodieRealtimeFileSplit) p).getStart())
+        ArrayUtils.toPrimitive(realtimeFileSplits.stream().map(p -> p.getStart())
             .collect(Collectors.toList()).toArray(new Long[realtimeFileSplits.size()])),
-        ArrayUtils.toPrimitive(realtimeFileSplits.stream().map(p -> ((HoodieRealtimeFileSplit) p).getLength())
+        ArrayUtils.toPrimitive(realtimeFileSplits.stream().map(p -> p.getLength())
             .collect(Collectors.toList()).toArray(new Long[realtimeFileSplits.size()])),
         realtimeFileSplits.stream().map(p -> {
           try {

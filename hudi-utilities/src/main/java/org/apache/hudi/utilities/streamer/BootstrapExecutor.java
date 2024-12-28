@@ -54,9 +54,9 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
 import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -110,7 +110,7 @@ public class BootstrapExecutor implements Serializable {
    */
   private transient FileSystem fs;
 
-  private String bootstrapBasePath;
+  private final String bootstrapBasePath;
 
   /**
    * Bootstrap Executor.

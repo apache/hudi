@@ -49,7 +49,7 @@ public class HoodieLogFormatReverseReader implements HoodieLogFormat.Reader {
   private final boolean reverseLogReader;
   private final String recordKeyField;
   private final boolean enableInlineReading;
-  private int bufferSize;
+  private final int bufferSize;
   private int logFilePos = -1;
 
   HoodieLogFormatReverseReader(HoodieStorage storage, List<HoodieLogFile> logFiles, Schema readerSchema,

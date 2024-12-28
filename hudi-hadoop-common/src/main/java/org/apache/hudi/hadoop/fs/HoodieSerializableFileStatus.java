@@ -37,17 +37,17 @@ import java.util.stream.Collectors;
  */
 public class HoodieSerializableFileStatus implements Serializable {
 
-  private Path path;
-  private long length;
-  private Boolean isDir;
-  private short blockReplication;
-  private long blockSize;
-  private long modificationTime;
-  private long accessTime;
-  private FsPermission permission;
-  private String owner;
-  private String group;
-  private Path symlink;
+  private final Path path;
+  private final long length;
+  private final Boolean isDir;
+  private final short blockReplication;
+  private final long blockSize;
+  private final long modificationTime;
+  private final long accessTime;
+  private final FsPermission permission;
+  private final String owner;
+  private final String group;
+  private final Path symlink;
 
   HoodieSerializableFileStatus(Path path, long length, boolean isDir, short blockReplication,
                                long blockSize, long modificationTime, long accessTime,

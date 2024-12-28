@@ -42,9 +42,9 @@ public interface TableChange {
    */
   enum ColumnChangeID {
     ADD, UPDATE, DELETE, PROPERTY_CHANGE, REPLACE;
-    private String name;
+    private final String name;
 
-    private ColumnChangeID() {
+    ColumnChangeID() {
       this.name = this.name().toLowerCase(Locale.ROOT);
     }
 

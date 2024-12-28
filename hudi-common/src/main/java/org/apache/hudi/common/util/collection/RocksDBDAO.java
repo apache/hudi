@@ -73,7 +73,7 @@ public class RocksDBDAO {
 
   public RocksDBDAO(String basePath, String rocksDBBasePath) {
     this.rocksDBBasePath =
-        String.format("%s/%s/%s", rocksDBBasePath, URI.create(basePath).getPath().replace(":","").replace("/", "_"), UUID.randomUUID().toString());
+        String.format("%s/%s/%s", rocksDBBasePath, URI.create(basePath).getPath().replace(":","").replace("/", "_"), UUID.randomUUID());
     init();
     totalBytesWritten = 0L;
   }

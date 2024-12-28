@@ -784,12 +784,10 @@ public class HoodieTableMetaClient implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieTableMetaClient{");
-    sb.append("basePath='").append(basePath).append('\'');
-    sb.append(", metaPath='").append(metaPath).append('\'');
-    sb.append(", tableType=").append(tableType);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieTableMetaClient{" + "basePath='" + basePath + '\''
+        + ", metaPath='" + metaPath + '\''
+        + ", tableType=" + tableType
+        + '}';
   }
 
   public void initializeBootstrapDirsIfNotExists() throws IOException {
@@ -1004,7 +1002,7 @@ public class HoodieTableMetaClient implements Serializable {
      * Persist the configs that is written at the first time, and should not be changed.
      * Like KeyGenerator's configs.
      */
-    private Properties others = new Properties();
+    private final Properties others = new Properties();
 
     TableBuilder() {
     }

@@ -36,13 +36,13 @@ import java.util.Map;
 import java.util.Properties;
 
 public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
-  private Option<Iterator<HoodieRecord>> baseFileIterator;
-  private HoodieMergedLogRecordScanner scanner;
-  private Schema schema;
-  private Properties props;
+  private final Option<Iterator<HoodieRecord>> baseFileIterator;
+  private final HoodieMergedLogRecordScanner scanner;
+  private final Schema schema;
+  private final Properties props;
 
-  private TypedProperties payloadProps = new TypedProperties();
-  private Option<Pair<String, String>> simpleKeyGenFieldsOpt;
+  private final TypedProperties payloadProps = new TypedProperties();
+  private final Option<Pair<String, String>> simpleKeyGenFieldsOpt;
   Map<String, HoodieRecord> records;
   HoodieRecordMerger merger;
 

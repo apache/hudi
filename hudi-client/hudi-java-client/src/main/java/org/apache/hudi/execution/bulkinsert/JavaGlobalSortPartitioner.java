@@ -43,16 +43,10 @@ public class JavaGlobalSortPartitioner<T>
       public int compare(Object o1, Object o2) {
         HoodieRecord o11 = (HoodieRecord) o1;
         HoodieRecord o22 = (HoodieRecord) o2;
-        String left = new StringBuilder()
-            .append(o11.getPartitionPath())
-            .append("+")
-            .append(o11.getRecordKey())
-            .toString();
-        String right = new StringBuilder()
-            .append(o22.getPartitionPath())
-            .append("+")
-            .append(o22.getRecordKey())
-            .toString();
+        String left = o11.getPartitionPath()
+            + "+" + o11.getRecordKey();
+        String right = o22.getPartitionPath()
+            + "+" + o22.getRecordKey();
         return left.compareTo(right);
       }
     });

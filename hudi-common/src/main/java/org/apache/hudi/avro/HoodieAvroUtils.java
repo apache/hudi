@@ -1105,7 +1105,7 @@ public class HoodieAvroUtils {
           return String.valueOf(oldValue);
         }
         if (oldSchema.getType() == Schema.Type.BYTES) {
-          return String.valueOf(((ByteBuffer) oldValue));
+          return String.valueOf(oldValue);
         }
         if (oldSchema.getLogicalType() == LogicalTypes.date()) {
           return toJavaDate((Integer) oldValue).toString();

@@ -34,8 +34,8 @@ import java.util.stream.IntStream;
  * Builder for {@link ResolvedSchema}.
  */
 public class SchemaBuilder {
-  private List<Column> columns;
-  private List<WatermarkSpec> watermarkSpecs;
+  private final List<Column> columns;
+  private final List<WatermarkSpec> watermarkSpecs;
   private UniqueConstraint constraint;
 
   public static SchemaBuilder instance() {

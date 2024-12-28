@@ -25,9 +25,9 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.NumericUtils;
@@ -194,7 +194,7 @@ public class CommitsCommand {
     HoodieArchivedTimeline archivedTimeline = HoodieCLI.getTableMetaClient().getArchivedTimeline();
     try {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
-      HoodieTimeline timelineRange = (HoodieTimeline)archivedTimeline.findInstantsInRange(startTs, endTs);
+      HoodieTimeline timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs);
       if (includeExtraMetadata) {
         return printCommitsWithMetadata(timelineRange, limit, sortByField, descending, headerOnly, exportTableName, partition);
       } else {

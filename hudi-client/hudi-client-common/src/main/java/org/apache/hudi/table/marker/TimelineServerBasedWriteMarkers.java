@@ -88,7 +88,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       return httpRequestClient.executeRequest(
           DELETE_MARKER_DIR_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
     } catch (IOException e) {
-      throw new HoodieRemoteException("Failed to delete marker directory " + markerDirPath.toString(), e);
+      throw new HoodieRemoteException("Failed to delete marker directory " + markerDirPath, e);
     }
   }
 
@@ -99,7 +99,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       return httpRequestClient.executeRequest(
           MARKERS_DIR_EXISTS_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.GET);
     } catch (IOException e) {
-      throw new HoodieRemoteException("Failed to check marker directory " + markerDirPath.toString(), e);
+      throw new HoodieRemoteException("Failed to check marker directory " + markerDirPath, e);
     }
   }
 
@@ -112,7 +112,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       return markerPaths.stream().map(WriteMarkers::stripMarkerSuffix).collect(Collectors.toSet());
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to get CREATE and MERGE data file paths in "
-          + markerDirPath.toString(), e);
+          + markerDirPath, e);
     }
   }
 
@@ -123,7 +123,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       return httpRequestClient.executeRequest(
           ALL_MARKERS_URL, paramsMap, SET_TYPE_REFERENCE, RequestMethod.GET);
     } catch (IOException e) {
-      throw new HoodieRemoteException("Failed to get all markers in " + markerDirPath.toString(), e);
+      throw new HoodieRemoteException("Failed to get all markers in " + markerDirPath, e);
     }
   }
 

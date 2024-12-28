@@ -43,7 +43,7 @@ public class HoodieMetaSyncMetrics {
   private static final String RECREATE_TABLE_DURATION_MS_METRIC = "recreate_table_duration_ms";
   // Metrics are shut down by the shutdown hook added in the Metrics class
   private Metrics metrics;
-  private HoodieMetricsConfig metricsConfig;
+  private final HoodieMetricsConfig metricsConfig;
   private transient HoodieStorage storage;
 
   private final String syncToolName;
