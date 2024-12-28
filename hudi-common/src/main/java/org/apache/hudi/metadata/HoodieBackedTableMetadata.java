@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
@@ -75,7 +76,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
@@ -801,28 +801,47 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Map<String, String> getSecondaryKeysForRecordKeys(List<String> recordKeys, String partitionName) {
+  protected HoodiePairData<String, String> getSecondaryKeysForRecordKeys(HoodieData<String> recordKeys, String partitionName, int batchSize) {
     if (recordKeys.isEmpty()) {
-      return Collections.emptyMap();
+      return getEngineContext().emptyHoodiePairData();
     }
 
     // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
     List<FileSlice> partitionFileSlices =
         partitionFileSliceMap.computeIfAbsent(partitionName, k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
     if (partitionFileSlices.isEmpty()) {
-      return Collections.emptyMap();
+      return getEngineContext().emptyHoodiePairData();
     }
 
-    // Parallel lookup keys from each file slice
-    Map<String, String> reverseSecondaryKeyMap = new HashMap<>(recordKeys.size());
-    getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Lookup secondary keys from metadata table partition " + partitionName);
-    List<Pair<String, String>> secondaryToRecordKeyPairList = getEngineContext().flatMap(partitionFileSlices,
-        (SerializableFunction<FileSlice, Stream<Pair<String, String>>>) v1 -> reverseLookupSecondaryKeys(partitionName, recordKeys, v1)
-            .entrySet().stream()
-            .map(entry -> Pair.of(entry.getKey(), entry.getValue())).collect(Collectors.toList()).stream(), partitionFileSlices.size());
+    // Step 1: Batch record keys
+    HoodieData<List<String>> batchedRecordKeys = recordKeys.mapPartitions(iter -> {
+      List<List<String>> batches = new ArrayList<>();
+      List<String> currentBatch = new ArrayList<>();
 
-    secondaryToRecordKeyPairList.forEach(pair -> reverseSecondaryKeyMap.put(pair.getKey(), pair.getValue()));
-    return reverseSecondaryKeyMap;
+      while (iter.hasNext()) {
+        currentBatch.add(iter.next());
+        if (currentBatch.size() == batchSize) {
+          batches.add(new ArrayList<>(currentBatch));
+          currentBatch.clear();
+        }
+      }
+
+      // Add any remaining items as the last batch
+      if (!currentBatch.isEmpty()) {
+        batches.add(currentBatch);
+      }
+
+      return batches.iterator();
+    }, true);
+
+    // Step 2: Process each batch of record keys against all file slices
+    return batchedRecordKeys.flatMapToPair(recordKeysBatch -> {
+      Map<String, String> reverseSecondaryKeyMap = new HashMap<>();
+      for (FileSlice fileSlice : partitionFileSlices) {
+        reverseSecondaryKeyMap.putAll(reverseLookupSecondaryKeys(partitionName, recordKeysBatch, fileSlice));
+      }
+      return reverseSecondaryKeyMap.entrySet().stream().map(entry -> Pair.of(entry.getKey(), entry.getValue())).iterator();
+    });
   }
 
   private Map<String, String> reverseLookupSecondaryKeys(String partitionName, List<String> recordKeys, FileSlice fileSlice) {

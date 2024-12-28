@@ -203,9 +203,4 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected EngineType getEngineType() {
     return EngineType.FLINK;
   }
-
-  @Override
-  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    throw new HoodieNotSupportedException("Flink metadata table does not support secondary index yet.");
-  }
 }

@@ -133,9 +133,4 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   protected EngineType getEngineType() {
     return EngineType.JAVA;
   }
-
-  @Override
-  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    throw new HoodieNotSupportedException("Java metadata table writer does not support secondary index yet.");
-  }
 }

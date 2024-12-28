@@ -19,7 +19,6 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -42,6 +41,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
+import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -62,7 +62,6 @@ import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -235,21 +234,5 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected EngineType getEngineType() {
     return EngineType.SPARK;
-  }
-
-  @Override
-  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
-    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
-    if (recordKeySecondaryKeyMap.isEmpty()) {
-      return sparkEngineContext.emptyHoodieData();
-    }
-
-    List<HoodieRecord> deletedRecords = new ArrayList<>();
-    recordKeySecondaryKeyMap.forEach((key, value) -> {
-      HoodieRecord<HoodieMetadataPayload> siRecord = HoodieMetadataPayload.createSecondaryIndexRecord(key, value, indexDefinition.getIndexName(), true);
-      deletedRecords.add(siRecord);
-    });
-
-    return HoodieJavaRDD.of(deletedRecords, sparkEngineContext, 1);
   }
 }

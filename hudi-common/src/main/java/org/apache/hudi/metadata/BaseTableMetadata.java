@@ -24,6 +24,8 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -338,12 +340,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   /**
    * Returns a map of (record-key -> secondary-key) for the provided record keys.
    */
-  public Map<String, String> getSecondaryKeys(List<String> recordKeys, String secondaryIndexName) {
+  public HoodiePairData<String, String> getSecondaryKeys(HoodieData<String> recordKeys, String secondaryIndexName, int parallelism) {
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
     ValidationUtils.checkState(dataMetaClient.getTableConfig().getMetadataPartitions().contains(secondaryIndexName),
         "Secondary index is not initialized in MDT");
-    return getSecondaryKeysForRecordKeys(recordKeys, secondaryIndexName);
+    return getSecondaryKeysForRecordKeys(recordKeys, secondaryIndexName, parallelism);
   }
 
   /**
@@ -459,7 +461,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
   protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
 
-  protected abstract Map<String, String> getSecondaryKeysForRecordKeys(List<String> recordKeys, String partitionName);
+  protected abstract HoodiePairData<String, String> getSecondaryKeysForRecordKeys(HoodieData<String> recordKeys, String partitionName, int batchSize);
 
   /**
    * Returns a map of (secondary-key -> set-of-record-keys) for the provided secondary keys.

@@ -22,6 +22,7 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -41,7 +42,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -61,6 +62,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getDeletedKeysFromMergedLogs;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRecordKeys;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.reduceByKeys;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -273,7 +279,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
           Option.empty(), WriteOperationType.UPSERT, writeConfig.getSchema(), "commit");
 
       try {
-        HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(context, commitMetadata, writeConfig.getMetadataConfig(), metaClient, finalCommitTime3);
+        getRecordKeysDeletedOrUpdated(context, commitMetadata, writeConfig.getMetadataConfig(), metaClient, finalCommitTime3);
         fail("Should not have reached here");
       } catch (Exception e) {
         // no op
@@ -285,8 +291,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieWriteMetadata compactionWriteMetadata = client.compact(compactionInstantOpt.get());
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
       // no RLI records should be generated for compaction operation.
-      assertTrue(HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
-          metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get()).isEmpty());
+      assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
+          metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get(), EngineType.SPARK).isEmpty());
     }
   }
 
@@ -314,12 +320,13 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     writeStatuses3.stream().filter(writeStatus -> FSUtils.isLogFile(FSUtils.getFileName(writeStatus.getStat().getPath(), writeStatus.getPartitionPath())))
         .forEach(writeStatus -> {
           try {
+            StoragePath fullFilePath = new StoragePath(basePath, writeStatus.getStat().getPath());
             // used for RLI
-            finalActualDeletes.addAll(HoodieTableMetadataUtil.getRecordKeys(basePath + "/" + writeStatus.getStat().getPath(), metaClient, writerSchemaOpt,
-                writeConfig.getMetadataConfig().getMaxReaderBufferSize(), latestCommitTimestamp, false, true));
+            finalActualDeletes.addAll(
+                getDeletedKeysFromMergedLogs(metaClient, latestCommitTimestamp, EngineType.SPARK, Collections.singletonList(fullFilePath.toString()), writerSchemaOpt, fullFilePath));
 
             // used in SI flow
-            actualUpdatesAndDeletes.addAll(HoodieTableMetadataUtil.getRecordKeys(basePath + "/" + writeStatus.getStat().getPath(), metaClient, writerSchemaOpt,
+            actualUpdatesAndDeletes.addAll(getRecordKeys(Collections.singletonList(fullFilePath.toString()), metaClient, writerSchemaOpt,
                 writeConfig.getMetadataConfig().getMaxReaderBufferSize(), latestCommitTimestamp, true, true));
           } catch (IOException e) {
             throw new HoodieIOException("Failed w/ IOException ", e);
@@ -334,7 +341,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
     // validate HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated for entire CommitMetadata which is used in SI code path.
     List<String> updatedOrDeletedKeys =
-        new ArrayList<>(HoodieTableMetadataUtil.getRecordKeysDeletedOrUpdated(context, commitMetadata, writeConfig.getMetadataConfig(), metaClient, finalCommitTime3));
+        new ArrayList<>(getRecordKeysDeletedOrUpdated(context, commitMetadata, writeConfig.getMetadataConfig(), metaClient, finalCommitTime3).collectAsList());
     List<String> expectedUpdatesOrDeletes = new ArrayList<>(expectedUpdates);
     expectedUpdatesOrDeletes.addAll(expectedRLIDeletes);
     assertListEquality(expectedUpatesAndDeletes, updatedOrDeletedKeys);
@@ -368,14 +375,14 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       recordsToTest.addAll(adjustedInserts);
       recordsToTest.addAll(deleteRecords);
       // happy paths. no dups. in and out are same.
-      List<HoodieRecord> actualRecords = HoodieTableMetadataUtil.reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
+      List<HoodieRecord> actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
       assertHoodieRecordListEquality(actualRecords, recordsToTest);
 
       // few records has both inserts and deletes.
       recordsToTest = new ArrayList<>();
       recordsToTest.addAll(insertRecords);
       recordsToTest.addAll(deleteRecords);
-      actualRecords = HoodieTableMetadataUtil.reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
+      actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
       List<HoodieRecord> expectedList = new ArrayList<>();
       expectedList.addAll(insertRecords);
       assertHoodieRecordListEquality(actualRecords, expectedList);
@@ -385,7 +392,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       recordsToTest.addAll(adjustedInserts);
       recordsToTest.addAll(deleteRecords);
       recordsToTest.addAll(deleteRecords.subList(0, 10));
-      actualRecords = HoodieTableMetadataUtil.reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
+      actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
       expectedList = new ArrayList<>();
       expectedList.addAll(adjustedInserts);
       expectedList.addAll(deleteRecords);
@@ -396,7 +403,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       recordsToTest.addAll(adjustedInserts);
       recordsToTest.addAll(adjustedInserts.subList(0, 5));
       try {
-        HoodieTableMetadataUtil.reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
+        reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
         fail("Should not have reached here");
       } catch (Exception e) {
         // expected. no-op
