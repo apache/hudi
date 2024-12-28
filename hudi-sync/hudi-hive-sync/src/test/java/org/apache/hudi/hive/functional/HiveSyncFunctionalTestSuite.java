@@ -19,12 +19,11 @@
 
 package org.apache.hudi.hive.functional;
 
-import org.junit.platform.runner.JUnitPlatform;
 import org.junit.platform.suite.api.IncludeTags;
 import org.junit.platform.suite.api.SelectPackages;
-import org.junit.runner.RunWith;
+import org.junit.platform.suite.api.Suite;
 
-@RunWith(JUnitPlatform.class)
+@Suite
 @SelectPackages("org.apache.hudi.hive.functional")
 @IncludeTags("functional")
 public class HiveSyncFunctionalTestSuite {
