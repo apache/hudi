@@ -699,6 +699,12 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Parallelism of tasks that do actual compaction, default same as the write task parallelism");
 
+  public static final ConfigOption<Boolean> COMPACTION_SCHEDULE_INCREMENTAL_PARTITIONS = ConfigOptions
+      .key("compaction.schedule.incremental.partitions")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Schedule the compaction plan based on all the partitions related to commit meta since last compete compaction.");
+
   public static final String NUM_COMMITS = "num_commits";
   public static final String TIME_ELAPSED = "time_elapsed";
   public static final String NUM_AND_TIME = "num_and_time";
