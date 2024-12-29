@@ -197,8 +197,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
   private Option<String> getLatestCheckpoint(HoodieTimeline timeline) {
     return (Option<String>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = timeline.deserializeInstantContent(instant, HoodieCommitMetadata.class);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           return Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
         } else {
