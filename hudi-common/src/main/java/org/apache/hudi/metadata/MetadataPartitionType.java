@@ -19,7 +19,6 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.DateWrapper;
-import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
@@ -334,7 +333,8 @@ public enum MetadataPartitionType {
     if (minValue != null) {
       boolean toReturn = ((GenericRecord) minValue).getSchema().getName().equals(DateWrapper.class.getSimpleName())
           || ((GenericRecord) minValue).getSchema().getName().equals(TimestampMicrosWrapper.class.getSimpleName())
-          || ((GenericRecord) minValue).getSchema().getName().equals(DecimalWrapper.class.getSimpleName());
+          || ((GenericRecord) minValue).getSchema().getName().equals(TimestampMicrosWrapper.class.getSimpleName());
+      //|| ((GenericRecord) minValue).getSchema().getName().equals(DecimalWrapper.class.getSimpleName());
       if (toReturn) {
         return Pair.of(true, ((GenericRecord) minValue).getSchema().getName());
       }
