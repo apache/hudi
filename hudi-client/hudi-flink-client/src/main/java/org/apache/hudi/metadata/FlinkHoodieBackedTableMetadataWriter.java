@@ -99,7 +99,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
-    throw new HoodieNotSupportedException("Col stats integration with flink is not yet supported");
+    // no op. HUDI-8801 to fix.
   }
 
   @Override

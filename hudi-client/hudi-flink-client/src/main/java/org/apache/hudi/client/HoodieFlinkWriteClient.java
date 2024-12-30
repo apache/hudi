@@ -432,7 +432,7 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    throw new HoodieNotSupportedException("Col stats is not yet integrated with flink");
+    //no op. HUDI-8801 to fix.
   }
 
   /**

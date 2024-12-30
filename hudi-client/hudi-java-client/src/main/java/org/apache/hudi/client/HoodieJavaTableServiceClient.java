@@ -47,7 +47,7 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
 
   @Override
   protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    throw new HoodieNotSupportedException("col stats index is not yet supported with java");
+    // no op
   }
 
   @Override

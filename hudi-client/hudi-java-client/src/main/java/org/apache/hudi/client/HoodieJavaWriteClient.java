@@ -60,7 +60,7 @@ public class HoodieJavaWriteClient<T> extends
 
   @Override
   protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    throw new HoodieNotSupportedException("Col stats is not yet supported in java");
+    // no op
   }
 
   public HoodieJavaWriteClient(HoodieEngineContext context,
