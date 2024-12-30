@@ -34,6 +34,7 @@ import org.apache.spark.api.java.Optional;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.storage.StorageLevel;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -127,6 +128,10 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   @Override
   public <W> HoodiePairData<K, W> mapValues(SerializableFunction<V, W> func) {
     return HoodieJavaPairRDD.of(pairRDDData.mapValues(func::apply));
+  }
+
+  public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
+    return HoodieJavaPairRDD.of(pairRDDData.flatMapValues(func::apply));
   }
 
   @Override

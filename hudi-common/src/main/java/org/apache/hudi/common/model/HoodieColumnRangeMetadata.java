@@ -176,6 +176,10 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> merge(
       HoodieColumnRangeMetadata<T> left,
       HoodieColumnRangeMetadata<T> right) {
+    if (left == null || right == null) {
+      return left == null ? right : left;
+    }
+
     ValidationUtils.checkArgument(left.getColumnName().equals(right.getColumnName()),
         "Column names should be the same for merging column ranges");
     String filePath = left.getFilePath();

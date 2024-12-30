@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -533,10 +534,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   public static Stream<HoodieRecord> createPartitionStatsRecords(String partitionPath,
                                                                  Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
-                                                                 boolean isDeleted, boolean isTightBound) {
+                                                                 boolean isDeleted, boolean isTightBound, Option<String> indexPartitionOpt) {
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
-      HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata.getColumnName()),
-          MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+      HoodieKey key;
+      if (indexPartitionOpt.isPresent()) {
+        // For Expression index, index name is provided since expression index partition stat records are stored within expression index partition
+        // The partition path for such records is same as expression index
+        // The key for such records is a combination of column name, HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX and partition path
+        key = new HoodieKey(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, partitionPath, columnRangeMetadata.getColumnName()),
+            indexPartitionOpt.get());
+      } else {
+        key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata.getColumnName()),
+            MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+      }
       HoodieMetadataPayload payload = new HoodieMetadataPayload(
           key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()

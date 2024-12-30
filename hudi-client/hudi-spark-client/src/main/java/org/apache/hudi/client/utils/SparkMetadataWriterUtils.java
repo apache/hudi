@@ -22,17 +22,20 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -41,6 +44,7 @@ import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.JavaScalaConverters;
 
@@ -111,7 +115,7 @@ public class SparkMetadataWriterUtils {
 
   public static HoodieData<HoodieRecord> getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset,
                                                                                    HoodieExpressionIndex<Column, Column> expressionIndex,
-                                                                                   String columnToIndex) {
+                                                                                   HoodieIndexDefinition indexDefinition, String columnToIndex, boolean shouldGeneratePartitionStatRecords) {
     // Aggregate col stats related data for the column to index
     Dataset<Row> columnRangeMetadataDataset = dataset
         .select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
@@ -121,7 +125,8 @@ public class SparkMetadataWriterUtils {
             functions.max(columnToIndex).alias("maxValue"),
             functions.count(columnToIndex).alias("valueCount"));
     // Generate column stat records using the aggregated data
-    return HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD()).flatMap((SerializableFunction<Row, Iterator<HoodieRecord>>)
+    HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> rangeMetadataHoodieJavaRDD = HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD())
+        .flatMapToPair((SerializableFunction<Row, Iterator<? extends Pair<String, HoodieColumnRangeMetadata<Comparable>>>>)
         row -> {
           int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
           long nullCount = row.getLong(baseAggregatePosition);
@@ -145,9 +150,19 @@ public class SparkMetadataWriterUtils {
               totalFileSize,
               totalUncompressedSize
           );
-          return createColumnStatsRecords(partitionName, Collections.singletonList(rangeMetadata), false, expressionIndex.getIndexName(),
-              COLUMN_STATS.getRecordType()).collect(Collectors.toList()).iterator();
+          return Collections.singletonList(Pair.of(partitionName, rangeMetadata)).iterator();
         });
+    rangeMetadataHoodieJavaRDD.persist("MEMORY_AND_DISK");
+
+    HoodieData<HoodieRecord> colStatRecords = rangeMetadataHoodieJavaRDD.map(pair ->
+        createColumnStatsRecords(pair.getKey(), Collections.singletonList(pair.getValue()), false, expressionIndex.getIndexName(),
+            COLUMN_STATS.getRecordType()).collect(Collectors.toList()))
+        .flatMap(records -> records.iterator());
+    if (shouldGeneratePartitionStatRecords) {
+      colStatRecords = colStatRecords.union(HoodieTableMetadataUtil.collectAndProcessColumnMetadata(rangeMetadataHoodieJavaRDD, true, Option.of(indexDefinition.getIndexName())));
+    }
+    rangeMetadataHoodieJavaRDD.unpersist();
+    return colStatRecords;
   }
 
   public static HoodieData<HoodieRecord> getExpressionIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex,
