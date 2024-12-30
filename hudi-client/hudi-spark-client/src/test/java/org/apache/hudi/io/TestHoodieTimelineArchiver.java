@@ -291,6 +291,10 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
             getAllArchivedCommitInstants(Arrays.asList("00000001", "00000002")),
             getActiveCommitInstants(Arrays.asList("00000003", "00000004", "00000005", "00000006")),
             commitsAfterArchival, false);
+        // disable metadata table
+        if (enableMetadata) {
+          disableMetadataTable(writeConfig);
+        }
       } else if (i < 8) {
         assertEquals(originalCommits, commitsAfterArchival);
       } else if (i == 8) {
@@ -1924,6 +1928,11 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
   private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(HoodieWriteConfig writeConfig) throws IOException {
     return archiveAndGetCommitsList(writeConfig, false);
+  }
+
+  private void disableMetadataTable(HoodieWriteConfig writeConfig) {
+    writeConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
+    writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE.key(), "false");
   }
 
   private Pair<List<HoodieInstant>, List<HoodieInstant>> archiveAndGetCommitsList(
