@@ -1,0 +1,151 @@
+---
+title: "Apache Hudi 2024: A Year In Review"
+excerpt: "Reflect on and celebrate the myriad of exciting developments and accomplishments that have defined the year 2024 for the Hudi community."
+author: Shiyan Xu
+category: blog
+image: /assets/images/blog/2024-12-29-a-year-in-review-2024/cover.jpg
+tags:
+- apache hudi
+- community
+---
+
+import SlackCommunity from '@site/src/components/SlackCommunity';
+
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/cover.jpg" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+As we wrap up another remarkable year for Apache Hudi, I am thrilled to reflect on the tremendous achievements and milestones that have defined 2024. This year has been particularly special as we achieved several significant milestones, including the landmark release of Hudi 1.0, the publication of comprehensive books, and the introduction of new tools that expand Hudi's ecosystem.
+
+## Community Growth and Engagement
+
+The Apache Hudi community continued its impressive growth trajectory in 2024. The number of new PRs has remained stable, indicating a consistent level of development activities:
+
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/pr-history.svg" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+Our community presence expanded significantly across various platforms:
+
+- The community grew to over 10,500 followers on LinkedIn
+- Added 8,755 new followers in the last 365 days
+- Generated 441,402 content impressions
+- Received 6,555 reactions and 493 comments across platforms
+- Our Slack community remained vibrant with rich technical discussions and knowledge sharing
+
+## Major Milestones
+
+### Apache Hudi 1.0 Release
+
+2024 marked a historic moment with the [release of Apache Hudi 1.0](https://hudi.apache.org/releases/release-1.0.0), representing a major evolution in data lakehouse technology. This release brought several groundbreaking features:
+
+- **Secondary Indexing**: First of its kind in lakehouses, enabling database-like query acceleration with demonstrated 95% latency reduction on 10TB TPC-DS for low-moderate selectivity queries
+- **Logical Partitioning via Expression Indexes**: Introducing PostgreSQL-style expression indexes for more efficient partition management
+- **Partial Updates**: Achieving 2.6x performance improvement and 85% reduction in bytes written for update-heavy workloads
+- **Non-blocking Concurrency Control (NBCC)**: An industry-first feature allowing simultaneous writing from multiple writers
+- **Merge Modes**: First-class support for both `commit_time_ordering` and `event_time_ordering`
+- **LSM Timeline**: Revamped timeline storage as a scalable LSM tree for extended table history retention
+- **TrueTime**: Strengthened time semantics ensuring forward-moving clocks in distributed processes
+
+Please check out the [announcement blog](/blog/2024/12/16/announcing-hudi-1-0-0).
+
+### Launch of Hudi-rs
+
+A significant expansion of the Hudi ecosystem occurred with the [release of Hudi-rs](https://github.com/apache/hudi-rs), the native Rust implementation for Apache Hudi with Python API bindings. This new project enables:
+
+- Reading Hudi Tables without Spark or JVM dependencies
+- Integration with Apache Arrow for enhanced compatibility
+- Support for Copy-on-Write (CoW) table snapshots and time-travel reads
+- Cloud storage support across AWS, Azure, and GCP
+- Native integration with Apache DataFusion, Ray, Daft, etc
+
+### Published Books and Educational Content
+
+2024 saw the release of two comprehensive guides to Apache Hudi:
+
+- [**"Apache Hudi: The Definitive Guide"**](https://learning.oreilly.com/library/view/apache-hudi-the/9781098173821/) (O'Reilly) - Released in early access, [free copy available](https://www.onehouse.ai/whitepaper/apache-hudi-the-definitive-guide), providing comprehensive coverage of:
+  - Distributed query engines
+  - Snapshot and time travel queries
+  - Incremental queries
+  - Change-data-capture modes
+  - End-to-end ingestion with Hudi Streamer
+
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/hudi-tdg.jpg" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+- [**"Apache Hudi: From Zero to One"**](https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-110) - A 10-part blog series turned into [an ebook](https://www.onehouse.ai/whitepaper/ebook-apache-hudi---zero-to-one), offering deep technical insights into Hudi's architecture and capabilities, covering:
+  - Storage format and operations
+  - Read and write flows
+  - Table services and indexing
+  - Incremental processing
+  - Hudi 1.0 features
+
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/hudi0to1.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+## Community Events and Sharing
+
+The Apache Hudi community maintained a strong presence at major industry events throughout 2024:
+
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/community-events.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+- Databricks' Data+AI Summit - Presenting Apache Hudi's role in the lakehouse ecosystem and its interoperability with other table formats through XTable, an open-source project enabling seamless conversion between Hudi, Delta Lake, and Iceberg
+- Confluent's Current 2024 - Demonstrating Hudi's powerful CDC capabilities with Apache Flink, showcasing real-time data pipelines and the innovative Non-Blocking Concurrency Control (NBCC) for high-volume streaming workloads
+- Trino Fest 2024 - Showcasing Hudi connector's evolution and innovations in Trino, including multi-modal indexing capabilities and the roadmap for enhanced query performance through Alluxio-powered caching and expanded DDL/DML support
+- Bangalore Lakehouse Days - Deep dive into Apache Hudi 1.0's groundbreaking features including LSM-based timeline, functional indexes, and non-blocking concurrency control, demonstrating Hudi's continued innovation in the lakehouse space
+
+Additionally, the community launched several new initiatives to foster learning and knowledge sharing:
+
+### [Lakehouse Chronicles with Apache Hudi](https://www.youtube.com/playlist?list=PLxSSOLH2WRMNQetyPU98B2dHnYv91R6Y8)
+
+A new community series with 4 episodes released.
+
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/lakehouse-chronicles.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+### [Hudi Newsletter](https://hudinewsletter.substack.com/)
+
+9 editions published, keeping the community informed about latest developments.
+
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/newsletter.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+### [Community Syncs](https://www.youtube.com/@apachehudi)
+
+Featured 8 user stories from major organizations including Amazon, Peloton, Shopee and Uber.
+
+<img src="/assets/images/blog/2024-12-29-a-year-in-review-2024/community-syncs.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
+
+- [Powering Amazon Unit Economics with Configurations and Hudi](https://www.youtube.com/watch?v=rMXhlb7Uci8)
+- [Modernizing Data Infrastructure at Peleton using Apache Hudi](https://www.youtube.com/watch?v=-Pyid5K9dyU)
+- [Innovative Solution for Real-time Analytics at Scale using Apache Hudi (Shopee)](https://www.youtube.com/watch?v=fqhr-4jXi6I)
+- [Scaling Complex Data Workflows using Apache Hudi (Uber)](https://www.youtube.com/watch?v=VpdimpH_nsI)
+
+## Notable User Stories and Technical Content
+
+Throughout 2024, several organizations shared their Hudi implementation experiences:
+
+- [Notion's transition from Snowflake to Hudi](https://www.notion.com/blog/building-and-scaling-notions-data-lake)
+- [Grab's implementation of near-realtime data analytics](https://engineering.grab.com/enabling-near-realtime-data-analytics)
+- [AWS's data sharing capabilities with AWS Data Exchange](https://aws.amazon.com/blogs/big-data/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets/)
+- [Yuno's data lake transformation](https://www.y.uno/post/how-apache-hudi-transformed-yunos-data-lake)
+- [Halodoc's cost optimization strategies](https://blogs.halodoc.io/data-lake-cost-optimisation-strategies/)
+- [Upstox's data platform evolution](https://medium.com/upstox-engineering/navigating-the-future-the-evolutionary-journey-of-upstoxs-data-platform-92dc10ff22ae)
+
+## Looking Ahead to 2025
+
+As we look forward to 2025, Apache Hudi's roadmap includes several exciting developments:
+
+- Enhanced core engine with modernized write paths and advanced indexing (bitmap, vector search)
+- Multi-modal data support with improved storage engine APIs and cross-format interoperability
+- Enterprise-grade features including multi-table transactions and advanced caching
+- Robust platform services with Data Lakehouse Management System (DLMS) components
+- Broader adoption of Hudi-rs across the ecosystem
+- Continued focus on stability and seamless migration path for the community
+
+These initiatives reflect our commitment to advancing data lakehouse technology while ensuring reliability and user experience.
+
+## Get Involved
+
+Join our thriving community:
+
+- Contribute to the project on GitHub: [Hudi](https://github.com/apache/hudi) & [Hudi-rs](https://github.com/apache/hudi-rs)
+- Join our [Slack community](https://apache-hudi.slack.com/join/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g)
+- Follow us on [LinkedIn](https://www.linkedin.com/company/apache-hudi/) and [X (Twitter)](https://x.com/apachehudi)
+- Subscribe to our [YouTube channel](https://www.youtube.com/@apachehudi)
+- Participate in our [community syncs](https://hudi.apache.org/community/syncs) and [office hours](https://hudi.apache.org/community/office_hours).
+- Subscribe to the dev mailing list by sending an empty email to `dev-subscribe@hudi.apache.org`
+
+The success of Apache Hudi in 2024 wouldn't have been possible without our dedicated community of contributors, users, and supporters. As we celebrate these achievements, we look forward to another year of innovation and growth in 2025.
