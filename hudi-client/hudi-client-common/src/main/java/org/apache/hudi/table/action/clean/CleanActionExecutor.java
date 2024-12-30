@@ -213,7 +213,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       final HoodieTimer timer = HoodieTimer.start();
       if (cleanInstant.isRequested()) {
         inflightInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant,
-            TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+            TimelineMetadataUtils.getInstantWriter(cleanerPlan));
       } else {
         inflightInstant = cleanInstant;
       }
@@ -236,11 +236,9 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       }
       writeTableMetadata(metadata, inflightInstant.getTimestamp());
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
-          TimelineMetadataUtils.serializeCleanMetadata(metadata));
+          TimelineMetadataUtils.getInstantWriter(metadata));
       LOG.info("Marked clean started on {} as complete", inflightInstant.getTimestamp());
       return metadata;
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
       if (!skipLocking) {
         this.txnManager.endTransaction(Option.ofNullable(inflightInstant));

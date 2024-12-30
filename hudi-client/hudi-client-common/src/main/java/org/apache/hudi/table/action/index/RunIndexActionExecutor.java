@@ -267,7 +267,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
           finalIndexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
       table.getActiveTimeline().saveAsComplete(
           new HoodieInstant(true, INDEXING_ACTION, indexInstant.getTimestamp()),
-          TimelineMetadataUtils.serializeIndexCommitMetadata(indexCommitMetadata));
+          TimelineMetadataUtils.getInstantWriter(indexCommitMetadata));
     } finally {
       txnManager.endTransaction(Option.of(indexInstant));
     }

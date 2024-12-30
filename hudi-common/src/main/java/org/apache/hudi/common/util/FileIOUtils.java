@@ -142,10 +142,10 @@ public class FileIOUtils {
   }
 
   public static void writeStringToFile(String str, String filePath) throws IOException {
-    PrintStream out = new PrintStream(new FileOutputStream(filePath));
-    out.println(str);
-    out.flush();
-    out.close();
+    try (PrintStream out = new PrintStream(new FileOutputStream(filePath))) {
+      out.println(str);
+      out.flush();
+    }
   }
 
   /**
@@ -166,19 +166,19 @@ public class FileIOUtils {
 
   public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<HoodieInstantWriter> contentWriter, boolean ignoreIOE) {
     try {
-      // If the path does not exist, create it first
-      if (!fileSystem.exists(fullPath)) {
-        if (fileSystem.createNewFile(fullPath)) {
-          LOG.info("Created a new file in meta path: " + fullPath);
-        } else {
-          throw new HoodieIOException("Failed to create file " + fullPath);
-        }
-      }
-
       if (contentWriter.isPresent()) {
-        FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-        contentWriter.get().writeToStream(fsout);
-        fsout.close();
+        try (FSDataOutputStream fsout = fileSystem.create(fullPath, true)) {
+          contentWriter.get().writeToStream(fsout);
+        }
+      } else {
+        // If the path does not exist, create it even if there is no content to write
+        if (!fileSystem.exists(fullPath)) {
+          if (fileSystem.createNewFile(fullPath)) {
+            LOG.info("Created a new file in meta path: " + fullPath);
+          } else {
+            throw new HoodieIOException("Failed to create file " + fullPath);
+          }
+        }
       }
     } catch (IOException e) {
       LOG.warn("Failed to create file " + fullPath, e);
@@ -188,8 +188,12 @@ public class FileIOUtils {
     }
   }
 
-  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<byte[]> content) {
-    createFileInPath(fileSystem, fullPath, content.map(bytes -> (outputStream) -> outputStream.write(bytes)), false);
+  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, byte[] content) {
+    createFileInPath(fileSystem, fullPath, Option.of(outputStream -> outputStream.write(content)));
+  }
+
+  public static void createFileInPath(FileSystem fileSystem, org.apache.hadoop.fs.Path fullPath, Option<HoodieInstantWriter> contentWriter) {
+    createFileInPath(fileSystem, fullPath, contentWriter, false);
   }
 
   public static Option<byte[]> readDataFromPath(FileSystem fileSystem, org.apache.hadoop.fs.Path detailPath, boolean ignoreIOE) {

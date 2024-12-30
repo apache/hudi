@@ -31,12 +31,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 
@@ -82,9 +82,8 @@ public class CompactHelpers<T, I, K, O> {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
       activeTimeline.transitionCompactionInflightToComplete(
-          HoodieTimeline.getCompactionInflightInstant(compactionCommitTime),
-          Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    } catch (IOException e) {
+          HoodieTimeline.getCompactionInflightInstant(compactionCommitTime), Option.of(commitMetadata));
+    } catch (HoodieIOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
     }
@@ -94,9 +93,8 @@ public class CompactHelpers<T, I, K, O> {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
       activeTimeline.transitionLogCompactionInflightToComplete(
-          HoodieTimeline.getLogCompactionInflightInstant(logCompactionCommitTime),
-          Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    } catch (IOException e) {
+          HoodieTimeline.getLogCompactionInflightInstant(logCompactionCommitTime), Option.of(commitMetadata));
+    } catch (HoodieIOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + logCompactionCommitTime, e);
     }

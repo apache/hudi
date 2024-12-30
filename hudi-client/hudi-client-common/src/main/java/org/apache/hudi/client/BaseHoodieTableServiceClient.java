@@ -73,7 +73,6 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -528,9 +527,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // before transitioning to complete, lets do post commit validation
       table.doValidateCommitMetadataConsistency(HoodieActiveTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime, writeStats, metrics);
 
-      table.getActiveTimeline().transitionReplaceInflightToComplete(
-          clusteringInstant,
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+      table.getActiveTimeline().transitionReplaceInflightToComplete(clusteringInstant, Option.of(metadata));
     } catch (HoodieInconsistentMetadataException ime) {
       throw new HoodieClusteringException("Clustering failed due to inconsistent commit metadata : " + clusteringCommitTime, ime);
     } catch (Exception e) {

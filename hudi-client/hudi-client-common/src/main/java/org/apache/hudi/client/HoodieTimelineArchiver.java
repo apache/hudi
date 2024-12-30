@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantWriter;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -336,7 +337,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         .setCandidate(compactCandidate)
         .setMergedArchiveFileName(compactedArchiveFileName)
         .build();
-    Option<byte[]> content = TimelineMetadataUtils.serializeAvroMetadata(plan, HoodieMergeArchiveFilePlan.class);
+    Option<HoodieInstantWriter> content = TimelineMetadataUtils.getInstantWriter(plan);
     // building merge archive files plan.
     FileIOUtils.createFileInPath(metaClient.getFs(), planPath, content);
     LOG.info("Success to build archive merge plan");

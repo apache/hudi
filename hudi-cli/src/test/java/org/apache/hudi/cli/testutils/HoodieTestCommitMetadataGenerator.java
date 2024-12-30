@@ -22,17 +22,17 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstantWriter;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -90,8 +90,7 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
               generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, true);
-      String content = commitMetadata.toJsonString();
-      createFileWithMetadata(basePath, configuration, name, content);
+      createFileWithMetadata(basePath, configuration, name, commitMetadata);
     }
   }
 
@@ -106,15 +105,14 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
           generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, setDefaultFileId);
-      String content = commitMetadata.toJsonString();
-      createFileWithMetadata(basePath, configuration, name, content);
+      createFileWithMetadata(basePath, configuration, name, commitMetadata);
     }
   }
 
-  static void createFileWithMetadata(String basePath, Configuration configuration, String name, String content) throws IOException {
+  static void createFileWithMetadata(String basePath, Configuration configuration, String name, HoodieInstantWriter writer) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
-    try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-      os.writeBytes(new String(content.getBytes(StandardCharsets.UTF_8)));
+    try (OutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+      writer.writeToStream(os);
     }
   }
 

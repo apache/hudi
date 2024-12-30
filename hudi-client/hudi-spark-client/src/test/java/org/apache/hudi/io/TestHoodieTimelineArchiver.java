@@ -77,7 +77,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -432,8 +431,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       metadataWriter.performTableServices(Option.of(instantTime));
       metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
-          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime), Option.of(commitMeta));
     } else {
       commitMeta = generateCommitMetadata(instantTime, new HashMap<>());
     }
@@ -650,7 +648,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     archiver.buildArchiveMergePlan(candidateFiles, plan, ".commits_.archive.3_1-0-1");
     String s = "Dummy Content";
     // stain the current merge plan file.
-    FileIOUtils.createFileInPath(metaClient.getFs(), plan, Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), plan, s.getBytes());
 
     // check that damaged plan file will not block archived timeline loading.
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
@@ -672,7 +670,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // if there are damaged archive files and damaged plan, hoodie need throw ioe while loading archived timeline.
     Path damagedFile = new Path(metaClient.getArchivePath(), ".commits_.archive.300_1-0-1");
-    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, s.getBytes());
 
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
@@ -707,7 +705,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     String s = "Dummy Content";
     // stain the current merged archive file.
-    FileIOUtils.createFileInPath(metaClient.getFs(), writer.getLogFile().getPath(), Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), writer.getLogFile().getPath(), s.getBytes());
 
     // do another archive actions with merge small archive files.
     for (int i = 1; i < 10; i++) {
@@ -725,7 +723,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     // if there are a damaged merged archive files and other common damaged archive file.
     // hoodie need throw ioe while loading archived timeline because of parsing the damaged archive file.
     Path damagedFile = new Path(metaClient.getArchivePath(), ".commits_.archive.300_1-0-1");
-    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, s.getBytes());
 
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
@@ -794,7 +792,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     Path plan = new Path(metaClient.getArchivePath(), HoodieArchivedTimeline.MERGE_ARCHIVE_PLAN_NAME);
     String s = "Dummy Content";
     // stain the current merge plan file.
-    FileIOUtils.createFileInPath(metaClient.getFs(), plan, Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), plan, s.getBytes());
 
     // check that damaged plan file will not block archived timeline loading.
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
@@ -803,7 +801,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // if there are damaged archive files and damaged plan, hoodie need throw ioe while loading archived timeline.
     Path damagedFile = new Path(metaClient.getArchivePath(), ".commits_.archive.300_1-0-1");
-    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, s.getBytes());
 
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
@@ -922,7 +920,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     String s = "Dummy Content";
     // stain the current merged archive file.
-    FileIOUtils.createFileInPath(metaClient.getFs(), writer.getLogFile().getPath(), Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), writer.getLogFile().getPath(), s.getBytes());
 
     // if there's only a damaged merged archive file, we need to ignore the exception while reading this damaged file.
     HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);
@@ -933,7 +931,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     // if there are a damaged merged archive files and other common damaged archive file.
     // hoodie need throw ioe while loading archived timeline because of parsing the damaged archive file.
     Path damagedFile = new Path(metaClient.getArchivePath(), ".commits_.archive.300_1-0-1");
-    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, s.getBytes());
 
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }

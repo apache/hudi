@@ -470,14 +470,14 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addRequestedCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
     HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+        TimelineMetadataUtils.getInstantWriter(compactionPlan));
     return addRequestedCompaction(instantTime);
   }
 
   public HoodieTestTable addRequestedLogCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
     HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToLogCompactionRequested(compactionInstant,
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+        TimelineMetadataUtils.getInstantWriter(compactionPlan));
     return addRequestedCompaction(instantTime);
   }
 

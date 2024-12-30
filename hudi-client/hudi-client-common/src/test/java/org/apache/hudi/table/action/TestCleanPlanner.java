@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -58,7 +59,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.platform.commons.util.ReflectionUtils;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -552,54 +552,41 @@ public class TestCleanPlanner {
   }
 
   private static Option<byte[]> getSavepointBytes(String partition, List<String> paths) {
-    try {
-      Map<String, HoodieSavepointPartitionMetadata> partitionMetadata = new HashMap<>();
-      List<String> fileNames = paths.stream().map(path -> path.substring(path.lastIndexOf("/") + 1)).collect(Collectors.toList());
-      partitionMetadata.put(partition, new HoodieSavepointPartitionMetadata(partition, fileNames));
-      HoodieSavepointMetadata savepointMetadata =
-          new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1);
-      return TimelineMetadataUtils.serializeSavepointMetadata(savepointMetadata);
-    } catch (IOException ex) {
-      throw new UncheckedIOException(ex);
-    }
+    Map<String, HoodieSavepointPartitionMetadata> partitionMetadata = new HashMap<>();
+    List<String> fileNames = paths.stream().map(path -> path.substring(path.lastIndexOf("/") + 1)).collect(Collectors.toList());
+    partitionMetadata.put(partition, new HoodieSavepointPartitionMetadata(partition, fileNames));
+    HoodieSavepointMetadata savepointMetadata =
+        new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1);
+    return TimelineMetadataUtils.getInstantWriter(savepointMetadata).map(Transformations::writeInstantContentToBytes);
   }
 
   private static Pair<HoodieCleanMetadata, Option<byte[]>> getCleanCommitMetadata(List<String> partitions, String instantTime, String earliestCommitToRetain,
                                                                                   String lastCompletedTime, Set<String> savepointsToTrack, Option<String> earliestCommitToNotArchive) {
-    try {
-      Map<String, HoodieCleanPartitionMetadata> partitionMetadata = new HashMap<>();
-      partitions.forEach(partition -> partitionMetadata.put(partition, new HoodieCleanPartitionMetadata(partition, HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(),
-          Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false)));
-      Map<String, String> extraMetadata = new HashMap<>();
-      if (!savepointsToTrack.isEmpty()) {
-        extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointsToTrack.stream().collect(Collectors.joining(",")));
-        if (earliestCommitToNotArchive.isPresent()) {
-          extraMetadata.put(EARLIEST_COMMIT_TO_NOT_ARCHIVE, earliestCommitToNotArchive.get());
-        }
+    Map<String, HoodieCleanPartitionMetadata> partitionMetadata = new HashMap<>();
+    partitions.forEach(partition -> partitionMetadata.put(partition, new HoodieCleanPartitionMetadata(partition, HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(),
+        Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false)));
+    Map<String, String> extraMetadata = new HashMap<>();
+    if (!savepointsToTrack.isEmpty()) {
+      extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointsToTrack.stream().collect(Collectors.joining(",")));
+      if (earliestCommitToNotArchive.isPresent()) {
+        extraMetadata.put(EARLIEST_COMMIT_TO_NOT_ARCHIVE, earliestCommitToNotArchive.get());
       }
-      HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(instantTime, 100L, partitionMetadata.isEmpty() ? 0 : 10, earliestCommitToRetain, lastCompletedTime, partitionMetadata,
-          CLEAN_METADATA_VERSION_2, Collections.emptyMap(), extraMetadata.isEmpty() ? null : extraMetadata);
-      return Pair.of(cleanMetadata, TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
-    } catch (IOException ex) {
-      throw new UncheckedIOException(ex);
     }
+    HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(instantTime, 100L, partitionMetadata.isEmpty() ? 0 : 10, earliestCommitToRetain, lastCompletedTime, partitionMetadata,
+        CLEAN_METADATA_VERSION_2, Collections.emptyMap(), extraMetadata.isEmpty() ? null : extraMetadata);
+    return Pair.of(cleanMetadata, TimelineMetadataUtils.getInstantWriter(cleanMetadata).map(Transformations::writeInstantContentToBytes));
   }
 
   private static Pair<HoodieSavepointMetadata, Option<byte[]>> getSavepointMetadata(List<String> partitions) {
-    try {
-      Map<String, HoodieSavepointPartitionMetadata> partitionMetadata = new HashMap<>();
-      partitions.forEach(partition -> partitionMetadata.put(partition, new HoodieSavepointPartitionMetadata(partition, Collections.emptyList())));
-      HoodieSavepointMetadata savepointMetadata =
-          new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1);
-      return Pair.of(savepointMetadata, TimelineMetadataUtils.serializeSavepointMetadata(savepointMetadata));
-    } catch (IOException ex) {
-      throw new UncheckedIOException(ex);
-    }
+    Map<String, HoodieSavepointPartitionMetadata> partitionMetadata = new HashMap<>();
+    partitions.forEach(partition -> partitionMetadata.put(partition, new HoodieSavepointPartitionMetadata(partition, Collections.emptyList())));
+    HoodieSavepointMetadata savepointMetadata =
+        new HoodieSavepointMetadata("user", 1L, "comments", partitionMetadata, 1);
+    return Pair.of(savepointMetadata, TimelineMetadataUtils.getInstantWriter(savepointMetadata).map(Transformations::writeInstantContentToBytes));
   }
 
   private static void mockLastCleanCommit(HoodieTable hoodieTable, String timestamp, String earliestCommitToRetain, HoodieActiveTimeline activeTimeline,
-                                          Pair<HoodieCleanMetadata, Option<byte[]>> cleanMetadata)
-      throws IOException {
+                                          Pair<HoodieCleanMetadata, Option<byte[]>> cleanMetadata) {
     HoodieDefaultTimeline cleanTimeline = mock(HoodieDefaultTimeline.class);
     when(activeTimeline.getCleanerTimeline()).thenReturn(cleanTimeline);
     when(hoodieTable.getCleanTimeline()).thenReturn(cleanTimeline);

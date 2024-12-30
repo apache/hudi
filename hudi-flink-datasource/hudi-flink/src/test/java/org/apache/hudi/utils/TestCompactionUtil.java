@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
@@ -177,13 +176,9 @@ public class TestCompactionUtil {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     HoodieInstant compactionInstant =
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-    try {
-      metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-          TimelineMetadataUtils.serializeCompactionPlan(plan));
-      table.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Exception scheduling compaction", ioe);
-    }
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
+        TimelineMetadataUtils.getInstantWriter(plan));
+    table.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
     metaClient.reloadActiveTimeline();
     return instantTime;
   }

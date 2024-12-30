@@ -69,7 +69,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -336,8 +335,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       }
       writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
       table.doValidateCommitMetadataConsistency(actionType, instantTime, result.getWriteStats().get(), metrics);
-      activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+      activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime), Option.of(metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
     } catch (HoodieInconsistentMetadataException ime) {

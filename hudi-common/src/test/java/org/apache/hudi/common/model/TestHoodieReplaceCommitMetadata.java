@@ -19,7 +19,12 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
@@ -28,11 +33,12 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.hudi.common.model.TestHoodieCommitMetadata.verifyMetadataFieldNames;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests {@link HoodieReplaceCommitMetadata}.
  */
-public class TestHoodieReplaceCommitMetadata {
+class TestHoodieReplaceCommitMetadata extends HoodieCommonTestHarness {
 
   private static final List<String> EXPECTED_FIELD_NAMES = Arrays.asList(
       "partitionToWriteStats", "partitionToReplaceFileIds", "compacted", "extraMetadata", "operationType");
@@ -46,5 +52,35 @@ public class TestHoodieReplaceCommitMetadata {
       commitMetadata.addReplaceFileId(stat.getPartitionPath(), stat.getFileId());
     });
     verifyMetadataFieldNames(commitMetadata, EXPECTED_FIELD_NAMES);
+  }
+
+  @Test
+  void handleNullPartitionInSerialization() throws Exception {
+    initMetaClient();
+    HoodieInstant commitInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "1");
+    HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(commitInstant);
+    timeline.transitionRequestedToInflight(commitInstant, Option.empty());
+    HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
+    HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    HoodieWriteStat writeStat1 = new HoodieWriteStat();
+    writeStat1.setPath("/path1");
+    writeStat1.setPrevCommit("001");
+    HoodieWriteStat writeStat2 = new HoodieWriteStat();
+    writeStat2.setPath("/path2");
+    writeStat2.setPrevCommit("001");
+    commitMetadata.addWriteStat(null, writeStat1);
+    String partition1 = "partition1";
+    commitMetadata.addWriteStat(partition1, writeStat2);
+    commitMetadata.addReplaceFileId(null, "fileId1");
+    commitMetadata.addReplaceFileId(partition1, "fileId2");
+    timeline.saveAsComplete(completeCommitInstant, Option.of(commitMetadata));
+
+    HoodieReplaceCommitMetadata expected = new HoodieReplaceCommitMetadata();
+    expected.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    expected.addWriteStat(partition1, writeStat2);
+    expected.addReplaceFileId(partition1, "fileId2");
+    assertEquals(expected, timeline.deserializeInstantContent(timeline.reload().lastInstant().get(), HoodieReplaceCommitMetadata.class));
   }
 }

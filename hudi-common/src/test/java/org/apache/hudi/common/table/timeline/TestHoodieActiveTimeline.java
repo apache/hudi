@@ -146,7 +146,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             .setFileSystemRetryConfig(metaClient.getFileSystemRetryConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(VERSION_0))).build());
     // Old Timeline writes both to aux and timeline folder
-    oldTimeline.saveToCompactionRequested(instant6, Option.of(dummy));
+    oldTimeline.saveToCompactionRequested(instant6, Option.of(outputStream -> outputStream.write(dummy)));
     // Now use the latest timeline version
     timeline = timeline.reload();
     // Ensure aux file is present
@@ -228,7 +228,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
       byte[] data = "commit".getBytes(StandardCharsets.UTF_8);
       timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(),
-          instant1.getTimestamp()), Option.of(data));
+          instant1.getTimestamp()), Option.of(outputStream -> outputStream.write(data)));
 
       timeline = timeline.reload();
 
@@ -795,8 +795,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.createNewInstant(commitInstant);
     timeline.transitionRequestedToInflight(commitInstant, Option.empty());
     HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
-    timeline.saveAsComplete(completeCommitInstant,
-        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    timeline.saveAsComplete(completeCommitInstant, Option.of(commitMetadata));
     HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
@@ -807,7 +806,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     cleanerPlan.setPolicy("policy");
     cleanerPlan.setVersion(1);
     cleanerPlan.setPartitionsToBeDeleted(Collections.singletonList("partition1"));
-    timeline.saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+    timeline.saveToCleanRequested(cleanInstant, TimelineMetadataUtils.getInstantWriter(cleanerPlan));
 
     assertEquals(cleanerPlan, timeline.deserializeInstantContent(cleanInstant, HoodieCleanerPlan.class));
 
@@ -827,7 +826,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
     // save a valid object that does not match the expected schema
     timeline.saveAsComplete(completeCommitInstant,
-        Option.of("{\"partitionToWriteStats\":\"not a map\"}".getBytes(StandardCharsets.UTF_8)));
+        Option.of(outputStream -> outputStream.write("{\"partitionToWriteStats\":\"not a map\"}".getBytes(StandardCharsets.UTF_8))));
     HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
@@ -841,7 +840,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.createNewInstant(commitInstant);
     timeline.transitionRequestedToInflight(commitInstant, Option.empty());
     HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
-    timeline.saveAsComplete(completeCommitInstant, Option.of(new byte[0]));
+    timeline.saveAsComplete(completeCommitInstant, Option.of(outputStream -> outputStream.write(new byte[0])));
     HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
@@ -852,7 +851,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.createNewInstant(replaceCommitInstant);
     timeline.transitionRequestedToInflight(replaceCommitInstant, Option.empty());
     HoodieInstant completeReplaceCommitInstant = new HoodieInstant(true, replaceCommitInstant.getAction(), replaceCommitInstant.getTimestamp());
-    timeline.saveAsComplete(completeReplaceCommitInstant, Option.of(new byte[0]));
+    timeline.saveAsComplete(completeReplaceCommitInstant, Option.of(outputStream -> outputStream.write(new byte[0])));
     HoodieActiveTimeline timelineAfterSecondInstant = timeline.reload();
 
     HoodieInstant completedReplaceCommitInstant = timelineAfterSecondInstant.lastInstant().get();

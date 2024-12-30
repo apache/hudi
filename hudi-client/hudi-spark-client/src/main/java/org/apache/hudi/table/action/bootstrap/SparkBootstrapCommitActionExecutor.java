@@ -68,7 +68,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -248,10 +247,9 @@ public class SparkBootstrapCommitActionExecutor<T>
     writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
 
     try {
-      activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+      activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime), Option.of(metadata));
       LOG.info("Committed " + instantTime);
-    } catch (IOException e) {
+    } catch (HoodieIOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     }

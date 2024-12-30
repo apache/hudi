@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieInstantWriter;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -26,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -34,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -49,10 +52,11 @@ import java.util.stream.Collectors;
  * All the metadata that gets stored along with a commit.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class HoodieCommitMetadata implements Serializable {
+public class HoodieCommitMetadata implements Serializable, HoodieInstantWriter {
 
   public static final String SCHEMA_KEY = "schema";
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCommitMetadata.class);
+  private static final ObjectWriter WRITER = JsonUtils.getObjectMapper().writerFor(HoodieCommitMetadata.class).withDefaultPrettyPrinter();
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;
 
@@ -222,20 +226,13 @@ public class HoodieCommitMetadata implements Serializable {
     return fileIdToFileStatus;
   }
 
-  public String toJsonString() throws IOException {
+  @Override
+  public void writeToStream(OutputStream outputStream) throws IOException {
     if (partitionToWriteStats.containsKey(null)) {
-      LOG.info("partition path is null for " + partitionToWriteStats.get(null));
+      LOG.info("partition path is null for {}", partitionToWriteStats.get(null));
       partitionToWriteStats.remove(null);
     }
-    return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
-  }
-
-  public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
-    if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file (no data or somethings bad happen).
-      return clazz.newInstance();
-    }
-    return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
+    WRITER.writeValue(outputStream, this);
   }
 
   /**

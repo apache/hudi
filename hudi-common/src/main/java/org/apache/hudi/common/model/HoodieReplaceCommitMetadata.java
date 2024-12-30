@@ -21,10 +21,12 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.util.JsonUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +38,7 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieReplaceCommitMetadata.class);
+  private static final ObjectWriter WRITER = JsonUtils.getObjectMapper().writerFor(HoodieReplaceCommitMetadata.class).withDefaultPrettyPrinter();
   protected Map<String, List<String>> partitionToReplaceFileIds;
 
   // for ser/deser
@@ -67,16 +70,17 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     return partitionToReplaceFileIds;
   }
 
-  public String toJsonString() throws IOException {
+  @Override
+  public void writeToStream(OutputStream outputStream) throws IOException {
     if (partitionToWriteStats.containsKey(null)) {
-      LOG.info("partition path is null for " + partitionToWriteStats.get(null));
+      LOG.info("partition path is null for {}", partitionToWriteStats.get(null));
       partitionToWriteStats.remove(null);
     }
     if (partitionToReplaceFileIds.containsKey(null)) {
-      LOG.info("partition path is null for " + partitionToReplaceFileIds.get(null));
+      LOG.info("partition path is null for {}", partitionToReplaceFileIds.get(null));
       partitionToReplaceFileIds.remove(null);
     }
-    return JsonUtils.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
+    WRITER.writeValue(outputStream, this);
   }
 
   @Override

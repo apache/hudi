@@ -24,20 +24,20 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstantWriter;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -117,8 +117,7 @@ public class HoodieTestCommitGenerator {
     String commitFilename = HoodieTimeline.makeCommitFileName(instantTime);
     HoodieCommitMetadata commitMetadata =
         generateCommitMetadata(partitionPathToFileIdAndNameMap, Collections.emptyMap());
-    String content = commitMetadata.toJsonString();
-    createCommitFileWithMetadata(basePath, new Configuration(), commitFilename, content);
+    createCommitFileWithMetadata(basePath, new Configuration(), commitFilename, commitMetadata);
     for (String partitionPath : partitionPathToFileIdAndNameMap.keySet()) {
       partitionPathToFileIdAndNameMap.get(partitionPath)
           .forEach(fileInfo -> {
@@ -160,10 +159,10 @@ public class HoodieTestCommitGenerator {
 
   public static void createCommitFileWithMetadata(
       String basePath, Configuration configuration,
-      String filename, String content) throws IOException {
+      String filename, HoodieInstantWriter writer) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + filename);
-    try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-      os.writeBytes(new String(content.getBytes(StandardCharsets.UTF_8)));
+    try (OutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+      writer.writeToStream(os);
     }
   }
 

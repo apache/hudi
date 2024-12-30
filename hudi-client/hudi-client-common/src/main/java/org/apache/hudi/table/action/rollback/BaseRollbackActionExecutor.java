@@ -265,11 +265,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       // to complete in the data table timeline
       if (!skipTimelinePublish) {
         table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
-            TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
+            TimelineMetadataUtils.getInstantWriter(rollbackMetadata));
         LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
       }
-    } catch (IOException e) {
-      throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     } finally {
       if (enableLocking) {
         this.txnManager.endTransaction(Option.of(inflightInstant));

@@ -70,7 +70,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testClusteringPlanMultipleInstants() throws Exception {
+  public void testClusteringPlanMultipleInstants() {
     String partitionPath1 = "partition1";
     List<String> fileIds1 = new ArrayList<>();
     fileIds1.add(UUID.randomUUID().toString());
@@ -125,7 +125,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
   // Verify that getClusteringPlan fetches content from corresponding requested file.
   @Disabled("Will fail due to avro issue AVRO-3789. This is fixed in avro 1.11.3")
   @Test
-  public void testClusteringPlanInflight() throws Exception {
+  public void testClusteringPlanInflight() {
     String partitionPath1 = "partition1";
     List<String> fileIds1 = new ArrayList<>();
     fileIds1.add(UUID.randomUUID().toString());
@@ -180,12 +180,12 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
         .setFilesToBeDeletedPerPartition(new HashMap<>())
         .setVersion(CleanPlanV2MigrationHandler.VERSION)
         .build();
-    metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant4, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan1));
+    metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant4, TimelineMetadataUtils.getInstantWriter(cleanerPlan1));
     HoodieInstant inflightInstant4 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant4, Option.empty());
     HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(cleanTime1, 1L, 1,
         completedInstant3.getTimestamp(), "", Collections.emptyMap(), 0, Collections.emptyMap(), Collections.emptyMap());
     metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant4,
-        TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
+        TimelineMetadataUtils.getInstantWriter(cleanMetadata));
     metaClient.reloadActiveTimeline();
     actual = ClusteringUtils.getOldestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
     assertEquals(clusterTime3, actual.get().getTimestamp(),
@@ -208,12 +208,12 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     HoodieCleanerPlan cleanerPlan1 = new HoodieCleanerPlan(null, clusterTime1,
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name(), Collections.emptyMap(),
         CleanPlanV2MigrationHandler.VERSION, Collections.emptyMap(), Collections.emptyList(), Collections.EMPTY_MAP);
-    metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant2, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan1));
+    metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant2, TimelineMetadataUtils.getInstantWriter(cleanerPlan1));
     HoodieInstant inflightInstant2 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant2, Option.empty());
     HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(cleanTime1, 1L, 1,
         "", "", Collections.emptyMap(), 0, Collections.emptyMap(), Collections.emptyMap());
     metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant2,
-        TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
+        TimelineMetadataUtils.getInstantWriter(cleanMetadata));
     metaClient.reloadActiveTimeline();
 
     List<String> fileIds2 = new ArrayList<>();
@@ -237,15 +237,15 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     }
   }
 
-  private HoodieInstant createRequestedReplaceInstantNotClustering(String instantTime) throws IOException {
+  private HoodieInstant createRequestedReplaceInstantNotClustering(String instantTime) {
     HoodieInstant newRequestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setOperationType(WriteOperationType.UNKNOWN.name()).build();
-    metaClient.getActiveTimeline().saveToPendingReplaceCommit(newRequestedInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+    metaClient.getActiveTimeline().saveToPendingReplaceCommit(newRequestedInstant, TimelineMetadataUtils.getInstantWriter(requestedReplaceMetadata));
     return newRequestedInstant;
   }
 
-  private HoodieInstant createRequestedReplaceInstant(String partitionPath1, String clusterTime, List<String>... fileIds) throws IOException {
+  private HoodieInstant createRequestedReplaceInstant(String partitionPath1, String clusterTime, List<String>... fileIds) {
     List<FileSlice>[] fileSliceGroups = new List[fileIds.length];
     for (int i = 0; i < fileIds.length; i++) {
       fileSliceGroups[i] = fileIds[i].stream().map(fileId -> generateFileSlice(partitionPath1, fileId, "0")).collect(Collectors.toList());
@@ -257,7 +257,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+    metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant, TimelineMetadataUtils.getInstantWriter(requestedReplaceMetadata));
     return clusteringInstant;
   }
 

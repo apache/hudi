@@ -38,7 +38,6 @@ import org.apache.hudi.table.action.BaseActionExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -105,14 +104,14 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
             .collect(Collectors.toList());
         HoodieIndexPlan indexPlan = new HoodieIndexPlan(LATEST_INDEX_PLAN_VERSION, indexPartitionInfos);
         // update data timeline with requested instant
-        table.getActiveTimeline().saveToPendingIndexAction(indexInstant, TimelineMetadataUtils.serializeIndexPlan(indexPlan));
+        table.getActiveTimeline().saveToPendingIndexAction(indexInstant, TimelineMetadataUtils.getInstantWriter(indexPlan));
         return Option.of(indexPlan);
       }
-    } catch (IOException e) {
+    } catch (HoodieIOException e) {
       LOG.error("Could not initialize file groups", e);
       // abort gracefully
       abort(indexInstant);
-      throw new HoodieIOException(e.getMessage(), e);
+      throw e;
     } finally {
       this.txnManager.endTransaction(Option.of(indexInstant));
     }

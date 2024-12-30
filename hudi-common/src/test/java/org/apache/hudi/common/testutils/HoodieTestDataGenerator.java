@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.table.timeline.HoodieInstantWriter;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.AvroOrcUtils;
@@ -62,7 +63,6 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -603,15 +603,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
-  private static void createMetadataFile(String f, String basePath, Configuration configuration, HoodieCommitMetadata commitMetadata) {
-    try {
-      createMetadataFile(f, basePath, configuration, commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
-    } catch (IOException e) {
-      throw new HoodieIOException(e.getMessage(), e);
-    }
-  }
-
-  private static void createMetadataFile(String f, String basePath, Configuration configuration, byte[] content) {
+  private static void createMetadataFile(String f, String basePath, Configuration configuration, HoodieInstantWriter writer) {
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
     FSDataOutputStream os = null;
@@ -619,7 +611,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       FileSystem fs = FSUtils.getFs(basePath, configuration);
       os = fs.create(commitFile, true);
       // Write empty commit metadata
-      os.write(content);
+      writer.writeToStream(os);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {
@@ -686,7 +678,8 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
       // Write empty commit metadata
-      os.write(TimelineMetadataUtils.serializeCompactionPlan(workload).get());
+      HoodieInstantWriter writer = TimelineMetadataUtils.getInstantWriter(workload).get();
+      writer.writeToStream(os);
     }
   }
 
@@ -698,7 +691,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
       // Write empty commit metadata
-      os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+      commitMetadata.writeToStream(os);
     }
   }
 

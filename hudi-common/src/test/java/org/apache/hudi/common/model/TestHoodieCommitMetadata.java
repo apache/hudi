@@ -18,14 +18,20 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.JsonUtils;
+import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests hoodie commit metadata {@link HoodieCommitMetadata}.
  */
-public class TestHoodieCommitMetadata {
+public class TestHoodieCommitMetadata extends HoodieCommonTestHarness {
 
   private static final List<String> EXPECTED_FIELD_NAMES = Arrays.asList(
       "partitionToWriteStats", "compacted", "extraMetadata", "operationType");
@@ -45,7 +51,7 @@ public class TestHoodieCommitMetadata {
   public static void verifyMetadataFieldNames(
       HoodieCommitMetadata commitMetadata, List<String> expectedFieldNameList)
       throws IOException {
-    String serializedCommitMetadata = commitMetadata.toJsonString();
+    String serializedCommitMetadata = JsonUtils.getObjectMapper().writeValueAsString(commitMetadata);
     List<String> actualFieldNameList = CollectionUtils.toStream(
             JsonUtils.getObjectMapper().readTree(serializedCommitMetadata).fieldNames())
         .collect(Collectors.toList());
@@ -74,9 +80,16 @@ public class TestHoodieCommitMetadata {
     assertTrue(commitMetadata.getTotalScanTime() > 0);
     assertTrue(commitMetadata.getTotalLogFilesCompacted() > 0);
 
-    String serializedCommitMetadata = commitMetadata.toJsonString();
-    HoodieCommitMetadata metadata =
-        HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
+    // Serialize and deserialize
+    initMetaClient();
+    HoodieInstant commitInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(commitInstant);
+    timeline.transitionRequestedToInflight(commitInstant, Option.empty());
+    HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
+    timeline.saveAsComplete(completeCommitInstant, Option.of(commitMetadata));
+
+    HoodieCommitMetadata metadata = timeline.deserializeInstantContent(timeline.reload().lastInstant().get(), HoodieCommitMetadata.class);
     assertTrue(commitMetadata.getTotalCreateTime() > 0);
     assertTrue(commitMetadata.getTotalUpsertTime() > 0);
     assertTrue(commitMetadata.getTotalScanTime() > 0);
@@ -85,11 +98,19 @@ public class TestHoodieCommitMetadata {
 
   @Test
   public void testCompatibilityWithoutOperationType() throws Exception {
+    initMetaClient();
+    HoodieInstant commitInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(commitInstant);
+    timeline.transitionRequestedToInflight(commitInstant, Option.empty());
+    HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
+
     // test compatibility of old version file
     String serializedCommitMetadata =
         FileIOUtils.readAsUTFString(TestHoodieCommitMetadata.class.getResourceAsStream("/old-version.commit"));
-    HoodieCommitMetadata metadata =
-        HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
+    timeline.saveAsComplete(completeCommitInstant, Option.of(outputStream -> outputStream.write(serializedCommitMetadata.getBytes(StandardCharsets.UTF_8))));
+
+    HoodieCommitMetadata metadata = timeline.deserializeInstantContent(timeline.reload().lastInstant().get(), HoodieCommitMetadata.class);
     assertSame(metadata.getOperationType(), WriteOperationType.UNKNOWN);
 
     // test operate type
@@ -97,10 +118,39 @@ public class TestHoodieCommitMetadata {
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     assertSame(commitMetadata.getOperationType(), WriteOperationType.INSERT);
 
+    HoodieInstant commitInstant2 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "2");
+    timeline.createNewInstant(commitInstant2);
+    timeline.transitionRequestedToInflight(commitInstant2, Option.empty());
+    HoodieInstant completeCommitInstant2 = new HoodieInstant(true, commitInstant2.getAction(), commitInstant2.getTimestamp());
     // test serialized
-    serializedCommitMetadata = commitMetadata.toJsonString();
-    metadata =
-        HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
+    timeline.saveAsComplete(completeCommitInstant2, Option.of(commitMetadata));
+    metadata = timeline.deserializeInstantContent(timeline.reload().lastInstant().get(), HoodieCommitMetadata.class);
     assertSame(metadata.getOperationType(), WriteOperationType.INSERT);
+  }
+
+  @Test
+  void handleNullPartitionInSerialization() throws Exception {
+    initMetaClient();
+    HoodieInstant commitInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(commitInstant);
+    timeline.transitionRequestedToInflight(commitInstant, Option.empty());
+    HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.UPSERT);
+    HoodieWriteStat writeStat1 = new HoodieWriteStat();
+    writeStat1.setPath("/path1");
+    writeStat1.setPrevCommit("001");
+    HoodieWriteStat writeStat2 = new HoodieWriteStat();
+    writeStat2.setPath("/path2");
+    writeStat2.setPrevCommit("001");
+    commitMetadata.addWriteStat(null, writeStat1);
+    commitMetadata.addWriteStat("partition1", writeStat2);
+    timeline.saveAsComplete(completeCommitInstant, Option.of(commitMetadata));
+
+    HoodieCommitMetadata expected = new HoodieCommitMetadata();
+    expected.setOperationType(WriteOperationType.UPSERT);
+    expected.addWriteStat("partition1", writeStat2);
+    assertEquals(expected, timeline.deserializeInstantContent(timeline.reload().lastInstant().get(), HoodieCommitMetadata.class));
   }
 }

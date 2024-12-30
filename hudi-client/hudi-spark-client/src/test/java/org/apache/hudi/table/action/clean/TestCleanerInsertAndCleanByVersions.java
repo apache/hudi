@@ -168,7 +168,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
       String compactionTime = instantTimes.get(0);
       table.getActiveTimeline().saveToCompactionRequested(
           new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionTime),
-          TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+          TimelineMetadataUtils.getInstantWriter(compactionPlan));
 
       instantTimes = instantTimes.subList(1, instantTimes.size());
       // Keep doing some writes and clean inline. Make sure we have expected number of files

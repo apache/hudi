@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
@@ -36,7 +35,6 @@ import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 
@@ -92,18 +90,14 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
     if (planOption.isPresent()) {
       HoodieInstant clusteringInstant =
           new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
-      try {
-        HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-            .setOperationType(WriteOperationType.CLUSTER.name())
-            .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
-            .setClusteringPlan(planOption.get())
-            .build();
-        table.validateForLatestTimestamp(clusteringInstant.getTimestamp());
-        table.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
-            TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
-      } catch (IOException ioe) {
-        throw new HoodieIOException("Exception scheduling clustering", ioe);
-      }
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+          .setOperationType(WriteOperationType.CLUSTER.name())
+          .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
+          .setClusteringPlan(planOption.get())
+          .build();
+      table.validateForLatestTimestamp(clusteringInstant.getTimestamp());
+      table.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
+          TimelineMetadataUtils.getInstantWriter(requestedReplaceMetadata));
     }
 
     return planOption;

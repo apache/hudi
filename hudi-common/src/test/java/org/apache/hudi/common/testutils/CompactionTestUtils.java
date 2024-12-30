@@ -135,10 +135,10 @@ public class CompactionTestUtils {
   }
 
   public static void scheduleCompaction(HoodieTableMetaClient metaClient, String instantTime,
-      HoodieCompactionPlan compactionPlan) throws IOException {
+      HoodieCompactionPlan compactionPlan) {
     metaClient.getActiveTimeline().saveToCompactionRequested(
         new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+        TimelineMetadataUtils.getInstantWriter(compactionPlan));
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) {
@@ -150,7 +150,7 @@ public class CompactionTestUtils {
   }
 
   public static void scheduleInflightCompaction(HoodieTableMetaClient metaClient, String instantTime,
-      HoodieCompactionPlan compactionPlan) throws IOException {
+      HoodieCompactionPlan compactionPlan) {
     scheduleCompaction(metaClient, instantTime, compactionPlan);
     metaClient.getActiveTimeline()
         .transitionCompactionRequestedToInflight(new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime));

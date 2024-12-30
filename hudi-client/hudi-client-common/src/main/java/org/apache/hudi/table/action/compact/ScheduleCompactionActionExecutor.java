@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
@@ -116,20 +115,16 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     if (plan != null && nonEmpty(plan.getOperations())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
       table.validateForLatestTimestamp(instantTime);
-      try {
-        if (operationType.equals(WriteOperationType.COMPACT)) {
-          HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
-              HoodieTimeline.COMPACTION_ACTION, instantTime);
-          table.getActiveTimeline().saveToCompactionRequestedOptionallyAuxFolder(compactionInstant,
-              TimelineMetadataUtils.serializeCompactionPlan(plan), config.doWriteCompactionPlanToAuxFolder());
-        } else {
-          HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
-              HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
-          table.getActiveTimeline().saveToLogCompactionRequested(logCompactionInstant,
-              TimelineMetadataUtils.serializeCompactionPlan(plan), config.doWriteCompactionPlanToAuxFolder());
-        }
-      } catch (IOException ioe) {
-        throw new HoodieIOException("Exception scheduling compaction", ioe);
+      if (operationType.equals(WriteOperationType.COMPACT)) {
+        HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
+            HoodieTimeline.COMPACTION_ACTION, instantTime);
+        table.getActiveTimeline().saveToCompactionRequestedOptionallyAuxFolder(compactionInstant,
+            TimelineMetadataUtils.getInstantWriter(plan), config.doWriteCompactionPlanToAuxFolder());
+      } else {
+        HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
+            HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
+        table.getActiveTimeline().saveToLogCompactionRequested(logCompactionInstant,
+            TimelineMetadataUtils.getInstantWriter(plan), config.doWriteCompactionPlanToAuxFolder());
       }
       option = Option.of(plan);
     }

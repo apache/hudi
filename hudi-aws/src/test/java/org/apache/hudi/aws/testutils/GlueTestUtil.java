@@ -29,14 +29,13 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.MessageTypeParser;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.time.Instant;
 
@@ -124,11 +123,10 @@ public class GlueTestUtil {
 
   private static void createMetaFile(String basePath, String fileName, HoodieCommitMetadata metadata)
       throws IOException {
-    byte[] bytes = metadata.toJsonString().getBytes(StandardCharsets.UTF_8);
     Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
-    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
+    try (OutputStream fsout = fileSystem.create(fullPath, true)) {
+      metadata.writeToStream(fsout);
+    }
   }
 
   public static HoodieTableMetaClient getMetaClient() {

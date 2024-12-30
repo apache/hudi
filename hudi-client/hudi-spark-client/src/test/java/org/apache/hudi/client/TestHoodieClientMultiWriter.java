@@ -76,7 +76,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -231,7 +230,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   public void injectInstantWithSchema(
       String timestamp,
       String action,
-      String schemaAttrValue) throws Exception {
+      String schemaAttrValue) {
 
     HoodieInstant instantRequested =
         new HoodieInstant(HoodieInstant.State.REQUESTED, action, timestamp);
@@ -256,10 +255,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     timeline.transitionRequestedToInflight(instantRequested, Option.empty());
 
     // Save as complete with commit metadata
-    byte[] commitMetadataBytes = commitMetadata.toJsonString().getBytes();
     timeline.saveAsComplete(
         instantInflight,
-        Option.of(commitMetadataBytes));
+        Option.of(commitMetadata));
   }
 
   @ParameterizedTest
@@ -1182,15 +1180,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     return result;
   }
 
-  private static void startSchemaEvolutionTransaction(SparkRDDWriteClient client, String nextCommitTime2, HoodieTableType tableType) throws IOException {
+  private static void startSchemaEvolutionTransaction(SparkRDDWriteClient client, String nextCommitTime2, HoodieTableType tableType) {
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.UPSERT, tableType);
     client.startCommitWithTime(nextCommitTime2, commitActionType);
     client.preWrite(nextCommitTime2, WriteOperationType.UPSERT, client.createMetaClient(true));
     HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, commitActionType, nextCommitTime2);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.setOperationType(WriteOperationType.UPSERT);
-    client.createMetaClient(true).getActiveTimeline().transitionRequestedToInflight(
-        requested, Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    client.createMetaClient(true).getActiveTimeline().transitionRequestedToInflight(requested, Option.of(metadata));
   }
 
   private void createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,

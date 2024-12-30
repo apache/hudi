@@ -73,7 +73,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieActiveTimeline commitTimeline = deserializedMetaClient.getActiveTimeline();
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
-    commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
+    commitTimeline.saveAsComplete(instant, Option.of(outputStream -> outputStream.write("test-detail".getBytes())));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
     assertEquals(completedInstant, commitTimeline.getInstantsAsStream().findFirst().get(),
@@ -90,7 +90,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     activeTimeline.createNewInstant(instant);
-    activeTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
+    activeTimeline.saveAsComplete(instant, Option.of(outputStream -> outputStream.write("test-detail".getBytes())));
 
     // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
     activeTimeline = metaClient.getActiveTimeline();

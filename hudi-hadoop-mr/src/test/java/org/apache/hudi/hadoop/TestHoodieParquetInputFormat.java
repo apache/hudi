@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantWriter;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -66,7 +67,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
@@ -497,10 +497,9 @@ public class TestHoodieParquetInputFormat {
     writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
     File file = basePath.resolve(".hoodie").resolve(commitNumber + ".commit").toFile();
     file.createNewFile();
-    FileOutputStream fileOutputStream = new FileOutputStream(file);
-    fileOutputStream.write(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
-    fileOutputStream.flush();
-    fileOutputStream.close();
+    try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
+      commitMetadata.writeToStream(fileOutputStream);
+    }
   }
 
   private File createCompactionFile(java.nio.file.Path basePath, String commitTime)
@@ -508,14 +507,12 @@ public class TestHoodieParquetInputFormat {
     File file = basePath.resolve(".hoodie")
         .resolve(HoodieTimeline.makeRequestedCompactionFileName(commitTime)).toFile();
     assertTrue(file.createNewFile());
-    FileOutputStream os = new FileOutputStream(file);
-    try {
+    try (FileOutputStream os = new FileOutputStream(file)) {
       HoodieCompactionPlan compactionPlan = HoodieCompactionPlan.newBuilder().setVersion(2).build();
       // Write empty commit metadata
-      os.write(TimelineMetadataUtils.serializeCompactionPlan(compactionPlan).get());
+      HoodieInstantWriter writer = TimelineMetadataUtils.getInstantWriter(compactionPlan).get();
+      writer.writeToStream(os);
       return file;
-    } finally {
-      os.close();
     }
   }
 

@@ -87,7 +87,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     timeline.createNewInstant(hoodieInstant);
     byte[] writeContent = historySchemaStr.getBytes(StandardCharsets.UTF_8);
     timeline.transitionRequestedToInflight(hoodieInstant, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.getTimestamp()), Option.of(writeContent));
+    timeline.saveAsComplete(new HoodieInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.getTimestamp()), Option.of((outputStream) -> outputStream.write(writeContent)));
     LOG.info(String.format("persist history schema success on commit time: %s", instantTime));
   }
 

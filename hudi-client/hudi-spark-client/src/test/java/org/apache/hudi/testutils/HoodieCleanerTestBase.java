@@ -45,7 +45,6 @@ import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -227,8 +226,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
       metadataWriter.performTableServices(Option.of(instantTime));
       metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime), Option.of(commitMeta));
       metaClient = HoodieTableMetaClient.reload(metaClient);
     }
   }

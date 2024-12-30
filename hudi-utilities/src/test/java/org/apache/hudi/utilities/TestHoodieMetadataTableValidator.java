@@ -65,7 +65,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -296,8 +295,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     fs.copyFromLocalFile(new Path(basePath, writeStatToCopy.getPath()), new Path(basePath, newLogFilePath));
     // remove the existing instant and rewrite with the new metadata
     assertTrue(fs.delete(new Path(basePath, String.format(".hoodie/%s", instantToOverwrite.getFileName()))));
-    timeline.saveAsComplete(new HoodieInstant(HoodieInstant.State.INFLIGHT, instantToOverwrite.getAction(), instantToOverwrite.getTimestamp()),
-        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    timeline.saveAsComplete(new HoodieInstant(HoodieInstant.State.INFLIGHT, instantToOverwrite.getAction(), instantToOverwrite.getTimestamp()), Option.of(commitMetadata));
 
     for (int i = 0; i < 5; i++) {
       inserts.write().format("hudi").options(writeOptions)

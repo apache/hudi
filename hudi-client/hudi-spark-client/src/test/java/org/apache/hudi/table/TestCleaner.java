@@ -448,7 +448,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
           .setFilePathsToBeDeletedPerPartition(Collections.emptyMap())
           .build();
       final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, instantTime);
-      table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+      table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.getInstantWriter(cleanerPlan));
 
       table.getMetaClient().reloadActiveTimeline();
       // clean

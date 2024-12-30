@@ -178,7 +178,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       // Overwrite compaction plan with updated info
       metaClient.getActiveTimeline().saveToCompactionRequested(
           new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
-          TimelineMetadataUtils.serializeCompactionPlan(newPlan), true, config.doWriteCompactionPlanToAuxFolder());
+          TimelineMetadataUtils.getInstantWriter(newPlan), true, config.doWriteCompactionPlanToAuxFolder());
     }
     return res;
   }

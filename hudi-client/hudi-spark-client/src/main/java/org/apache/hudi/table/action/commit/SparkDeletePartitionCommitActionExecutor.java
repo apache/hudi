@@ -82,7 +82,7 @@ public class SparkDeletePartitionCommitActionExecutor<T>
             .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
             .build();
         table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant,
-            TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+            TimelineMetadataUtils.getInstantWriter(requestedReplaceMetadata));
       }
 
       this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),

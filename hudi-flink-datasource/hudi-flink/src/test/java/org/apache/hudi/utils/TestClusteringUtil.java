@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkTables;
@@ -127,13 +126,9 @@ public class TestClusteringUtil {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     HoodieInstant clusteringInstant =
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
-    try {
-      metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
-          TimelineMetadataUtils.serializeRequestedReplaceMetadata(metadata));
-      table.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringInstant, Option.empty());
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Exception scheduling clustering", ioe);
-    }
+    metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
+        TimelineMetadataUtils.getInstantWriter(metadata));
+    table.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringInstant, Option.empty());
     metaClient.reloadActiveTimeline();
     return instantTime;
   }

@@ -202,22 +202,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
   }
 
   public void createRequestedReplaceCommit(String instantTime, String actionType) {
-    try {
-      HoodieInstant instant = new HoodieInstant(State.REQUESTED, actionType, instantTime);
-      LOG.info("Creating a new instant " + instant);
-      // Create the request replace file
-      createFileInMetaPath(instant.getFileName(),
-              TimelineMetadataUtils.serializeRequestedReplaceMetadata(new HoodieRequestedReplaceMetadata()), false);
-    } catch (IOException e) {
-      throw new HoodieIOException("Error create requested replace commit ", e);
-    }
+    HoodieInstant instant = new HoodieInstant(State.REQUESTED, actionType, instantTime);
+    LOG.info("Creating a new instant " + instant);
+    // Create the request replace file
+    createFileInMetaPath(instant.getFileName(),
+            TimelineMetadataUtils.getInstantWriter(new HoodieRequestedReplaceMetadata()), false);
   }
 
-  public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
+  public void saveAsComplete(HoodieInstant instant, Option<HoodieInstantWriter> writerOption) {
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
-    transitionState(instant, HoodieTimeline.getCompletedInstant(instant), data);
+    transitionState(instant, HoodieTimeline.getCompletedInstant(instant), writerOption);
     LOG.info("Completed " + instant);
   }
 
@@ -471,35 +467,35 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
    * Transition Compaction State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
-   * @param data Extra Metadata
+   * @param writerOption writer for the metadata object
    * @return commit instant
    */
-  public HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, COMMIT_ACTION, inflightInstant.getTimestamp());
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, writerOption);
     return commitInstant;
   }
 
-  private void createFileInAuxiliaryFolder(HoodieInstant instant, Option<byte[]> data) {
+  private void createFileInAuxiliaryFolder(HoodieInstant instant, Option<HoodieInstantWriter> writerOption) {
     // This will be removed in future release. See HUDI-546
     Path fullPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
-    FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, data);
+    FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, writerOption);
   }
 
   /**
    * Transition Log Compaction State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
-   * @param data Extra Metadata
+   * @param writerOption Extra Metadata
    * @return commit instant
    */
-  public HoodieInstant transitionLogCompactionInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionLogCompactionInflightToComplete(HoodieInstant inflightInstant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, DELTA_COMMIT_ACTION, inflightInstant.getTimestamp());
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, writerOption);
     return commitInstant;
   }
 
@@ -511,15 +507,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
    * Transition Clean State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
-   * @param data Extra Metadata
+   * @param writerOption Optional writer for data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, CLEAN_ACTION, inflightInstant.getTimestamp());
     // Then write to timeline
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, writerOption);
     return commitInstant;
   }
 
@@ -527,14 +523,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
    * Transition Clean State from requested to inflight.
    *
    * @param requestedInstant requested instant
-   * @param data Optional data to be stored
+   * @param writerOption Optional writer for data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, CLEAN_ACTION, requestedInstant.getTimestamp());
-    transitionState(requestedInstant, inflight, data);
+    transitionState(requestedInstant, inflight, writerOption);
     return inflight;
   }
 
@@ -542,15 +538,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
    * Transition Rollback State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
-   * @param data Extra Metadata
+   * @param writerOption Optional writer for data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, inflightInstant.getTimestamp());
     // Then write to timeline
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, writerOption);
     return commitInstant;
   }
 
@@ -587,15 +583,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
    * Transition replace requested file to replace inflight.
    *
    * @param requestedInstant Requested instant
-   * @param data Extra Metadata
+   * @param writerOption Optional writer for data to be stored
    * @return inflight instant
    */
-  public HoodieInstant transitionReplaceRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionReplaceRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, requestedInstant.getTimestamp());
     // Then write to timeline
-    transitionState(requestedInstant, inflightInstant, data);
+    transitionState(requestedInstant, inflightInstant, writerOption);
     return inflightInstant;
   }
 
@@ -603,29 +599,29 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
    * Transition replace inflight to Committed.
    *
    * @param inflightInstant Inflight instant
-   * @param data Extra Metadata
+   * @param writerOption Optional writer for data to be stored
    * @return commit instant
    */
-  public HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.getTimestamp());
     // Then write to timeline
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, writerOption);
     return commitInstant;
   }
 
-  private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
-    transitionState(fromInstant, toInstant, data, false);
+  private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<HoodieInstantWriter> writerOption) {
+    transitionState(fromInstant, toInstant, writerOption, false);
   }
 
-  protected void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
+  protected void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<HoodieInstantWriter> writerOption,
        boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         // Re-create the .inflight file by opening a new file and write the commit metadata in
-        createFileInMetaPath(fromInstant.getFileName(), data, allowRedundantTransitions);
+        createFileInMetaPath(fromInstant.getFileName(), writerOption, allowRedundantTransitions);
         Path fromInstantPath = getInstantFileNamePath(fromInstant.getFileName());
         Path toInstantPath = getInstantFileNamePath(toInstant.getFileName());
         boolean success = metaClient.getFs().rename(fromInstantPath, toInstantPath);
@@ -638,9 +634,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
         ValidationUtils.checkArgument(metaClient.getFs().exists(getInstantFileNamePath(fromInstant.getFileName())));
         // Use Write Once to create Target File
         if (allowRedundantTransitions) {
-          FileIOUtils.createFileInPath(metaClient.getFs(), getInstantFileNamePath(toInstant.getFileName()), data);
+          FileIOUtils.createFileInPath(metaClient.getFs(), getInstantFileNamePath(toInstant.getFileName()), writerOption);
         } else {
-          metaClient.getFs().createImmutableFileInPath(getInstantFileNamePath(toInstant.getFileName()), data.map(this::convertByteArrayToWriter));
+          metaClient.getFs().createImmutableFileInPath(getInstantFileNamePath(toInstant.getFileName()), writerOption);
         }
         LOG.info("Create new file for toInstant ?" + getInstantFileNamePath(toInstant.getFileName()));
       }
@@ -692,82 +688,82 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
     transitionRequestedToInflight(requested, Option.empty(), false);
   }
 
-  public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content) {
-    transitionRequestedToInflight(requested, content, false);
+  public void transitionRequestedToInflight(HoodieInstant requested, Option<HoodieInstantWriter> writerOption) {
+    transitionRequestedToInflight(requested, writerOption, false);
   }
 
-  public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content,
+  public void transitionRequestedToInflight(HoodieInstant requested, Option<HoodieInstantWriter> writerOption,
       boolean allowRedundantTransitions) {
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, requested.getAction(), requested.getTimestamp());
     ValidationUtils.checkArgument(requested.isRequested(), "Instant " + requested + " in wrong state");
-    transitionState(requested, inflight, content, allowRedundantTransitions);
+    transitionState(requested, inflight, writerOption, allowRedundantTransitions);
   }
 
-  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content) {
-    saveToCompactionRequested(instant, content, false);
+  public void saveToCompactionRequested(HoodieInstant instant, Option<HoodieInstantWriter> writerOption) {
+    saveToCompactionRequested(instant, writerOption, false);
   }
 
-  public void saveToCompactionRequestedOptionallyAuxFolder(HoodieInstant instant, Option<byte[]> content, boolean writetoAuxFolder) {
-    saveToCompactionRequested(instant, content, false, writetoAuxFolder);
+  public void saveToCompactionRequestedOptionallyAuxFolder(HoodieInstant instant, Option<HoodieInstantWriter> writerOption, boolean writetoAuxFolder) {
+    saveToCompactionRequested(instant, writerOption, false, writetoAuxFolder);
   }
 
-  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
-    saveToCompactionRequested(instant, content, overwrite, false);
+  public void saveToCompactionRequested(HoodieInstant instant, Option<HoodieInstantWriter> writerOption, boolean overwrite) {
+    saveToCompactionRequested(instant, writerOption, overwrite, false);
   }
 
-  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite, boolean writeToAuxFolder) {
+  public void saveToCompactionRequested(HoodieInstant instant, Option<HoodieInstantWriter> writerOption, boolean overwrite, boolean writeToAuxFolder) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
     if (writeToAuxFolder) {
       // Write workload to auxiliary folder
-      createFileInAuxiliaryFolder(instant, content);
+      createFileInAuxiliaryFolder(instant, writerOption);
     }
-    createFileInMetaPath(instant.getFileName(), content, overwrite);
+    createFileInMetaPath(instant.getFileName(), writerOption, overwrite);
   }
 
-  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content) {
-    saveToLogCompactionRequested(instant, content, false);
+  public void saveToLogCompactionRequested(HoodieInstant instant, Option<HoodieInstantWriter> writerOption) {
+    saveToLogCompactionRequested(instant, writerOption, false);
   }
 
-  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
-    saveToLogCompactionRequested(instant, content, overwrite, false);
+  public void saveToLogCompactionRequested(HoodieInstant instant, Option<HoodieInstantWriter> writerOption, boolean overwrite) {
+    saveToLogCompactionRequested(instant, writerOption, overwrite, false);
   }
 
-  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite, boolean writeToAuxFolder) {
+  public void saveToLogCompactionRequested(HoodieInstant instant, Option<HoodieInstantWriter> writerOption, boolean overwrite, boolean writeToAuxFolder) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
     if (writeToAuxFolder) {
       // Write workload to auxiliary folder
-      createFileInAuxiliaryFolder(instant, content);
+      createFileInAuxiliaryFolder(instant, writerOption);
     }
-    createFileInMetaPath(instant.getFileName(), content, overwrite);
+    createFileInMetaPath(instant.getFileName(), writerOption, overwrite);
   }
 
   /**
    * Saves content for requested REPLACE instant.
    */
-  public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToPendingReplaceCommit(HoodieInstant instant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createFileInMetaPath(instant.getFileName(), writerOption, false);
   }
 
-  public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToCleanRequested(HoodieInstant instant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createFileInMetaPath(instant.getFileName(), writerOption, false);
   }
 
-  public void saveToRollbackRequested(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToRollbackRequested(HoodieInstant instant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createFileInMetaPath(instant.getFileName(), writerOption, false);
   }
 
-  public void saveToRestoreRequested(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToRestoreRequested(HoodieInstant instant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.RESTORE_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createFileInMetaPath(instant.getFileName(), writerOption, false);
   }
 
   /**
@@ -776,13 +772,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
    * @param requestedInstant Inflight Instant
    * @return inflight instant
    */
-  public HoodieInstant transitionIndexRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+  public HoodieInstant transitionIndexRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
         String.format("%s is not equal to %s action", requestedInstant.getAction(), INDEXING_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested(),
         String.format("Instant %s not in requested state", requestedInstant.getTimestamp()));
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, INDEXING_ACTION, requestedInstant.getTimestamp());
-    transitionState(requestedInstant, inflightInstant, data);
+    transitionState(requestedInstant, inflightInstant, writerOption);
     return inflightInstant;
   }
 
@@ -791,13 +787,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
    * @param inflightInstant Inflight Instant
    * @return completed instant
    */
-  public HoodieInstant transitionIndexInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+  public HoodieInstant transitionIndexInflightToComplete(HoodieInstant inflightInstant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
         String.format("%s is not equal to %s action", inflightInstant.getAction(), INDEXING_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight(),
         String.format("Instant %s not inflight", inflightInstant.getTimestamp()));
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, INDEXING_ACTION, inflightInstant.getTimestamp());
-    transitionState(inflightInstant, commitInstant, data);
+    transitionState(inflightInstant, commitInstant, writerOption);
     return commitInstant;
   }
 
@@ -823,23 +819,19 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
   /**
    * Save content for inflight/requested index instant.
    */
-  public void saveToPendingIndexAction(HoodieInstant instant, Option<byte[]> content) {
+  public void saveToPendingIndexAction(HoodieInstant instant, Option<HoodieInstantWriter> writerOption) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
         String.format("%s is not equal to %s action", instant.getAction(), INDEXING_ACTION));
-    createFileInMetaPath(instant.getFileName(), content, false);
+    createFileInMetaPath(instant.getFileName(), writerOption, false);
   }
 
-  protected void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
+  protected void createFileInMetaPath(String filename, Option<HoodieInstantWriter> writerOption, boolean allowOverwrite) {
     Path fullPath = getInstantFileNamePath(filename);
     if (allowOverwrite || metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, content.map(this::convertByteArrayToWriter), false);
+      FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, writerOption);
     } else {
-      metaClient.getFs().createImmutableFileInPath(fullPath, content.map(this::convertByteArrayToWriter));
+      metaClient.getFs().createImmutableFileInPath(fullPath, writerOption);
     }
-  }
-
-  private HoodieInstantWriter convertByteArrayToWriter(byte[] bytes) {
-    return outputStream -> outputStream.write(bytes);
   }
 
   protected InputStream readDataStreamFromPath(Path filePath) {

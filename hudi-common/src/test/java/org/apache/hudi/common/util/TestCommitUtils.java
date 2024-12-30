@@ -48,7 +48,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.common.util.CommitUtils.getCheckpointValueAsString;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -155,7 +154,7 @@ public class TestCommitUtils {
 
   private void addDeltaCommit(HoodieActiveTimeline timeline,
                               String ts, String id, String batchId,
-                              boolean isCompleted) throws IOException {
+                              boolean isCompleted) {
     HoodieInstant instant = new HoodieInstant(
         HoodieInstant.State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, ts);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -163,31 +162,25 @@ public class TestCommitUtils {
     commitMetadata.addMetadata(SINK_CHECKPOINT_KEY,
         getCheckpointValueAsString(id, batchId));
     timeline.createNewInstant(instant);
-    timeline.transitionRequestedToInflight(
-        instant, Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+    timeline.transitionRequestedToInflight(instant, Option.of(commitMetadata));
     if (isCompleted) {
       timeline.saveAsComplete(new HoodieInstant(
-              true, instant.getAction(), instant.getTimestamp()),
-          Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+              true, instant.getAction(), instant.getTimestamp()), Option.of(commitMetadata));
     }
   }
 
-  private void addCommit(HoodieActiveTimeline timeline,
-                         String ts) throws IOException {
+  private void addCommit(HoodieActiveTimeline timeline, String ts) {
     HoodieInstant instant = new HoodieInstant(
         HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, ts);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     timeline.createNewInstant(instant);
-    timeline.transitionRequestedToInflight(
-        instant, Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+    timeline.transitionRequestedToInflight(instant, Option.of(commitMetadata));
     timeline.saveAsComplete(new HoodieInstant(
-            true, instant.getAction(), instant.getTimestamp()),
-        Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+            true, instant.getAction(), instant.getTimestamp()), Option.of(commitMetadata));
   }
 
-  private void addRequestedCompaction(HoodieActiveTimeline timeline,
-                                      String ts) throws IOException {
+  private void addRequestedCompaction(HoodieActiveTimeline timeline, String ts) {
     HoodieCompactionPlan compactionPlan = HoodieCompactionPlan.newBuilder()
         .setOperations(Collections.emptyList())
         .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION)
@@ -196,12 +189,11 @@ public class TestCommitUtils {
         .build();
     timeline.saveToCompactionRequested(
         new HoodieInstant(HoodieInstant.State.REQUESTED, COMPACTION_ACTION, ts),
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan)
+        TimelineMetadataUtils.getInstantWriter(compactionPlan)
     );
   }
 
-  private void addRequestedReplaceCommit(HoodieActiveTimeline timeline,
-                                         String ts) throws IOException {
+  private void addRequestedReplaceCommit(HoodieActiveTimeline timeline, String ts) {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata =
         HoodieRequestedReplaceMetadata.newBuilder()
             .setOperationType(WriteOperationType.CLUSTER.name())
@@ -210,7 +202,7 @@ public class TestCommitUtils {
             .build();
     timeline.saveToPendingReplaceCommit(
         new HoodieInstant(HoodieInstant.State.REQUESTED, REPLACE_COMMIT_ACTION, ts),
-        TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata)
+        TimelineMetadataUtils.getInstantWriter(requestedReplaceMetadata)
     );
   }
 }

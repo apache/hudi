@@ -244,13 +244,8 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
    */
   private void createCleanRequested(String startCleanTime, HoodieCleanerPlan cleanerPlan) {
     final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
-    try {
-      table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
-      LOG.info("Requesting Cleaning with instant time {}", cleanInstant);
-    } catch (IOException e) {
-      LOG.error("Got exception when saving cleaner requested file", e);
-      throw new HoodieIOException(e.getMessage(), e);
-    }
+    table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.getInstantWriter(cleanerPlan));
+    LOG.info("Requesting Cleaning with instant time {}", cleanInstant);
   }
 
   @Override

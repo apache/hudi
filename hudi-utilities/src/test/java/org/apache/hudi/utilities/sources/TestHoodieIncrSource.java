@@ -258,7 +258,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
       activeTimeline.reload().saveAsComplete(
           new HoodieInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getKey()),
-          instant4CommitData);
+          Option.of(outputStream -> outputStream.write(instant4CommitData.get())));
 
       // After the inflight commit completes, the checkpoint should move on after incremental pull
       readAndAssert(
