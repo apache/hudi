@@ -43,6 +43,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -391,12 +392,6 @@ public class HoodieTableMetadataUtil {
       final HoodieData<HoodieRecord> metadataColumnStatsRDD = convertMetadataToColumnStatsRecords(commitMetadata, context,
           dataMetaClient, metadataConfig);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
-    }
-    if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS)) {
-      checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient),
-          "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
-      final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatsRecords(commitMetadata, context, dataMetaClient, metadataConfig);
-      partitionToRecordsMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);
     }
     if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX)) {
       partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), convertMetadataToRecordIndexRecords(context, commitMetadata, metadataConfig,
@@ -2339,18 +2334,52 @@ public class HoodieTableMetadataUtil {
   private static Stream<HoodieRecord> collectAndProcessColumnMetadata(
           List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata,
           String partitionPath, boolean isTightBound) {
+    return collectAndProcessColumnMetadata(partitionPath, isTightBound, Option.empty(), fileColumnMetadata.stream().flatMap(List::stream));
+  }
 
+  private static Stream<HoodieRecord> collectAndProcessColumnMetadata(Iterable<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadataIterable, String partitionPath,
+                                                                      boolean isTightBound, Option<String> indexPartitionOpt) {
+
+    List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = new ArrayList<>();
+    fileColumnMetadataIterable.forEach(fileColumnMetadata::add);
     // Step 1: Flatten and Group by Column Name
-    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap = fileColumnMetadata.stream()
-            .flatMap(List::stream)
-            .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, Collectors.toList()));
+    return collectAndProcessColumnMetadata(partitionPath, isTightBound, indexPartitionOpt, fileColumnMetadata.stream());
+  }
+
+  private static Stream<HoodieRecord> collectAndProcessColumnMetadata(String partitionPath, boolean isTightBound, Option<String> indexPartitionOpt,
+                                                                      Stream<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata) {
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap =
+        fileColumnMetadata.collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, Collectors.toList()));
 
     // Step 2: Aggregate Column Ranges
     Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-            .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue()));
+        .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue()));
 
     // Create Partition Stats Records
-    return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound);
+    return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound, indexPartitionOpt);
+  }
+
+  public static HoodieData<HoodieRecord> collectAndProcessColumnMetadata(
+      HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata, boolean isTightBound, Option<String> indexPartitionOpt) {
+
+    // Step 1: Group by partition name
+    HoodiePairData<String, Iterable<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap = fileColumnMetadata.groupByKey();
+
+    // Step 2: Aggregate Column Ranges
+    return columnMetadataMap.map(entry -> {
+      String partitionName = entry.getKey();
+      Iterable<HoodieColumnRangeMetadata<Comparable>> iterable = entry.getValue();
+      final HoodieColumnRangeMetadata<Comparable>[] finalMetadata = new HoodieColumnRangeMetadata[] {null};
+      iterable.forEach(e -> {
+        HoodieColumnRangeMetadata<Comparable> rangeMetadata = HoodieColumnRangeMetadata.create(
+            partitionName, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
+            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize());
+        finalMetadata[0] = HoodieColumnRangeMetadata.merge(finalMetadata[0], rangeMetadata);
+      });
+      return HoodieMetadataPayload.createPartitionStatsRecords(partitionName,
+              Collections.singletonList(finalMetadata[0]), false, isTightBound, indexPartitionOpt)
+          .collect(Collectors.toList());
+    }).flatMap(records -> records.iterator());
   }
 
   public static HoodieData<HoodieRecord> convertFilesToPartitionStatsRecords(HoodieEngineContext engineContext,
@@ -2415,14 +2444,35 @@ public class HoodieTableMetadataUtil {
     return readColumnRangeMetadataFrom(partitionPath, fileName, datasetMetaClient, columnsToIndex, maxBufferSize);
   }
 
-  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodieCommitMetadata commitMetadata,
-                                                                                HoodieEngineContext engineContext,
-                                                                                HoodieTableMetaClient dataMetaClient,
-                                                                                HoodieMetadataConfig metadataConfig) {
+  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> partitionRangeMetadataPartitionPair,
+                                                                                HoodieTableMetaClient dataMetaClient) {
+    return convertMetadataToPartitionStatsRecords(partitionRangeMetadataPartitionPair.flatMapValues(list -> list.stream().flatMap(List::stream).iterator()), dataMetaClient, Option.empty());
+  }
+
+  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> partitionRangeMetadataPartitionPair,
+                                                                                HoodieTableMetaClient dataMetaClient, Option<String> indexPartitionOpt) {
+    try {
+      return partitionRangeMetadataPartitionPair
+          .groupByKey()
+          .map(pair -> {
+            final String partitionName = pair.getLeft();
+            boolean shouldScanColStatsForTightBound = isShouldScanColStatsForTightBound(dataMetaClient);
+            return collectAndProcessColumnMetadata(pair.getRight(), partitionName, shouldScanColStatsForTightBound, indexPartitionOpt);
+          })
+          .flatMap(recordStream -> recordStream.iterator());
+    } catch (Exception e) {
+      throw new HoodieException("Failed to generate column stats records for metadata table", e);
+    }
+  }
+
+  public static HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> convertMetadataToPartitionStatsColumnRangeMetadata(HoodieCommitMetadata commitMetadata,
+                                                                                                                                             HoodieEngineContext engineContext,
+                                                                                                                                             HoodieTableMetaClient dataMetaClient,
+                                                                                                                                             HoodieMetadataConfig metadataConfig) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     if (allWriteStats.isEmpty()) {
-      return engineContext.emptyHoodieData();
+      return engineContext.emptyHoodieData().mapToPair(o -> Pair.of("", new ArrayList<>()));
     }
 
     try {
@@ -2437,7 +2487,7 @@ public class HoodieTableMetadataUtil {
       Lazy<Option<Schema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
       List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt);
       if (columnsToIndex.isEmpty()) {
-        return engineContext.emptyHoodieData();
+        return engineContext.emptyHoodieData().mapToPair(o -> Pair.of("", new ArrayList<>()));
       }
       // filter columns with only supported types
       final List<String> validColumnsToIndex = columnsToIndex.stream()
@@ -2453,7 +2503,7 @@ public class HoodieTableMetadataUtil {
           .collect(Collectors.toList());
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-      boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient);
+      boolean shouldScanColStatsForTightBound = isShouldScanColStatsForTightBound(dataMetaClient);
 
       HoodieTableMetadata tableMetadata;
       if (shouldScanColStatsForTightBound) {
@@ -2461,7 +2511,7 @@ public class HoodieTableMetadataUtil {
       } else {
         tableMetadata = null;
       }
-      return engineContext.parallelize(partitionedWriteStats, parallelism).flatMap(partitionedWriteStat -> {
+      return engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
         final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
         // Step 1: Collect Column Metadata for Each File part of current commit metadata
         List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionedWriteStat.stream()
@@ -2492,11 +2542,17 @@ public class HoodieTableMetadataUtil {
           fileColumnMetadata.add(partitionColumnMetadata);
         }
 
-        return collectAndProcessColumnMetadata(fileColumnMetadata, partitionName, shouldScanColStatsForTightBound).iterator();
+        return Pair.of(partitionName, fileColumnMetadata);
       });
+
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);
     }
+  }
+
+  private static boolean isShouldScanColStatsForTightBound(HoodieTableMetaClient dataMetaClient) {
+    boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient);
+    return shouldScanColStatsForTightBound;
   }
 
   /**
@@ -2555,6 +2611,14 @@ public class HoodieTableMetadataUtil {
     final PartitionIndexID partitionIndexID = new PartitionIndexID(getColumnStatsIndexPartitionIdentifier(partitionPath));
     final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
     return columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString());
+  }
+
+  public static String getPartitionStatsIndexKey(String partitionPathPrefix, String partitionPath, String columnName) {
+    final PartitionIndexID partitionPrefixID = new PartitionIndexID(getColumnStatsIndexPartitionIdentifier(partitionPathPrefix));
+    final PartitionIndexID partitionIndexID = new PartitionIndexID(getColumnStatsIndexPartitionIdentifier(partitionPath));
+    final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
+    String partitionID = partitionPrefixID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString());
+    return columnIndexID.asBase64EncodedString().concat(partitionID);
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})

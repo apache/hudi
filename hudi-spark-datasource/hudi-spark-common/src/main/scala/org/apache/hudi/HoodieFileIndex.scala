@@ -330,9 +330,19 @@ case class HoodieFileIndex(spark: SparkSession,
             // fall back to listing all partitions
             case _: HoodieException => (false, listMatchingPartitionPaths(Seq.empty))
           }
+        } else if (isExpressionIndexEnabled) {
+          val expressionIndexSupport = new ExpressionIndexSupport(spark, schema, metadataConfig, metaClient)
+          val exprIndexPrunedPartitionsOpt = expressionIndexSupport.prunePartitions(this, dataFilters, filterReferencedColumns)
+          if (exprIndexPrunedPartitionsOpt.nonEmpty) {
+            (true, exprIndexPrunedPartitionsOpt.get.map(e => convertToPartitionPath(e)).toSeq)
+          } else {
+            // Cannot use expression index for pruning partitions,
+            // fall back to listing all partitions
+            (false, listMatchingPartitionPaths(Seq.empty))
+          }
         } else {
-          // Cannot use partition stats index (not available) for pruning partitions,
-          // fall back to listing all partitions
+          // Both partition stats pruning and expression index pruning was not helpful
+          // Falling back to listing all partitions
           (false, listMatchingPartitionPaths(Seq.empty))
         }
       } else {

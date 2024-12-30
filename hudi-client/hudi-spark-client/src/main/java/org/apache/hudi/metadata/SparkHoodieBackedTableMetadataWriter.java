@@ -19,6 +19,11 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.data.HoodieJavaPairRDD;
+import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.HoodieSparkIndexClient;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -42,7 +47,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
-import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -50,6 +54,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
@@ -63,6 +68,8 @@ import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -73,6 +80,7 @@ import static org.apache.hudi.client.utils.SparkMetadataWriterUtils.readRecordsA
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
 
@@ -169,11 +177,77 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
+  protected HoodieData<HoodieRecord> getExpressionIndexUpdates(Option<HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>>> partitionRangeMetadataPairOpt,
+                                                               HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
+//    RDD<HoodieColumnRangeMetadata<Comparable>> rdd = HoodieJavaPairRDD.getJavaPairRDD(partitionRangeMetadataPair).values().flatMap(list -> list.stream().flatMap(
+//        Collection::stream).iterator()).rdd();
+//
+//    Encoder<HoodieColumnRangeMetadata<Comparable>> encoder = (Encoder<HoodieColumnRangeMetadata<Comparable>>) Encoders.kryo(rdd.first().getClass());
+//    Dataset<HoodieColumnRangeMetadata<Comparable>> dataset = ((HoodieSparkEngineContext) engineContext).getSqlContext().createDataset(rdd, encoder);
+
+    Option<HoodieData<HoodieRecord>> partitionStatsRDDOpt = Option.empty();
+    if (partitionRangeMetadataPairOpt.isPresent()) {
+      HoodieExpressionIndex<Column, Column> expressionIndex =
+          new HoodieSparkExpressionIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
+      ObjectMapper objectMapper = new ObjectMapper();
+      JavaRDD<String> rangeMetadataJson = HoodieJavaPairRDD.getJavaPairRDD(partitionRangeMetadataPairOpt.get())
+          .flatMapValues(list -> list.stream()
+              .flatMap(Collection::stream)
+              .iterator()
+          ).map(rangeMetadata -> objectMapper.writeValueAsString(rangeMetadata));
+//    JavaRDD<String> rangeMetadataJson = HoodieJavaPairRDD.getJavaPairRDD(partitionRangeMetadataPartitionPair).values().flatMap(list -> list.stream().flatMap(
+//        Collection::stream).iterator()).map(rangeMetadata -> objectMapper.writeValueAsString(rangeMetadata));
+      Dataset<Row> rowDataset = ((HoodieSparkEngineContext) engineContext).getSqlContext().read().json(rangeMetadataJson);
+      rowDataset = rowDataset.filter(String.format("_2.columnName == '%s'", indexDefinition.getSourceFields().get(0)));
+      Column minValueCol = expressionIndex.apply(Collections.singletonList(rowDataset.col("_2.minValue")));
+      Column maxValueCol = expressionIndex.apply(Collections.singletonList(rowDataset.col("_2.maxValue")));
+      Dataset<Row> transformedDataset = rowDataset.withColumn("transformedMinValue", minValueCol);
+      transformedDataset = transformedDataset.withColumn("transformedMaxValue", maxValueCol);
+      HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> finalDataset = HoodieJavaRDD.of(transformedDataset.javaRDD()).mapToPair(row -> {
+        Row rangeMetadataRow = row.getAs("_2");
+        HoodieColumnRangeMetadata rangeMetadata = HoodieColumnRangeMetadata.create(rangeMetadataRow.getAs("filePath"),
+            rangeMetadataRow.getAs("columnName"), row.getAs("transformedMinValue"), row.getAs("transformedMaxValue"),
+            rangeMetadataRow.getAs("nullCount"), rangeMetadataRow.getAs("valueCount"), rangeMetadataRow.getAs("totalSize"),
+            rangeMetadataRow.getAs("totalUncompressedSize"));
+        String partitionName = row.getAs("_1");
+        return Pair.of(partitionName, rangeMetadata);
+      });
+      partitionStatsRDDOpt = Option.of(HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords(finalDataset,
+          dataMetaClient, Option.of(indexPartition)));
+    }
+
+//    HoodieData<List<HoodieColumnRangeMetadata<Comparable>>> transformedColumnRangeMetadatas =
+//        partitionRangeMetadataPartitionPair.mapValues(rangeMetadatas ->
+//            rangeMetadatas.stream().map(rangeMetadata -> {
+//              HoodieExpressionIndex<Column, Column> expressionIndex =
+//                  new HoodieSparkExpressionIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
+//              Dataset<Row> dataset = ((HoodieSparkEngineContext) engineContext).getSqlContext().emptyDataFrame();
+//              Column minValueCol = expressionIndex.apply(Collections.singletonList(functions.lit(rangeMetadata.getMinValue())));
+//              Column maxValueCol = expressionIndex.apply(Collections.singletonList(functions.lit(rangeMetadata.getMaxValue())));
+//              dataset.withColumn("minValue", minValueCol);
+//              dataset.withColumn("maxValue", maxValueCol);
+//              Row transformedRangeRow = dataset.collect()[0];
+//              Comparable minValue = (Comparable) transformedRangeRow.get(0);
+//              Comparable maxValue = (Comparable) transformedRangeRow.get(1);
+//              return HoodieColumnRangeMetadata.create(rangeMetadata.getFilePath(), rangeMetadata.getColumnName(), minValue, maxValue, rangeMetadata.getNullCount(),
+//                  rangeMetadata.getValueCount(), rangeMetadata.getTotalSize(), rangeMetadata.getTotalUncompressedSize());
+//            }).collect(Collectors.toList()));
+    List<Pair<String, Pair<String, Long>>> partitionFilePathPairs = new ArrayList<>();
+    commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> writeStats.forEach(writeStat -> partitionFilePathPairs.add(
+        Pair.of(writeStat.getPartitionPath(), Pair.of(new StoragePath(dataMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileSizeInBytes())))));
+    int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
+    Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient);
+    HoodieData<HoodieRecord> expressionIndexRecords = getExpressionIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime, false);
+    return partitionStatsRDDOpt.isPresent() ? expressionIndexRecords.union(partitionStatsRDDOpt.get()) : expressionIndexRecords;
+  }
+
+  @Override
   protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
                                                                HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
                                                                Schema readerSchema, StorageConfiguration<?> storageConf,
-                                                               String instantTime) {
+                                                               String instantTime, boolean shouldGeneratePartitionStatRecords) {
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
     if (indexDefinition.getSourceFields().isEmpty()) {
       // In case there are no columns to index, bail
@@ -214,7 +288,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // Generate expression index records
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-      return SparkMetadataWriterUtils.getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex);
+      return SparkMetadataWriterUtils.getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, indexDefinition, columnToIndex, shouldGeneratePartitionStatRecords);
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
       return SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime, indexDefinition.getIndexName());
     } else {

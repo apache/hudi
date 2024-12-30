@@ -130,7 +130,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   @Override
   protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
-                                                               String instantTime) {
+                                                               String instantTime, boolean shouldGeneratePartitionStatRecords) {
     throw new HoodieNotSupportedException("Expression index not supported for Java metadata table writer yet.");
   }
 
