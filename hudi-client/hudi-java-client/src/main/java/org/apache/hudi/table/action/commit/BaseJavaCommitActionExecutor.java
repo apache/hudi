@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
 import org.apache.hudi.io.CreateHandleFactory;
@@ -302,6 +301,6 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   @Override
   protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    throw new HoodieNotSupportedException("Col stats with Java is not yet supported");
+    // no op. HUDI-8801
   }
 }

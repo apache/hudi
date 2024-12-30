@@ -94,7 +94,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
 
   @Override
   protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
-    throw new HoodieNotSupportedException("Col stats integration with Java is not yet supported");
+    // no op. HUDI-8801 to fix.
   }
 
   @Override
