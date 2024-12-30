@@ -507,3 +507,6 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-19380][HUDI-8792] Fix bug with timeline server reuse overriding client properties (#1104)
 [ENG-13584][INTERNAL] Migrate HoodieCommitMetadata and HoodieReplaceCommitMetadata reading (#1100)
 [AUDIT-1071]: Changelog for release-v1.62.0 (#1102)
+
+---[2024-12-30 13:01:12] [release-v1.63.1] ---
+[AUDIT-1112] Fix compilation failure with integration test profile (#1108)
