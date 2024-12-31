@@ -510,3 +510,9 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 
 ---[2024-12-30 13:01:12] [release-v1.63.1] ---
 [AUDIT-1112] Fix compilation failure with integration test profile (#1108)
+
+--- [2024-12-30 16:03:36] [release-v1.64.0] ---
+[ENG-18034][HUDI-8798] Validate Metadata Table Enabled during Archival (#1105)
+[AUDIT-1112]: Changelog for release-v1.63.1 (#1109)
+[AUDIT-1112] Fix compilation failure with integration test profile (#1108)
+[AUDIT-1071]: Changelog for release-v1.63.0 (#1106)
