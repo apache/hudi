@@ -51,6 +51,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
+import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_ORDERING_VALUE;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -177,7 +178,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       case COMMIT_TIME_ORDERING:
         for (Long recordPosition : recordPositions) {
           records.putIfAbsent(recordPosition,
-              Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", orderingFieldDefault, orderingFieldTypeOpt)));
+              Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
+                  null, "", COMMIT_TIME_ORDERING_VALUE)));
         }
         return;
       case EVENT_TIME_ORDERING:
@@ -200,7 +202,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     if (recordOpt.isPresent()) {
       String recordKey = recordOpt.get().getRecordKey();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue() == null ? orderingFieldDefault : recordOpt.get().getOrderingValue(), orderingFieldTypeOpt)));
+          recordKey, recordOpt.get().getPartitionPath(),
+          recordOpt.get().getOrderingValue() == null ? COMMIT_TIME_ORDERING_VALUE : recordOpt.get().getOrderingValue())));
     }
   }
 
