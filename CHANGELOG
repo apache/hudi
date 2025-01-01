@@ -516,3 +516,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [AUDIT-1112]: Changelog for release-v1.63.1 (#1109)
 [AUDIT-1112] Fix compilation failure with integration test profile (#1108)
 [AUDIT-1071]: Changelog for release-v1.63.0 (#1106)
+
+--- [2025-01-01 16:03:30] [release-v1.66.0] ---
+[AUDIT-1071]: Changelog for release-v1.64.0 (#1110)
+[ENG-13584][INTERNAL] Update commit metadata writers to use OutputStream directly (#1103)
