@@ -366,10 +366,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
                 ? Option.empty()
                 : Option.of(getBaseOrBootstrapFileReader(storageConf, bootstrapBasePath, partitionFields, clusteringOp));
+            Option<BaseKeyGenerator> keyGeneratorOp = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
             return new HoodieFileSliceReader(baseFileReader, scanner, readerSchema, tableConfig.getPreCombineField(), config.getRecordMerger(),
                 tableConfig.getProps(),
                 tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
-                    tableConfig.getPartitionFieldProp())));
+                    tableConfig.getPartitionFieldProp())), keyGeneratorOp);
           } catch (IOException e) {
             throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
                 + " and " + clusteringOp.getDeltaFilePaths(), e);
