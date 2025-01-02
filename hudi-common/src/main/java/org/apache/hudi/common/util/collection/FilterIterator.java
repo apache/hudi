@@ -23,6 +23,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import java.util.Iterator;
 import java.util.function.Predicate;
 
+/**
+ * An iterator that filters elements from a source iterator based on a predicate.
+ * @param <R> Type of elements in the iterator
+ */
 public class FilterIterator<R> implements Iterator<R> {
 
   private final Iterator<R> source;
@@ -31,29 +35,13 @@ public class FilterIterator<R> implements Iterator<R> {
 
   private R current;
 
-  private boolean init;
-
   public FilterIterator(Iterator<R> source, Predicate<R> filter) {
     this.source = source;
     this.filter = filter;
   }
 
-  private void init() {
-    if (!init) {
-      while (source.hasNext()) {
-        R next = source.next();
-        if (filter.test(next)) {
-          current = next;
-          break;
-        }
-      }
-      init = true;
-    }
-  }
-
   @Override
   public boolean hasNext() {
-    init();
     while (current == null && source.hasNext()) {
       R next = source.next();
       if (filter.test(next)) {
