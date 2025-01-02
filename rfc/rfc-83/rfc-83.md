@@ -27,7 +27,7 @@
 JIRA: https://issues.apache.org/jira/browse/HUDI-8780
 
 ## Abstract
-Currently, Table Service, including Clustering and Compaction, need to scans all partitions of the table during the strategy 
+Currently, Table Service, including Clustering and Compaction, need to scan all partitions of the table during the strategy 
 plan phase. This is a very expensive operation. As the table partitions continue to increase, The pressure on the table 
 service is increasing, which may affect the performance and stability of the entire lake table processing job.
 
@@ -54,13 +54,13 @@ performance and stability of the entire writing job.
 ## Design
 In the design of Incremental Table service, the following principles are followed:
 1. It is unaware of users, that is, it is fully adapted to the partition filtering, Target IO restrictions and other capabilities provided in the existing strategy.
-2. All strategies are enabled this incremental processing by default
-3. Table services to be added later can quickly realize incremental partitioning capabilities
+2. All strategies are working under the incremental processing by default
+3. Keep good extensibility for new table services
 
 ### Abstraction
 
 ### Strategy Interface
-Add a new marked strategy interface `IncrementalPartitionAwareStrategy`. Any Strategy implement this `IncrementalPartitionAwareStrategy` 
+Add a new marking strategy interface `IncrementalPartitionAwareStrategy`. Any Strategy implement this `IncrementalPartitionAwareStrategy` 
 could have the ability to perform incremental partitions processing. At this time, Incremental partitions should be 
 passed to the current strategy.
 
@@ -89,9 +89,9 @@ For table services like clustering and compaction, at plan stage, they will perf
 that is, first obtain the partition, and then filter the partition. The difference is that clustering obtains partitions in strategy.
 
 Considering that partition acquisition should be a general behavior of the engine, while partition filtering should be a
-specific behavior of different strategies, here we perform a small-scale reconstruction of the clustering and compaction plan to achieve:
-1. Unify partition acquisition in PlanActionExecutor
-2. Unify partition filtering in strategy
+specific behavior of different strategies, here we perform a small refactoring to the clustering and compaction plan to achieve:
+1. Unified partition acquisition in PlanActionExecutor
+2. Unified partition filtering in strategy
 
 ```java
 package org.apache.hudi.table;
@@ -171,8 +171,8 @@ T10.deltacommit.requested
 7. Perform normal Table Service scheduling based on *INCREMENTAL PARTITIONS 2*. If partition scheduling is incomplete due to Target IO and other factors, add the corresponding partition to *MISSING PARTITIONS*
 8. Finally generate the Table Service Plan and record *MISSING PARTITIONS* in it
 
-Note: If the instant time of the last completed TableService cannot be obtained due to reasons such as archive, the partition 
-acquisition operation will be rollback to obtain all table partitions.
+Note: If the instant time of the last completed TableService cannot be obtained due to reasons such as archive, the partition
+acquisition operation will fall back to obtaining all table partitions.
 
 ## Rollout/Adoption Plan
 
