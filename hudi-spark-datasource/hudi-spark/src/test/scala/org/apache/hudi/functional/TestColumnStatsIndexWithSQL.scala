@@ -33,9 +33,8 @@ import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, 
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
-
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, Literal, Or}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -43,7 +42,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.io.File
-
 import scala.collection.JavaConverters._
 
 class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
@@ -94,6 +92,17 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true, useShortSchema = true,
       validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
       "c2_minValue", "c3_maxValue", "c3_minValue"))
+
+    // predicate with c2. should prune based on col stats lookup
+    var dataFilter: Expression = EqualTo(attribute("c2"), literal("619sdc"))
+    verifyPruningFileCount(commonOpts, dataFilter)
+    // predicate w/ c5. should not lookup in col stats since the column is not indexed.
+    var dataFilter1: Expression = GreaterThan(attribute("c5"), literal("70"))
+    verifyPruningFileCount(commonOpts, dataFilter1, false)
+
+    // a mix of two cols, where c2 is indexed and c5 is not indexed
+    dataFilter1 = And(dataFilter1, EqualTo(attribute("c2"), literal("619sdc")))
+    verifyPruningFileCount(commonOpts, dataFilter1, false)
   }
 
   @ParameterizedTest
@@ -406,7 +415,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     verifySQLQueries(numRecordsForFirstQuery, numRecordsForSecondQuery, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
     commonOpts = commonOpts + (DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key -> "true")
     // TODO: https://issues.apache.org/jira/browse/HUDI-6657 - Investigate why below assertions fail with full table scan enabled.
-    //verifySQLQueries(numRecordsForFirstQuery, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
+    // verifySQLQueries(numRecordsForFirstQuery, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
 
     var dataFilter: Expression = GreaterThan(attribute("c5"), literal("70"))
     verifyPruningFileCount(commonOpts, dataFilter)
@@ -418,18 +427,26 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     verifyPruningFileCount(commonOpts, dataFilter)
   }
 
-  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression): Unit = {
+  private def verifyPruningFileCount(opts: Map[String, String], dataFilter: Expression, shouldPrune : Boolean = true): Unit = {
     // with data skipping
     val commonOpts = opts + ("path" -> basePath)
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
-    assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
+    if (shouldPrune) {
+      assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
+    } else {
+      assertEquals(filteredFilesCount, getLatestDataFilesCount(opts))
+    }
 
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
     val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
-    assertTrue(filteredFilesCount < filesCountWithNoSkipping)
+    if (shouldPrune) {
+      assertTrue(filteredFilesCount < filesCountWithNoSkipping)
+    } else {
+      assertEquals(filteredFilesCount, filesCountWithNoSkipping)
+    }
   }
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
