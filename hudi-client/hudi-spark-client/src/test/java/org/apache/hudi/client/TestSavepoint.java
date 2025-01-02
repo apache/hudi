@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -29,7 +30,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -106,9 +106,7 @@ public class TestSavepoint extends HoodieClientTestBase {
       assertEquals(1, savepointTimeline.countInstants());
 
       Map<String, HoodieSavepointPartitionMetadata> savepointPartitionMetadataMap =
-          TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
-                  savepointTimeline.getInstantDetails(savepointTimeline.firstInstant().get()).get())
-              .getPartitionMetadata();
+          savepointTimeline.deserializeInstantContent(savepointTimeline.firstInstant().get(), HoodieSavepointMetadata.class).getPartitionMetadata();
 
       HoodieTimeline commitsTimeline = table.getActiveTimeline().getCommitsTimeline();
       Map<String, List<HoodieWriteStat>> partitionToWriteStats = commitsTimeline.deserializeInstantContent(commitsTimeline.lastInstant().get(), HoodieCommitMetadata.class)

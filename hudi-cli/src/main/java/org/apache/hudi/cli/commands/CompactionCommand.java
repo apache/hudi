@@ -36,7 +36,6 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -119,9 +118,8 @@ public class CompactionCommand {
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
-    HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
-        activeTimeline.readCompactionPlanAsBytes(
-            HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
+    HoodieCompactionPlan compactionPlan = activeTimeline.deserializeInstantContent(
+        HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime), HoodieCompactionPlan.class);
 
     return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
   }
@@ -174,8 +172,7 @@ public class CompactionCommand {
         HoodieTimeline.COMPACTION_ACTION, compactionInstantTime);
     try {
       archivedTimeline.loadCompactionDetailsInMemory(compactionInstantTime);
-      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeAvroRecordMetadata(
-          archivedTimeline.getInstantDetails(instant).get(), HoodieCompactionPlan.getClassSchema());
+      HoodieCompactionPlan compactionPlan = archivedTimeline.deserializeInstantContent(instant, HoodieCompactionPlan.class);
       return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
     } finally {
       archivedTimeline.clearInstantDetailsFromMemory(compactionInstantTime);
@@ -369,8 +366,7 @@ public class CompactionCommand {
     if (HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())
         && HoodieInstant.State.INFLIGHT.equals(instant.getState())) {
       try {
-        return TimelineMetadataUtils.deserializeAvroRecordMetadata(archivedTimeline.getInstantDetails(instant).get(),
-            HoodieCompactionPlan.getClassSchema());
+        return archivedTimeline.deserializeInstantContent(instant, HoodieCompactionPlan.class);
       } catch (Exception e) {
         throw new HoodieException(e.getMessage(), e);
       }
@@ -388,16 +384,13 @@ public class CompactionCommand {
       if (!HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
-          return TimelineMetadataUtils.deserializeCompactionPlan(
-              activeTimeline.readCompactionPlanAsBytes(
-                  HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
+          return activeTimeline.deserializeInstantContent(HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp()), HoodieCompactionPlan.class);
         } catch (HoodieIOException ioe) {
           // SKIP
           return null;
         }
       } else {
-        return TimelineMetadataUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
-            HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
+        return activeTimeline.deserializeInstantContent(HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp()), HoodieCompactionPlan.class);
       }
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);

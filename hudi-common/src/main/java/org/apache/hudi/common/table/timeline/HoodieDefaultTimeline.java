@@ -42,7 +42,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -56,6 +58,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimest
  * @see HoodieTimeline
  */
 public class HoodieDefaultTimeline implements HoodieTimeline {
+  private static final Map<Class<?>, DatumReader<?>> DATUM_READERS = new ConcurrentHashMap<>();
 
   private static final long serialVersionUID = 1L;
 
@@ -544,9 +547,9 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public <T> T deserializeInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
     if (SpecificRecord.class.isAssignableFrom(clazz)) {
-      try (InputStream inputStream = getInstantContentStream(instant)) {
-        DatumReader<T> reader = new SpecificDatumReader<>(clazz);
-        DataFileStream<T> fileReader = new DataFileStream<>(inputStream, reader);
+      DatumReader<T> reader = (DatumReader<T>) DATUM_READERS.computeIfAbsent(clazz, SpecificDatumReader::new);
+      try (InputStream inputStream = getInstantContentStream(instant);
+           DataFileStream<T> fileReader = new DataFileStream<>(inputStream, reader)) {
         ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
         return fileReader.next();
       }
@@ -564,7 +567,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean isEmpty(HoodieInstant instant) {
-    return getInstantDetails(instant).get().length == 0;
+    return instantReader.isEmpty(instant);
   }
 
   @Override
@@ -649,6 +652,15 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
         return timeline1.getInstantContentStream(instant);
       } else {
         return timeline2.getInstantContentStream(instant);
+      }
+    }
+
+    @Override
+    public boolean isEmpty(HoodieInstant instant) {
+      if (timeline1.getInstantsAsStream().anyMatch(i -> i.equals(instant))) {
+        return timeline1.isEmpty(instant);
+      } else {
+        return timeline2.isEmpty(instant);
       }
     }
   }

@@ -33,7 +33,6 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -178,7 +177,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
       assertEquals(HoodieTimeline.ROLLBACK_ACTION, lastInstant.getAction());
-      HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(metaClient.getActiveTimeline().getInstantDetails(lastInstant).get());
+      HoodieRollbackMetadata rollbackMetadata = metaClient.getActiveTimeline().deserializeInstantContent(lastInstant, HoodieRollbackMetadata.class);
       copyIn(tableType, "002");
       rollbackMetadata.getPartitionMetadata().forEach((partition, metadata) -> metadata.getRollbackLogFiles().forEach((n, k) -> recreateMarkerFile(cfg, "003", partition, n)));
       rollbackMetadata.getPartitionMetadata().forEach((partition, metadata) -> metadata.getLogFilesFromFailedCommit().forEach((n, k) -> recreateMarkerFile(cfg, "002", partition, n)));

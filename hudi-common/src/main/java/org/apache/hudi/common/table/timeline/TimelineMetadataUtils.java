@@ -18,15 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
-import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
-import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
@@ -36,14 +28,12 @@ import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.file.FileReader;
 import org.apache.avro.file.SeekableByteArrayInput;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
-import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecordBase;
@@ -127,60 +117,11 @@ public class TimelineMetadataUtils {
     });
   }
 
-  public static HoodieCleanerPlan deserializeCleanerPlan(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieCleanerPlan.class);
-  }
-
-  public static HoodieCompactionPlan deserializeCompactionPlan(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieCompactionPlan.class);
-  }
-
-  public static HoodieCleanMetadata deserializeHoodieCleanMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieCleanMetadata.class);
-  }
-
-  public static HoodieRollbackMetadata deserializeHoodieRollbackMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieRollbackMetadata.class);
-  }
-
-  public static HoodieRestoreMetadata deserializeHoodieRestoreMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieRestoreMetadata.class);
-  }
-
-  public static HoodieSavepointMetadata deserializeHoodieSavepointMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieSavepointMetadata.class);
-  }
-
-  public static HoodieRequestedReplaceMetadata deserializeRequestedReplaceMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieRequestedReplaceMetadata.class);
-  }
-
-  public static HoodieReplaceCommitMetadata deserializeHoodieReplaceMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieReplaceCommitMetadata.class);
-  }
-
-  public static HoodieIndexPlan deserializeIndexPlan(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieIndexPlan.class);
-  }
-
-  public static HoodieIndexCommitMetadata deserializeIndexCommitMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieIndexCommitMetadata.class);
-  }
-
   public static <T extends SpecificRecordBase> T deserializeAvroMetadata(byte[] bytes, Class<T> clazz)
       throws IOException {
     DatumReader<T> reader = new SpecificDatumReader<>(clazz);
     FileReader<T> fileReader = DataFileReader.openReader(new SeekableByteArrayInput(bytes), reader);
     ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
     return fileReader.next();
-  }
-
-  public static <T extends SpecificRecordBase> T deserializeAvroRecordMetadata(byte[] bytes, Schema schema)
-      throws IOException {
-    return  deserializeAvroRecordMetadata(HoodieAvroUtils.bytesToAvro(bytes, schema), schema);
-  }
-
-  public static <T extends SpecificRecordBase> T deserializeAvroRecordMetadata(Object object, Schema schema) {
-    return  (T) SpecificData.get().deepCopy(schema, object);
   }
 }

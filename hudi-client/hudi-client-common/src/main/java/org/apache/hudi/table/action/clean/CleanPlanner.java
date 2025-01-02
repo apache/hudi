@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -140,8 +139,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTimestamp);
     try {
-      return TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
-          hoodieTable.getActiveTimeline().getInstantDetails(instant).get());
+      return hoodieTable.getActiveTimeline().deserializeInstantContent(instant, HoodieSavepointMetadata.class);
     } catch (IOException e) {
       throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTimestamp, e);
     }
@@ -184,8 +182,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         if (hoodieTable.getActiveTimeline().isEmpty(lastClean.get())) {
           hoodieTable.getActiveTimeline().deleteEmptyInstantIfExists(lastClean.get());
         } else {
-          HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-                  .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
+          HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().deserializeInstantContent(lastClean.get(), HoodieCleanMetadata.class);
           if ((cleanMetadata.getEarliestCommitToRetain() != null)
                   && (cleanMetadata.getEarliestCommitToRetain().length() > 0)
                   && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {

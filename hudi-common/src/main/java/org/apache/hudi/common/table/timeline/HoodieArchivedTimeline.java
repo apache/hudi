@@ -230,12 +230,17 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline implements Hoo
 
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    return Option.ofNullable(readCommits.getOrDefault(instant.getTimestamp(), new HashMap<>()).get(instant.getState()));
+    return Option.ofNullable(readCommits.getOrDefault(instant.getTimestamp(), Collections.emptyMap()).get(instant.getState()));
   }
 
   @Override
   public InputStream getContentStream(HoodieInstant instant) {
     return new ByteArrayInputStream(getInstantDetails(instant).orElseGet(() -> new byte[0]));
+  }
+
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    return getInstantDetails(instant).map(bytes -> bytes.length == 0).orElse(true);
   }
 
   public HoodieArchivedTimeline reload() {

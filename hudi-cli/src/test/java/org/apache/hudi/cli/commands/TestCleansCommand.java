@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -199,8 +198,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
     HoodieInstant clean = timeline.getReverseOrderedInstants().findFirst().orElse(null);
     if (clean != null) {
-      HoodieCleanMetadata cleanMetadata =
-          TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
+      HoodieCleanMetadata cleanMetadata = timeline.deserializeInstantContent(clean, HoodieCleanMetadata.class);
       return cleanMetadata.getTimeTakenInMillis();
     }
     return -1L;

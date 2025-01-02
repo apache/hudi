@@ -26,12 +26,9 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,9 +39,6 @@ import java.util.Map;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public class RollbackUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RollbackUtils.class);
-
   /**
    * Get Latest version of Rollback plan corresponding to a clean instant.
    *
@@ -57,8 +51,7 @@ public class RollbackUtils {
       throws IOException {
     // TODO: add upgrade step if required.
     final HoodieInstant requested = HoodieTimeline.getRollbackRequestedInstant(rollbackInstant);
-    return TimelineMetadataUtils.deserializeAvroMetadata(
-        metaClient.getActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
+    return metaClient.getActiveTimeline().deserializeInstantContent(requested, HoodieRollbackPlan.class);
   }
 
   static Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String instantToRollback, String rollbackInstantTime) {

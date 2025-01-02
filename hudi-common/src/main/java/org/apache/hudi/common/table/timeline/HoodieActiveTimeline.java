@@ -322,6 +322,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
     return readDataStreamFromPath(filePath);
   }
 
+  @Override
+  public boolean isEmpty(HoodieInstant instant) {
+    try {
+      return metaClient.getFs().getFileStatus(getInstantFileNamePath(instant.getFileName())).getLen() == 0;
+    } catch (IOException ex) {
+      throw new HoodieIOException("Unable to read file status for instant: " + instant);
+    }
+  }
+
   /**
    * Returns most recent instant having valid schema in its {@link HoodieCommitMetadata}
    */
@@ -366,30 +375,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
         });
   }
 
-  public Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant) {
-    // Cleaner metadata are always stored only in timeline .hoodie
-    return readDataFromPath(getInstantFileNamePath(instant.getFileName()));
-  }
-
-  public Option<byte[]> readRollbackInfoAsBytes(HoodieInstant instant) {
-    // Rollback metadata are always stored only in timeline .hoodie
-    return readDataFromPath(getInstantFileNamePath(instant.getFileName()));
-  }
-
-  public Option<byte[]> readRestoreInfoAsBytes(HoodieInstant instant) {
-    // Rollback metadata are always stored only in timeline .hoodie
-    return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
-  }
-
   //-----------------------------------------------------------------
   //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
   //-----------------------------------------------------------------
 
   public Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant) {
-    return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
-  }
-
-  public Option<byte[]> readIndexPlanAsBytes(HoodieInstant instant) {
     return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
   }
 

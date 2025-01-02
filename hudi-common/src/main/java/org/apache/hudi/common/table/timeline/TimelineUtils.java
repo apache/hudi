@@ -20,6 +20,8 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -153,20 +155,20 @@ public class TimelineUtils {
           }
         case HoodieTimeline.CLEAN_ACTION:
           try {
-            HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(s).get());
+            HoodieCleanMetadata cleanMetadata = timeline.deserializeInstantContent(s, HoodieCleanMetadata.class);
             return cleanMetadata.getPartitionMetadata().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions cleaned at " + s, e);
           }
         case HoodieTimeline.ROLLBACK_ACTION:
           try {
-            return TimelineMetadataUtils.deserializeHoodieRollbackMetadata(timeline.getInstantDetails(s).get()).getPartitionMetadata().keySet().stream();
+            return timeline.deserializeInstantContent(s, HoodieRollbackMetadata.class).getPartitionMetadata().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions rolledback at " + s, e);
           }
         case HoodieTimeline.RESTORE_ACTION:
           try {
-            HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeAvroMetadata(timeline.getInstantDetails(s).get(), HoodieRestoreMetadata.class);
+            HoodieRestoreMetadata restoreMetadata = timeline.deserializeInstantContent(s, HoodieRestoreMetadata.class);
             return restoreMetadata.getHoodieRestoreMetadata().values().stream()
                 .flatMap(Collection::stream)
                 .flatMap(rollbackMetadata -> rollbackMetadata.getPartitionMetadata().keySet().stream());
@@ -175,7 +177,7 @@ public class TimelineUtils {
           }
         case HoodieTimeline.SAVEPOINT_ACTION:
           try {
-            return TimelineMetadataUtils.deserializeHoodieSavepointMetadata(timeline.getInstantDetails(s).get()).getPartitionMetadata().keySet().stream();
+            return timeline.deserializeInstantContent(s, HoodieSavepointMetadata.class).getPartitionMetadata().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions savepoint at " + s, e);
           }

@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
@@ -106,20 +105,7 @@ public class CleanerUtils {
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
-        metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get());
-    return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
-  }
-
-  /**
-   * Get Latest Version of Hoodie Cleaner Metadata - Output of cleaner operation.
-   * @return Latest version of Clean metadata corresponding to clean instant
-   * @throws IOException
-   */
-  public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, byte[] details)
-      throws IOException {
-    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(details);
+    HoodieCleanMetadata cleanMetadata = metaClient.getActiveTimeline().deserializeInstantContent(cleanInstant, HoodieCleanMetadata.class);
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
 
@@ -167,22 +153,7 @@ public class CleanerUtils {
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
-    HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(
-        metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(), HoodieCleanerPlan.class);
-    return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
-  }
-
-  /**
-   * Get Latest version of cleaner plan corresponding to a clean instant.
-   *
-   * @param metaClient   Hoodie Table Meta Client
-   * @return Cleaner plan corresponding to clean instant
-   * @throws IOException
-   */
-  public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, byte[] details)
-      throws IOException {
-    CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
-    HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(details, HoodieCleanerPlan.class);
+    HoodieCleanerPlan cleanerPlan = metaClient.getActiveTimeline().deserializeInstantContent(cleanInstant, HoodieCleanerPlan.class);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
   }
 

@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -42,6 +41,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Arrays;
@@ -104,12 +104,15 @@ public class ClusteringUtils {
     } else {
       requestedInstant = pendingReplaceInstant;
     }
-    Option<byte[]> content = timeline.getInstantDetails(requestedInstant);
-    if (!content.isPresent() || content.get().length == 0) {
-      // few operations create requested file without any content. Assume these are not clustering
-      return Option.empty();
+    try {
+      return Option.of(timeline.deserializeInstantContent(requestedInstant, HoodieRequestedReplaceMetadata.class));
+    } catch (IOException ex) {
+      if (ex.getCause() instanceof EOFException) {
+        // few operations create requested file without any content. Assume these are not clustering
+        return Option.empty();
+      }
+      throw ex;
     }
-    return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(content.get()));
   }
 
   /**

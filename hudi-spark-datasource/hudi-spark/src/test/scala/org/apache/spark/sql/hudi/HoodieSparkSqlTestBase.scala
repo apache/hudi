@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkRecordMerger
+import org.apache.hudi.avro.model.HoodieCleanMetadata
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
@@ -248,8 +249,7 @@ object HoodieSparkSqlTestBase {
       .build()
 
     val cleanInstant = metaClient.reloadActiveTimeline().getCleanerTimeline.filterCompletedInstants().lastInstant().get()
-    TimelineMetadataUtils.deserializeHoodieCleanMetadata(metaClient
-      .getActiveTimeline.getInstantDetails(cleanInstant).get)
+    metaClient.getActiveTimeline.deserializeInstantContent(cleanInstant, classOf[HoodieCleanMetadata])
   }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =

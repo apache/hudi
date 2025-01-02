@@ -27,7 +27,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -113,13 +112,11 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
               metadataWriter.update(cleanMetadata, instant.getTimestamp());
               break;
             case RESTORE_ACTION:
-              HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
-                  metaClient.getActiveTimeline().getInstantDetails(instant).get());
+              HoodieRestoreMetadata restoreMetadata = metaClient.getActiveTimeline().deserializeInstantContent(instant, HoodieRestoreMetadata.class);
               metadataWriter.update(restoreMetadata, instant.getTimestamp());
               break;
             case ROLLBACK_ACTION:
-              HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-                  metaClient.getActiveTimeline().getInstantDetails(instant).get());
+              HoodieRollbackMetadata rollbackMetadata = metaClient.getActiveTimeline().deserializeInstantContent(instant, HoodieRollbackMetadata.class);
               metadataWriter.update(rollbackMetadata, instant.getTimestamp());
               break;
             default:

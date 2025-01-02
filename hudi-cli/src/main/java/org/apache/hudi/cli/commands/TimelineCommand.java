@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -303,12 +302,10 @@ public class TimelineCommand {
       if (instant.isInflight()) {
         HoodieInstant instantToUse = new HoodieInstant(
             HoodieInstant.State.REQUESTED, instant.getAction(), instant.getTimestamp());
-        HoodieRollbackPlan metadata = TimelineMetadataUtils
-            .deserializeAvroMetadata(timeline.getInstantDetails(instantToUse).get(), HoodieRollbackPlan.class);
+        HoodieRollbackPlan metadata = timeline.deserializeInstantContent(instantToUse, HoodieRollbackPlan.class);
         return metadata.getInstantToRollback().getCommitTime();
       } else {
-        HoodieRollbackMetadata metadata = TimelineMetadataUtils
-            .deserializeAvroMetadata(timeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+        HoodieRollbackMetadata metadata = timeline.deserializeInstantContent(instant, HoodieRollbackMetadata.class);
         return String.join(",", metadata.getCommitsRollback());
       }
     } catch (IOException e) {
@@ -328,13 +325,11 @@ public class TimelineCommand {
         if (rollbackInstant.isInflight()) {
           HoodieInstant instantToUse = new HoodieInstant(
               HoodieInstant.State.REQUESTED, rollbackInstant.getAction(), rollbackInstant.getTimestamp());
-          HoodieRollbackPlan metadata = TimelineMetadataUtils
-              .deserializeAvroMetadata(timeline.getInstantDetails(instantToUse).get(), HoodieRollbackPlan.class);
+          HoodieRollbackPlan metadata = timeline.deserializeInstantContent(instantToUse, HoodieRollbackPlan.class);
           rollbackInfoMap.computeIfAbsent(metadata.getInstantToRollback().getCommitTime(), k -> new ArrayList<>())
               .add(rollbackInstant.getTimestamp());
         } else {
-          HoodieRollbackMetadata metadata = TimelineMetadataUtils
-              .deserializeAvroMetadata(timeline.getInstantDetails(rollbackInstant).get(), HoodieRollbackMetadata.class);
+          HoodieRollbackMetadata metadata = timeline.deserializeInstantContent(rollbackInstant, HoodieRollbackMetadata.class);
           metadata.getCommitsRollback().forEach(instant -> {
             rollbackInfoMap.computeIfAbsent(instant, k -> new ArrayList<>())
                 .add(rollbackInstant.getTimestamp());

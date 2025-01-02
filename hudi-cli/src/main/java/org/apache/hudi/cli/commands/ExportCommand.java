@@ -41,7 +41,6 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.slf4j.Logger;
@@ -194,8 +193,7 @@ public class ExportCommand {
       byte[] data = null;
       switch (instant.getAction()) {
         case HoodieTimeline.CLEAN_ACTION: {
-          HoodieCleanMetadata metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
-              timeline.getInstantDetails(instant).get());
+          HoodieCleanMetadata metadata = timeline.deserializeInstantContent(instant, HoodieCleanMetadata.class);
           data = HoodieAvroUtils.avroToJson(metadata, true);
           break;
         }
@@ -207,14 +205,12 @@ public class ExportCommand {
           break;
         }
         case HoodieTimeline.ROLLBACK_ACTION: {
-          HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-              timeline.getInstantDetails(instant).get());
+          HoodieRollbackMetadata metadata = timeline.deserializeInstantContent(instant, HoodieRollbackMetadata.class);
           data = HoodieAvroUtils.avroToJson(metadata, true);
           break;
         }
         case HoodieTimeline.SAVEPOINT_ACTION: {
-          HoodieSavepointMetadata metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
-              timeline.getInstantDetails(instant).get());
+          HoodieSavepointMetadata metadata = timeline.deserializeInstantContent(instant, HoodieSavepointMetadata.class);
           data = HoodieAvroUtils.avroToJson(metadata, true);
           break;
         }

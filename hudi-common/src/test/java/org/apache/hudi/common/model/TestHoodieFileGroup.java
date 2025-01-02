@@ -146,7 +146,7 @@ public class TestHoodieFileGroup {
   }
 
   @Test
-  void handleMultipleBaseFiles_failToReadCommit() {
+  void handleMultipleBaseFiles_failToReadCommit() throws IOException {
     String partition = "1";
     String groupId = UUID.randomUUID().toString();
     String relativePath = "1/some_path2.parquet";
@@ -162,7 +162,7 @@ public class TestHoodieFileGroup {
     when(mockTimeline.lastInstant()).thenReturn(Option.of(instant));
     when(mockTimeline.containsOrBeforeTimelineStarts(instant.getTimestamp())).thenReturn(true);
 
-    when(mockTimeline.getInstantDetails(instant)).thenThrow(new RuntimeException("No file found"));
+    when(mockTimeline.deserializeInstantContent(instant, HoodieCommitMetadata.class)).thenThrow(new RuntimeException("No file found"));
 
     HoodieFileGroup fileGroup = new HoodieFileGroup(partition, groupId, mockTimeline);
 

@@ -419,7 +419,7 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
       if (isInstantLoaded) {
         assertTrue(hoodieArchivedTimeline.getInstantDetails(instant).isPresent());
       } else {
-        assertFalse(hoodieArchivedTimeline.getInstantDetails(instant).isPresent());
+        assertTrue(hoodieArchivedTimeline.isEmpty(instant));
       }
     });
   }

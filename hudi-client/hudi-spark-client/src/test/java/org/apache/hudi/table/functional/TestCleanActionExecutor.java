@@ -35,8 +35,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -131,8 +129,7 @@ public class TestCleanActionExecutor extends SparkClientFunctionalTestHarness {
     HoodieActiveTimeline cleanTimeline = mock(HoodieActiveTimeline.class);
     when(activeTimeline.getCleanerTimeline()).thenReturn(cleanTimeline);
     when(cleanTimeline.getInstants()).thenReturn(Collections.singletonList(cleanInstant));
-    when(activeTimeline.getInstantDetails(cleanInstant)).thenReturn(TimelineMetadataUtils.getInstantWriter(cleanerPlan).map(Transformations::writeInstantContentToBytes));
-    when(activeTimeline.readCleanerInfoAsBytes(cleanInstant)).thenReturn(TimelineMetadataUtils.getInstantWriter(cleanerPlan).map(Transformations::writeInstantContentToBytes));
+    when(activeTimeline.deserializeInstantContent(cleanInstant, HoodieCleanerPlan.class)).thenReturn(cleanerPlan);
 
     when(mockHoodieTable.getCleanTimeline()).thenReturn(cleanTimeline);
     HoodieTimeline inflightsAndRequestedTimeline = mock(HoodieTimeline.class);

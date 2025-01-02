@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.action.savepoint;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -45,8 +47,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCleanerPlan;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeHoodieCleanMetadata;
 
 public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieSavepointMetadata> {
 
@@ -78,13 +78,11 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       String lastCommitRetained = cleanInstant.map(instant -> {
         try {
           if (instant.isCompleted()) {
-            return deserializeHoodieCleanMetadata(
-                table.getActiveTimeline().getInstantDetails(instant).get())
+            return table.getActiveTimeline().deserializeInstantContent(instant, HoodieCleanMetadata.class)
                 .getEarliestCommitToRetain();
           } else {
             // clean is pending or inflight
-            return deserializeCleanerPlan(
-                table.getActiveTimeline().getInstantDetails(new HoodieInstant(REQUESTED, instant.getAction(), instant.getTimestamp())).get())
+            return table.getActiveTimeline().deserializeInstantContent(new HoodieInstant(REQUESTED, instant.getAction(), instant.getTimestamp()), HoodieCleanerPlan.class)
                 .getEarliestInstantToRetain().getTimestamp();
           }
         } catch (IOException e) {

@@ -814,7 +814,24 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieDefaultTimeline mergedTimeline = timelineAfterFirstInstant.mergeTimeline(refreshedTimeline);
     assertEquals(commitMetadata, mergedTimeline.deserializeInstantContent(completedCommitInstant, HoodieCommitMetadata.class));
     assertEquals(cleanerPlan, mergedTimeline.deserializeInstantContent(cleanInstant, HoodieCleanerPlan.class));
+    assertFalse(mergedTimeline.isEmpty(cleanInstant));
+    assertFalse(mergedTimeline.isEmpty(completedCommitInstant));
     assertEquals(Option.of(Pair.of(completedCommitInstant, commitMetadata)), refreshedTimeline.getLastCommitMetadataWithValidData());
+  }
+
+  @Test
+  void testIsEmpty() {
+    HoodieInstant commitInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(commitInstant);
+    timeline.transitionRequestedToInflight(commitInstant, Option.empty());
+    HoodieInstant completeCommitInstant = new HoodieInstant(true, commitInstant.getAction(), commitInstant.getTimestamp());
+    assertTrue(timeline.isEmpty(commitInstant));
+    timeline.saveAsComplete(completeCommitInstant, Option.of(new HoodieCommitMetadata()));
+    HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
+
+    HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
+    assertFalse(timelineAfterFirstInstant.isEmpty(completedCommitInstant));
   }
 
   @Test

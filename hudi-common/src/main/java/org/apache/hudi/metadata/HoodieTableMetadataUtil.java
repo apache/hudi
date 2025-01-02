@@ -55,7 +55,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -1397,14 +1396,13 @@ public class HoodieTableMetadataUtil {
       List<String> commitsToRollback;
       if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
         try {
-          HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-              timeline.getInstantDetails(instant).get());
+          HoodieRollbackMetadata rollbackMetadata = timeline.deserializeInstantContent(instant, HoodieRollbackMetadata.class);
           commitsToRollback = rollbackMetadata.getCommitsRollback();
         } catch (IOException e) {
           // if file is empty, fetch the commits to rollback from rollback.requested file
-          HoodieRollbackPlan rollbackPlan = TimelineMetadataUtils.deserializeAvroMetadata(
-              timeline.readRollbackInfoAsBytes(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION,
-                  instant.getTimestamp())).get(), HoodieRollbackPlan.class);
+          HoodieRollbackPlan rollbackPlan =
+              timeline.deserializeInstantContent(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION,
+                  instant.getTimestamp()), HoodieRollbackPlan.class);
           commitsToRollback = Collections.singletonList(rollbackPlan.getInstantToRollback().getCommitTime());
           LOG.warn("Had to fetch rollback info from requested instant since completed file is empty " + instant.toString());
         }
@@ -1414,8 +1412,7 @@ public class HoodieTableMetadataUtil {
       List<String> rollbackedCommits = new LinkedList<>();
       if (instant.getAction().equals(HoodieTimeline.RESTORE_ACTION)) {
         // Restore is made up of several rollbacks
-        HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
-            timeline.getInstantDetails(instant).get());
+        HoodieRestoreMetadata restoreMetadata = timeline.deserializeInstantContent(instant, HoodieRestoreMetadata.class);
         restoreMetadata.getHoodieRestoreMetadata().values().forEach(rms -> {
           rms.forEach(rm -> rollbackedCommits.addAll(rm.getCommitsRollback()));
         });

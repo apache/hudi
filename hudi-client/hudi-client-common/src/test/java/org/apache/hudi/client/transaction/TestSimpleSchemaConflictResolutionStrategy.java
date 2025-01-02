@@ -28,8 +28,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSchemaEvolutionConflictException;
@@ -194,11 +192,10 @@ public class TestSimpleSchemaConflictResolutionStrategy extends SimpleSchemaConf
                   .build())
               .build();
 
-      Option<byte[]> res = TimelineMetadataUtils.getInstantWriter(requestedReplaceMetadata).map(Transformations::writeInstantContentToBytes);
       // Get the corresponding requested instant for the inflight instant
       HoodieInstant requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
           REPLACE_COMMIT_ACTION, clusteringInstant.get().getTimestamp());
-      when(activeTimeline.getInstantDetails(requestedInstant)).thenReturn(res);
+      when(activeTimeline.deserializeInstantContent(requestedInstant, HoodieRequestedReplaceMetadata.class)).thenReturn(requestedReplaceMetadata);
     }
   }
 

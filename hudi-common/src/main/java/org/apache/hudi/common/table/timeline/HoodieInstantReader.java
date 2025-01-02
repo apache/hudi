@@ -49,4 +49,11 @@ public interface HoodieInstantReader {
       throw new HoodieIOException("Could not read commit details from stream", ex);
     }
   }
+
+  /**
+   * Checks if the instant is empty.
+   * @param instant the instant to check
+   * @return true if no data in the file, false otherwise
+   */
+  boolean isEmpty(HoodieInstant instant);
 }
