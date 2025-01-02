@@ -22,6 +22,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.CompactionContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -41,10 +42,10 @@ import java.util.Map;
  */
 public interface HoodieCompactionHandler<T> {
   Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
-                                           Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException;
+                                           Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile, CompactionContext compactionContext) throws IOException;
 
   Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
-                                           Map<String, HoodieRecord<?>> recordMap);
+                                           Map<String, HoodieRecord<?>> recordMap, CompactionContext compactionContext);
 
   default List<WriteStatus> compactUsingFileGroupReader(String instantTime,
                                                         CompactionOperation operation,
@@ -58,4 +59,10 @@ public interface HoodieCompactionHandler<T> {
                                                            Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     throw new HoodieNotSupportedException("Operation is not yet supported");
   }
+
+  Iterator<List<WriteStatus>> handleUpdateWithUnMergedIterator(String instantTime, String partitionPath, String fileId,
+                                                               Iterator<HoodieRecord> unMergedRecordsItr, HoodieBaseFile oldDataFile, CompactionContext compactionContext) throws IOException;
+
+  Iterator<List<WriteStatus>> handleInsertWithUnMergedIterator(String instantTime, String partitionPath, String fileId,
+                                                               Iterator<HoodieRecord> unMergedRecordsItr, CompactionContext compactionContext) throws IOException;
 }

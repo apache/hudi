@@ -58,6 +58,10 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
     return orderingVal;
   }
 
+  public Comparable<?> getOrderingValue() {
+    return orderingVal;
+  }
+
   @Override
   public HoodieRecord<T> newInstance() {
     return this;
