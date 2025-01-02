@@ -78,9 +78,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val resolveAlterTableCommandsClass =
       if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.gteqSpark3_4) {
+      } else if (HoodieSparkUtils.isSpark3_4) {
         "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.gteqSpark3_3) {
+      } else if (HoodieSparkUtils.isSpark3_3) {
         "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
       } else {
         throw new IllegalStateException("Unsupported Spark version")

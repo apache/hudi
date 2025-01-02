@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
+import org.apache.hudi.common.util.AvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -33,6 +34,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import javax.annotation.Nullable;
+
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -52,7 +56,7 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow} in Spark
  *            and {@code RowData} in Flink.
  */
-public abstract class HoodieReaderContext<T> {
+public abstract class HoodieReaderContext<T> implements Closeable {
 
   private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
@@ -62,6 +66,9 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
   private Boolean shouldMergeUseRecordPosition = null;
+
+  // for encoding and decoding schemas to the spillable map
+  private final AvroSchemaCache avroSchemaCache = AvroSchemaCache.getInstance();
 
   // Getter and Setter for schemaHandler
   public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
@@ -295,8 +302,18 @@ public abstract class HoodieReaderContext<T> {
   public Map<String, Object> generateMetadataForRecord(T record, Schema schema) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema));
-    meta.put(INTERNAL_META_SCHEMA_ID, this.schemaHandler.encodeAvroSchema(schema));
+    meta.put(INTERNAL_META_SCHEMA_ID, encodeAvroSchema(schema));
     return meta;
+  }
+
+  /**
+   * Gets the schema encoded in the metadata map
+   *
+   * @param infoMap The record metadata
+   * @return the avro schema if it is encoded in the metadata map, else null
+   */
+  public Schema getSchemaFromMetadata(Map<String, Object> infoMap) {
+    return decodeAvroSchema(infoMap.get(INTERNAL_META_SCHEMA_ID));
   }
 
   /**
@@ -309,7 +326,7 @@ public abstract class HoodieReaderContext<T> {
   public Map<String, Object> updateSchemaAndResetOrderingValInMetadata(Map<String, Object> meta,
                                                                        Schema schema) {
     meta.remove(INTERNAL_META_ORDERING_FIELD);
-    meta.put(INTERNAL_META_SCHEMA_ID, this.schemaHandler.encodeAvroSchema(schema));
+    meta.put(INTERNAL_META_SCHEMA_ID, encodeAvroSchema(schema));
     return meta;
   }
 
@@ -363,5 +380,27 @@ public abstract class HoodieReaderContext<T> {
 
   public boolean supportsParquetRowIndex() {
     return false;
+  }
+
+  /**
+   * Encodes the given avro schema for efficient serialization.
+   */
+  private Integer encodeAvroSchema(Schema schema) {
+    return this.avroSchemaCache.cacheSchema(schema);
+  }
+
+  /**
+   * Decodes the avro schema with given version ID.
+   */
+  @Nullable
+  private Schema decodeAvroSchema(Object versionId) {
+    return this.avroSchemaCache.getSchema((Integer) versionId).orElse(null);
+  }
+
+  @Override
+  public void close() {
+    if (this.avroSchemaCache != null) {
+      this.avroSchemaCache.close();
+    }
   }
 }

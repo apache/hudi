@@ -2321,7 +2321,7 @@ public class HoodieTableMetadataUtil {
     }
     HoodieFileSliceReader fileSliceReader = new HoodieFileSliceReader(baseFileReader, mergedLogRecordScanner, tableSchema, metaClient.getTableConfig().getPreCombineField(), recordMerger,
         metaClient.getTableConfig().getProps(),
-        Option.empty());
+        Option.empty(), Option.empty());
     ClosableIterator<HoodieRecord> fileSliceIterator = ClosableIterator.wrap(fileSliceReader);
     return new ClosableIterator<HoodieRecord>() {
       private HoodieRecord nextValidRecord;

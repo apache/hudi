@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
-import org.apache.hudi.{HoodieSparkUtils, ScalaAssertionSupport}
+import org.apache.hudi.ScalaAssertionSupport
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -133,11 +133,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |""".stripMargin)
 
         if (sparkSqlOptimizedWrites) {
-          val errorMessage2 = if (HoodieSparkUtils.gteqSpark3_3) {
-            "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found"
-          } else {
-            "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found;"
-          }
+          val errorMessage2 = "Hudi tables with primary key are required to match on all primary key colums. Column: 'name' not found"
           checkException(
             s"""
                | merge into $tableName3 as t0
