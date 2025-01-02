@@ -947,19 +947,19 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     assertEquals(200, upserts);
   }
 
-  protected void testFailWritesOnInlineTableServiceExceptions(boolean shouldFail, Function createBrokenClusteringClientFn) throws IOException {
+  protected void testFailWritesOnInlineTableServiceThrowable(boolean shouldFailOnException, boolean actuallyFailed, Function createBrokenClusteringClientFn) throws IOException {
     try {
       Properties properties = new Properties();
-      properties.setProperty("hoodie.fail.writes.on.inline.table.service.exception", String.valueOf(shouldFail));
+      properties.setProperty("hoodie.fail.writes.on.inline.table.service.exception", String.valueOf(shouldFailOnException));
       properties.setProperty("hoodie.auto.commit", "false");
       properties.setProperty("hoodie.clustering.inline.max.commits", "1");
       properties.setProperty("hoodie.clustering.inline", "true");
       properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
       testInsertTwoBatches(true, "2015/03/16", properties, true, createBrokenClusteringClientFn);
-      assertFalse(shouldFail);
-    } catch (HoodieException e) {
+      assertFalse(actuallyFailed);
+    } catch (HoodieException | Error e) {
       assertEquals(CLUSTERING_FAILURE, e.getMessage());
-      assertTrue(shouldFail);
+      assertTrue(actuallyFailed);
     }
   }
 
