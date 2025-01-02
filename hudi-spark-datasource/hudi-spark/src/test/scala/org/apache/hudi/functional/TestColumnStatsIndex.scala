@@ -995,7 +995,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       )
 
       columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
-        val andConditionActualFilter = andConditionFilters.map(translateIntoColumnStatsIndexFilterExpr(_, partialTransposedColStatsDF.schema))
+        val andConditionActualFilter = andConditionFilters.map(translateIntoColumnStatsIndexFilterExpr(_,
+          indexedCols = targetColumnsToIndex))
           .reduce(And)
         assertEquals(expectedAndConditionIndexedFilter, andConditionActualFilter)
       }
@@ -1017,7 +1018,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       )
 
       columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
-        val orConditionActualFilter = orConditionFilters.map(translateIntoColumnStatsIndexFilterExpr(_, partialTransposedColStatsDF.schema))
+        val orConditionActualFilter = orConditionFilters.map(translateIntoColumnStatsIndexFilterExpr(_,
+          indexedCols = targetColumnsToIndex))
           .reduce(And)
         assertEquals(expectedOrConditionIndexedFilter, orConditionActualFilter)
       }
