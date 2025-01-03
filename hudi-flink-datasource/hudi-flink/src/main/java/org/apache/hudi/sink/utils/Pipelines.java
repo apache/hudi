@@ -207,11 +207,30 @@ public class Pipelines {
       Configuration conf,
       RowType rowType,
       DataStream<RowData> dataStream) {
-    WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
+    boolean isBucketIndex = OptionsResolver.isBucketIndexType(conf);
+    if (isBucketIndex) {
+      HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
+      switch (bucketIndexEngineType) {
+        case SIMPLE:
+          // RowDataKeyGen here is used only for shuffle and don't change/enrich row data to avoid using of map transformation and skip serde costs
+          BucketIndexPartitioner<HoodieKey> partitioner =
+              new BucketIndexPartitioner<>(conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS), OptionsResolver.getIndexKeyField(conf));
+          RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
+          dataStream = dataStream.partitionCustom(partitioner, keyGen::getHoodieKey);
+          break;
+        case CONSISTENT_HASHING:
+          throw new HoodieException("Consistent hashing bucket index is not supported in append mode. Use simple bucket index or upsert operation.");
+        default:
+          throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
+      }
+    }
 
+    WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
     return dataStream
-        .transform(opName("hoodie_append_write", conf), TypeInformation.of(Object.class), operatorFactory)
-        .uid(opUID("hoodie_stream_write", conf))
+        .transform(opName(isBucketIndex ? "hoodie_bucket_append_write" : "hoodie_append_write", conf),
+            TypeInformation.of(Object.class),
+            operatorFactory)
+        .uid(opUID("hoodie_append_write", conf))
         .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
   }
 

@@ -37,6 +37,7 @@ import org.apache.hudi.utils.TestSQL;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -78,10 +79,10 @@ public class ITTestBucketStreamWrite {
     // this test is to ensure that the correct fileId can be fetched when recovering from a rollover when a new
     // fileGroup is created for a bucketId
     String tablePath = tempFile.getAbsolutePath();
-    doWrite(tablePath, isCow);
+    doWrite(tablePath, isCow, 1);
     doDeleteCommit(tablePath, isCow);
-    doWrite(tablePath, isCow);
-    doWrite(tablePath, isCow);
+    doWrite(tablePath, isCow, 1);
+    doWrite(tablePath, isCow, 1);
 
     if (isCow) {
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
@@ -89,6 +90,13 @@ public class ITTestBucketStreamWrite {
       HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
       TestData.checkWrittenDataMOR(storage, tempFile, EXPECTED, 4);
     }
+  }
+
+  @Test
+  public void testBucketWriteInAppendMode() throws ExecutionException, InterruptedException, IOException {
+    String tablePath = tempFile.getAbsolutePath();
+    doWrite(tablePath, true, 2);
+    TestData.checkBucketNum(tempFile, 2);
   }
 
   private static void doDeleteCommit(String tablePath, boolean isCow) throws Exception {
@@ -136,7 +144,7 @@ public class ITTestBucketStreamWrite {
     return matcher.group(1);
   }
 
-  private static void doWrite(String path, boolean isCow) throws InterruptedException, ExecutionException {
+  private static void doWrite(String path, boolean isCow, int bucketNum) throws InterruptedException, ExecutionException {
     // create hoodie table and perform writes
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
@@ -146,7 +154,7 @@ public class ITTestBucketStreamWrite {
     // use bucket index
     options.put(FlinkOptions.TABLE_TYPE.key(), isCow ? FlinkOptions.TABLE_TYPE_COPY_ON_WRITE : FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     options.put(FlinkOptions.INDEX_TYPE.key(), IndexType.BUCKET.name());
-    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), "1");
+    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), String.valueOf(bucketNum));
 
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);

@@ -48,7 +48,7 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
 
   private final int recordArity;
 
-  private String lastFileId; // for efficient code path
+  protected String lastFileId; // for efficient code path
 
   public BucketBulkInsertWriterHelper(Configuration conf, HoodieTable<?, ?, ?, ?> hoodieTable, HoodieWriteConfig writeConfig,
                                       String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType) {
@@ -75,7 +75,7 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     }
   }
 
-  private HoodieRowDataCreateHandle getRowCreateHandle(String partitionPath, String fileId) throws IOException {
+  protected HoodieRowDataCreateHandle getRowCreateHandle(String partitionPath, String fileId) throws IOException {
     if (!handles.containsKey(fileId)) { // if there is no handle corresponding to the fileId
       if (this.isInputSorted) {
         // if records are sorted, we can close all existing handles

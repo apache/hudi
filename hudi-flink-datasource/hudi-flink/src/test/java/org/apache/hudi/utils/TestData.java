@@ -756,6 +756,26 @@ public class TestData {
   }
 
   /**
+   * Checks the number of written buckets
+   *
+   * @param baseFile            The file base to check, should be a directory
+   * @param expectedBucketNum   The expected number of buckets, which would be checked in each partition
+   */
+  public static void checkBucketNum(
+      File baseFile,
+      int expectedBucketNum) throws IOException {
+    assert baseFile.isDirectory();
+    FileFilter filter = file -> !file.getName().startsWith(".");
+    File[] partitionDirs = baseFile.listFiles(filter);
+    assertNotNull(partitionDirs);
+    for (File partitionDir : partitionDirs) {
+      File[] dataFiles = partitionDir.listFiles(filter);
+      assert dataFiles != null;
+      assertThat(dataFiles.length, is(expectedBucketNum));
+    }
+  }
+
+  /**
    * Checks the source data set are written as expected.
    * Different with {@link #checkWrittenData}, it reads all the data files.
    *
