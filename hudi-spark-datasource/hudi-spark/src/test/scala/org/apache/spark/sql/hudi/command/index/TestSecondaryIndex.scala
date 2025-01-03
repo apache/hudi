@@ -30,8 +30,7 @@ import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, H
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -504,6 +503,72 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         .load(basePath).count())(s"${dataFile.toString} is not a Parquet file")
 
       dataGen.close()
+    }
+  }
+
+  /**
+   * Test secondary index with auto generation of record keys
+   */
+  test("Test Secondary Index With Auto Record Key Generation") {
+    withTempDir { tmp =>
+      val tableName = generateTableName + s"_si_auto_keygen"
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+
+      spark.sql(
+        s"""
+           CREATE TABLE $tableName (
+           |    ts LONG,
+           |    id STRING,
+           |    rider STRING,
+           |    driver STRING,
+           |    fare DOUBLE,
+           |    dateDefault STRING,
+           |    date STRING,
+           |    city STRING,
+           |    state STRING
+           |) USING HUDI
+           |options(
+           |    type = 'mor',
+           |    hoodie.metadata.enable = 'true',
+           |    hoodie.enable.data.skipping = 'true',
+           |    hoodie.metadata.record.index.enable = 'true',
+           |    hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
+           |)
+           |PARTITIONED BY (state)
+           |location '$basePath'
+           |""".stripMargin)
+
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      if (HoodieSparkUtils.gteqSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled=false")
+      }
+
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+           |  (1695414520,'trip2','rider-C','driver-M',27.70,'2024-11-30 01:30:40', '2024-11-30', 'sunnyvale','california'),
+           |  (1699349649,'trip5','rider-A','driver-Q',3.32, '2019-11-30 01:30:40', '2019-11-30', 'san_diego','texas')
+           |""".stripMargin)
+
+      // create secondary index
+      spark.sql(s"CREATE INDEX idx_city on $tableName (city)")
+      // validate secondary index
+      var expectedSecondaryKeys = spark.sql(s"SELECT _hoodie_record_key, city from $tableName")
+        .collect().map(row => SecondaryIndexKeyUtils.constructSecondaryIndexKey(row.getString(1), row.getString(0)))
+      var actualSecondaryKeys = spark.sql(s"SELECT key FROM hudi_metadata('$basePath') WHERE type=7 AND key LIKE '%$SECONDARY_INDEX_RECORD_KEY_SEPARATOR%'")
+        .collect().map(indexKey => indexKey.getString(0))
+      assertEquals(expectedSecondaryKeys.toSet, actualSecondaryKeys.toSet)
+
+      // update record
+      spark.sql(s"UPDATE $tableName SET city = 'san_francisco' WHERE rider = 'rider-C'")
+      // validate secondary index
+      expectedSecondaryKeys = spark.sql(s"SELECT _hoodie_record_key, city from $tableName")
+        .collect().map(row => SecondaryIndexKeyUtils.constructSecondaryIndexKey(row.getString(1), row.getString(0)))
+      actualSecondaryKeys = spark.sql(s"SELECT key FROM hudi_metadata('$basePath') WHERE type=7 AND key LIKE '%$SECONDARY_INDEX_RECORD_KEY_SEPARATOR%'")
+        .collect().map(indexKey => indexKey.getString(0))
+      assertEquals(expectedSecondaryKeys.toSet, actualSecondaryKeys.toSet)
     }
   }
 
