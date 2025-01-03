@@ -308,7 +308,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
             .enable(useFileListingMetadata)
             .enableMetrics(enableMetrics)
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
-            .withMetadataIndexColumnStats(false)
+            .withMetadataIndexColumnStats(false) // HUDI-8774
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
             .withExecutorMetrics(enableMetrics).withReporterType(MetricsReporterType.INMEMORY.name()).build())

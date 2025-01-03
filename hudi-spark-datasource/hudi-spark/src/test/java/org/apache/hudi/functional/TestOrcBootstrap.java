@@ -248,7 +248,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
             .withBootstrapModeSelector(bootstrapModeSelectorClass)
             .withBootstrapModeForRegexMatch(modeForRegexMatch).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMaxNumDeltaCommitsBeforeCompaction(3)
-            .withMetadataIndexColumnStats(false).build())
+            .withMetadataIndexColumnStats(false).build()) // HUDI-8774
         .build();
 
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);

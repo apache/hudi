@@ -54,7 +54,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false"
+    HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false" // HUDI-8587
   )
 
   val verificationCol: String = "driver"

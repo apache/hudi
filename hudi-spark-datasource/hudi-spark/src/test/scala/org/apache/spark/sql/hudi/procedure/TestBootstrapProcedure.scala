@@ -95,7 +95,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
       assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
 
-      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
+      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable") // HUDI-8774
     }
   }
 

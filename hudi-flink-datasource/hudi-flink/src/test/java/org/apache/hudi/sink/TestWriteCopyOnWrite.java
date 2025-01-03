@@ -615,7 +615,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testReuseEmbeddedServer() throws IOException {
     conf.setInteger("hoodie.filesystem.view.remote.timeout.secs", 500);
     conf.setString("hoodie.metadata.enable","true");
-    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false"); // HUDI-8814
 
     HoodieFlinkWriteClient writeClient = null;
     HoodieFlinkWriteClient writeClient2 = null;

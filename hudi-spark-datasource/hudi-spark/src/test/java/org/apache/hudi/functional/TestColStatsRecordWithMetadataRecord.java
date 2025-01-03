@@ -55,6 +55,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -78,6 +80,8 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestHarness {
+
+  private static final Logger LOG = LoggerFactory.getLogger(TestColStatsRecordWithMetadataRecord.class);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -127,6 +131,9 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     minMaxValues.add(Pair.of(LocalDate.ofEpochDay(1000 * 60 * 60 * 10), LocalDate.ofEpochDay(1000 * 60 * 60 * 60)));
     // Timestamp
     minMaxValues.add(Pair.of(new Timestamp(1000 * 60 * 60 * 10), new Timestamp(1000 * 60 * 60 * 60)));
+    minMaxValues.add(generateRandomMinMaxValue(random, (Functions.Function1<Random, Comparable>) random1
+        -> new Timestamp(random1.nextInt(1000) * 60 * 60 * 1000)));
+
     //Bytes
     byte[] bytes1 = new byte[10];
     byte[] bytes2 = new byte[10];
@@ -221,8 +228,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     allRecords.forEach(record -> {
       HoodieMetadataColumnStats actualColStatsMetadata = record.getData().getColumnStatMetadata().get();
       HoodieMetadataColumnStats expectedColStatsMetadata = expectedColumnStatsRecords.get(finalCounter.getAndIncrement()).getData().getColumnStatMetadata().get();
-      System.out.println("Validating " + expectedColStatsMetadata.getColumnName() + ", " + expectedColStatsMetadata.getMinValue().getClass().getSimpleName());
-      // assertEquals(expectedColStatsMetadata.getMinValue().getClass().getCanonicalName(), actualColStatsMetadata.getMinValue().getClass().getCanonicalName());
+      LOG.info("Validating " + expectedColStatsMetadata.getColumnName() + ", " + expectedColStatsMetadata.getMinValue().getClass().getSimpleName());
       if (expectedColStatsMetadata.getMinValue().getClass().getSimpleName().equals(DecimalWrapper.class.getSimpleName())) {
         // Big decimal gets wrapped w/ Decimal wrapper and converts to bytes.
         assertEquals(expectedColStatsMetadata.getMinValue().toString(), actualColStatsMetadata.getMinValue().toString());

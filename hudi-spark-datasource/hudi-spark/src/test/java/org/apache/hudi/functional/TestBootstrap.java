@@ -267,7 +267,8 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
             .withBootstrapParallelism(3)
             .withBootstrapModeSelector(bootstrapModeSelectorClass)
             .withBootstrapModeForRegexMatch(modeForRegexMatch).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMaxNumDeltaCommitsBeforeCompaction(3).withMetadataIndexColumnStats(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMaxNumDeltaCommitsBeforeCompaction(3)
+            .withMetadataIndexColumnStats(false).build()) // HUDI-8774
         .build();
 
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);

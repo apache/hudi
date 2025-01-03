@@ -784,7 +784,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           return true;
         case FLINK:
         case JAVA:
-          return false;
+          return false; // HUDI-8814
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }

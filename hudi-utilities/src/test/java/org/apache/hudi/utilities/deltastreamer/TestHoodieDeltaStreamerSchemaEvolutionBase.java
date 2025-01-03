@@ -156,7 +156,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(String[] transformerClasses, boolean nullForDeletedCols,
                                                               TypedProperties extraProps) throws IOException {
-    extraProps.setProperty(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(),"false");
+    extraProps.setProperty(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(),"false"); // HUDI-8587
 
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
