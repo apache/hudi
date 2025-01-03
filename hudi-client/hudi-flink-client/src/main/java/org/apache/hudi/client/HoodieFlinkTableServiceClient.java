@@ -89,6 +89,8 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       writeTableMetadata(table, compactionCommitTime, metadata);
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+      // update table config for cols to Index as applicable
+      BaseHoodieClient.updateColsToIndex(table, config, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
     }
@@ -140,6 +142,8 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
           clusteringInstant,
           serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata),
           table.getActiveTimeline());
+      // update table config for cols to Index as applicable
+      BaseHoodieClient.updateColsToIndex(table, config, metadata);
     } catch (IOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
