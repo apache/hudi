@@ -356,6 +356,13 @@ object ColumnStatIndexTestBase {
         : _*)
   }
 
+  def testMetadataColumnStatsIndexParamsForCOW: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      Seq(Arguments.arguments(ColumnStatsTestCase(HoodieTableType.COPY_ON_WRITE, shouldReadInMemory = true))
+      )
+        : _*)
+  }
+
   def testTableTypePartitionTypeParams: java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
       Seq(

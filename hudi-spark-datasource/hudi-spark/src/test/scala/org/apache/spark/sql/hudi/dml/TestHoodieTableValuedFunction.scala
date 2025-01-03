@@ -612,11 +612,11 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
         )
         assert(result6DF.count() == 0)
 
-        // no partition stats by default
+        // partition stats enabled by default
         val result7DF = spark.sql(
           s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}"
         )
-        assert(result7DF.count() == 0)
+        assert(result7DF.count() == 12)
       }
     }
     spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)

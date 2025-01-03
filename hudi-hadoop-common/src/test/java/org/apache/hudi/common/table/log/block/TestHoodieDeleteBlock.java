@@ -102,8 +102,7 @@ public class TestHoodieDeleteBlock {
             {new String[] {"val1", "val2", "val3", null}},
             {new Timestamp[] {new Timestamp(1690766971000L), new Timestamp(1672536571000L)}},
             {new LocalDate[] {LocalDate.of(2023, 1, 1), LocalDate.of(1980, 7, 1)}},
-            {new BigDecimal[] {new BigDecimal("12345678901234.2948"),
-                new BigDecimal("23456789012345.4856")}}
+            {new BigDecimal[] {new BigDecimal("12345678901234.2948"), new BigDecimal("23456789012345.4856")}}
         };
     return Stream.of(data).map(Arguments::of);
   }

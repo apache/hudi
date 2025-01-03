@@ -275,6 +275,9 @@ public class ParquetUtils extends FileFormatUtils {
                     .filter(f -> columnList.contains(f.getPath().toDotString()))
                     .map(columnChunkMetaData -> {
                       Statistics stats = columnChunkMetaData.getStatistics();
+                      if (columnChunkMetaData.getPath().toDotString().equals("current_date")) {
+                        System.out.println("asdfads");
+                      }
                       return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
                           filePath.getName(),
                           columnChunkMetaData.getPath().toDotString(),
