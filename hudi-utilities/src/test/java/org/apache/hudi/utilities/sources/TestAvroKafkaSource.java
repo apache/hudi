@@ -26,6 +26,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieSourceConfigException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -64,6 +65,7 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
 public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
@@ -151,6 +153,30 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     // wait for all in-sync replicas to ack sends
     props.put("acks", "all");
     return props;
+  }
+
+  @Test
+  void testKafkaSource_InvalidHostException() throws IOException {
+    UtilitiesTestBase.Helpers.saveStringsToDFS(
+        new String[] {dataGen.generateGenericRecord().getSchema().toString()}, hoodieStorage(),
+        SCHEMA_PATH);
+    final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+
+    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", SCHEMA_PATH);
+    SchemaProvider schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
+        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
+
+    AvroKafkaSource avroSourceWithConfluentConfigException = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    // this should throw io.confluent.common.config.ConfigException because of missing `schema.registry.url` config
+    assertThrows(HoodieSourceConfigException.class, () -> avroSourceWithConfluentConfigException.fetchNewData(Option.empty(), Long.MAX_VALUE));
+
+    props.setProperty("schema.registry.url", "schema-registry-url");
+    // add invalid brokers address in the props
+    props.setProperty("bootstrap.servers", "unknownhost");
+    AvroKafkaSource avroSourceWithKafkaConfiException = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    // this should throw org.apache.kafka.common.config.ConfigException because of invalid kafka broker address
+    assertThrows(HoodieSourceConfigException.class, () -> avroSourceWithKafkaConfiException.fetchNewData(Option.empty(), Long.MAX_VALUE));
   }
 
   @Test
