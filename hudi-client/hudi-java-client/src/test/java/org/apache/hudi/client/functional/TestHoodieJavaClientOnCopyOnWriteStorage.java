@@ -84,8 +84,9 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
 
   private static final Function<Object, Object> IDENTITY = Function.identity();
 
-  private final Function<HoodieWriteConfig, BaseHoodieWriteClient> createBrokenClusteringClient =
-      config -> new WriteClientBrokenClustering<>(context, config);
+  private Function<HoodieWriteConfig, BaseHoodieWriteClient> createBrokenClusteringClient(Throwable throwable) {
+    return config -> new WriteClientBrokenClustering<>(context, config, throwable);
+  }
 
   private final Function2<HoodieTable, HoodieTableMetaClient, HoodieWriteConfig> getHoodieTable =
       (metaClient, config) -> getHoodieTable(metaClient, config);
@@ -352,7 +353,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         .withClusteringPlanStrategyClass(JavaSizeBasedClusteringPlanStrategy.class.getName())
         .withClusteringExecutionStrategyClass(JavaSortAndSizeExecutionStrategy.class.getName())
         .withInlineClustering(true).withInlineClusteringNumCommits(2).build();
-    testAndValidateClusteringOutputFiles(createBrokenClusteringClient, clusteringConfig, IDENTITY, IDENTITY);
+    testAndValidateClusteringOutputFiles(createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), clusteringConfig, IDENTITY, IDENTITY);
   }
 
   @ParameterizedTest
@@ -362,13 +363,20 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         .withClusteringTargetPartitions(0).withAsyncClusteringMaxCommits(1).withInlineClustering(false).withScheduleInlineClustering(scheduleInlineClustering)
         .withClusteringExecutionStrategyClass(JavaSortAndSizeExecutionStrategy.class.getName())
         .withClusteringPlanStrategyClass(JavaSizeBasedClusteringPlanStrategy.class.getName()).build();
-    testInlineScheduleClustering(createBrokenClusteringClient, clusteringConfig, IDENTITY, IDENTITY);
+    testInlineScheduleClustering(createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), clusteringConfig, IDENTITY, IDENTITY);
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testFailWritesOnInlineTableServiceExceptions(boolean shouldFail) throws IOException {
-    testFailWritesOnInlineTableServiceExceptions(shouldFail, createBrokenClusteringClient);
+    testFailWritesOnInlineTableServiceThrowable(shouldFail, shouldFail,
+        createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)));
+  }
+
+  @Test
+  public void testFailWritesOnInlineTableServiceErrors() throws IOException {
+    testFailWritesOnInlineTableServiceThrowable(false, true,
+        createBrokenClusteringClient(new OutOfMemoryError(CLUSTERING_FAILURE)));
   }
 
   /**
@@ -440,17 +448,21 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   }
 
   public static class WriteClientBrokenClustering<T extends HoodieRecordPayload> extends org.apache.hudi.client.HoodieJavaWriteClient<T> {
+    private final Throwable throwable;
 
-    public WriteClientBrokenClustering(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    public WriteClientBrokenClustering(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
       super(context, clientConfig);
+      this.throwable = throwable;
     }
 
     @Override
-    protected void runTableServicesInline(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
+    protected void runTableServicesInlineInternal(HoodieTable table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
       if (config.inlineClusteringEnabled()) {
-        throw new HoodieException(CLUSTERING_FAILURE);
+        if (throwable instanceof Error) {
+          throw (Error) throwable;
+        }
+        throw (HoodieException) throwable;
       }
     }
-
   }
 }
