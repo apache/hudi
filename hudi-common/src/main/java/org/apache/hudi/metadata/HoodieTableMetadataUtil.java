@@ -1686,11 +1686,6 @@ public class HoodieTableMetadataUtil {
   }
 
   private static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType) {
-    // if record type is not set or if its AVRO, MAP is unsupported.
-    if (!recordType.isPresent() || recordType.get() == HoodieRecordType.AVRO) {
-      return schema.getType() != Schema.Type.MAP;
-    }
-    // if record Type is SPARK then we cannot compare RECORD and ARRAY types in addition to MAP type
     return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
   }
 

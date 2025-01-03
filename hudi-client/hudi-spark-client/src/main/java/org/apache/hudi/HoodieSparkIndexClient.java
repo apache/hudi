@@ -63,7 +63,6 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_EN
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.index.expression.ExpressionIndexSparkFunctions.IDENTITY_FUNCTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.RANGE_TYPE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
@@ -134,7 +133,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
   @Override
   public void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(PARTITION_NAME_COLUMN_STATS, RANGE_TYPE, RANGE_TYPE,
+    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(PARTITION_NAME_COLUMN_STATS, PARTITION_NAME_COLUMN_STATS, PARTITION_NAME_COLUMN_STATS,
         columnsToIndex, Collections.EMPTY_MAP);
     LOG.info("Registering Or Updating the index " + PARTITION_NAME_COLUMN_STATS);
     register(metaClient, indexDefinition);

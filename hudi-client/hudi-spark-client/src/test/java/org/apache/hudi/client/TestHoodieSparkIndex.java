@@ -38,7 +38,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.index.expression.ExpressionIndexSparkFunctions.IDENTITY_FUNCTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.RANGE_TYPE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
@@ -82,7 +81,7 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
 
     // add col stats index.
     HoodieIndexDefinition colStatsIndexDefinition = getIndexDefinition(PARTITION_NAME_COLUMN_STATS,
-        RANGE_TYPE, fieldNamePrefix + "_5");
+        PARTITION_NAME_COLUMN_STATS, fieldNamePrefix + "_5");
     sparkIndexClient.register(metaClient, colStatsIndexDefinition);
     readAndValidateIndexDefn(colStatsIndexDefinition);
 
@@ -104,7 +103,7 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
     // update col stats w/ new set of cols
     List<String> colsToIndex = IntStream.range(0, 10).mapToObj(number -> fieldNamePrefix + "_" + number).collect(Collectors.toList());
     colStatsIndexDefinition = getIndexDefinition(PARTITION_NAME_COLUMN_STATS,
-        RANGE_TYPE, RANGE_TYPE, colsToIndex, Collections.EMPTY_MAP);
+        PARTITION_NAME_COLUMN_STATS, PARTITION_NAME_COLUMN_STATS, colsToIndex, Collections.EMPTY_MAP);
     sparkIndexClient.register(metaClient, colStatsIndexDefinition);
     readAndValidateIndexDefn(colStatsIndexDefinition);
 
