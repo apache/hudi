@@ -329,14 +329,13 @@ public enum MetadataPartitionType {
   }
 
   private static Pair<Boolean, String> getIsValueWrapperObfuscated(GenericRecord record, String subFieldName) {
-    Object minValue = ((GenericRecord) record.get(SCHEMA_FIELD_ID_COLUMN_STATS)).get(subFieldName);
-    if (minValue != null) {
-      boolean toReturn = ((GenericRecord) minValue).getSchema().getName().equals(DateWrapper.class.getSimpleName())
-          || ((GenericRecord) minValue).getSchema().getName().equals(TimestampMicrosWrapper.class.getSimpleName())
-          || ((GenericRecord) minValue).getSchema().getName().equals(TimestampMicrosWrapper.class.getSimpleName());
-      //|| ((GenericRecord) minValue).getSchema().getName().equals(DecimalWrapper.class.getSimpleName());
+    Object statsValue = ((GenericRecord) record.get(SCHEMA_FIELD_ID_COLUMN_STATS)).get(subFieldName);
+    if (statsValue != null) {
+      boolean toReturn = ((GenericRecord) statsValue).getSchema().getName().equals(DateWrapper.class.getSimpleName())
+          || ((GenericRecord) statsValue).getSchema().getName().equals(TimestampMicrosWrapper.class.getSimpleName())
+          || ((GenericRecord) statsValue).getSchema().getName().equals(TimestampMicrosWrapper.class.getSimpleName());
       if (toReturn) {
-        return Pair.of(true, ((GenericRecord) minValue).getSchema().getName());
+        return Pair.of(true, ((GenericRecord) statsValue).getSchema().getName());
       }
     }
     return Pair.of(false, null);
