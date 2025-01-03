@@ -231,10 +231,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   @Override
   public void close() throws IOException {
+    closeStream();
+    // remove the shutdown hook after closing the stream to avoid memory leaks
     if (null != shutdownThread) {
       Runtime.getRuntime().removeShutdownHook(shutdownThread);
     }
-    closeStream();
   }
 
   private void closeStream() throws IOException {
@@ -275,12 +276,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     shutdownThread = new Thread() {
       public void run() {
         try {
-          LOG.warn("running logformatwriter hook");
-          if (output != null) {
-            closeStream();
-          }
+          LOG.warn("running HoodieLogFormatWriter shutdown hook to close output stream for log file: {}", logFile);
+          closeStream();
         } catch (Exception e) {
-          LOG.warn(String.format("unable to close output stream for log file %s", logFile), e);
+          LOG.warn("unable to close output stream for log file: {}", logFile, e);
           // fail silently for any sort of exception
         }
       }
