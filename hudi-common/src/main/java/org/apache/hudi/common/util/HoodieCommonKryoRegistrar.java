@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -49,6 +50,7 @@ import org.apache.hudi.storage.StoragePath;
 
 import com.esotericsoftware.kryo.Kryo;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 
@@ -108,7 +110,9 @@ public class HoodieCommonKryoRegistrar {
         HoodieIndexMetadata.class,
         HashMap.class,
         StoragePath.class,
-        HoodieTableMetaClient.class
+        HoodieTableMetaClient.class,
+        HoodieFileGroupId.class,
+        ArrayList.class
     })
         .forEachOrdered(kryo::register);
   }
