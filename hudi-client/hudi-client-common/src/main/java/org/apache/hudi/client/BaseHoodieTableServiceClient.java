@@ -1197,6 +1197,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
   }
 
+  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    // no op
+  }
+
   /**
    * Called after each commit of a compaction or clustering table service,
    * to release any resources used.
