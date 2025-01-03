@@ -31,7 +31,6 @@ import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.BucketSortBulkInsertPartitioner;
-import org.apache.hudi.table.ConsistentHashingBucketInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.Partitioner;
@@ -42,7 +41,6 @@ import org.apache.spark.sql.Row;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -54,14 +52,13 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * Bulk_insert partitioner of Spark row using consistent hashing bucket index.
  */
-public class ConsistentBucketIndexBulkInsertPartitionerWithRows
-    extends BucketSortBulkInsertPartitioner<Dataset<Row>> implements ConsistentHashingBucketInsertPartitioner {
+public class ConsistentBucketIndexBulkInsertPartitionerWithRows extends BucketSortBulkInsertPartitioner<Dataset<Row>> {
 
   private final String indexKeyFields;
 
   private final List<String> fileIdPfxList = new ArrayList<>();
 
-  private final Map<String, List<ConsistentHashingNode>> hashingChildrenNodes;
+  private Map<String/*partition*/, List<ConsistentHashingNode>/*pending resizing related child nodes*/> hashingChildrenNodes;
 
   private Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
 
@@ -74,11 +71,19 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
   private final boolean populateMetaFields;
 
   public ConsistentBucketIndexBulkInsertPartitionerWithRows(HoodieTable table,
+                                                            Map<String, String> strategyParams, boolean populateMetaFields) {
+    this(table, strategyParams, populateMetaFields, null);
+  }
+
+  /**
+   * Constructor of ConsistentBucketIndexBulkInsertPartitionerWithRows.
+   * @param hashingChildrenNodes children nodes for clustering, only used in executing clustering
+   */
+  public ConsistentBucketIndexBulkInsertPartitionerWithRows(HoodieTable table,
                                                             Map<String, String> strategyParams,
-                                                            boolean populateMetaFields) {
+                                                            boolean populateMetaFields, Map<String, List<ConsistentHashingNode>> hashingChildrenNodes) {
     super(table, strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), ""));
     this.indexKeyFields = table.getConfig().getBucketIndexHashField();
-    this.hashingChildrenNodes = new HashMap<>();
     this.populateMetaFields = populateMetaFields;
     if (!populateMetaFields) {
       this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(table.getConfig().getProps());
@@ -88,13 +93,25 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
     this.extractor = RowRecordKeyExtractor.getRowRecordKeyExtractor(populateMetaFields, keyGeneratorOpt);
     ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
         "Consistent hash bucket index doesn't support CoW table");
+    if (hashingChildrenNodes != null) {
+      /**
+       * Set pending consistent hashing for partition.
+       * The bulk insert will directly use the pending metadata as the consistent hash metadata for writing data to after-resizing buckets.
+       * NOTE: Only used in the case of executing bulk insert.
+       */
+      ValidationUtils.checkArgument(hashingChildrenNodes.values().stream().flatMap(List::stream).noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL),
+          "children nodes should not be tagged as NORMAL");
+      this.hashingChildrenNodes = hashingChildrenNodes;
+    }
   }
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
     HoodieConsistentHashingMetadata metadata =
         ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
-    if (hashingChildrenNodes.containsKey(partition)) {
+    if (hashingChildrenNodes != null) {
+      // for executing bucket resizing
+      ValidationUtils.checkState(hashingChildrenNodes.containsKey(partition), "children nodes should be provided for clustering");
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
     }
     return new ConsistentBucketIdentifier(metadata);
@@ -152,15 +169,11 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
    * the mapping from partition to its bucket identifier is constructed.
    */
   private Map<String, ConsistentBucketIdentifier> initializeBucketIdentifier(JavaRDD<Row> rows) {
+    if (hashingChildrenNodes != null) {
+      return hashingChildrenNodes.keySet().stream().collect(Collectors.toMap(p -> p, this::getBucketIdentifier));
+    }
     return rows.map(this.extractor::getPartitionPath).distinct().collect().stream()
         .collect(Collectors.toMap(p -> p, this::getBucketIdentifier));
-  }
-
-  @Override
-  public void addHashingChildrenNodes(String partition, List<ConsistentHashingNode> nodes) {
-    ValidationUtils.checkState(nodes.stream().noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL),
-        "children nodes should not be tagged as NORMAL");
-    hashingChildrenNodes.put(partition, nodes);
   }
 
   private int getBucketId(Row row) {
