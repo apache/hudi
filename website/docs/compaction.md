@@ -226,3 +226,9 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 | `--seq` | `LIFO`  (Optional)   | The order in which compaction tasks are executed. Executing from the latest compaction plan by default. `LIFO`: executing from the latest plan. `FIFO`: executing from the oldest plan. |
 | `--service` | `false`  (Optional)  | Whether to start a monitoring service that checks and schedules new compaction task in configured interval. |
 | `--min-compaction-interval-seconds` | `600(s)` (optional)  | The checking interval for service mode, by default 10 minutes. |
+
+## Related Resources
+
+<h3>Blogs</h3>
+[Apache Hudi Compaction](https://medium.com/@simpsons/apache-hudi-compaction-6e6383790234)
+[Standalone HoodieCompactor Utility](https://medium.com/@simpsons/standalone-hoodiecompactor-utility-890198e4c539)

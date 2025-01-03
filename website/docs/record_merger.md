@@ -251,3 +251,7 @@ example, [`MySqlDebeziumAvroPayload`](https://github.com/apache/hudi/blob/e76dd1
 captured via Debezium for MySQL and PostgresDB. [`AWSDmsAvroPayload`](https://github.com/apache/hudi/blob/e76dd102bcaf8aec5a932e7277ccdbfd73ce1a32/hudi-common/src/main/java/org/apache/hudi/common/model/AWSDmsAvroPayload.java) provides support for applying changes captured via Amazon Database Migration Service onto S3.
 For full configurations, go [here](/docs/configurations#RECORD_PAYLOAD) and please check out [this FAQ](faq_writing_tables/#can-i-implement-my-own-logic-for-how-input-records-are-merged-with-record-on-storage) if you want to implement your own custom payloads.
 
+## Related Resources
+
+<h3>Blogs</h3>
+* [How to define your own merge logic with Apache Hudi](https://medium.com/@simpsons/how-to-define-your-own-merge-logic-with-apache-hudi-622ee5ccab1e)

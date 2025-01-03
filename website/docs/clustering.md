@@ -341,6 +341,11 @@ and execution strategy `org.apache.hudi.client.clustering.run.strategy.JavaSortA
 out-of-the-box. Note that as of now only linear sort is supported in Java execution strategy.
 
 ## Related Resources
+
+<h3>Blogs</h3>
+[Apache Hudi Z-Order and Hilbert Space Filling Curves](https://www.onehouse.ai/blog/apachehudi-z-order-and-hilbert-space-filling-curves)
+[Hudi Z-Order and Hilbert Space-filling Curves](https://medium.com/apache-hudi-blogs/hudi-z-order-and-hilbert-space-filling-curves-68fa28bffaf0)
+
 <h3>Videos</h3>
 
 * [Understanding Clustering in Apache Hudi and the Benefits of Asynchronous Clustering](https://www.youtube.com/watch?v=R_sm4wlGXuE)
