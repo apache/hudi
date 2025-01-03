@@ -589,7 +589,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         LOG.error("Inline compaction or clustering failed for table {}.", table.getConfig().getBasePath(), t);
         throw t;
       }
-      LOG.warn("Inline compaction or clustering failed table {}. Moving further since "
+      LOG.warn("Inline compaction or clustering failed for table {}. Moving further since "
           + "\"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.", table.getConfig().getBasePath(), t);
     }
   }
