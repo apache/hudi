@@ -21,7 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.client.HoodieColStatsIndexUtils;
+import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
@@ -234,9 +234,9 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
       // update cols to Index as applicable
-      HoodieColStatsIndexUtils.updateColsToIndex(table, config, metadata,
-          (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (val1, val2) -> {
-            updateColumnsToIndexWithColStats(val1, val2);
+      HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata,
+          (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
+            updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
             return null;
           });
     } catch (IOException e) {
@@ -250,7 +250,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
    * @param metaClient instance of {@link HoodieTableMetaClient} of interest.
    * @param columnsToIndex list of columns to index.
    */
-  protected abstract void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
+  protected abstract void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
 
   /**
    * Finalize Write operation.

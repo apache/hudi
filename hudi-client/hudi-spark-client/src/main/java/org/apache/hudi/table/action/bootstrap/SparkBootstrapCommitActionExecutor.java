@@ -221,7 +221,7 @@ public class SparkBootstrapCommitActionExecutor<T>
   }
 
   @Override
-  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+  protected void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
     throw new HoodieNotSupportedException("col stats is not supported with bootstrap operation");
   }
 

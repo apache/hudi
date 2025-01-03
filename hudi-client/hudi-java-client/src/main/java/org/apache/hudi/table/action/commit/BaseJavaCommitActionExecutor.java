@@ -300,7 +300,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   }
 
   @Override
-  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+  protected void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
     // no op. HUDI-8801
   }
 }

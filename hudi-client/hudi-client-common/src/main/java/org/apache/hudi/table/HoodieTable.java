@@ -31,7 +31,7 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.client.HoodieColStatsIndexUtils;
+import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -1032,7 +1032,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           }
           if (partitionType == MetadataPartitionType.COLUMN_STATS) {
             // delete index definition as well
-            HoodieColStatsIndexUtils.deleteColStatsIndexDefn(getMetaClient());
+            HoodieColumnStatsIndexUtils.deleteColumnStatsIndexDefinition(getMetaClient());
           }
           clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
         } catch (HoodieMetadataException e) {

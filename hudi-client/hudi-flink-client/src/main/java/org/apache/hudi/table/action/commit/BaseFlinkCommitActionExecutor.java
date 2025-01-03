@@ -201,7 +201,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
   }
 
   @Override
-  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+  protected void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
     throw new HoodieNotSupportedException("Col stats with flink is not yet supported");
   }
 }

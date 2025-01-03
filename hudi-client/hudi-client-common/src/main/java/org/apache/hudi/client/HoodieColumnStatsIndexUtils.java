@@ -38,7 +38,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
 /**
  * Utils to assist with updating columns to index with col stats.
  */
-public class HoodieColStatsIndexUtils {
+public class HoodieColumnStatsIndexUtils {
 
   /**
    * Updates the list of columns to index with col stats partition in MDT.
@@ -81,7 +81,7 @@ public class HoodieColStatsIndexUtils {
    * @param dataTableMetaClient {@link HoodieTableMetaClient} instance for the data table.
    */
   @VisibleForTesting
-  public static void deleteColStatsIndexDefn(HoodieTableMetaClient dataTableMetaClient) {
+  public static void deleteColumnStatsIndexDefinition(HoodieTableMetaClient dataTableMetaClient) {
     dataTableMetaClient.deleteIndexDefinition(PARTITION_NAME_COLUMN_STATS);
   }
 }

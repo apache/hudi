@@ -1342,9 +1342,7 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  public static List<String> getColumnsToIndex(HoodieCommitMetadata commitMetadata,
-                                         HoodieTableMetaClient dataMetaClient,
-                                         HoodieMetadataConfig metadataConfig) {
+  public static List<String> getColumnsToIndex(HoodieCommitMetadata commitMetadata, HoodieTableMetaClient dataMetaClient, HoodieMetadataConfig metadataConfig) {
     Option<Schema> writerSchema =
         Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
             .flatMap(writerSchemaStr ->

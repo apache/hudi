@@ -74,14 +74,14 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
     for (int i = 0; i < 5; i++) {
       String indexName = indexNamePrefix + "_" + i;
       String fieldName = fieldNamePrefix + "_" + i;
-      HoodieIndexDefinition indexDefinition = getHoodieIndexDefn(indexName,
+      HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName,
           i % 2 == 0 ? PARTITION_NAME_SECONDARY_INDEX : PARTITION_NAME_EXPRESSION_INDEX, fieldName);
       sparkIndexClient.register(metaClient, indexDefinition);
       readAndValidateIndexDefn(indexDefinition);
     }
 
     // add col stats index.
-    HoodieIndexDefinition colStatsIndexDefinition = getHoodieIndexDefn(PARTITION_NAME_COLUMN_STATS,
+    HoodieIndexDefinition colStatsIndexDefinition = getIndexDefinition(PARTITION_NAME_COLUMN_STATS,
         RANGE_TYPE, fieldNamePrefix + "_5");
     sparkIndexClient.register(metaClient, colStatsIndexDefinition);
     readAndValidateIndexDefn(colStatsIndexDefinition);
@@ -93,17 +93,17 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
     //validate rest.
     HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.builder().setBasePath(metaClient.getBasePath()).setConf(metaClient.getStorageConf())
         .build();
-    HoodieIndexDefinition indexDefinition = getHoodieIndexDefn(indexNamePrefix + "_0", PARTITION_NAME_SECONDARY_INDEX, fieldNamePrefix + "_0");
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexNamePrefix + "_0", PARTITION_NAME_SECONDARY_INDEX, fieldNamePrefix + "_0");
     readAndValidateIndexDefn(indexDefinition, newMetaClient);
-    indexDefinition = getHoodieIndexDefn(indexNamePrefix + "_3", PARTITION_NAME_EXPRESSION_INDEX, fieldNamePrefix + "_3");
+    indexDefinition = getIndexDefinition(indexNamePrefix + "_3", PARTITION_NAME_EXPRESSION_INDEX, fieldNamePrefix + "_3");
     readAndValidateIndexDefn(indexDefinition, newMetaClient);
-    indexDefinition = getHoodieIndexDefn(indexNamePrefix + "_4", PARTITION_NAME_SECONDARY_INDEX, fieldNamePrefix + "_4");
+    indexDefinition = getIndexDefinition(indexNamePrefix + "_4", PARTITION_NAME_SECONDARY_INDEX, fieldNamePrefix + "_4");
     readAndValidateIndexDefn(indexDefinition, newMetaClient);
     readAndValidateIndexDefn(colStatsIndexDefinition);
 
     // update col stats w/ new set of cols
     List<String> colsToIndex = IntStream.range(0, 10).mapToObj(number -> fieldNamePrefix + "_" + number).collect(Collectors.toList());
-    colStatsIndexDefinition = getHoodieIndexDefn(PARTITION_NAME_COLUMN_STATS,
+    colStatsIndexDefinition = getIndexDefinition(PARTITION_NAME_COLUMN_STATS,
         RANGE_TYPE, RANGE_TYPE, colsToIndex, Collections.EMPTY_MAP);
     sparkIndexClient.register(metaClient, colStatsIndexDefinition);
     readAndValidateIndexDefn(colStatsIndexDefinition);
@@ -133,11 +133,11 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
     assertTrue(!metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(expectedIndexDefn.getIndexName()));
   }
 
-  private HoodieIndexDefinition getHoodieIndexDefn(String indexName, String indexType, String sourceField) {
-    return getHoodieIndexDefn(indexName, indexType, IDENTITY_FUNCTION, Collections.singletonList(sourceField), Collections.emptyMap());
+  private HoodieIndexDefinition getIndexDefinition(String indexName, String indexType, String sourceField) {
+    return getIndexDefinition(indexName, indexType, IDENTITY_FUNCTION, Collections.singletonList(sourceField), Collections.emptyMap());
   }
 
-  private HoodieIndexDefinition getHoodieIndexDefn(String indexName, String indexType, String indexFunc, List<String> sourceFields,
+  private HoodieIndexDefinition getIndexDefinition(String indexName, String indexType, String indexFunc, List<String> sourceFields,
                                                    Map<String, String> indexOptions) {
     String fullIndexName = getIndexFullName(indexName, indexType);
     return new HoodieIndexDefinition(fullIndexName, indexType, indexFunc, sourceFields, indexOptions);
