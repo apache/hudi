@@ -298,4 +298,9 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
     commitOnAutoCommit(result);
   }
+
+  @Override
+  protected void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    // no op. HUDI-8801
+  }
 }
