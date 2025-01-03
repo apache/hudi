@@ -20,20 +20,21 @@ package org.apache.hudi
 
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.storage.StoragePathInfo
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
+import org.apache.spark.TaskContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.sources.{And, Filter, Or}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
+import java.io.Closeable
 import scala.collection.JavaConverters._
 
 object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
@@ -66,6 +67,13 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
 
     file: PartitionedFile => {
       val iter = readParquetFile(file)
+      iter match {
+        case closeable: Closeable =>
+          // register a callback to close logScanner which will be executed on task completion.
+          // when tasks finished, this method will be called, and release resources.
+          Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => closeable.close()))
+        case _ =>
+      }
       iter.flatMap {
         case r: InternalRow => Seq(r)
         case b: ColumnarBatch => b.rowIterator().asScala

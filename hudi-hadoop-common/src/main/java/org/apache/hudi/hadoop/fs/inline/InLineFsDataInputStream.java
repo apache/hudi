@@ -130,4 +130,10 @@ public class InLineFsDataInputStream extends FSDataInputStream {
   public void unbuffer() {
     outerStream.unbuffer();
   }
+
+  @Override
+  public void close() throws IOException {
+    super.close();
+    outerStream.close();
+  }
 }

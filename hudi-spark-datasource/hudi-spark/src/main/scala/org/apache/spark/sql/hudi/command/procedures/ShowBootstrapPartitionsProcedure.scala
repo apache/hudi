@@ -48,9 +48,12 @@ class ShowBootstrapPartitionsProcedure extends BaseProcedure with ProcedureBuild
     val metaClient = createMetaClient(jsc, basePath)
 
     val indexReader = createBootstrapIndexReader(metaClient)
-    val indexedPartitions = indexReader.getIndexedPartitionPaths
-
-    indexedPartitions.stream().toArray.map(r => Row(r)).toList
+    try {
+      val indexedPartitions = indexReader.getIndexedPartitionPaths
+      indexedPartitions.stream().toArray.map(r => Row(r)).toList
+    } finally {
+      indexReader.close()
+    }
   }
 
   private def createBootstrapIndexReader(metaClient: HoodieTableMetaClient) = {
