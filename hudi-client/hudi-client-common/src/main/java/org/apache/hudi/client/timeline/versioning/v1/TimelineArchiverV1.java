@@ -143,7 +143,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter(archiveFilePath.getParent());
-        LOG.info(String.format("Archiving instants {} for table {}", instantsToArchive, config.getBasePath()));
+        LOG.info("Archiving instants {} for table {}", instantsToArchive, config.getBasePath());
         archive(context, instantsToArchive);
         LOG.info("Deleting archived instants {} for table {}", instantsToArchive, config.getBasePath());
         deleteArchivedInstants(instantsToArchive, context);
