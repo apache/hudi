@@ -100,9 +100,37 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     var dataFilter1: Expression = GreaterThan(attribute("c5"), literal("70"))
     verifyPruningFileCount(commonOpts, dataFilter1, false)
 
-    // a mix of two cols, where c2 is indexed and c5 is not indexed
-    dataFilter1 = And(dataFilter1, EqualTo(attribute("c2"), literal("619sdc")))
-    verifyPruningFileCount(commonOpts, dataFilter1, false)
+    // a mix of two cols, where c2 is indexed and c5 is not indexed. but since its 'AND', pruning should kick in.
+    var dataFilter2 = And(dataFilter1, EqualTo(attribute("c2"), literal("619sdc")))
+    verifyPruningFileCount(commonOpts, dataFilter2, true)
+    // adding an AND clause
+    dataFilter2 = And(dataFilter2, EqualTo(attribute("c5"), literal("100")))
+    verifyPruningFileCount(commonOpts, dataFilter2, true)
+    // adding an OR clause where the col is indexed. expected to prune
+    var dataFilter2_1 = Or(dataFilter2, EqualTo(attribute("c2"), literal("619sda")))
+    verifyPruningFileCount(commonOpts, dataFilter2_1, true)
+    // adding another Or clause, but this time the col is not indexed. So, no pruning expected.
+    dataFilter2_1 = Or(dataFilter2_1, EqualTo(attribute("c5"), literal("120")))
+    verifyPruningFileCount(commonOpts, dataFilter2_1, false)
+
+    // a mix of two cols, where c2 is indexed and c5 is not indexed. but since its 'OR', pruning should be by passed.
+    var dataFilter3 = Or(dataFilter1, EqualTo(attribute("c2"), literal("619sdc")))
+    verifyPruningFileCount(commonOpts, dataFilter3, false)
+    // adding an OR clause
+    dataFilter3 = Or(dataFilter3, EqualTo(attribute("c5"), literal("100")))
+    verifyPruningFileCount(commonOpts, dataFilter3, false)
+    // adding AND clause where the col is indexed. Expected to prune.
+    var dataFilter3_1 = And(dataFilter3, EqualTo(attribute("c2"), literal("619sda")))
+    verifyPruningFileCount(commonOpts, dataFilter3_1, true)
+    // adding another AND clause where the col is not indexed. Still expected to prune since c2 = 619sda could still be pruned.
+    dataFilter3_1 = And(dataFilter3_1, EqualTo(attribute("c5"), literal("200")))
+    verifyPruningFileCount(commonOpts, dataFilter3_1, true)
+    // adding an Or clause where the col is indexed. expected to prune.
+    var dataFilter3_2 = Or(dataFilter3_1, EqualTo(attribute("c2"), literal("619sda")))
+    verifyPruningFileCount(commonOpts, dataFilter3_2, true)
+    // adding an Or clause where the col is not indexed. not expected to prune
+    dataFilter3_2 = Or(dataFilter3_2, EqualTo(attribute("c5"), literal("250")))
+    verifyPruningFileCount(commonOpts, dataFilter3_2, false)
   }
 
   @ParameterizedTest

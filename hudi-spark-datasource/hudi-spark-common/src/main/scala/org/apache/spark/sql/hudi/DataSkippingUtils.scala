@@ -375,10 +375,15 @@ object DataSkippingUtils extends Logging {
         Option(Or(resLeft, resRight))
 
       case and: And =>
+        val leftHasNonIndexedCols = new AtomicBoolean(false)
         val resLeft = createColumnStatsIndexFilterExprInternal(and.left, isExpressionIndex = isExpressionIndex,
-          indexedCols = indexedCols, hasNonIndexedCols = hasNonIndexedCols)
+          indexedCols = indexedCols, hasNonIndexedCols = leftHasNonIndexedCols)
+        val rightHasNonIndexedCols = new AtomicBoolean(false)
         val resRight = createColumnStatsIndexFilterExprInternal(and.right, isExpressionIndex = isExpressionIndex,
-          indexedCols = indexedCols, hasNonIndexedCols = hasNonIndexedCols)
+          indexedCols = indexedCols, hasNonIndexedCols = rightHasNonIndexedCols)
+        // only if both left and right has non indexed cols, we can set hasNonIndexedCols to true.
+        // If not, we can still afford to prune files based on col stats lookup.
+        hasNonIndexedCols.set(leftHasNonIndexedCols.get() && rightHasNonIndexedCols.get())
         Option(And(resLeft, resRight))
 
       //
