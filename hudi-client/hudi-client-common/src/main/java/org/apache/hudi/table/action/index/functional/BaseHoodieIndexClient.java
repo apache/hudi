@@ -28,6 +28,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 
 public abstract class BaseHoodieIndexClient {
@@ -47,12 +48,15 @@ public abstract class BaseHoodieIndexClient {
   public void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
     LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
     // build HoodieIndexMetadata and then add to index definition file
-    metaClient.buildIndexDefinition(indexDefinition);
-    // update table config if necessary
-    String indexMetaPath = metaClient.getIndexDefinitionPath();
-    if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH) || !metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()) {
-      metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(indexMetaPath)));
-      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+    boolean indexDefnUpdated = metaClient.buildIndexDefinition(indexDefinition);
+    if (indexDefnUpdated) {
+      String indexMetaPath = metaClient.getIndexDefinitionPath();
+      // update table config if necessary
+      if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
+          || !metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()) {
+        metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(indexMetaPath)));
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+      }
     }
   }
 
@@ -61,6 +65,13 @@ public abstract class BaseHoodieIndexClient {
    */
   public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
                               Map<String, String> tableProperties) throws Exception;
+
+  /**
+   * Creates or updated the col stats index definition.
+   * @param metaClient data table's {@link HoodieTableMetaClient} instance.
+   * @param columnsToIndex list of columns to index.
+   */
+  public abstract void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
 
   /**
    * Drop an index. By default, ignore drop if index does not exist.

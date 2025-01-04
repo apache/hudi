@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
+import org.apache.hudi.HoodieSparkIndexClient;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -251,5 +252,10 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     });
 
     return HoodieJavaRDD.of(deletedRecords, sparkEngineContext, 1);
+  }
+
+  @Override
+  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+    new HoodieSparkIndexClient(dataWriteConfig, engineContext).createOrUpdateColumnStatsIndexDefinition(dataMetaClient, columnsToIndex);
   }
 }

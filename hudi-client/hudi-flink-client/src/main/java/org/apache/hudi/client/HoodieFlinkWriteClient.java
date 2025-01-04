@@ -430,6 +430,11 @@ public class HoodieFlinkWriteClient<T> extends
     cleanHandles();
   }
 
+  @Override
+  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    //no op. HUDI-8801 to fix.
+  }
+
   /**
    * Get or create a new write handle in order to reuse the file handles.
    *

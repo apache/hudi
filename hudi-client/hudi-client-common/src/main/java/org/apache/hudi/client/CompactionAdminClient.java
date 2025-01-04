@@ -324,6 +324,11 @@ public class CompactionAdminClient extends BaseHoodieClient {
     }
   }
 
+  @Override
+  protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    // no op
+  }
+
   /**
    * Holds Operation result for Renaming.
    */
