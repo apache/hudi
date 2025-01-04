@@ -573,7 +573,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       autoCleanOnCommit();
       autoArchiveOnCommit(table);
     } catch (Throwable t) {
-      LOG.error(String.format("Inline cleaning or clustering failed for {}", table.getConfig().getBasePath()), t);
+      LOG.error(String.format("Inline cleaning or archival failed for {}",
+          table.getConfig().getBasePath()), t);
       throw t;
     }
   }
