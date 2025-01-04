@@ -76,35 +76,36 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
           table, context, instantToRollback.getTimestamp(), config.getRollbackParallelism());
       int parallelism = Math.max(Math.min(markerPaths.size(), config.getRollbackParallelism()), 1);
-      return context.map(markerPaths, markerFilePath -> {
-        String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
-        IOType type = IOType.valueOf(typeStr);
-        String fileNameWithPartitionToRollback = WriteMarkers.stripMarkerSuffix(markerFilePath);
-        Path fullFilePathToRollback = new Path(basePath, fileNameWithPartitionToRollback);
-        String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullFilePathToRollback.getParent());
-        switch (type) {
-          case MERGE:
-          case CREATE:
-            String fileId = null;
-            String baseInstantTime = null;
-            if (FSUtils.isBaseFile(fullFilePathToRollback)) {
-              HoodieBaseFile baseFileToDelete = new HoodieBaseFile(fullFilePathToRollback.toString());
-              fileId = baseFileToDelete.getFileId();
-              baseInstantTime = baseFileToDelete.getCommitTime();
-            } else if (FSUtils.isLogFile(fullFilePathToRollback)) {
-              throw new HoodieRollbackException("Log files should have only APPEND as IOTypes " + fullFilePathToRollback);
+      return RollbackUtils.groupRollbackRequestsBasedOnFileGroup(
+          context.map(markerPaths, markerFilePath -> {
+            String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
+            IOType type = IOType.valueOf(typeStr);
+            String fileNameWithPartitionToRollback = WriteMarkers.stripMarkerSuffix(markerFilePath);
+            Path fullFilePathToRollback = new Path(basePath, fileNameWithPartitionToRollback);
+            String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullFilePathToRollback.getParent());
+            switch (type) {
+              case MERGE:
+              case CREATE:
+                String fileId = null;
+                String baseInstantTime = null;
+                if (FSUtils.isBaseFile(fullFilePathToRollback)) {
+                  HoodieBaseFile baseFileToDelete = new HoodieBaseFile(fullFilePathToRollback.toString());
+                  fileId = baseFileToDelete.getFileId();
+                  baseInstantTime = baseFileToDelete.getCommitTime();
+                } else if (FSUtils.isLogFile(fullFilePathToRollback)) {
+                  throw new HoodieRollbackException("Log files should have only APPEND as IOTypes " + fullFilePathToRollback);
+                }
+                Objects.requireNonNull(fileId, "Cannot find valid fileId from path: " + fullFilePathToRollback);
+                Objects.requireNonNull(baseInstantTime, "Cannot find valid base instant from path: " + fullFilePathToRollback);
+                return new HoodieRollbackRequest(partitionPath, fileId, baseInstantTime,
+                    Collections.singletonList(fullFilePathToRollback.toString()),
+                    Collections.emptyMap());
+              case APPEND:
+                return getRollbackRequestForAppend(instantToRollback, fileNameWithPartitionToRollback);
+              default:
+                throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
             }
-            Objects.requireNonNull(fileId, "Cannot find valid fileId from path: " + fullFilePathToRollback);
-            Objects.requireNonNull(baseInstantTime, "Cannot find valid base instant from path: " + fullFilePathToRollback);
-            return new HoodieRollbackRequest(partitionPath, fileId, baseInstantTime,
-                Collections.singletonList(fullFilePathToRollback.toString()),
-                Collections.emptyMap());
-          case APPEND:
-            return getRollbackRequestForAppend(instantToRollback, fileNameWithPartitionToRollback);
-          default:
-            throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
-        }
-      }, parallelism);
+          }, parallelism));
     } catch (Exception e) {
       throw new HoodieRollbackException("Error rolling back using marker files written for " + instantToRollback, e);
     }
