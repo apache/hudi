@@ -949,7 +949,7 @@ public class HoodieTableMetadataUtil {
     if (timeline.empty()) {
       final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION,
           HoodieActiveTimeline.createNewInstantTime());
-      timeline = new HoodieDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline().getInstantReader());
+      timeline = new HoodieDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline());
     }
     HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(),
         metaClient.getSerializableHadoopConf(), metaClient.getBasePathV2().toString(), false);

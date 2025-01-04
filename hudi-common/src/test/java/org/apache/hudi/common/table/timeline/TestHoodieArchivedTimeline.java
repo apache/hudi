@@ -66,6 +66,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -405,6 +406,12 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
     validateInstantsLoaded(timeline, Arrays.asList("17", "21"), true);
 
     assertEquals(instants, timeline.getInstants());
+  }
+
+  @Test
+  void getInstantReaderReferencesSelf() {
+    timeline = new HoodieArchivedTimeline(metaClient, "15", "21");
+    assertSame(timeline, timeline.getInstantReader());
   }
 
   /**

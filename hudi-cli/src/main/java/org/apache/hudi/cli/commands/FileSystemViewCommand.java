@@ -266,7 +266,7 @@ public class FileSystemViewCommand {
       instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.getTimestamp()));
     }
 
-    HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream, metaClient.getActiveTimeline().getInstantReader());
+    HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream, metaClient.getActiveTimeline());
     return new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new FileStatus[0]));
   }
 }

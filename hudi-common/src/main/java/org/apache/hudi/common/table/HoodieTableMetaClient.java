@@ -628,7 +628,7 @@ public class HoodieTableMetaClient implements Serializable {
             // We reverse the order as the operation against this timeline would be very efficient if
             // we always start from the tail.
             .sorted(HoodieInstant.COMPARATOR.reversed()),
-        timeline.getInstantReader());
+        timeline);
   }
 
   /**

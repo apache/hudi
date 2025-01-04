@@ -243,6 +243,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline implements Hoo
     return getInstantDetails(instant).map(bytes -> bytes.length == 0).orElse(true);
   }
 
+  @Override
+  protected HoodieInstantReader getInstantReader() {
+    return this;
+  }
+
   public HoodieArchivedTimeline reload() {
     return new HoodieArchivedTimeline(metaClient);
   }

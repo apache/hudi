@@ -304,8 +304,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline implements Hoodi
   }
 
   @Override
-  public InputStream getInstantContentStream(HoodieInstant instant) {
-    return getContentStream(instant);
+  protected HoodieInstantReader getInstantReader() {
+    return this;
   }
 
   private Option<byte[]> readDataFromPath(Path filePath) {
