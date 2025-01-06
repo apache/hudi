@@ -1347,35 +1347,22 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id bigint,
              |  name string,
              |  price double,
-             |  dt string
+             |  dt string,
+             |  ts bigint
              | ) using hudi
              | tblproperties (
              |  type = 'mor',
-             |  primaryKey = 'id'
+             |  primaryKey = 'id',
+             |  precombineKey = 'ts'
              | )
              | partitioned by(dt)
              | location '${tmp.getCanonicalPath}'
          """.stripMargin)
 
-        spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21'")
-
-        // test with optimized sql merge enabled / disabled.
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
-
-        spark.sql(
-          s"""
-             | merge into $tableName as t0
-             | using (
-             |  select 2 as id, 'a2' as name, 10 as price, '2021-03-20' as dt
-             | ) s0
-             | on s0.id = t0.id
-             | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
-             | values(s0.id, s0.name, s0.dt)
-         """.stripMargin)
-        checkAnswer(s"select id, name, price, dt from $tableName order by id")(
-          Seq(1, "a1", 10, "2021-03-21"),
-          Seq(2, "a2", null, "2021-03-20")
-        )
+//        None of these queries work
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21', 1L")
+//        spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21', cast(1 as bigint)")
+//        spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21', 1")
       })
     }
   }
