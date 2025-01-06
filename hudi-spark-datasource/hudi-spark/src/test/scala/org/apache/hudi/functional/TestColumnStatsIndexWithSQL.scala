@@ -36,7 +36,7 @@ import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, LessThanOrEqual, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, LessThanOrEqual, Literal, Or}
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.{AllowedTransformationExpression, swapAttributeRefInExpr}
 import org.apache.spark.sql.hudi.{ColumnStatsExpressionUtils, DataSkippingUtils}
 import org.apache.spark.sql.types.StringType
@@ -240,6 +240,60 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
     // c1 = 619sdc or c2 = 100 and c3 = 200, where c2 and c3 is not indexed.
     translateIntoColStatsExprAndValidate(dataFilter2_2, Seq("c1"), TrueLiteral, true)
+
+    // nested And and Or case
+    val dataFilter3 = And(
+      Or(
+        EqualTo(attribute("c1"), literal("619sdc")),
+        And(EqualTo(attribute("c2"), literal("100")), EqualTo(attribute("c3"), literal("200")))
+      ),
+      EqualTo(attribute("c4"), literal("300"))
+    )
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c2","100")
+    expectedExpr = And(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c3","200"))
+    expectedExpr = Or(generateColStatsExprForGreaterthanOrEquals("c1","619sdc"), expectedExpr)
+    expectedExpr = And(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c4","300"))
+    translateIntoColStatsExprAndValidate(
+      dataFilter3,
+      Seq("c1", "c2", "c3", "c4"),
+      expectedExpr,
+      false
+    )
+
+    // unsupported filter type
+    val dataFilter4 = BitwiseOr(
+        EqualTo(attribute("c1"), literal("619sdc")),
+        EqualTo(attribute("c2"), literal("100"))
+      )
+    translateIntoColStatsExprAndValidate(
+      dataFilter4,
+      Seq("c1", "c2"),
+      TrueLiteral,
+      false
+    )
+
+    // too many filters, out of which only half are indexed.
+    val largeFilter = (1 to 100).map(i => EqualTo(attribute(s"c$i"), literal("value"))).reduce(And)
+    val indexedColumns = (1 to 50).map(i => s"c$i")
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","value")
+    (2 to 50).map(i => {
+      expectedExpr = And(expectedExpr, generateColStatsExprForGreaterthanOrEquals(s"c$i","value"))
+    })
+    translateIntoColStatsExprAndValidate(largeFilter, indexedColumns, expectedExpr, false)
+
+    // nested field part of data filters.
+    val dataFilter5 = And(
+      EqualTo(attribute("c1"), literal("val1")),
+      EqualTo(attribute("nested.inner_c2"), literal("val2"))
+    )
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","val1")
+    translateIntoColStatsExprAndValidate(
+      dataFilter5,
+      Seq("c1"),
+      expectedExpr,
+      false
+    )
+
   }
 
   def translateIntoColStatsExprAndValidate(dataFilter: Expression, indexedCols: Seq[String], expectedExpr: Expression,

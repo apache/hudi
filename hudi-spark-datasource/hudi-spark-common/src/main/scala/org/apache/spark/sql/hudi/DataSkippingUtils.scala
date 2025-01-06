@@ -45,8 +45,7 @@ object DataSkippingUtils extends Logging {
    * @param isExpressionIndex whether the index is an expression index
    * @return filter for column-stats index's table
    */
-  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, isExpressionIndex: Boolean = false,
-                                              indexedCols : Seq[String] = Seq.empty,
+  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, isExpressionIndex: Boolean = false, indexedCols : Seq[String] = Seq.empty,
                                               hasNonIndexedCols : AtomicBoolean = new AtomicBoolean(false)): Expression = {
     try {
       createColumnStatsIndexFilterExprInternal(dataTableFilterExpr, isExpressionIndex, indexedCols,
@@ -391,13 +390,13 @@ object DataSkippingUtils extends Logging {
           indexedCols = indexedCols, hasNonIndexedCols = rightHasNonIndexedCols)
         // only if both left and right has non indexed cols, we can set hasNonIndexedCols to true.
         // If not, we can still afford to prune files based on col stats lookup.
-        if (leftHasNonIndexedCols.get() && !rightHasNonIndexedCols.get()) {
-          Option(resRight)  // if only left has non indexed cols, ignore from the expression to be looked up in col stats df
-        } else if (!leftHasNonIndexedCols.get() && rightHasNonIndexedCols.get()) {
-          Option(resLeft) // if only right has non indexed cols, ignore from the expression to be looked up in col stats df
-        } else if (leftHasNonIndexedCols.get() && rightHasNonIndexedCols.get()) {
+        if (leftHasNonIndexedCols.get() && rightHasNonIndexedCols.get()) {
           hasNonIndexedCols.set(true)
           None
+        } else if (leftHasNonIndexedCols.get()) {
+          Option(resRight) // Ignore the non-indexed left expression
+        } else if (rightHasNonIndexedCols.get()) {
+          Option(resLeft) // Ignore the non-indexed right expression
         } else {
           Option(And(resLeft, resRight))
         }

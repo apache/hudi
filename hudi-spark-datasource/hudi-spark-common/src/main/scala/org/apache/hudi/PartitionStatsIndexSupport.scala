@@ -98,7 +98,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
             //       filter does not prune any partition.
             val indexSchema = transposedPartitionStatsDF.schema
             val indexedCols : Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
-            // to be fixed. Siva.
+            // to be fixed. HUDI-8836.
             val hasNonIndexedCols = new AtomicBoolean(false)
             val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols,
               hasNonIndexedCols = hasNonIndexedCols)).reduce(And)
