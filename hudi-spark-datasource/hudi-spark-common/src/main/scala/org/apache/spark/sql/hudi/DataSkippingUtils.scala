@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor, getValueCountColumnNameFor}
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.VisibleForTesting
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -368,11 +369,18 @@ object DataSkippingUtils extends Logging {
         })
 
       case or: Or =>
+        val leftHasNonIndexedCols = new AtomicBoolean(false)
         val resLeft = createColumnStatsIndexFilterExprInternal(or.left, isExpressionIndex = isExpressionIndex,
-          indexedCols = indexedCols, hasNonIndexedCols = hasNonIndexedCols)
+          indexedCols = indexedCols, hasNonIndexedCols = leftHasNonIndexedCols)
+        val rightHasNonIndexedCols = new AtomicBoolean(false)
         val resRight = createColumnStatsIndexFilterExprInternal(or.right, isExpressionIndex = isExpressionIndex,
-          indexedCols = indexedCols, hasNonIndexedCols = hasNonIndexedCols)
-        Option(Or(resLeft, resRight))
+          indexedCols = indexedCols, hasNonIndexedCols = rightHasNonIndexedCols)
+        if (leftHasNonIndexedCols.get() || rightHasNonIndexedCols.get()) {
+          hasNonIndexedCols.set(true)
+          None
+        } else {
+          Option(Or(resLeft, resRight))
+        }
 
       case and: And =>
         val leftHasNonIndexedCols = new AtomicBoolean(false)
@@ -383,8 +391,16 @@ object DataSkippingUtils extends Logging {
           indexedCols = indexedCols, hasNonIndexedCols = rightHasNonIndexedCols)
         // only if both left and right has non indexed cols, we can set hasNonIndexedCols to true.
         // If not, we can still afford to prune files based on col stats lookup.
-        hasNonIndexedCols.set(leftHasNonIndexedCols.get() && rightHasNonIndexedCols.get())
-        Option(And(resLeft, resRight))
+        if (leftHasNonIndexedCols.get() && !rightHasNonIndexedCols.get()) {
+          Option(resRight)  // if only left has non indexed cols, ignore from the expression to be looked up in col stats df
+        } else if (!leftHasNonIndexedCols.get() && rightHasNonIndexedCols.get()) {
+          Option(resLeft) // if only right has non indexed cols, ignore from the expression to be looked up in col stats df
+        } else if (leftHasNonIndexedCols.get() && rightHasNonIndexedCols.get()) {
+          hasNonIndexedCols.set(true)
+          None
+        } else {
+          Option(And(resLeft, resRight))
+        }
 
       //
       // Pushing Logical NOT inside the AND/OR expressions
