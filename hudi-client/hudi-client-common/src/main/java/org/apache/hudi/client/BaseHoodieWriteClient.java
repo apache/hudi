@@ -580,7 +580,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       autoCleanOnCommit();
       autoArchiveOnCommit(table);
     } catch (Throwable t) {
-      LOG.error(String.format("Inline cleaning or clustering failed for {}", table.getConfig().getBasePath()), t);
+      LOG.error("Inline cleaning or clustering failed for {}", table.getConfig().getBasePath(), t);
       throw t;
     }
   }
@@ -591,12 +591,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
       runTableServicesInlineInternal(table, metadata, extraMetadata);
     } catch (Throwable t) {
-      LOG.error(String.format("Inline compaction or clustering failed for table {}.", table.getConfig().getBasePath()), t);
       // Throw if this is exception and the exception is configured to throw or if it is something else like Error.
       if (config.isFailOnInlineTableServiceExceptionEnabled() || !(t instanceof Exception)) {
+        LOG.error("Inline compaction or clustering failed for table {}.", table.getConfig().getBasePath(), t);
         throw t;
       }
-      LOG.warn("Inline compaction or clustering failed. Moving further since \"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.", t);
+      LOG.warn("Inline compaction or clustering failed for table {}. Moving further since "
+          + "\"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.", table.getConfig().getBasePath(), t);
     }
   }
 
