@@ -34,7 +34,11 @@ import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, Literal, Or}
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, LessThanOrEqual, Literal, Or}
+import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.{AllowedTransformationExpression, swapAttributeRefInExpr}
+import org.apache.spark.sql.hudi.{ColumnStatsExpressionUtils, DataSkippingUtils}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -42,6 +46,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.JavaConverters._
 
 class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
@@ -131,6 +136,123 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     // adding an Or clause where the col is not indexed. not expected to prune
     dataFilter3_2 = Or(dataFilter3_2, EqualTo(attribute("c5"), literal("250")))
     verifyPruningFileCount(commonOpts, dataFilter3_2, false)
+  }
+
+  @Test
+  def testTranslateIntoColumnStatsIndexFilterExpr(): Unit = {
+    var dataFilter: Expression = EqualTo(attribute("c1"), literal("619sdc"))
+    var expectedExpr: Expression = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    translateIntoColStatsExprAndValidate(dataFilter, Seq("c1"), expectedExpr, false)
+
+    // if c1 is not indexed, we should get empty expr
+    translateIntoColStatsExprAndValidate(dataFilter, Seq.empty, TrueLiteral, true)
+
+    // c1 = 619sdc and c2 = 100, where both c1 and c2 are indexed.
+    val dataFilter1 = And(dataFilter, EqualTo(attribute("c2"), literal("100")))
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    expectedExpr = And(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c2","100"))
+    translateIntoColStatsExprAndValidate(dataFilter1, Seq("c1","c2"), expectedExpr, false)
+
+    // c1 = 619sdc and c2 = 100, where only c1 is indexed. we expect only c1 to be part of translated expr
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    translateIntoColStatsExprAndValidate(dataFilter1, Seq("c1"), expectedExpr, false)
+
+    // c1 = 619sdc and c2 = 100 and c3 = 200, where all 3 (c1, c2 and c3) are indexed.
+    val dataFilter1_1 = And(dataFilter1, EqualTo(attribute("c3"), literal("200")))
+    expectedExpr = And(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c2","100"))
+    expectedExpr = And(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c3","200"))
+    translateIntoColStatsExprAndValidate(dataFilter1_1, Seq("c1","c2","c3"), expectedExpr, false)
+
+    // c1 = 619sdc and c2 = 100 and c3 = 200, where all only c1 and c3 are indexed.
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    expectedExpr = And(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c3","200"))
+    translateIntoColStatsExprAndValidate(dataFilter1_1, Seq("c1","c3"), expectedExpr, false)
+
+    // c1 = 619sdc and c2 = 100 and c3 = 200, where only c1 is indexed. we expect only c1 to be part of translated expr
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    translateIntoColStatsExprAndValidate(dataFilter1_1, Seq("c1"), expectedExpr, false)
+
+    // c1 = 619sdc and c2 = 100 and c3 = 200, where none of c1, or c2 or c3 is indexed.
+    translateIntoColStatsExprAndValidate(dataFilter1_1, Seq(""), TrueLiteral, true)
+
+    // c1 = 619sdc Or c2 = 100, where both c1 and c2 are indexed.
+    val dataFilter2 = Or(dataFilter, EqualTo(attribute("c2"), literal("100")))
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    expectedExpr = Or(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c2","100"))
+    translateIntoColStatsExprAndValidate(dataFilter2, Seq("c1","c2"), expectedExpr, false)
+
+    // c1 = 619sdc Or c2 = 100, where only c1 is indexed. Since its a 'or' condition, we can't translate the expr and we expect TrueLiteral.
+    translateIntoColStatsExprAndValidate(dataFilter2, Seq("c1"), TrueLiteral, true)
+
+    // lets mix `and` and 'or' together.
+    // c1 = 619sdc and c2 = 100 or c3 = 200, where all of them (c1, c2 and c3) are indexed.
+    val dataFilter1_2 = Or(dataFilter1, EqualTo(attribute("c3"), literal("200")))
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    expectedExpr = And(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c2","100"))
+    expectedExpr = Or(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c3","200"))
+    translateIntoColStatsExprAndValidate(dataFilter1_2, Seq("c1","c2","c3"), expectedExpr, false)
+
+    // c1 = 619sdc and c2 = 100 or c3 = 200, where c3 is not indexed.
+    translateIntoColStatsExprAndValidate(dataFilter1_2, Seq("c1","c2"), TrueLiteral, true)
+
+    // c1 = 619sdc and c2 = 100 or c3 = 200, where c2 is not indexed.
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    expectedExpr = Or(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c3","200"))
+    translateIntoColStatsExprAndValidate(dataFilter1_2, Seq("c1","c3"), expectedExpr, false)
+
+    // c1 = 619sdc and c2 = 100 or c3 = 200, where c1 is not indexed.
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c2","100")
+    expectedExpr = Or(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c3","200"))
+    translateIntoColStatsExprAndValidate(dataFilter1_2, Seq("c2","c3"), expectedExpr, false)
+
+    // c1 = 619sdc and c2 = 100 or c3 = 200, where c1 and c3 is not indexed.
+    translateIntoColStatsExprAndValidate(dataFilter1_2, Seq("c2"), TrueLiteral, true)
+
+    // c1 = 619sdc and c2 = 100 or c3 = 200, where c1 and c2 is not indexed.
+    translateIntoColStatsExprAndValidate(dataFilter1_2, Seq("c3"), TrueLiteral, true)
+
+    // c1 = 619sdc and c2 = 100 or c3 = 200, where c2 and c3 is not indexed.
+    translateIntoColStatsExprAndValidate(dataFilter1_2, Seq("c1"), TrueLiteral, true)
+
+    val dataFilter2_2 = And(dataFilter2, EqualTo(attribute("c3"), literal("200")))
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    expectedExpr = Or(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c2","100"))
+    expectedExpr = And(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c3","200"))
+    translateIntoColStatsExprAndValidate(dataFilter2_2, Seq("c1","c2","c3"), expectedExpr, false)
+
+    // c1 = 619sdc or c2 = 100 and c3 = 200, where c3 is not indexed.
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c1","619sdc")
+    expectedExpr = Or(expectedExpr, generateColStatsExprForGreaterthanOrEquals("c2","100"))
+    translateIntoColStatsExprAndValidate(dataFilter2_2, Seq("c1","c2"), expectedExpr, false)
+
+    // c1 = 619sdc or c2 = 100 and c3 = 200, where c2 is not indexed.
+    expectedExpr = generateColStatsExprForGreaterthanOrEquals("c3","200")
+    translateIntoColStatsExprAndValidate(dataFilter2_2, Seq("c1","c3"), expectedExpr, false)
+
+    // c1 = 619sdc or c2 = 100 and c3 = 200, where c1 is not indexed.
+    translateIntoColStatsExprAndValidate(dataFilter2_2, Seq("c2","c3"), expectedExpr, false)
+
+    // c1 = 619sdc or c2 = 100 and c3 = 200, where c1 and c3 is not indexed.
+    translateIntoColStatsExprAndValidate(dataFilter2_2, Seq("c2"), TrueLiteral, true)
+
+    // c1 = 619sdc or c2 = 100 and c3 = 200, where c1 and c2 is not indexed.
+    translateIntoColStatsExprAndValidate(dataFilter2_2, Seq("c3"), expectedExpr, false)
+
+    // c1 = 619sdc or c2 = 100 and c3 = 200, where c2 and c3 is not indexed.
+    translateIntoColStatsExprAndValidate(dataFilter2_2, Seq("c1"), TrueLiteral, true)
+  }
+
+  def translateIntoColStatsExprAndValidate(dataFilter: Expression, indexedCols: Seq[String], expectedExpr: Expression,
+                                           expectedHasNonIndexedCols: Boolean): Unit = {
+    val hasNonIndexedCols = new AtomicBoolean(false)
+    val transformedExpr = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(dataFilter, false, indexedCols, hasNonIndexedCols)
+    assertEquals(expectedExpr.toString(), transformedExpr.toString())
+    assertEquals(expectedHasNonIndexedCols, hasNonIndexedCols.get())
+  }
+
+  def generateColStatsExprForGreaterthanOrEquals(colName: String, colValue: String): Expression = {
+    val expectedExpr: Expression = GreaterThanOrEqual(UnresolvedAttribute(colName + "_maxValue"), literal(colValue))
+    And(LessThanOrEqual(UnresolvedAttribute(colName + "_minValue"), literal(colValue)), expectedExpr)
   }
 
   @ParameterizedTest
