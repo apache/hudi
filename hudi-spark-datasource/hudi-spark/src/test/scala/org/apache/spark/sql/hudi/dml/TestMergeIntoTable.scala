@@ -1364,16 +1364,21 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
 
         spark.sql(
           s"""
-             | merge into $tableName as t0
-             | using (
-             |  select 2 as id, 'a2' as name, 10 as price, '2021-03-20' as dt
-             | ) s0
-             | on s0.id = t0.id
-             | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
-             | values(s0.id, s0.name, s0.dt)
-         """.stripMargin)
+             |MERGE INTO $tableName AS t0
+             |USING (
+             |  SELECT 2 as id, 'a2' as name, 10 as price, '2021-03-20' as dt
+             |  UNION
+             |  SELECT 1 as id, 'a3' as name, 11 as price, '2021-03-21' as dt
+             |) s0
+             |ON s0.id = t0.id
+             |WHEN MATCHED THEN
+             |  UPDATE SET price = s0.price, name = s0.name
+             |WHEN NOT MATCHED AND s0.id % 2 = 0 THEN
+             |  INSERT (id, name, dt)
+             |  VALUES (s0.id, s0.name, s0.dt)
+             |""".stripMargin)
         checkAnswer(s"select id, name, price, dt from $tableName order by id")(
-          Seq(1, "a1", 10, "2021-03-21"),
+          Seq(1, "a3", 11, "2021-03-21"),
           Seq(2, "a2", null, "2021-03-20")
         )
       })
