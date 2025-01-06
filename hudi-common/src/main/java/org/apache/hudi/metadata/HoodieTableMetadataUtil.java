@@ -95,6 +95,7 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -188,7 +189,7 @@ public class HoodieTableMetadataUtil {
 
   private static final Set<Schema.Type> SUPPORTED_TYPES_PARTITION_STATS = new HashSet<>(Arrays.asList(
       Schema.Type.INT, Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING, Schema.Type.BOOLEAN, Schema.Type.NULL, Schema.Type.BYTES));
-  private static final Set<String> SUPPORTED_META_FIELDS_PARTITION_STATS = new HashSet<>(Arrays.asList(
+  public static final Set<String> SUPPORTED_META_FIELDS_PARTITION_STATS = new HashSet<>(Arrays.asList(
       HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName()));
@@ -2446,18 +2447,18 @@ public class HoodieTableMetadataUtil {
 
   public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> partitionRangeMetadataPartitionPair,
                                                                                 HoodieTableMetaClient dataMetaClient) {
-    return convertMetadataToPartitionStatsRecords(partitionRangeMetadataPartitionPair.flatMapValues(list -> list.stream().flatMap(List::stream).iterator()), dataMetaClient, Option.empty());
+    return convertMetadataToPartitionStatsRecords(partitionRangeMetadataPartitionPair.flatMapValues(list -> list.stream().flatMap(List::stream).iterator()),
+        Option.empty(), isShouldScanColStatsForTightBound(dataMetaClient));
   }
 
   public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> partitionRangeMetadataPartitionPair,
-                                                                                HoodieTableMetaClient dataMetaClient, Option<String> indexPartitionOpt) {
+                                                                                Option<String> indexPartitionOpt, boolean isTightBound) {
     try {
       return partitionRangeMetadataPartitionPair
           .groupByKey()
           .map(pair -> {
             final String partitionName = pair.getLeft();
-            boolean shouldScanColStatsForTightBound = isShouldScanColStatsForTightBound(dataMetaClient);
-            return collectAndProcessColumnMetadata(pair.getRight(), partitionName, shouldScanColStatsForTightBound, indexPartitionOpt);
+            return collectAndProcessColumnMetadata(pair.getRight(), partitionName, isTightBound, indexPartitionOpt);
           })
           .flatMap(recordStream -> recordStream.iterator());
     } catch (Exception e) {
@@ -2550,9 +2551,17 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  private static boolean isShouldScanColStatsForTightBound(HoodieTableMetaClient dataMetaClient) {
-    boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient);
-    return shouldScanColStatsForTightBound;
+  public static boolean isShouldScanColStatsForTightBound(HoodieTableMetaClient dataMetaClient) {
+    return MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient);
+  }
+
+  public static HoodieIndexDefinition getHoodieIndexDefinition(String indexName, HoodieTableMetaClient metaClient) {
+    Option<HoodieIndexMetadata> expressionIndexMetadata = metaClient.getIndexMetadata();
+    if (expressionIndexMetadata.isPresent()) {
+      return expressionIndexMetadata.get().getIndexDefinitions().get(indexName);
+    } else {
+      throw new HoodieIndexException("Expression Index definition is not present");
+    }
   }
 
   /**
@@ -2563,7 +2572,7 @@ public class HoodieTableMetadataUtil {
    * @return true if field's data type is supported, false otherwise
    */
   @VisibleForTesting
-  static boolean validateDataTypeForPartitionStats(String columnToIndex, Schema tableSchema) {
+  public static boolean validateDataTypeForPartitionStats(String columnToIndex, Schema tableSchema) {
     Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(tableSchema, columnToIndex);
     // Exclude fields based on logical type
     if ((fieldSchema.getType() == Schema.Type.INT || fieldSchema.getType() == Schema.Type.LONG)
@@ -2581,7 +2590,7 @@ public class HoodieTableMetadataUtil {
   /**
    * Generate key prefixes for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
    */
-  private static List<String> generateKeyPrefixes(List<String> columnsToIndex, String partitionName) {
+  public static List<String> generateKeyPrefixes(List<String> columnsToIndex, String partitionName) {
     List<String> keyPrefixes = new ArrayList<>();
     PartitionIndexID partitionIndexId = new PartitionIndexID(getColumnStatsIndexPartitionIdentifier(partitionName));
     for (String columnName : columnsToIndex) {

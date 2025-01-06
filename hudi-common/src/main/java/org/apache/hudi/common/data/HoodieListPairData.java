@@ -193,6 +193,12 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
+    throw new UnsupportedOperationException("Operation is not supported yet");
+  }
+
+
+  @Override
   public long count() {
     return super.count();
   }

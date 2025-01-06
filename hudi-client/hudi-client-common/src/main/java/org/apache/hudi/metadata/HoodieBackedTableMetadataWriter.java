@@ -40,7 +40,6 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -617,12 +616,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   HoodieIndexDefinition getIndexDefinition(String indexName) {
-    Option<HoodieIndexMetadata> expressionIndexMetadata = dataMetaClient.getIndexMetadata();
-    if (expressionIndexMetadata.isPresent()) {
-      return expressionIndexMetadata.get().getIndexDefinitions().get(indexName);
-    } else {
-      throw new HoodieIndexException("Expression Index definition is not present");
-    }
+    return HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataMetaClient);
   }
 
   private Set<String> getIndexPartitionsToInit(MetadataPartitionType partitionType) {
@@ -1121,7 +1115,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()), commitMetadata);
         partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()).union(additionalUpdates));
       }
-      // TODO: ABCDEFGHI Cache partitionRangeMetadataPartitionPairOpt
       updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionRangeMetadataPartitionPairOpt, partitionToRecordMap);
       updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
       return partitionToRecordMap;

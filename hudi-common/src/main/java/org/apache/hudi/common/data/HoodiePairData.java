@@ -130,6 +130,11 @@ public interface HoodiePairData<K, V> extends Serializable {
   <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other);
 
   /**
+   * Performs a union of this dataset with the provided dataset
+   */
+  HoodiePairData<K, V> union(HoodiePairData<K, V> other);
+
+  /**
    * Collects results of the underlying collection into a {@link List<Pair<K, V>>}
    *
    * This is a terminal operation

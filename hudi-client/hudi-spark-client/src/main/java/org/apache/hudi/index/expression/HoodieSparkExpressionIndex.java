@@ -19,6 +19,12 @@
 
 package org.apache.hudi.index.expression;
 
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
+
 import org.apache.spark.sql.Column;
 
 import java.io.Serializable;
@@ -71,5 +77,28 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
     }
     sparkFunction.validateOptions(options);
     return sparkFunction.apply(orderedSourceValues, options);
+  }
+
+  public static class ExpressionIndexComputationMetadata {
+    HoodieData<HoodieRecord> expressionIndexRecords;
+    Option<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata;
+
+    public ExpressionIndexComputationMetadata(HoodieData<HoodieRecord> expressionIndexRecords, Option<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata) {
+      this.expressionIndexRecords = expressionIndexRecords;
+      this.columnRangeMetadata = columnRangeMetadata;
+    }
+
+    public ExpressionIndexComputationMetadata(HoodieData<HoodieRecord> expressionIndexRecords) {
+      this.expressionIndexRecords = expressionIndexRecords;
+      this.columnRangeMetadata = Option.empty();
+    }
+
+    public HoodieData<HoodieRecord> getExpressionIndexRecords() {
+      return expressionIndexRecords;
+    }
+
+    public Option<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>> getColumnRangeMetadataOption() {
+      return columnRangeMetadata;
+    }
   }
 }
