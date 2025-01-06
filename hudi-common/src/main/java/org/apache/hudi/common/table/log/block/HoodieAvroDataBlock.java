@@ -124,12 +124,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
           writer.write(data, encoder);
           encoder.flush();
 
-          // Get the size of the bytes
-          int size = temp.toByteArray().length;
           // Write the record size
-          output.writeInt(size);
+          output.writeInt(temp.size());
           // Write the content
-          output.write(temp.toByteArray());
+          temp.writeTo(output);
         } catch (IOException e) {
           throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
         }
@@ -341,12 +339,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
           writer.write(s, encoder);
           encoder.flush();
 
-          // Get the size of the bytes
-          int size = temp.toByteArray().length;
           // Write the record size
-          output.writeInt(size);
+          output.writeInt(temp.size());
           // Write the content
-          output.write(temp.toByteArray());
+          temp.writeTo(output);
           itr.remove();
         } catch (IOException e) {
           throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
