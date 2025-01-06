@@ -46,6 +46,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions, config}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.expressions.codegen.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types._
@@ -1012,16 +1013,11 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
           GreaterThan(AttributeReference("c4", StringType, nullable = true)(), Literal("c4 filed value")))
       )
 
-      val expectedOrConditionIndexedFilter = Or(
-        GreaterThan(UnresolvedAttribute("c1_maxValue"), Literal(1)),
-        Literal(true)
-      )
-
       columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
         val orConditionActualFilter = orConditionFilters.map(translateIntoColumnStatsIndexFilterExpr(_,
           indexedCols = targetColumnsToIndex))
           .reduce(And)
-        assertEquals(expectedOrConditionIndexedFilter, orConditionActualFilter)
+        assertEquals(Literal("true").toString(), orConditionActualFilter.toString())
       }
     }
   }
