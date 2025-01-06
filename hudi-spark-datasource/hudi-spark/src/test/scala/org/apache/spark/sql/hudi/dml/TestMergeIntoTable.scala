@@ -22,11 +22,13 @@ import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.DataSourceTestUtils
-
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.getClass
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
+import org.slf4j.LoggerFactory
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
+  private val log = LoggerFactory.getLogger(getClass)
 
   test("Test MergeInto Basic") {
     Seq(true, false).foreach { sparkSqlOptimizedWrites =>
@@ -842,7 +844,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       )
 
       checkAnswer(s"select id,name,price,v,dt from $tableName1 order by id")(
-        Seq(1, "a1", 10, 1000, "2021-03-21")
+        Seq(1, "a1", 10, 1000, "2021-03-21"),
+        Seq(3, "a3", 30, 3000, "2021-03-21")
       )
     }
   }
@@ -1336,10 +1339,20 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
 
   test("Test MergeInto with partial insert") {
     spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+
+    // Test combinations: (tableType, sparkSqlOptimizedWrites)
+    val testConfigs = Seq(
+      ("mor", true),
+      ("mor", false),
+      ("cow", true),
+      ("cow", false)
+    )
+
+    testConfigs.foreach { case (tableType, sparkSqlOptimizedWrites) =>
+      log.info(s"=== Testing MergeInto with partial insert: tableType=$tableType, sparkSqlOptimizedWrites=$sparkSqlOptimizedWrites ===")
       withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.payload.combined.schema.validate = true")
-        // Create a partitioned mor table
+        // Create a partitioned table
         val tableName = generateTableName
         spark.sql(
           s"""
@@ -1347,33 +1360,38 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |  id bigint,
              |  name string,
              |  price double,
+             |  ts bigint,
              |  dt string
              | ) using hudi
              | tblproperties (
-             |  type = 'mor',
-             |  primaryKey = 'id'
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  precombineKey = 'ts'
              | )
              | partitioned by(dt)
              | location '${tmp.getCanonicalPath}'
          """.stripMargin)
 
-        spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21'")
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1L, '2021-03-21'")
 
-        // test with optimized sql merge enabled / disabled.
+        // Set optimized sql merge setting
         spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
         spark.sql(
           s"""
              | merge into $tableName as t0
              | using (
-             |  select 2 as id, 'a2' as name, 10 as price, '2021-03-20' as dt
+             |  select 2 as id, 'a2' as name, 10 as price, 2L as ts, '2021-03-20' as dt
+             |  union
+             |  select 1 as id, 'a1_updated' as name, 11 as price, 3L as ts, '2021-03-21' as dt
              | ) s0
              | on s0.id = t0.id
+             | when matched then update set t0.id = s0.id, t0.name = s0.name
              | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
              | values(s0.id, s0.name, s0.dt)
          """.stripMargin)
         checkAnswer(s"select id, name, price, dt from $tableName order by id")(
-          Seq(1, "a1", 10, "2021-03-21"),
+          Seq(1, "a1_updated", 11, "2021-03-21"),
           Seq(2, "a2", null, "2021-03-20")
         )
       })
