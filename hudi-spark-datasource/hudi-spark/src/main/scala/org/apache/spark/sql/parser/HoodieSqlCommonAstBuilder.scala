@@ -93,19 +93,17 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
   }
 
   override def visitCall(ctx: CallContext): LogicalPlan = withOrigin(ctx) {
-    if (ctx.callArgumentList() == null || ctx.callArgumentList().callArgument() == null || ctx.callArgumentList().callArgument().size() == 0) {
-      val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText).toSeq
-      if (isHudiCallCommand(name)) {
-        return CallCommand(name, Seq())
-      }
+    val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText).toSeq
+    val args: Seq[CallArgument] = if (ctx.callArgumentList() == null || ctx.callArgumentList().callArgument() == null || ctx.callArgumentList().callArgument().size() == 0) {
+      Seq()
     } else {
-      val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText).toSeq
-      val args: Seq[CallArgument] = ctx.callArgumentList().callArgument().asScala.map(typedVisit[CallArgument]).toSeq
-      if (isHudiCallCommand(name)) {
-        return CallCommand(name, args)
-      }
+      ctx.callArgumentList().callArgument().asScala.map(typedVisit[CallArgument]).toSeq
     }
-    null
+    if (isHudiCallCommand(name)) {
+      CallCommand(name, args)
+    } else {
+      null
+    }
   }
 
   def isHudiCallCommand(name: Seq[String]): Boolean = {
