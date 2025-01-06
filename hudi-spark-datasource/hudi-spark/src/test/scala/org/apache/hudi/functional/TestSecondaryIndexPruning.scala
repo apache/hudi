@@ -1424,6 +1424,63 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
   }
 
+  @Test
+  def testSecondaryIndexWithNestedFields(): Unit = {
+    var hudiOpts = commonOpts
+    hudiOpts = hudiOpts ++ Map(
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+    tableName += "test_secondary_index_with_nested_fields"
+
+    // Create table with nested fields
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  record_key_col string,
+         |  name struct<first_name:string, last_name:string>,
+         |  ts bigint
+         |) using hudi
+         | options (
+         |  primaryKey ='record_key_col',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+         |  hoodie.enable.data.skipping = 'true',
+         |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+         | )
+         | location '$basePath'
+      """.stripMargin)
+    // insert initial records
+    spark.sql(s"insert into $tableName values('id1', named_struct('first_name', 'John', 'last_name', 'Doe'), 1)")
+    spark.sql(s"insert into $tableName values('id2', named_struct('first_name', 'Jane', 'last_name', 'Smith'), 2)")
+    // create secondary index on name.last_name field
+    spark.sql(s"create index idx_last_name on $tableName (name.last_name)")
+    // validate index creation
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .build()
+    assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_last_name"))
+    // validate index records
+    checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
+      Seq(s"Doe${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id1"),
+      Seq(s"Smith${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id2")
+    )
+    // verify pruning
+    checkAnswer(s"select record_key_col, name.last_name, ts from $tableName where name.last_name = 'Doe'")(
+      Seq("id1", "Doe", 1)
+    )
+    // update nested field
+    spark.sql(s"update $tableName set name = named_struct('first_name', 'John', 'last_name', 'Brown') where record_key_col = 'id1'")
+    // validate updated index records
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"Brown${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id1", false),
+      Seq(s"Smith${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id2", false)
+    )
+    // verify pruning
+    checkAnswer(s"select record_key_col, name.last_name, ts from $tableName where name.last_name = 'Brown'")(
+      Seq("id1", "Brown", 1)
+    )
+  }
 
   private def checkAnswer(query: String)(expects: Seq[Any]*): Unit = {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(query).collect().sortBy(_.toString()))

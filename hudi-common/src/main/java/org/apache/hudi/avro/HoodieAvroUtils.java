@@ -676,13 +676,15 @@ public class HoodieAvroUtils {
    */
   public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName) {
     String[] parts = fieldName.split("\\.");
-    int i = 0;
-    for (; i < parts.length; i++) {
+    Schema currentSchema = writeSchema;
+    for (int i = 0; i < parts.length; i++) {
       String part = parts[i];
-      Schema schema = writeSchema.getField(part).schema();
+      // Resolve nullable/union schema to the actual schema
+      currentSchema = resolveNullableSchema(currentSchema.getField(part).schema());
 
       if (i == parts.length - 1) {
-        return resolveNullableSchema(schema);
+        // Return the schema for the final part
+        return resolveNullableSchema(currentSchema);
       }
     }
     throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
