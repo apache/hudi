@@ -394,6 +394,14 @@ public class HoodieTableMetadataUtil {
           dataMetaClient, metadataConfig);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
     }
+    if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS)) {
+      checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient),
+          "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
+      HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> partitionRangeMetadata = convertMetadataToPartitionStatsColumnRangeMetadata(commitMetadata, context,
+          dataMetaClient, metadataConfig);
+      final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatsRecords(partitionRangeMetadata, dataMetaClient);
+      partitionToRecordsMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);
+    }
     if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX)) {
       partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), convertMetadataToRecordIndexRecords(context, commitMetadata, metadataConfig,
           dataMetaClient, writesFileIdEncoding, instantTime, engineType));
@@ -2343,16 +2351,17 @@ public class HoodieTableMetadataUtil {
 
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = new ArrayList<>();
     fileColumnMetadataIterable.forEach(fileColumnMetadata::add);
-    // Step 1: Flatten and Group by Column Name
+    // Group by Column Name
     return collectAndProcessColumnMetadata(partitionPath, isTightBound, indexPartitionOpt, fileColumnMetadata.stream());
   }
 
   private static Stream<HoodieRecord> collectAndProcessColumnMetadata(String partitionPath, boolean isTightBound, Option<String> indexPartitionOpt,
                                                                       Stream<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata) {
+    // Group by Column Name
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap =
         fileColumnMetadata.collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, Collectors.toList()));
 
-    // Step 2: Aggregate Column Ranges
+    // Aggregate Column Ranges
     Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
         .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue()));
 
@@ -2360,7 +2369,7 @@ public class HoodieTableMetadataUtil {
     return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound, indexPartitionOpt);
   }
 
-  public static HoodieData<HoodieRecord> collectAndProcessColumnMetadata(
+  public static HoodieData<HoodieRecord> collectAndProcessEIPartitionStatRecords(
       HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata, boolean isTightBound, Option<String> indexPartitionOpt) {
 
     // Step 1: Group by partition name

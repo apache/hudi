@@ -27,13 +27,11 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -108,12 +106,10 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeIndexPlan;
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToPartitionStatsColumnRangeMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
@@ -1099,23 +1095,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding(), getEngineType());
 
-      Option<HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>>> partitionRangeMetadataPartitionPairOpt = Option.empty();
-      if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS)) {
-        checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient),
-            "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
-        partitionRangeMetadataPartitionPairOpt = Option.of(convertMetadataToPartitionStatsColumnRangeMetadata(commitMetadata, engineContext, dataMetaClient, dataWriteConfig.getMetadataConfig()));
-        final HoodieData<HoodieRecord> partitionStatsRDD = HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords(partitionRangeMetadataPartitionPairOpt.get(),
-            dataMetaClient);
-        partitionToRecordMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);
-      }
-
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
       if (dataWriteConfig.isRecordIndexEnabled()) {
         HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()), commitMetadata);
         partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), partitionToRecordMap.get(MetadataPartitionType.RECORD_INDEX.getPartitionPath()).union(additionalUpdates));
       }
-      updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionRangeMetadataPartitionPairOpt, partitionToRecordMap);
+      updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
       updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
       return partitionToRecordMap;
     });
@@ -1130,19 +1116,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient, dataWriteConfig.getMetadataConfig(),
               enabledPartitionTypes, dataWriteConfig.getBloomFilterType(), dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding(), getEngineType());
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(records, commitMetadata);
-
-      Option<HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>>> partitionRangeMetadataPartitionPairOpt = Option.empty();
-      if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS)) {
-        checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient),
-            "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
-        partitionRangeMetadataPartitionPairOpt = Option.of(convertMetadataToPartitionStatsColumnRangeMetadata(commitMetadata, engineContext, dataMetaClient, dataWriteConfig.getMetadataConfig()));
-        final HoodieData<HoodieRecord> partitionStatsRDD = HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords(partitionRangeMetadataPartitionPairOpt.get(),
-            dataMetaClient);
-        partitionToRecordMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);
-      }
-
       partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), records.union(additionalUpdates));
-      updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionRangeMetadataPartitionPairOpt, partitionToRecordMap);
+      updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
       return partitionToRecordMap;
     });
     closeInternal();
@@ -1152,7 +1127,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * Update expression index from {@link HoodieCommitMetadata}.
    */
   private void updateExpressionIndexIfPresent(HoodieCommitMetadata commitMetadata, String instantTime,
-                                              Option<HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>>> partitionRangeMetadataPartitionPairOpt,
                                               Map<String, HoodieData<HoodieRecord>> partitionToRecordMap) {
     if (!MetadataPartitionType.EXPRESSION_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
       return;
@@ -1163,7 +1137,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .forEach(partition -> {
           HoodieData<HoodieRecord> expressionIndexRecords;
           try {
-            expressionIndexRecords = getExpressionIndexUpdates(partitionRangeMetadataPartitionPairOpt, commitMetadata, partition, instantTime);
+            expressionIndexRecords = getExpressionIndexUpdates(commitMetadata, partition, instantTime);
           } catch (Exception e) {
             throw new HoodieMetadataException(String.format("Failed to get expression index updates for partition %s", partition), e);
           }
@@ -1174,13 +1148,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   /**
    * Loads the file slices touched by the commit due to given instant time and returns the records for the expression index.
    *
-   * @param partitionRangeMetadataPartitionPairOpt Optional value of HoodiePairData containing pair of partition name and updated column range metadata for that partition
    * @param commitMetadata {@code HoodieCommitMetadata}
    * @param indexPartition partition name of the expression index
    * @param instantTime    timestamp at of the current update commit
    */
-  protected HoodieData<HoodieRecord> getExpressionIndexUpdates(Option<HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>>> partitionRangeMetadataPartitionPairOpt,
-                                                               HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
+  protected HoodieData<HoodieRecord> getExpressionIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
     throw new UnsupportedOperationException("");
   }
 

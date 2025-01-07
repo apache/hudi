@@ -288,7 +288,7 @@ public class SparkMetadataWriterUtils {
    * @param dataWriteConfig Write Config for the data table
    * @param metadataWriteConfig Write config for the metadata table
    * @param partitionRecordsFunctionOpt Function used to generate partition stat records for the EI. It takes the column range metadata generated for the provided partition files as input
-   *                                    and uses those to generate the corresponding partition stats
+   *                                    and uses those to generate the final partition stats
    * @return ExpressionIndexComputationMetadata containing both EI column stat records and partition stat records if partitionRecordsFunctionOpt is provided
    */
   public static ExpressionIndexComputationMetadata getExprIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
@@ -343,10 +343,10 @@ public class SparkMetadataWriterUtils {
     }
   }
 
-  public static HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> getExpressionIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition,
-                                                                                                                    HoodieEngineContext engineContext,
-                                                                                                                    HoodieTableMetaClient dataMetaClient,
-                                                                                                                    HoodieMetadataConfig metadataConfig) {
+  public static HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> getExpressionIndexPartitionStatUpdates(HoodieCommitMetadata commitMetadata, String indexPartition,
+                                                                                                                                 HoodieEngineContext engineContext,
+                                                                                                                                 HoodieTableMetaClient dataMetaClient,
+                                                                                                                                 HoodieMetadataConfig metadataConfig) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     if (allWriteStats.isEmpty()) {
@@ -385,7 +385,6 @@ public class SparkMetadataWriterUtils {
       HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, dataMetaClient.getStorage(), metadataConfig, dataMetaClient.getBasePath().toString());
       return engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
         final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
-        // Step 1: Collect Column Metadata for Each File part of current commit metadata
         checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
         // Collect Column Metadata for Each File part of active file system view of latest snapshot
         // Get all file names, including log files, in a set from the file slices
@@ -395,7 +394,7 @@ public class SparkMetadataWriterUtils {
                 fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
             .filter(Objects::nonNull)
             .collect(Collectors.toSet());
-        // Fetch metadata table COLUMN_STATS partition records for above files
+        // Fetch EI column stat records for above files
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
             tableMetadata.getRecordsByKeyPrefixes(HoodieTableMetadataUtil.generateKeyPrefixes(validColumnsToIndex, partitionName), indexPartition, false)
                 // schema and properties are ignored in getInsertValue, so simply pass as null
@@ -405,7 +404,6 @@ public class SparkMetadataWriterUtils {
                 .filter(stats -> fileNames.contains(stats.getFileName()))
                 .map(HoodieColumnRangeMetadata::fromColumnStats)
                 .collectAsList();
-        // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
         List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = new ArrayList<>();
         fileColumnMetadata.add(partitionColumnMetadata);
         return Pair.of(partitionName, fileColumnMetadata);

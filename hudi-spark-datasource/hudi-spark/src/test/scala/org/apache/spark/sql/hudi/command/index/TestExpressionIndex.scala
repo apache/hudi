@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.command.index
 
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{HIVE_PASS, HIVE_USER, HIVE_USE_PRE_APACHE_INPUT_FORMAT, INSERT_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -876,7 +876,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   }
 
   /**
-   * Test expression index pruning with partition filters.
+   * Test expression index partition pruning with partition stats.
    */
   @Test
   def testPartitionPruningWithPartitionStats(): Unit = {
@@ -953,7 +953,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val fromUnixTimeExpr = resolveExpr(spark, unapply(functions.from_unixtime(functions.col("ts"), "yyyy-MM-dd")).get, tableSchema)
         var literal = Literal.create("2023-11-07")
         var dataFilter = EqualTo(fromUnixTimeExpr, literal)
-        verifyFilePruningPartitionFilter(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
+        verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_ts on $tableName")
 
         spark.sql(s"create index idx_unix on $tableName using column_stats(date) options(expr='unix_timestamp', format='yyyy-MM-dd')")
@@ -961,21 +961,21 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val unixTimestamp = resolveExpr(spark, unapply(functions.unix_timestamp(functions.col("date"), "yyyy-MM-dd")).get, tableSchema)
         literal = Literal.create(1732924800L)
         dataFilter = EqualTo(unixTimestamp, literal)
-        verifyFilePruningPartitionFilter(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
+        verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_unix on $tableName")
 
         spark.sql(s"create index idx_to_date on $tableName using column_stats(date) options(expr='to_date', format='yyyy-MM-dd')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val toDate = resolveExpr(spark, unapply(functions.to_date(functions.col("date"), "yyyy-MM-dd")).get, tableSchema)
         dataFilter = EqualTo(toDate, lit(18230).expr)
-        verifyFilePruningPartitionFilter(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
+        verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_to_date on $tableName")
       }
     }
   }
 
   /**
-   * Test expression index pruning after update with partition filters.
+   * Test expression index pruning after update with partition stats.
    */
   @Test
   def testPartitionPruningAfterUpdateWithPartitionStats(): Unit = {
@@ -1053,13 +1053,13 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val riderExpr = resolveExpr(spark, unapply(functions.upper(functions.col("rider"))).get, tableSchema)
         var literal = Literal.create("RIDER-A")
         var dataFilter = EqualTo(riderExpr, literal)
-        verifyFilePruningPartitionFilter(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
+        verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
 
         spark.sql(s"update $tableName set rider = 'rider-G' where id = 'trip5'")
         metaClient = createMetaClient(spark, basePath)
         literal = Literal.create("RIDER-D")
         dataFilter = EqualTo(riderExpr, literal)
-        verifyFilePruningPartitionFilter(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true, isNoScanExpected = !isTableMOR)
+        verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true, isNoScanExpected = !isTableMOR)
 
         if (isTableMOR) {
           spark.sql("set hoodie.compact.inline=true")
@@ -1069,7 +1069,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         metaClient = createMetaClient(spark, basePath)
         literal = Literal.create("RIDER-D")
         dataFilter = EqualTo(riderExpr, literal)
-        verifyFilePruningPartitionFilter(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true, isNoScanExpected = true)
+        verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true, isNoScanExpected = true)
         if (isTableMOR) {
           spark.sql("set hoodie.compact.inline=false")
         }
@@ -1814,7 +1814,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     }
   }
 
-  private def verifyFilePruningPartitionFilter(opts: Map[String, String], partitionFilter: Seq[Expression], dataFilter: Seq[Expression],
+  private def verifyPartitionPruning(opts: Map[String, String], partitionFilter: Seq[Expression], dataFilter: Seq[Expression],
                                                metaClient: HoodieTableMetaClient, isDataSkippingExpected: Boolean = false, isNoScanExpected: Boolean = false): Unit = {
     // with data skipping
     val commonOpts = opts + ("path" -> metaClient.getBasePath.toString)

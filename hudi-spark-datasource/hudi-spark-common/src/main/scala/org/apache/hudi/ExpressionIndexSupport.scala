@@ -112,7 +112,6 @@ class ExpressionIndexSupport(spark: SparkSession,
               .map(_.getString(0))
               .toSet
             if (allPartitions.nonEmpty) {
-              // PARTITION_STATS index exist for all or some columns in the filters
               // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
               //       column in a filter does not have the stats available, by making sure such a
               //       filter does not prune any partition.
@@ -124,7 +123,7 @@ class ExpressionIndexSupport(spark: SparkSession,
                 .map(_.getString(0))
                 .toSet)
             } else {
-              // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
+              // Partition stats do not exist, skip the pruning
               Option.empty
             }
           }
