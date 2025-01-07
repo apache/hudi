@@ -1,4 +1,4 @@
- /*
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -143,6 +143,7 @@ public class SparkMetadataWriterUtils {
     }).collect(Collectors.toList());
   }
 
+  @SuppressWarnings("checkstyle:LineLength")
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex, String columnToIndex,
                                                                                              Option<java.util.function.Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
     // Aggregate col stats related data for the column to index
@@ -291,6 +292,7 @@ public class SparkMetadataWriterUtils {
    *                                    and uses those to generate the final partition stats
    * @return ExpressionIndexComputationMetadata containing both EI column stat records and partition stat records if partitionRecordsFunctionOpt is provided
    */
+  @SuppressWarnings("checkstyle:LineLength")
   public static ExpressionIndexComputationMetadata getExprIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
                                                                        HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, String instantTime,
                                                                        HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig, HoodieWriteConfig metadataWriteConfig,
@@ -343,6 +345,18 @@ public class SparkMetadataWriterUtils {
     }
   }
 
+  /**
+   * Fetches column range metadata from the EI partition for all the partition files impacted by the commit. This would only take into account completed commits for the partitions
+   * since EI updates have not yet been committed.
+   *
+   * @param commitMetadata Hoodie commit metadata
+   * @param indexPartition Partition name for the expression index
+   * @param engineContext Hoodie engine context
+   * @param dataMetaClient Data table meta client
+   * @param metadataConfig Hoodie metadata config
+   *
+   * @return HoodiePairData of partition name and list of column range metadata for the partitions
+   */
   public static HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> getExpressionIndexPartitionStatUpdates(HoodieCommitMetadata commitMetadata, String indexPartition,
                                                                                                                                  HoodieEngineContext engineContext,
                                                                                                                                  HoodieTableMetaClient dataMetaClient,

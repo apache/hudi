@@ -160,6 +160,15 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     writeClient.deletePartitions(partitionsToDrop, instantTime);
   }
 
+  /**
+   * Loads the file slices touched by the commit due to given instant time and returns the records for the expression index.
+   * This generates partition stat record updates along with EI column stat update records. Partition stat record updates are generated
+   * by reloading the affected partitions column range metadata from EI and then merging it with partition stat record from the updated data.
+   *
+   * @param commitMetadata {@code HoodieCommitMetadata}
+   * @param indexPartition partition name of the expression index
+   * @param instantTime    timestamp at of the current update commit
+   */
   @Override
   protected HoodieData<HoodieRecord> getExpressionIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
@@ -167,10 +176,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt = Option.empty();
     final HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> exprIndexPartitionStatUpdates;
     if (isColumnStatEI) {
+      // Fetch column range metadata for affected partitions in the commit
       exprIndexPartitionStatUpdates =
           SparkMetadataWriterUtils.getExpressionIndexPartitionStatUpdates(commitMetadata, indexPartition,
                   engineContext, dataMetaClient, dataWriteConfig.getMetadataConfig())
               .flatMapValues(list -> list.stream().flatMap(List::stream).iterator());
+      // The function below merges the column range metadata from the updated data with latest column range metadata of affected partition computed above
       partitionRecordsFunctionOpt = Option.of(rangeMetadata ->
           HoodieTableMetadataUtil.collectAndProcessEIPartitionStatRecords(exprIndexPartitionStatUpdates.union(rangeMetadata), true, Option.of(indexDefinition.getIndexName())));
     } else {
