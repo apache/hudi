@@ -173,6 +173,28 @@ public class TestHoodieAvroUtils {
       + "{\"name\":\"localTimestampMillisField\",\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},"
       + "{\"name\":\"localTimestampMicrosField\",\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}"
       + "]}";
+  // Define schema with a nested field containing a union type
+  private static final String NESTED_SCHEMA_WITH_UNION = "{\n"
+      + "  \"type\": \"record\",\n"
+      + "  \"name\": \"NestedRecordWithUnion\",\n"
+      + "  \"fields\": [\n"
+      + "    {\n"
+      + "      \"name\": \"student\",\n"
+      + "      \"type\": [\n"
+      + "        \"null\",\n"
+      + "        {\n"
+      + "          \"type\": \"record\",\n"
+      + "          \"name\": \"Student\",\n"
+      + "          \"fields\": [\n"
+      + "            {\"name\": \"firstname\", \"type\": [\"null\", \"string\"], \"default\": null},\n"
+      + "            {\"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null}\n"
+      + "          ]\n"
+      + "        }\n"
+      + "      ],\n"
+      + "      \"default\": null\n"
+      + "    }\n"
+      + "  ]\n"
+      + "}";
 
   @Test
   public void testPropsPresent() {
@@ -461,6 +483,33 @@ public class TestHoodieAvroUtils {
 
     assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec3.getSchema(), "student.firstname"));
     assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(nestedSchema, "student.firstname"));
+  }
+
+  @Test
+  public void testGetNestedFieldSchemaWithUnion() {
+    Schema schema = new Schema.Parser().parse(NESTED_SCHEMA_WITH_UNION);
+    // Create a record for the schema
+    GenericRecord rec = new GenericData.Record(schema);
+    Schema studentSchema = schema.getField("student").schema().getTypes().get(1); // Resolve union schema for "student"
+    GenericRecord studentRecord = new GenericData.Record(studentSchema);
+    studentRecord.put("firstname", "John");
+    studentRecord.put("lastname", "Doe");
+    rec.put("student", studentRecord);
+
+    // Test nested field schema for "student.firstname"
+    Schema expectedFirstnameSchema = Schema.create(Schema.Type.STRING);
+    assertEquals(expectedFirstnameSchema, getNestedFieldSchemaFromWriteSchema(schema, "student.firstname"));
+
+    // Test nested field schema for "student.lastname"
+    Schema expectedLastnameSchema = Schema.create(Schema.Type.STRING);
+    assertEquals(expectedLastnameSchema, getNestedFieldSchemaFromWriteSchema(schema, "student.lastname"));
+
+    // Test nullable handling for "student" (entire field)
+    assertEquals(studentSchema, getNestedFieldSchemaFromWriteSchema(schema, "student"));
+
+    // Test exception for invalid nested field
+    Exception exception = assertThrows(HoodieException.class, () -> getNestedFieldSchemaFromWriteSchema(schema, "student.middleName"));
+    assertTrue(exception.getMessage().contains("Failed to get schema. Not a valid field name"));
   }
 
   @Test

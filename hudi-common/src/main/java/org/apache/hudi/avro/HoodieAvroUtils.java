@@ -202,6 +202,7 @@ public class HoodieAvroUtils {
   /**
    * Convert a given avro record to a JSON string. If the record contents are invalid, return the record.toString().
    * Use this method over {@link HoodieAvroUtils#avroToJsonString} when simply trying to print the record contents without any guarantees around their correctness.
+   *
    * @param record The GenericRecord to convert
    * @return a JSON string
    */
@@ -679,12 +680,16 @@ public class HoodieAvroUtils {
     Schema currentSchema = writeSchema;
     for (int i = 0; i < parts.length; i++) {
       String part = parts[i];
-      // Resolve nullable/union schema to the actual schema
-      currentSchema = resolveNullableSchema(currentSchema.getField(part).schema());
+      try {
+        // Resolve nullable/union schema to the actual schema
+        currentSchema = resolveNullableSchema(currentSchema.getField(part).schema());
 
-      if (i == parts.length - 1) {
-        // Return the schema for the final part
-        return resolveNullableSchema(currentSchema);
+        if (i == parts.length - 1) {
+          // Return the schema for the final part
+          return resolveNullableSchema(currentSchema);
+        }
+      } catch (Exception e) {
+        throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
       }
     }
     throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
