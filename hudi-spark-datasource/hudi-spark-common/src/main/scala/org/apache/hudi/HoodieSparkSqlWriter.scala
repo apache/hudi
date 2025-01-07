@@ -29,7 +29,7 @@ import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTable
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
-import org.apache.hudi.HoodieSparkSqlWriterInternal.handleInsertDuplicates
+import org.apache.hudi.HoodieSparkSqlWriterInternal.{handleInsertDuplicates, shouldDropDuplicatesForInserts, shouldFailWhenDuplicatesFound}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
@@ -549,13 +549,16 @@ class HoodieSparkSqlWriterInternal {
     var operation = WriteOperationType.fromValue(hoodieConfig.getString(OPERATION))
     // TODO clean up
     // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS is true
+    // or INSERT_DUP_POLICY is `drop` or `fail`.
     // Auto-correct the operation to "insert" if OPERATION is set to "upsert" wrongly
     // or not set (in which case it will be set as "upsert" by parametersWithWriteDefaults()) .
-    if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) &&
+    if ((hoodieConfig.getBoolean(INSERT_DROP_DUPS) ||
+      shouldFailWhenDuplicatesFound(hoodieConfig) ||
+      shouldDropDuplicatesForInserts(hoodieConfig)) &&
       operation == WriteOperationType.UPSERT) {
 
       log.warn(s"$UPSERT_OPERATION_OPT_VAL is not applicable " +
-        s"when $INSERT_DROP_DUPS is set to be true, " +
+        s"when $INSERT_DROP_DUPS is set to be true, or $INSERT_DUP_POLICY is set to fail or drop, " +
         s"overriding the $OPERATION to be $INSERT_OPERATION_OPT_VAL")
 
       operation = WriteOperationType.INSERT
@@ -1183,8 +1186,8 @@ object HoodieSparkSqlWriterInternal {
 
   // Check if deduplication is needed.
   def isDeduplicationNeeded(operation: WriteOperationType): Boolean = {
-    operation != WriteOperationType.INSERT_OVERWRITE_TABLE &&
-      operation != WriteOperationType.INSERT_OVERWRITE
+    operation == WriteOperationType.INSERT ||
+      operation == WriteOperationType.INSERT_PREPPED
   }
 
   def handleInsertDuplicates(incomingRecords: JavaRDD[HoodieRecord[_]],
