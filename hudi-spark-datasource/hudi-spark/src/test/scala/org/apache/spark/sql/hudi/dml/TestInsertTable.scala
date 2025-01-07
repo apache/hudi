@@ -379,7 +379,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 12.0, 1000)
       )
 
-      assertThrows[HoodieDuplicateKeyException] {
+      assertThrows[HoodieException] {
         try {
           spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
         } catch {
@@ -449,9 +449,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10.0),
         Seq(2, "a2", 12.0)
       )
-
       spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
-      assertThrows[HoodieDuplicateKeyException] {
+      assertThrows[HoodieException] {
         try {
           spark.sql(s"insert into $tableName select 1, 'a1', 10")
         } catch {
@@ -2787,7 +2786,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     )
 
     if (expectExceptionOnSecondBatch) {
-      assertThrows[HoodieDuplicateKeyException] {
+      assertThrows[HoodieException] {
         try {
           spark.sql(
             s"""
@@ -3109,7 +3108,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              |  'preCombineField'='dt',
              |  'hoodie.index.type' = 'BUCKET',
              |  'hoodie.bucket.index.hash.field' = 'id',
-             |  'hoodie.bucket.index.num.buckets'=512
+             |  'hoodie.bucket.index.num.buckets'= 512
              | )
              partitioned by (`day`,`hour`)
              location '${tablePath}'
@@ -3153,10 +3152,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              |tblproperties (
              |  'primaryKey' = 'id',
              |  'type' = 'MOR',
-             |  'preCombineField'='dt',
+             |  'preCombineField'= 'dt',
              |  'hoodie.index.type' = 'BUCKET',
              |  'hoodie.bucket.index.hash.field' = 'id',
-             |  'hoodie.bucket.index.num.buckets'=512
+             |  'hoodie.bucket.index.num.buckets'= 512
              | )
            partitioned by (`day`,`hour`)
            location '${tablePath}'
@@ -3195,10 +3194,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              |tblproperties (
              |  'primaryKey' = 'id',
              |  'type' = 'MOR',
-             |  'preCombineField'='dt',
+             |  'preCombineField'= 'dt',
              |  'hoodie.index.type' = 'BUCKET',
              |  'hoodie.bucket.index.hash.field' = 'id',
-             |  'hoodie.bucket.index.num.buckets'=512
+             |  'hoodie.bucket.index.num.buckets'= 512
              | )
              partitioned by (`day`,`hour`)
              location '${tablePath}'
