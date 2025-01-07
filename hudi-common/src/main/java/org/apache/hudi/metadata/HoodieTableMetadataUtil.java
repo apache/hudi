@@ -2337,12 +2337,12 @@ public class HoodieTableMetadataUtil {
 
     Schema tableSchema;
     try {
-      tableSchema = new TableSchemaResolver(dataMetaClient).getTableAvroSchema();
+      tableSchema = tryResolveSchemaForTable(dataMetaClient).get();
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest schema for " + dataMetaClient.getBasePath(), e);
     }
     Map<String, List<HoodieWriteStat>> writeStatsByFileId = allWriteStats.stream().collect(Collectors.groupingBy(HoodieWriteStat::getFileId));
-    int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getRecordIndexMaxParallelism()), 1);
+    int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getSecondaryIndexParallelism()), 1);
 
     return engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism).flatMap(writeStatsByFileIdEntry -> {
       String fileId = writeStatsByFileIdEntry.getKey();
@@ -2370,26 +2370,23 @@ public class HoodieTableMetadataUtil {
           getRecordKeyToSecondaryKey(dataMetaClient, engineType, logFilesIncludingInflight, tableSchema, partition, Option.ofNullable(currentBaseFile), indexDefinition, instantTime);
       // Need to find what secondary index record should be deleted, and what should be inserted.
       // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is not present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be inserted.
+      // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be updated.
       // For each entry in recordKeyToSecondaryKeyForPreviousFileSlice, if it is not present in recordKeyToSecondaryKeyForCurrentFileSlice, then it should be deleted.
-      // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be updated
       List<HoodieRecord> records = new ArrayList<>();
       recordKeyToSecondaryKeyForCurrentFileSlice.forEach((recordKey, secondaryKey) -> {
         if (!recordKeyToSecondaryKeyForPreviousFileSlice.containsKey(recordKey)) {
           records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
-        }
-      });
-      recordKeyToSecondaryKeyForPreviousFileSlice.forEach((recordKey, secondaryKey) -> {
-        if (!recordKeyToSecondaryKeyForCurrentFileSlice.containsKey(recordKey)) {
-          records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), true));
-        }
-      });
-      recordKeyToSecondaryKeyForCurrentFileSlice.forEach((recordKey, secondaryKey) -> {
-        if (recordKeyToSecondaryKeyForPreviousFileSlice.containsKey(recordKey)) {
+        } else {
           // delete previous entry if secondaryKey is different
           if (!recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey).equals(secondaryKey)) {
             records.add(createSecondaryIndexRecord(recordKey, recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey), indexDefinition.getIndexName(), true));
             records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
           }
+        }
+      });
+      recordKeyToSecondaryKeyForPreviousFileSlice.forEach((recordKey, secondaryKey) -> {
+        if (!recordKeyToSecondaryKeyForCurrentFileSlice.containsKey(recordKey)) {
+          records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), true));
         }
       });
       return records.iterator();

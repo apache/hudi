@@ -19,35 +19,45 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
+import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -60,9 +70,13 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertWriteStatsToSecondaryIndexRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRecordKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRevivedAndDeletedKeysFromMergedLogs;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromFileSlices;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.reduceByKeys;
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.constructSecondaryIndexKey;
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -268,6 +282,143 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // no RLI records should be generated for compaction operation.
       assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
           metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get(), EngineType.SPARK).isEmpty());
+    }
+  }
+
+  /**
+   * Tests methods used for Secondary Index record generation flows with MOR table during index initialization as well as update.
+   */
+  @Test
+  public void testSecondaryIndexRecordGenerationForMOR() throws IOException {
+    HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
+    cleanupClients();
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
+    initMetaClient(tableType, props);
+    cleanupTimelineService();
+    initTimelineService();
+
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER).withAutoCommit(false)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2)
+            .withInlineCompaction(true)
+            .compactionSmallFileSize(0).build()).build();
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // Insert
+      String commitTime = client.createNewInstantTime();
+      List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 10);
+      client.startCommitWithTime(commitTime);
+      JavaRDD<WriteStatus> writeStatuses1 = client.insert(jsc.parallelize(records1, 1), commitTime);
+      assertNoWriteErrors(writeStatuses1.collect());
+      client.commit(commitTime, writeStatuses1);
+
+      // assert SI records from 1st commit
+      List<String> expectedSecondaryIndexKeys = records1.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
+      String firstCommitTime = commitTime;
+      HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition("secondary_index_idx_rider", "", "", Collections.singletonList("rider"), Collections.emptyMap());
+      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withSecondaryIndexParallelism(2).build();
+      HoodieMetadataFileSystemView metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+      metadataView.loadAllPartitions();
+      List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+      HoodieMetadataFileSystemView finalMetadataView = metadataView;
+      Arrays.asList(dataGen.getPartitionPaths()).forEach(partition -> finalMetadataView.getLatestMergedFileSlicesBeforeOrOn(partition, firstCommitTime)
+          .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+      List<HoodieRecord> secondaryIndexRecords = readSecondaryKeysFromFileSlices(
+          engineContext, partitionFileSlicePairs, metadataConfig.getSecondaryIndexParallelism(), this.getClass().getSimpleName(), metaClient, EngineType.SPARK, indexDefinition).collectAsList();
+      assertListEquality(expectedSecondaryIndexKeys, secondaryIndexRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+
+      // update some records and assert SI records
+      commitTime = client.createNewInstantTime();
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates(commitTime, 1);
+      List<String> expectedUpdatedIndexKeys = updates2.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
+      List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime, 1);
+      List<String> expectedInsertedIndexKeys = inserts2.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
+      List<HoodieRecord> records2 = new ArrayList<>();
+      records2.addAll(inserts2);
+      records2.addAll(updates2);
+      JavaRDD<WriteStatus> writeStatuses2 = client.upsert(jsc.parallelize(records2, 1), commitTime);
+      assertNoWriteErrors(writeStatuses2.collect());
+
+      // assert SI
+      String secondCommitTime = commitTime;
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+      List<HoodieWriteStat> allWriteStats = writeStatuses2.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      secondaryIndexRecords =
+          convertWriteStatsToSecondaryIndexRecords(allWriteStats, secondCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
+      client.commit(secondCommitTime, writeStatuses2);
+
+      // There should be 3 SI records:
+      // a) 1 insert due to inserts2,
+      // b) 1 delete + 1 insert due to updates2,
+      assertEquals(3, secondaryIndexRecords.size());
+      List<String> validSecondaryIndexKeys = new ArrayList<>(expectedInsertedIndexKeys);
+      validSecondaryIndexKeys.addAll(expectedUpdatedIndexKeys);
+      // filter delete records from secondaryIndexRecords
+      List<HoodieRecord> deletedSecondaryIndexRecords = new ArrayList<>();
+      List<HoodieRecord> validSecondaryIndexRecords = new ArrayList<>();
+      secondaryIndexRecords.stream().forEach(record -> {
+        try {
+          if (record.isDelete(HoodieSecondaryIndexInfo.getClassSchema(), new Properties())) {
+            deletedSecondaryIndexRecords.add(record);
+          } else {
+            validSecondaryIndexRecords.add(record);
+          }
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      });
+      assertListEquality(validSecondaryIndexKeys, validSecondaryIndexRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      assertTrue(expectedSecondaryIndexKeys.containsAll(deletedSecondaryIndexRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
+
+      // let us create one more file slice with delete
+      commitTime = client.createNewInstantTime();
+      client.startCommitWithTime(commitTime);
+      List<HoodieRecord> deletes = dataGen.generateUniqueDeleteRecords(commitTime, 1);
+      List<String> expectedDeletedIndexKeys = deletes.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
+      List<HoodieRecord> records3 = new ArrayList<>();
+      records3.addAll(deletes);
+      JavaRDD<WriteStatus> writeStatuses3 = client.upsert(jsc.parallelize(records3, 1), commitTime);
+      assertNoWriteErrors(writeStatuses3.collect());
+
+      // assert SI
+      String thirdCommitTime = commitTime;
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+      allWriteStats = writeStatuses3.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      secondaryIndexRecords =
+          convertWriteStatsToSecondaryIndexRecords(allWriteStats, thirdCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
+      client.commit(thirdCommitTime, writeStatuses3);
+
+      // There should be 1 SI records: 1 delete due to deletes3
+      assertEquals(1, secondaryIndexRecords.size());
+      // filter insert records from secondaryIndexRecords
+      List<HoodieRecord> validSecondaryIndexRecords2 = new ArrayList<>();
+      List<HoodieRecord> deletedSecondaryIndexRecords2 = new ArrayList<>();
+      secondaryIndexRecords.stream().forEach(record -> {
+        try {
+          if (record.isDelete(HoodieSecondaryIndexInfo.getClassSchema(), new Properties())) {
+            deletedSecondaryIndexRecords2.add(record);
+          } else {
+            validSecondaryIndexRecords2.add(record);
+          }
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      });
+      assertTrue(validSecondaryIndexRecords2.isEmpty());
+      assertEquals(1, deletedSecondaryIndexRecords2.size());
+      assertEquals(getRecordKeyFromSecondaryIndexKey(expectedDeletedIndexKeys.get(0)), getRecordKeyFromSecondaryIndexKey(deletedSecondaryIndexRecords2.get(0).getRecordKey()));
+    }
+  }
+
+  private static String getSecondaryIndexKey(HoodieRecord record) {
+    try {
+      return constructSecondaryIndexKey(((RawTripTestPayload) record.getData()).getJsonDataAsMap().get("rider").toString(), record.getRecordKey());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
   }
 
