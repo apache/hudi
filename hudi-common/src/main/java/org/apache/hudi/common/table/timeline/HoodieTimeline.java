@@ -405,7 +405,7 @@ public interface HoodieTimeline extends Serializable {
   Option<String> getLatestCompletionTime();
 
   /**
-   * Get the stream of instants in order by state transition timestamp of actions.
+   * Get the stream of instants in order by completion timestamp of actions.
    */
   Stream<HoodieInstant> getInstantsOrderedByCompletionTime();
 

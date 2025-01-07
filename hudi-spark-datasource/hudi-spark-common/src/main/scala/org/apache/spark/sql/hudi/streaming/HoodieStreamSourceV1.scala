@@ -107,11 +107,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
     filteredTimeline match {
       case activeInstants if !activeInstants.empty() =>
         val timestamp = if (hollowCommitHandling == USE_TRANSITION_TIME) {
-          activeInstants.getInstantsOrderedByCompletionTime
-            .skip(activeInstants.countInstants() - 1)
-            .findFirst()
-            .get()
-            .getCompletionTime
+          activeInstants.getLatestCompletionTime.get()
         } else {
           activeInstants.lastInstant().get().requestedTime()
         }
