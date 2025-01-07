@@ -29,6 +29,7 @@ import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTable
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
+import org.apache.hudi.HoodieSparkSqlWriterInternal.handleInsertDuplicates
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
@@ -45,7 +46,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
+import org.apache.hudi.common.util.ConfigUtils.{getAllConfigKeys, getStringWithAltKeys}
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_TABLE_VERSION}
@@ -66,8 +67,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
 import org.apache.hudi.util.SparkKeyGenUtils
-
-import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.sql.HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -79,7 +79,6 @@ import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.slf4j.LoggerFactory
 
 import java.util.function.BiConsumer
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
@@ -506,12 +505,8 @@ class HoodieSparkSqlWriterInternal {
               case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
             }
 
-            val dedupedHoodieRecords =
-              if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) && operation != WriteOperationType.INSERT_OVERWRITE_TABLE && operation != WriteOperationType.INSERT_OVERWRITE) {
-                DataSourceUtils.dropDuplicates(jsc, hoodieRecords, parameters.asJava)
-              } else {
-                hoodieRecords
-              }
+            // Remove duplicates from incoming records based on existing keys from storage.
+            val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, jsc, parameters)
             client.startCommitWithTime(instantTime, commitActionType)
             try {
               val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
@@ -1163,5 +1158,56 @@ class HoodieSparkSqlWriterInternal {
     // belongs to another plan job, so we couldn't update UI in this plan job.
     Option(context.getLocalProperty(SQLExecution.EXECUTION_ID_KEY))
       .map(_.toLong).filter(SQLExecution.getQueryExecution(_) eq newQueryExecution)
+  }
+}
+
+object HoodieSparkSqlWriterInternal {
+  // Check if duplicates should be dropped.
+  def shouldDropDuplicatesForInserts(hoodieConfig: HoodieConfig): Boolean = {
+    hoodieConfig.contains(INSERT_DUP_POLICY) &&
+      hoodieConfig.getString(INSERT_DUP_POLICY).equalsIgnoreCase(DROP_INSERT_DUP_POLICY)
+  }
+
+  // Check if we should fail if duplicates are found.
+  def shouldFailWhenDuplicatesFound(hoodieConfig: HoodieConfig): Boolean = {
+    hoodieConfig.contains(INSERT_DUP_POLICY) &&
+      hoodieConfig.getString(INSERT_DUP_POLICY).equalsIgnoreCase(FAIL_INSERT_DUP_POLICY)
+  }
+
+  // Check if deduplication is required.
+  def isDeduplicationRequired(hoodieConfig: HoodieConfig): Boolean = {
+    hoodieConfig.getBoolean(INSERT_DROP_DUPS) ||
+      shouldFailWhenDuplicatesFound(hoodieConfig) ||
+      shouldDropDuplicatesForInserts(hoodieConfig)
+  }
+
+  // Check if deduplication is needed.
+  def isDeduplicationNeeded(operation: WriteOperationType): Boolean = {
+    operation != WriteOperationType.INSERT_OVERWRITE_TABLE &&
+      operation != WriteOperationType.INSERT_OVERWRITE
+  }
+
+  def handleInsertDuplicates(incomingRecords: JavaRDD[HoodieRecord[_]],
+                             hoodieConfig: HoodieConfig,
+                             operation: WriteOperationType,
+                             jsc: JavaSparkContext,
+                             parameters: Map[String, String]): JavaRDD[HoodieRecord[_]] = {
+    // If no deduplication is needed, return the incoming records as is
+    if (!isDeduplicationRequired(hoodieConfig) || !isDeduplicationNeeded(operation)) {
+      incomingRecords
+    } else {
+      // Perform deduplication
+      val deduplicatedRecords = DataSourceUtils.dropDuplicates(jsc, incomingRecords, parameters.asJava)
+      // Check if duplicates were found and fail if necessary
+      if (shouldFailWhenDuplicatesFound(hoodieConfig) &&
+        deduplicatedRecords.count() < incomingRecords.count()) {
+        throw new HoodieException(
+          s"Duplicate records detected. " +
+            s"The number of records after deduplication (${deduplicatedRecords.count()}) " +
+            s"is less than the incoming records (${incomingRecords.count()})."
+        )
+      }
+      deduplicatedRecords
+    }
   }
 }

@@ -30,9 +30,10 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.avro.Schema
 import org.apache.commons.io.FileUtils
+import org.apache.hudi.DataSourceWriteOptions.{DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY, INSERT_DROP_DUPS, INSERT_DUP_POLICY}
+import org.apache.hudi.common.config.HoodieConfig
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{expr, lit}
@@ -1245,6 +1246,56 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     assert(exc.getMessage.contains("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table."))
   }
 
+  @Test
+  def testShouldDropDuplicatesForInserts(): Unit = {
+    val hoodieConfig: HoodieConfig = new HoodieConfig()
+    var shouldDrop: Boolean = HoodieSparkSqlWriterInternal.shouldDropDuplicatesForInserts(hoodieConfig)
+    assertFalse(shouldDrop)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, DROP_INSERT_DUP_POLICY)
+    shouldDrop = HoodieSparkSqlWriterInternal.shouldDropDuplicatesForInserts(hoodieConfig)
+    assertTrue(shouldDrop)
+  }
+
+  @Test
+  def testShouldFailWhenDuplicatesFound(): Unit = {
+    val hoodieConfig: HoodieConfig = new HoodieConfig()
+    var shouldFail: Boolean = HoodieSparkSqlWriterInternal.shouldFailWhenDuplicatesFound(hoodieConfig)
+    assertFalse(shouldFail)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, FAIL_INSERT_DUP_POLICY)
+    shouldFail = HoodieSparkSqlWriterInternal.shouldFailWhenDuplicatesFound(hoodieConfig)
+    assertTrue(shouldFail)
+  }
+
+  @Test
+  def testIsDeduplicationRequired(): Unit = {
+    val hoodieConfig: HoodieConfig = new HoodieConfig()
+    var isRequired: Boolean = HoodieSparkSqlWriterInternal.isDeduplicationRequired(hoodieConfig)
+    assertFalse(isRequired)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, FAIL_INSERT_DUP_POLICY)
+    isRequired = HoodieSparkSqlWriterInternal.isDeduplicationRequired(hoodieConfig)
+    assertTrue(isRequired)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, DROP_INSERT_DUP_POLICY)
+    isRequired = HoodieSparkSqlWriterInternal.isDeduplicationRequired(hoodieConfig)
+    assertTrue(isRequired)
+
+    hoodieConfig.setValue(INSERT_DUP_POLICY.key, "")
+    hoodieConfig.setValue(INSERT_DROP_DUPS.key, "true")
+    isRequired = HoodieSparkSqlWriterInternal.isDeduplicationRequired(hoodieConfig)
+    assertTrue(isRequired)
+  }
+
+  @Test
+  def testIsDeduplicationNeeded(): Unit = {
+    assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT_OVERWRITE))
+    assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT_OVERWRITE_TABLE))
+    assertTrue(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT))
+    assertTrue(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.UPSERT))
+  }
+
   private def fetchActualSchema(): Schema = {
     val tableMetaClient = createMetaClient(spark, tempBasePath)
     new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
@@ -1272,5 +1323,4 @@ object TestHoodieSparkSqlWriter {
       Arguments.arguments("*5/03/1*", Seq("2016/03/15")),
       Arguments.arguments("2016/03/*", Seq("2015/03/16", "2015/03/17")))
   }
-
 }
