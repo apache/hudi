@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
+import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -161,7 +162,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected HoodieData<HoodieRecord> getExpressionIndexUpdates(Option<HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>>> partitionRangeMetadataPairOpt,
                                                                HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
-    HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> exprIndexPartitionStatUpdates = SparkMetadataWriterUtils.getExpressionIndexUpdates(commitMetadata, indexPartition, engineContext,
+    final HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> exprIndexPartitionStatUpdates = SparkMetadataWriterUtils.getExpressionIndexUpdates(commitMetadata, indexPartition, engineContext,
             dataMetaClient, dataWriteConfig.getMetadataConfig())
         .flatMapValues(list -> list.stream().flatMap(List::stream).iterator());
 
@@ -172,11 +173,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient);
     HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata
         expressionIndexComputationMetadata = SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, instantTime,
-        true, engineContext, dataWriteConfig, metadataWriteConfig);
-    if (expressionIndexComputationMetadata.getColumnRangeMetadataOption().isPresent()) {
-      exprIndexPartitionStatUpdates = exprIndexPartitionStatUpdates.union(expressionIndexComputationMetadata.getColumnRangeMetadataOption().get());
-      expressionIndexComputationMetadata.getColumnRangeMetadataOption().get().unpersist();
-    }
+        engineContext, dataWriteConfig, metadataWriteConfig,
+        Option.of(rangeMetadata ->
+            HoodieTableMetadataUtil.collectAndProcessColumnMetadata(exprIndexPartitionStatUpdates.union(rangeMetadata), true, Option.of(indexDefinition.getIndexName()))));
     HoodieData<HoodieRecord> partitionStatsRDD = HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords(exprIndexPartitionStatUpdates, Option.of(indexPartition), true);
     return expressionIndexComputationMetadata.getExpressionIndexRecords().union(partitionStatsRDD);
   }
@@ -187,15 +186,15 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                HoodieTableMetaClient metaClient, int parallelism,
                                                                Schema readerSchema, StorageConfiguration<?> storageConf,
                                                                String instantTime, boolean shouldGeneratePartitionStatRecords) {
-     HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata expressionIndexComputationMetadata = SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathAndSizeTriplet, indexDefinition,
-         metaClient, parallelism, readerSchema, instantTime, shouldGeneratePartitionStatRecords, engineContext, dataWriteConfig, metadataWriteConfig);
+    ExpressionIndexComputationMetadata expressionIndexComputationMetadata = SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathAndSizeTriplet, indexDefinition,
+        metaClient, parallelism, readerSchema, instantTime, engineContext, dataWriteConfig, metadataWriteConfig,
+        Option.of(rangeMetadata ->
+            HoodieTableMetadataUtil.collectAndProcessColumnMetadata(rangeMetadata, true, Option.of(indexDefinition.getIndexName()))));
     HoodieData<HoodieRecord> exprIndexRecords = expressionIndexComputationMetadata.getExpressionIndexRecords();
-     if (expressionIndexComputationMetadata.getColumnRangeMetadataOption().isPresent()) {
-       exprIndexRecords = exprIndexRecords.union(HoodieTableMetadataUtil.collectAndProcessColumnMetadata(expressionIndexComputationMetadata.getColumnRangeMetadataOption().get(), true,
-           Option.of(indexDefinition.getIndexName())));
-       expressionIndexComputationMetadata.getColumnRangeMetadataOption().get().unpersist();
-     }
-     return exprIndexRecords;
+    if (shouldGeneratePartitionStatRecords) {
+      exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get());
+    }
+    return exprIndexRecords;
   }
 
   @Override

@@ -197,7 +197,6 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
     throw new UnsupportedOperationException("Operation is not supported yet");
   }
 
-
   @Override
   public long count() {
     return super.count();

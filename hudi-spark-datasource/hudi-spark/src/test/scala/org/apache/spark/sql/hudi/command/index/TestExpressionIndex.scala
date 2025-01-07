@@ -879,7 +879,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
    * Test expression index pruning with partition filters.
    */
   @Test
-  def testPruningWithPartitionFilters(): Unit = {
+  def testPartitionPruningWithPartitionStats(): Unit = {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_pruning_partition_filters_$tableType"
@@ -978,7 +978,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
    * Test expression index pruning after update with partition filters.
    */
   @Test
-  def testPruningAfterUpdateWithPartitionFilters(): Unit = {
+  def testPartitionPruningAfterUpdateWithPartitionStats(): Unit = {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isTableMOR = tableType.equals("mor")

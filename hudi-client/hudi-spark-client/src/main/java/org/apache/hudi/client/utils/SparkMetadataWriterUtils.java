@@ -1,4 +1,4 @@
-/*
+ /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -89,6 +89,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -142,8 +143,8 @@ public class SparkMetadataWriterUtils {
     }).collect(Collectors.toList());
   }
 
-  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex,
-                                                                                             String columnToIndex, boolean fetchCachedColumnMetadata) {
+  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex, String columnToIndex,
+                                                                                             Option<java.util.function.Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
     // Aggregate col stats related data for the column to index
     Dataset<Row> columnRangeMetadataDataset = dataset
         .select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
@@ -155,41 +156,46 @@ public class SparkMetadataWriterUtils {
     // Generate column stat records using the aggregated data
     HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> rangeMetadataHoodieJavaRDD = HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD())
         .flatMapToPair((SerializableFunction<Row, Iterator<? extends Pair<String, HoodieColumnRangeMetadata<Comparable>>>>)
-        row -> {
-          int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
-          long nullCount = row.getLong(baseAggregatePosition);
-          Comparable minValue = (Comparable) row.get(baseAggregatePosition + 1);
-          Comparable maxValue = (Comparable) row.get(baseAggregatePosition + 2);
-          long valueCount = row.getLong(baseAggregatePosition + 3);
+            row -> {
+              int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
+              long nullCount = row.getLong(baseAggregatePosition);
+              Comparable minValue = (Comparable) row.get(baseAggregatePosition + 1);
+              Comparable maxValue = (Comparable) row.get(baseAggregatePosition + 2);
+              long valueCount = row.getLong(baseAggregatePosition + 3);
 
-          String partitionName = row.getString(0);
-          String relativeFilePath = row.getString(1);
-          long totalFileSize = row.getLong(2);
-          // Total uncompressed size is harder to get directly. This is just an approximation to maintain the order.
-          long totalUncompressedSize = totalFileSize * 2;
+              String partitionName = row.getString(0);
+              String relativeFilePath = row.getString(1);
+              long totalFileSize = row.getLong(2);
+              // Total uncompressed size is harder to get directly. This is just an approximation to maintain the order.
+              long totalUncompressedSize = totalFileSize * 2;
 
-          HoodieColumnRangeMetadata<Comparable> rangeMetadata = HoodieColumnRangeMetadata.create(
-              relativeFilePath,
-              columnToIndex,
-              minValue,
-              maxValue,
-              nullCount,
-              valueCount,
-              totalFileSize,
-              totalUncompressedSize
-          );
-          return Collections.singletonList(Pair.of(partitionName, rangeMetadata)).iterator();
-        });
+              HoodieColumnRangeMetadata<Comparable> rangeMetadata = HoodieColumnRangeMetadata.create(
+                  relativeFilePath,
+                  columnToIndex,
+                  minValue,
+                  maxValue,
+                  nullCount,
+                  valueCount,
+                  totalFileSize,
+                  totalUncompressedSize
+              );
+              return Collections.singletonList(Pair.of(partitionName, rangeMetadata)).iterator();
+            });
 
-    HoodieData<HoodieRecord> colStatRecords = rangeMetadataHoodieJavaRDD.map(pair ->
-        createColumnStatsRecords(pair.getKey(), Collections.singletonList(pair.getValue()), false, expressionIndex.getIndexName(),
-            COLUMN_STATS.getRecordType()).collect(Collectors.toList()))
-        .flatMap(records -> records.iterator());
-    if (fetchCachedColumnMetadata) {
+    if (partitionRecordsFunctionOpt.isPresent()) {
       rangeMetadataHoodieJavaRDD.persist("MEMORY_AND_DISK_SER");
     }
-    return fetchCachedColumnMetadata
-        ? new ExpressionIndexComputationMetadata(colStatRecords, Option.of(rangeMetadataHoodieJavaRDD))
+    HoodieData<HoodieRecord> colStatRecords = rangeMetadataHoodieJavaRDD.map(pair ->
+            createColumnStatsRecords(pair.getKey(), Collections.singletonList(pair.getValue()), false, expressionIndex.getIndexName(),
+                COLUMN_STATS.getRecordType()).collect(Collectors.toList()))
+        .flatMap(records -> records.iterator());
+    Option<HoodieData<HoodieRecord>> partitionStatRecordsOpt = Option.empty();
+    if (partitionRecordsFunctionOpt.isPresent()) {
+      partitionStatRecordsOpt = Option.of(partitionRecordsFunctionOpt.get().apply(rangeMetadataHoodieJavaRDD));
+      rangeMetadataHoodieJavaRDD.unpersist();
+    }
+    return partitionRecordsFunctionOpt.isPresent()
+        ? new ExpressionIndexComputationMetadata(colStatRecords, partitionStatRecordsOpt)
         : new ExpressionIndexComputationMetadata(colStatRecords);
   }
 
@@ -270,9 +276,25 @@ public class SparkMetadataWriterUtils {
     return avroRecords;
   }
 
+  /**
+   * Generates expression index records
+   * @param partitionFilePathAndSizeTriplet Triplet of file path, file size and partition name to which file belongs
+   * @param indexDefinition Hoodie Index Definition for the expression index for which records need to be generated
+   * @param metaClient Hoodie Table Meta Client
+   * @param parallelism Parallelism to use for engine operations
+   * @param readerSchema Schema of reader
+   * @param instantTime Instant time
+   * @param engineContext HoodieEngineContext
+   * @param dataWriteConfig Write Config for the data table
+   * @param metadataWriteConfig Write config for the metadata table
+   * @param partitionRecordsFunctionOpt Function used to generate partition stat records for the EI. It takes the column range metadata generated for the provided partition files as input
+   *                                    and uses those to generate the corresponding partition stats
+   * @return ExpressionIndexComputationMetadata containing both EI column stat records and partition stat records if partitionRecordsFunctionOpt is provided
+   */
   public static ExpressionIndexComputationMetadata getExprIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
-                                                                       HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, String instantTime, boolean fetchCachedColumnMetadata,
-                                                                       HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig, HoodieWriteConfig metadataWriteConfig) {
+                                                                       HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, String instantTime,
+                                                                       HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig, HoodieWriteConfig metadataWriteConfig,
+                                                                       Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
     if (indexDefinition.getSourceFields().isEmpty()) {
       // In case there are no columns to index, bail
@@ -313,7 +335,7 @@ public class SparkMetadataWriterUtils {
 
     // Generate expression index records
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, fetchCachedColumnMetadata);
+      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt);
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
       return new ExpressionIndexComputationMetadata(getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime, indexDefinition.getIndexName()));
     } else {

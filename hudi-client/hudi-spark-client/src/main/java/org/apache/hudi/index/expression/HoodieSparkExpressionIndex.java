@@ -20,8 +20,6 @@
 package org.apache.hudi.index.expression;
 
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodiePairData;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 
@@ -81,24 +79,24 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
 
   public static class ExpressionIndexComputationMetadata {
     HoodieData<HoodieRecord> expressionIndexRecords;
-    Option<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata;
+    Option<HoodieData<HoodieRecord>> partitionStatRecordsOpt;
 
-    public ExpressionIndexComputationMetadata(HoodieData<HoodieRecord> expressionIndexRecords, Option<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata) {
+    public ExpressionIndexComputationMetadata(HoodieData<HoodieRecord> expressionIndexRecords, Option<HoodieData<HoodieRecord>> partitionStatRecordsOpt) {
       this.expressionIndexRecords = expressionIndexRecords;
-      this.columnRangeMetadata = columnRangeMetadata;
+      this.partitionStatRecordsOpt = partitionStatRecordsOpt;
     }
 
     public ExpressionIndexComputationMetadata(HoodieData<HoodieRecord> expressionIndexRecords) {
       this.expressionIndexRecords = expressionIndexRecords;
-      this.columnRangeMetadata = Option.empty();
+      this.partitionStatRecordsOpt = Option.empty();
     }
 
     public HoodieData<HoodieRecord> getExpressionIndexRecords() {
       return expressionIndexRecords;
     }
 
-    public Option<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>> getColumnRangeMetadataOption() {
-      return columnRangeMetadata;
+    public Option<HoodieData<HoodieRecord>> getPartitionStatRecordsOption() {
+      return partitionStatRecordsOpt;
     }
   }
 }
