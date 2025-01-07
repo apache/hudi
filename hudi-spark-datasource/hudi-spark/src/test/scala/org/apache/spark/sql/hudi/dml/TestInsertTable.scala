@@ -2606,7 +2606,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test FAIL insert dup policy with INSERT_INTO explicit new configs") {
     withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val operation = WriteOperationType.UPSERT
+        val operation = WriteOperationType.INSERT
         val dupPolicy = FAIL_INSERT_DUP_POLICY
         withTable(generateTableName) { tableName =>
           ingestAndValidateDataDupPolicy(tableType, tableName, tmp, operation,
@@ -2638,6 +2638,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | PARTITIONED BY (boolean_field, float_field, byte_field, short_field, decimal_field, date_field, string_field, timestamp_field)
            |LOCATION '${tmp.getCanonicalPath}'
      """.stripMargin)
+      // Avoid operation type modification.
+      spark.sql(s"set ${INSERT_DROP_DUPS.key}=false")
+      spark.sql(s"set ${INSERT_DUP_POLICY.key}=$NONE_INSERT_DUP_POLICY")
 
       // Insert data into partitioned table
       spark.sql(
