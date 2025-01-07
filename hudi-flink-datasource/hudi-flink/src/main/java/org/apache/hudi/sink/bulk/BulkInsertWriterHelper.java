@@ -168,7 +168,8 @@ public class BulkInsertWriterHelper {
     if (handles.isEmpty()) {
       return;
     }
-    ExecutorService executorService = Executors.newFixedThreadPool(handles.size());
+    int handsSize = Math.min(handles.size(), 10);
+    ExecutorService executorService = Executors.newFixedThreadPool(handsSize);
     allOf(handles.values().stream()
         .map(rowCreateHandle -> CompletableFuture.supplyAsync(() -> {
           try {
