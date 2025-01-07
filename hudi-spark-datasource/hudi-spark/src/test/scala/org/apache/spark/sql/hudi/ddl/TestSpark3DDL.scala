@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
@@ -35,6 +36,7 @@ import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.StringType
+import org.junit.jupiter.api.Assertions.assertEquals
 
 import scala.collection.JavaConverters._
 
@@ -233,9 +235,15 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test alter table properties and add rename drop column") {
+  test("Test alter table properties and add rename drop column with table services") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
+      Seq("cow,clustering", "mor,compaction", "mor,clustering").foreach { args =>
+        val argArray = args.split(',')
+        val tableType = argArray(0)
+        val runCompaction = "compaction".equals(argArray(1))
+        val runClustering = "clustering".equals(argArray(1))
+        assert(runCompaction || runClustering)
+
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         // disable automatic inline compaction
@@ -293,8 +301,18 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
-        // try schedule compact
-        if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
+        if (runCompaction) {
+          // try schedule compact
+          if (tableType == "mor") spark.sql(s"schedule compaction on $tableName")
+        } else if (runClustering) {
+          assertEquals(0, spark.sql(s"CALL show_clustering('$tableName')").count)
+          spark.sql(s"CALL run_clustering(table => '$tableName', op => 'schedule')")
+          spark.sql(s"CALL run_clustering(table => '$tableName', op => 'execute')")
+          val clusteringRows = spark.sql(s"CALL show_clustering('$tableName')").collect()
+          assertResult(1)(clusteringRows.length)
+          val states = clusteringRows.map(_.getString(2))
+          assertResult(HoodieInstant.State.COMPLETED.name())(states(0))
+        }
         // test change column type decimal(10,4) 为decimal(18,8)
         spark.sql(s"alter table $tableName alter column col4 type decimal(18, 8)")
         spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
@@ -316,15 +334,25 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
-        // try schedule compact
-        if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
-        // if tableType is mor, check compaction
-        if (tableType == "mor") {
-          val compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
-          val timestamps = compactionRows.map(_.getString(0))
-          assertResult(2)(timestamps.length)
-          spark.sql(s"run compaction on $tableName at ${timestamps(1)}")
-          spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
+        if (runCompaction) {
+          // try schedule compact
+          if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
+          // if tableType is mor, check compaction
+          if (tableType == "mor") {
+            val compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
+            val timestamps = compactionRows.map(_.getString(0))
+            assertResult(2)(timestamps.length)
+            spark.sql(s"run compaction on $tableName at ${timestamps(1)}")
+            spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
+          }
+        } else if (runClustering) {
+          spark.sql(s"CALL run_clustering(table => '$tableName', op => 'schedule')")
+          spark.sql(s"CALL run_clustering(table => '$tableName', op => 'execute')")
+          val clusteringRows = spark.sql(s"CALL show_clustering('$tableName')").collect()
+          assertResult(2)(clusteringRows.length)
+          val states = clusteringRows.map(_.getString(2))
+          assertResult(HoodieInstant.State.COMPLETED.name())(states(0))
+          assertResult(HoodieInstant.State.COMPLETED.name())(states(1))
         }
         spark.sql(
           s"""
