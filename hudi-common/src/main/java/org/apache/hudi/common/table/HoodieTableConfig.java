@@ -76,9 +76,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
-import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
@@ -88,8 +88,8 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
@@ -198,7 +198,8 @@ public class HoodieTableConfig extends HoodieConfig {
   
   public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
-      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING)
+      .defaultValue((RecordMergeMode) null,
+          "COMMIT_TIME_ORDERING if precombine is not set; EVENT_TIME_ORDERING if precombine is set")
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
 
@@ -754,8 +755,10 @@ public class HoodieTableConfig extends HoodieConfig {
    * Infers the merging behavior based on what the user sets (or doesn't set).
    * Validates that the user has not set an illegal combination of configs
    */
-  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode, String payloadClassName,
-                                                                                    String recordMergeStrategyId) {
+  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
+                                                                                    String payloadClassName,
+                                                                                    String recordMergeStrategyId,
+                                                                                    String orderingFieldName) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
     String inferredRecordMergeStrategyId;
@@ -766,7 +769,7 @@ public class HoodieTableConfig extends HoodieConfig {
         checkArgument(recordMergeMode != RecordMergeMode.CUSTOM,
             "Custom merge mode should only be used if you set a payload class or merge strategy ID");
         if (recordMergeMode == null) {
-          inferredRecordMergeMode = RECORD_MERGE_MODE.defaultValue();
+          inferredRecordMergeMode = isNullOrEmpty(orderingFieldName) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING;
         } else {
           inferredRecordMergeMode = recordMergeMode;
         }
@@ -775,6 +778,8 @@ public class HoodieTableConfig extends HoodieConfig {
         if (inferredRecordMergeMode == COMMIT_TIME_ORDERING) {
           inferredRecordMergeStrategyId = COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
         } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
+          checkArgument(!isNullOrEmpty(orderingFieldName),
+              "Ordering field must be specified for EVENT_TIME_ORDERING");
           inferredRecordMergeStrategyId = DEFAULT_MERGE_STRATEGY_UUID;
         } else {
           throw new IllegalStateException("Merge Mode: '" + inferredRecordMergeMode + "' has not been fully implemented.");
@@ -785,6 +790,8 @@ public class HoodieTableConfig extends HoodieConfig {
         if (recordMergeStrategyId.equals(DEFAULT_MERGE_STRATEGY_UUID)) {
           checkArgument(recordMergeMode == null || recordMergeMode == EVENT_TIME_ORDERING,
               "Default merge strategy ID can only be used with the merge mode of EVENT_TIME_ORDERING");
+          checkArgument(!isNullOrEmpty(orderingFieldName),
+              "Ordering field must be specified for EVENT_TIME_ORDERING");
           inferredRecordMergeMode = EVENT_TIME_ORDERING;
         } else if (recordMergeStrategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
           checkArgument(recordMergeMode == null || recordMergeMode == COMMIT_TIME_ORDERING,
@@ -812,6 +819,8 @@ public class HoodieTableConfig extends HoodieConfig {
           // Default case, everything should be null or event time ordering / default strategy
           checkArgument(recordMergeMode == null || recordMergeMode == EVENT_TIME_ORDERING,
               "Only the record merge mode of EVENT_TIME_ORDERING can be used with default payload");
+          checkArgument(!isNullOrEmpty(orderingFieldName),
+              "Ordering field must be specified for EVENT_TIME_ORDERING");
           inferredRecordMergeMode = EVENT_TIME_ORDERING;
           inferredRecordMergeStrategyId = DEFAULT_MERGE_STRATEGY_UUID;
         } else {
