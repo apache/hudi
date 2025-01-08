@@ -30,7 +30,7 @@ import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, In, Literal}
-import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
+import org.apache.spark.sql.hudi.DataSkippingUtils.{LITERAL_TRUE_EXPR, translateIntoColumnStatsIndexFilterExpr}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import java.util.concurrent.atomic.AtomicBoolean
@@ -104,9 +104,8 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
   protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], fileNamesFromPrunedPartitions: Set[String], isExpressionIndex: Boolean = false): Set[String] = {
     val indexedCols : Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
-    val hasNonIndexedFilters = new AtomicBoolean(false)
-    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, indexedCols, hasNonIndexedFilters)).reduce(And)
-    if (hasNonIndexedFilters.get()) {
+    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, indexedCols)).reduce(And)
+    if (indexFilter.equals(TrueLiteral)) {
       // if there are any non indexed cols or we can't translate source expr, we have to read all files and may not benefit from col stats lookup.
        fileNamesFromPrunedPartitions
     } else {

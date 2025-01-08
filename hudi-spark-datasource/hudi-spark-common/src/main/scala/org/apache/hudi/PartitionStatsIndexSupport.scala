@@ -99,9 +99,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
             val indexSchema = transposedPartitionStatsDF.schema
             val indexedCols : Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
             // to be fixed. HUDI-8836.
-            val hasNonIndexedCols = new AtomicBoolean(false)
-            val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols,
-              hasNonIndexedCols = hasNonIndexedCols)).reduce(And)
+            val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
             Some(transposedPartitionStatsDF.where(new Column(indexFilter))
               .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
               .collect()

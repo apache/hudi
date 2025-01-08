@@ -269,7 +269,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       dataFilter4,
       Seq("c1", "c2"),
       TrueLiteral,
-      false
+      true
     )
 
     // too many filters, out of which only half are indexed.
@@ -297,11 +297,14 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   }
 
   def translateIntoColStatsExprAndValidate(dataFilter: Expression, indexedCols: Seq[String], expectedExpr: Expression,
-                                           expectedHasNonIndexedCols: Boolean): Unit = {
-    val hasNonIndexedCols = new AtomicBoolean(false)
-    val transformedExpr = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(dataFilter, false, indexedCols, hasNonIndexedCols)
-    assertEquals(expectedExpr.toString(), transformedExpr.toString())
-    assertEquals(expectedHasNonIndexedCols, hasNonIndexedCols.get())
+                                           expectTrueLiteral: Boolean): Unit = {
+    val transformedExpr = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(dataFilter, false, indexedCols)
+    assertTrue(expectedExpr.equals(transformedExpr))
+    if (expectTrueLiteral) {
+      assertTrue(expectedExpr.equals(TrueLiteral))
+    } else {
+      assertTrue(!expectedExpr.equals(TrueLiteral))
+    }
   }
 
   def generateColStatsExprForGreaterthanOrEquals(colName: String, colValue: String): Expression = {
