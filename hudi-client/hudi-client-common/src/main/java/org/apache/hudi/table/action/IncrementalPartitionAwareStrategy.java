@@ -16,25 +16,27 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.compact.strategy;
+package org.apache.hudi.table.action;
 
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
-public class PartitionRegexBasedCompactionStrategy extends CompactionStrategy {
-
+/**
+ * Marking strategy interface.
+ *
+ * Any Strategy implement this `IncrementalPartitionAwareStrategy` could have the ability to perform incremental partitions processing.
+ * At this time, Incremental partitions should be passed to the current strategy.
+ */
+public interface IncrementalPartitionAwareStrategy {
+  
   /**
-   * Regex filtered partitions are not included in missing partitions.
+   * Filter the given incremental partitions.
+   * @param writeConfig
+   * @param incrementalPartitions
+   * @return Pair of final processing partition paths and filtered partitions which will be recorded as missing partitions.
+   * Different strategies can individually implement whether to record, or which partitions to record as missing partitions.
    */
-  @Override
-  public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-    String regex = writeConfig.getCompactionSpecifyPartitionPathRegex();
-    Pattern pattern = Pattern.compile(regex);
-    return Pair.of(allPartitionPaths.stream().filter(pattern.asPredicate()).collect(Collectors.toList()), new ArrayList<>());
-  }
+  Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitions);
 }

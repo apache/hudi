@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.cluster.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -81,11 +82,6 @@ public class TestPartitionAwareClusteringPlanStrategy {
 
     public DummyPartitionAwareClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
       super(table, engineContext, writeConfig);
-    }
-
-    @Override
-    protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List list) {
-      return null;
     }
 
     @Override

@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -30,14 +29,18 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.IncrementalPartitionAwareStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
+import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -45,7 +48,7 @@ import java.util.stream.Stream;
 /**
  * Scheduling strategy with restriction that clustering groups can only contain files from same partition.
  */
-public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends ClusteringPlanStrategy<T,I,K,O> {
+public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends ClusteringPlanStrategy<T,I,K,O> implements IncrementalPartitionAwareStrategy {
   private static final Logger LOG = LoggerFactory.getLogger(PartitionAwareClusteringPlanStrategy.class);
 
   public PartitionAwareClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
@@ -113,14 +116,15 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
   /**
    * Return list of partition paths to be considered for clustering.
    */
-  protected List<String> filterPartitionPaths(List<String> partitionPaths) {
-    List<String> filteredPartitions = ClusteringPlanPartitionFilter.filter(partitionPaths, getWriteConfig());
+  public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitions) {
+    ArrayList<String> missingPartitions = new ArrayList<>();
+    List<String> filteredPartitions = ClusteringPlanPartitionFilter.filter(partitions, getWriteConfig(), missingPartitions);
     LOG.debug("Filtered to the following partitions: " + filteredPartitions);
-    return filteredPartitions;
+    return Pair.of(filteredPartitions, missingPartitions);
   }
 
   @Override
-  public Option<HoodieClusteringPlan> generateClusteringPlan() {
+  public Option<HoodieClusteringPlan> generateClusteringPlan(Lazy<List<String>> partitions) {
     if (!checkPrecondition()) {
       return Option.empty();
     }
@@ -135,21 +139,24 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     if (StringUtils.isNullOrEmpty(partitionSelected)) {
       // get matched partitions if set
-      partitionPaths = getRegexPatternMatchedPartitions(config, FSUtils.getAllPartitionPaths(
-          getEngineContext(), metaClient.getStorage(), config.getMetadataConfig(), metaClient.getBasePath()));
+      partitionPaths = getRegexPatternMatchedPartitions(config, partitions.get());
       // filter the partition paths if needed to reduce list status
     } else {
       partitionPaths = Arrays.asList(partitionSelected.split(","));
     }
 
-    partitionPaths = filterPartitionPaths(partitionPaths);
+    Pair<List<String>, List<String>> partitionsPair = filterPartitionPaths(getWriteConfig(), partitionPaths);
+    partitionPaths = partitionsPair.getLeft();
+    List<String> missingPartitions = partitionsPair.getRight();
     LOG.info("Scheduling clustering partitionPaths: {}", partitionPaths);
+    LOG.info("Missing Scheduled clustering partitionPaths: {}", missingPartitions);
 
     if (partitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no clustering plan
       return Option.empty();
     }
 
+    Set<String> processedPartitions = new HashSet<>();
     List<HoodieClusteringGroup> clusteringGroups = getEngineContext()
         .flatMap(
             partitionPaths,
@@ -160,7 +167,14 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
             partitionPaths.size())
         .stream()
         .limit(getWriteConfig().getClusteringMaxNumGroups())
+        .peek(clusteringGroup -> {
+          String partitionPath = clusteringGroup.getSlices().get(0).getPartitionPath();
+          processedPartitions.add(partitionPath);
+        })
         .collect(Collectors.toList());
+
+    partitionPaths.removeAll(processedPartitions);
+    missingPartitions.addAll(partitionPaths);
 
     if (clusteringGroups.isEmpty()) {
       LOG.warn("No data available to cluster");
@@ -178,6 +192,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
         .setExtraMetadata(getExtraMetadata())
         .setVersion(getPlanVersion())
         .setPreserveHoodieMetadata(true)
+        .setMissingSchedulePartitions(missingPartitions)
         .build());
   }
 

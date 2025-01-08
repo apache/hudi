@@ -63,7 +63,7 @@ public class TestHoodieCompactionStrategy {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
     assertEquals(operations, returned, "UnBounded should not re-order or filter");
   }
 
@@ -79,7 +79,7 @@ public class TestHoodieCompactionStrategy {
             HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
         .build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
 
     assertTrue(returned.size() < operations.size(), "BoundedIOCompaction should have resulted in fewer compactions");
     assertEquals(2, returned.size(), "BoundedIOCompaction should have resulted in 2 compactions being chosen");
@@ -103,7 +103,7 @@ public class TestHoodieCompactionStrategy {
                 .withLogFileSizeThresholdBasedCompaction(100 * 1024 * 1024).build())
         .build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
 
     assertTrue(returned.size() < operations.size(),
         "LogFileSizeBasedCompactionStrategy should have resulted in fewer compactions");
@@ -137,7 +137,7 @@ public class TestHoodieCompactionStrategy {
         HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(1).build()).build();
 
-    List<String> filterPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths));
+    List<String> filterPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths)).getLeft();
     assertEquals(1, filterPartitions.size(), "DayBasedCompactionStrategy should have resulted in fewer partitions");
 
     List<HoodieCompactionOperation> operations = createCompactionOperationsForPartition(writeConfig, sizesMap, keyToPartitionMap, filterPartitions);
@@ -182,11 +182,11 @@ public class TestHoodieCompactionStrategy {
             .build())
         .build();
 
-    List<String> filterPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths));
+    List<String> filterPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths)).getLeft();
     assertEquals(1, filterPartitions.size(), "DayBasedCompactionStrategy should have resulted in fewer partitions");
 
     List<HoodieCompactionOperation> operations = createCompactionOperationsForPartition(writeConfig, sizesMap, keyToPartitionMap, filterPartitions);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
 
     assertEquals(1, returned.size(),
         "DayBasedAndBoundedIOCompactionStrategy should have resulted in fewer compactions");
@@ -241,7 +241,7 @@ public class TestHoodieCompactionStrategy {
         HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(2).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
 
     assertTrue(returned.size() < operations.size(),
         "BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions");
@@ -290,7 +290,7 @@ public class TestHoodieCompactionStrategy {
         HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(2).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
 
     assertTrue(returned.size() < operations.size(),
         "UnBoundedPartitionAwareCompactionStrategy should not include last "
@@ -312,7 +312,7 @@ public class TestHoodieCompactionStrategy {
                 .withCompactionLogFileNumThreshold(2).build())
         .build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
 
     assertTrue(returned.size() < operations.size(),
         "LogFileLengthBasedCompactionStrategy should have resulted in fewer compactions");
@@ -341,7 +341,7 @@ public class TestHoodieCompactionStrategy {
     List<String> allPartitionPaths = Arrays.asList(
         "2017/01/01", "2018/01/02", "2017/02/01"
     );
-    List<String> returned = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, allPartitionPaths);
+    List<String> returned = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, allPartitionPaths).getLeft();
     // filter by num first and then filter by prefix
     assertEquals(1, returned.size());
     assertEquals("2017/01/01", returned.get(0));
@@ -349,7 +349,7 @@ public class TestHoodieCompactionStrategy {
     writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCompactionStrategy(new PrefixStrategy(), new NumStrategy()).withTargetIOPerCompactionInMB(1024)
             .withCompactionLogFileNumThreshold(2).build()).build();
-    returned = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, allPartitionPaths);
+    returned = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, allPartitionPaths).getLeft();
     // filter by prefix first and then filter by num
     assertEquals(2, returned.size());
     assertEquals("2017/01/01", returned.get(0));
@@ -358,15 +358,28 @@ public class TestHoodieCompactionStrategy {
 
   public static class NumStrategy extends CompactionStrategy {
     @Override
-    public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-      return allPartitionPaths.stream().limit(2).collect(Collectors.toList());
+    public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+      List<String> partitionToProcess = allPartitionPaths.stream().limit(2).collect(Collectors.toList());
+      List<String> missingPartitions = allPartitionPaths.stream().skip(2).collect(Collectors.toList());
+      return Pair.of(partitionToProcess, missingPartitions);
     }
   }
 
   public static class PrefixStrategy extends CompactionStrategy {
     @Override
-    public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-      return allPartitionPaths.stream().filter(s -> s.startsWith("2017")).collect(Collectors.toList());
+    public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+      ArrayList<String> partitionsToProcess = new ArrayList<>();
+      ArrayList<String> missingPartitions = new ArrayList<>();
+
+      allPartitionPaths.forEach(partition -> {
+        if (partition.startsWith("2017")) {
+          partitionsToProcess.add(partition);
+        } else {
+          missingPartitions.add(partition);
+        }
+      });
+
+      return Pair.of(partitionsToProcess, missingPartitions);
     }
   }
 
@@ -381,21 +394,21 @@ public class TestHoodieCompactionStrategy {
     );
 
     HoodieWriteConfig writeConfig = updateRegex(".*");
-    List<String> filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    List<String> filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions).getLeft();
     assertEquals(5, filteredPartitions.size());
 
     writeConfig = updateRegex("2020/01/01");
-    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions).getLeft();
     assertEquals(1, filteredPartitions.size());
     assertEquals("2020/01/01", filteredPartitions.get(0));
 
     writeConfig = updateRegex("2020/01/0[1-2]");
-    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions).getLeft();
     assertEquals(2, filteredPartitions.size());
     assertEquals("2020/01/01", filteredPartitions.get(0));
     assertEquals("2020/01/02", filteredPartitions.get(1));
     writeConfig = updateRegex("2020/01/0[1-2]|2020/02/01");
-    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions).getLeft();
     assertEquals(3, filteredPartitions.size());
     assertEquals("2020/01/01", filteredPartitions.get(0));
     assertEquals("2020/01/02", filteredPartitions.get(1));
@@ -403,13 +416,13 @@ public class TestHoodieCompactionStrategy {
 
 
     writeConfig = updateRegex("2020/.*/01");
-    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions).getLeft();
     assertEquals(2, filteredPartitions.size());
     assertEquals("2020/01/01", filteredPartitions.get(0));
     assertEquals("2020/02/01", filteredPartitions.get(1));
 
     writeConfig = updateRegex(".*/01/.*");
-    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions).getLeft();
     assertEquals(4, filteredPartitions.size());
     assertEquals("2020/01/01", filteredPartitions.get(0));
     assertEquals("2020/01/02", filteredPartitions.get(1));

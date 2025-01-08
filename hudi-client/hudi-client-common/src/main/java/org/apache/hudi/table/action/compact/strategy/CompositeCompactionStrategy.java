@@ -21,9 +21,12 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * CompositeCompactionStrategy chains multiple compaction strategies together.
@@ -39,21 +42,26 @@ public class CompositeCompactionStrategy extends CompactionStrategy {
   }
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans,
+                                                        Set<String> missingPartitions) {
     List<HoodieCompactionOperation> finalOperations = operations;
     for (CompactionStrategy strategy : strategies) {
-      finalOperations = strategy.orderAndFilter(writeConfig, finalOperations, pendingCompactionPlans);
+      finalOperations = strategy.orderAndFilter(writeConfig, finalOperations, pendingCompactionPlans, missingPartitions);
     }
     return finalOperations;
   }
 
   @Override
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-    List<String> finalPartitionPaths = allPartitionPaths;
+  public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    List<String> partitionsToProcess = allPartitionPaths;
+    List<String> missingPartitions = new ArrayList<>();
+
     for (CompactionStrategy strategy : strategies) {
-      finalPartitionPaths = strategy.filterPartitionPaths(writeConfig, finalPartitionPaths);
+      Pair<List<String>, List<String>> innerRes = strategy.filterPartitionPaths(writeConfig, partitionsToProcess);
+      partitionsToProcess = innerRes.getLeft();
+      missingPartitions.addAll(innerRes.getRight());
     }
-    return finalPartitionPaths;
+    return Pair.of(partitionsToProcess, missingPartitions);
   }
 
   @Override

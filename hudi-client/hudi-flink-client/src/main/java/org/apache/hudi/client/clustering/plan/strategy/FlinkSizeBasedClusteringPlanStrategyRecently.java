@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +62,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
   }
 
   @Override
-  public Option<HoodieClusteringPlan> generateClusteringPlan() {
+  public Option<HoodieClusteringPlan> generateClusteringPlan(Lazy<List<String>> partitions) {
     if (!checkPrecondition()) {
       return Option.empty();
     }
@@ -71,7 +72,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
 
     List<String> partitionPaths = getPartitionPathInActiveTimeline(hoodieTable);
 
-    partitionPaths = filterPartitionPaths(partitionPaths);
+    partitionPaths = filterPartitionPaths(getWriteConfig(), partitionPaths).getLeft();
 
     if (partitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no clustering plan

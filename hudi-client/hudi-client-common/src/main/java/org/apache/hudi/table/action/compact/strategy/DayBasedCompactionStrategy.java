@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.compact.strategy;
 
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -61,10 +62,13 @@ public class DayBasedCompactionStrategy extends BoundedIOCompactionStrategy {
   }
 
   @Override
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-    return allPartitionPaths.stream().sorted(comparator)
-        .collect(Collectors.toList()).subList(0, Math.min(allPartitionPaths.size(),
-            writeConfig.getTargetPartitionsPerDayBasedCompaction()));
+  public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    List<String> sortedPartitions = allPartitionPaths.stream().sorted(comparator).collect(Collectors.toList());
+    int boundary = Math.min(allPartitionPaths.size(), writeConfig.getTargetPartitionsPerDayBasedCompaction());
+
+    List<String> partitionsToProcess = sortedPartitions.subList(0, boundary);
+    List<String> missingPartitions = sortedPartitions.subList(boundary, sortedPartitions.size());
+    return Pair.of(partitionsToProcess, missingPartitions);
   }
 
   /**

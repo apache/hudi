@@ -24,6 +24,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -34,12 +35,20 @@ public class LogFileNumBasedCompactionStrategy extends BoundedIOCompactionStrate
     implements Comparator<HoodieCompactionOperation> {
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans,
+                                                        Set<String> missingPartitions) {
     Long numThreshold = writeConfig.getCompactionLogFileNumThreshold();
     List<HoodieCompactionOperation> filterOperator = operations.stream()
         .filter(e -> e.getDeltaFilePaths().size() >= numThreshold)
-        .sorted(this).collect(Collectors.toList());
-    return super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans);
+        .filter(e -> {
+          if (e.getDeltaFilePaths().size() >= numThreshold) {
+            return true;
+          } else {
+            missingPartitions.add(e.getPartitionPath());
+            return false;
+          }
+        }).sorted(this).collect(Collectors.toList());
+    return super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans, missingPartitions);
   }
 
   @Override

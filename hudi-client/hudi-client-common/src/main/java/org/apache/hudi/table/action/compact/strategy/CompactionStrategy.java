@@ -23,13 +23,18 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.utils.FileSliceMetricUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.action.IncrementalPartitionAwareStrategy;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Strategy for compaction. Pluggable implementation to define how compaction should be done. The over-ridden
@@ -37,7 +42,7 @@ import java.util.Map;
  * compaction operation to run in a single compaction. Implementation of CompactionStrategy cannot hold any state.
  * Difference instantiations can be passed in every time
  */
-public abstract class CompactionStrategy implements Serializable {
+public abstract class CompactionStrategy implements IncrementalPartitionAwareStrategy, Serializable {
 
   public static final String TOTAL_IO_READ_MB = "TOTAL_IO_READ_MB";
   public static final String TOTAL_IO_WRITE_MB = "TOTAL_IO_WRITE_MB";
@@ -71,10 +76,13 @@ public abstract class CompactionStrategy implements Serializable {
    * @return Compaction plan to be scheduled.
    */
   public HoodieCompactionPlan generateCompactionPlan(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans, Map<String, String> params, Pair<List<String>, List<String>> partitionPair) {
     // Strategy implementation can overload this method to set specific compactor-id
+    Set<String> missingPartitions = new HashSet<>(partitionPair.getRight());
+    List<HoodieCompactionOperation> operationsToProcess = orderAndFilter(writeConfig, operations, pendingCompactionPlans, missingPartitions);
     return HoodieCompactionPlan.newBuilder()
-        .setOperations(orderAndFilter(writeConfig, operations, pendingCompactionPlans))
+        .setOperations(operationsToProcess)
+        .setMissingSchedulePartitions(new ArrayList<>(missingPartitions))
         .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION).build();
   }
 
@@ -88,7 +96,7 @@ public abstract class CompactionStrategy implements Serializable {
    * @return list of compactions to perform in this run
    */
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans, Set<String> missingPartitions) {
     return operations;
   }
 
@@ -99,7 +107,7 @@ public abstract class CompactionStrategy implements Serializable {
    * @param allPartitionPaths
    * @return
    */
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-    return allPartitionPaths;
+  public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    return Pair.of(allPartitionPaths, Collections.emptyList());
   }
 }

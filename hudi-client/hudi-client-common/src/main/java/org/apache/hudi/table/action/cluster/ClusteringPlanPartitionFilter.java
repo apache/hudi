@@ -42,13 +42,13 @@ import java.util.stream.Stream;
  */
 public class ClusteringPlanPartitionFilter {
 
-  public static List<String> filter(List<String> partitions, HoodieWriteConfig config) {
+  public static List<String> filter(List<String> partitions, HoodieWriteConfig config, ArrayList<String> missingPartitions) {
     ClusteringPlanPartitionFilterMode mode = config.getClusteringPlanPartitionFilterMode();
     switch (mode) {
       case NONE:
         return partitions;
       case RECENT_DAYS:
-        return recentDaysFilter(partitions, config);
+        return recentDaysFilter(partitions, config, missingPartitions);
       case SELECTED_PARTITIONS:
         return selectedPartitionsFilter(partitions, config);
       case DAY_ROLLING:
@@ -71,12 +71,14 @@ public class ClusteringPlanPartitionFilter {
     return selectPt;
   }
 
-  private static List<String> recentDaysFilter(List<String> partitions, HoodieWriteConfig config) {
+  private static List<String> recentDaysFilter(List<String> partitions, HoodieWriteConfig config, ArrayList<String> missingPartitions) {
     int targetPartitionsForClustering = config.getTargetPartitionsForClustering();
     int skipPartitionsFromLatestForClustering = config.getSkipPartitionsFromLatestForClustering();
-    return partitions.stream()
-        .sorted(Comparator.reverseOrder())
-        .skip(Math.max(skipPartitionsFromLatestForClustering, 0))
+    int skipOffset = Math.max(skipPartitionsFromLatestForClustering, 0);
+    List<String> sortedPartitions = partitions.stream().sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+    missingPartitions.addAll(sortedPartitions.subList(0, skipOffset));
+    return sortedPartitions.stream()
+        .skip(skipOffset)
         .limit(targetPartitionsForClustering > 0 ? targetPartitionsForClustering : partitions.size())
         .collect(Collectors.toList());
   }

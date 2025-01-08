@@ -24,6 +24,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * CompactionStrategy which looks at total IO to be done for the compaction (read + write) and limits the list of
@@ -35,7 +36,7 @@ public class BoundedIOCompactionStrategy extends CompactionStrategy {
 
   @Override
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+                                                        List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans, Set<String> missingPartitions) {
     // Iterate through the operations in order and accept operations as long as we are within the
     // IO limit
     // Preserves the original ordering of compactions
@@ -46,7 +47,7 @@ public class BoundedIOCompactionStrategy extends CompactionStrategy {
       targetIORemaining -= opIo;
       finalOperations.add(op);
       if (targetIORemaining <= 0) {
-        return finalOperations;
+        missingPartitions.add(op.getPartitionPath());
       }
     }
     return finalOperations;
