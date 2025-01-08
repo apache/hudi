@@ -217,7 +217,7 @@ public class HadoopFSUtils {
                                                        StoragePath filePath,
                                                        int bufferSize,
                                                        boolean wrapStream) {
-    FSDataInputStream fsDataInputStream = null;
+    FSDataInputStream fsDataInputStream;
     try {
       fsDataInputStream = fs.open(convertToHadoopPath(filePath), bufferSize);
     } catch (IOException e) {
@@ -230,7 +230,7 @@ public class HadoopFSUtils {
 
     if (isGCSFileSystem(fs)) {
       // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception
-      return new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCS(fsDataInputStream, filePath, bufferSize), true);
+      return new SchemeAwareFSDataInputStream(new WrappedWithOriginalFSDataInputStream(getFSDataInputStreamForGCS(fsDataInputStream, filePath, bufferSize), fsDataInputStream), true);
     }
 
     if (isCHDFileSystem(fs)) {
@@ -238,8 +238,8 @@ public class HadoopFSUtils {
     }
 
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      return new TimedFSDataInputStream(convertToHadoopPath(filePath), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
+      return new TimedFSDataInputStream(convertToHadoopPath(filePath), new WrappedWithOriginalFSDataInputStream(new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)), fsDataInputStream));
     }
 
     // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream

@@ -223,6 +223,33 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Delete MOR Table") {
+    withTable(generateTableName) { tableName =>
+      spark.sql(
+        s"""
+           |create table $tableName (id int, name string, ts bigint)
+           |using hudi
+           |tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           |)
+           |""".stripMargin)
+      spark.sql(
+        s"""
+           |insert into $tableName values (1, "v1", 1000), (2, "v2", 2000),
+           | (3, "v1", 3000), (4, "v2", 4000)
+           |""".stripMargin)
+      spark.sql(
+        s"""
+           |delete from $tableName where id = 1
+           |""".stripMargin)
+      checkAnswer(s"select id, name from $tableName where name = 'v1'")(
+        Seq(3, "v1")
+      )
+    }
+  }
+
   test("Test Delete Table with op upsert") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach {tableType =>

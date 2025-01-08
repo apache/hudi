@@ -17,7 +17,10 @@
 
 package org.apache
 
+import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.spark.sql.{DataFrame, DataFrameReader, DataFrameWriter}
+
+import java.io.Closeable
 
 package object hudi {
 
@@ -35,4 +38,21 @@ package object hudi {
     def avro: String => DataFrame = reader.format("org.apache.hudi").load
   }
 
+  /**
+   * An implicit class that cast java [[ClosableIterator]] to a scala [[Iterator]].
+   */
+  implicit class ScalaClosableIterator[T](closableIterator: ClosableIterator[T]) extends Iterator[T] with Closeable {
+
+    override def hasNext: Boolean = {
+      val _hasNext = closableIterator.hasNext
+      if (!_hasNext) {
+        close()
+      }
+      _hasNext
+    }
+
+    override def next(): T = closableIterator.next()
+
+    override def close(): Unit = closableIterator.close()
+  }
 }
