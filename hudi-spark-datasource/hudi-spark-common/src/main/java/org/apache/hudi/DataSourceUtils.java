@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -284,24 +285,47 @@ public class DataSourceUtils {
    * @param writeConfig HoodieWriteConfig
    */
   @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(HoodieSparkEngineContext engineContext, JavaRDD<HoodieRecord> incomingHoodieRecords,
-      HoodieWriteConfig writeConfig) {
+  public static JavaRDD<HoodieRecord> doDropDuplicates(HoodieSparkEngineContext engineContext,
+                                                       JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                                       HoodieWriteConfig writeConfig,
+                                                       boolean failOnDuplicates) {
     try {
       SparkRDDReadClient client = new SparkRDDReadClient<>(engineContext, writeConfig);
       return client.tagLocation(incomingHoodieRecords)
-          .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
+          .filter(r -> shouldIncludeRecord((HoodieRecord<HoodieRecordPayload>) r, failOnDuplicates));
     } catch (TableNotFoundException e) {
-      // this will be executed when there is no hoodie table yet
-      // so no dups to drop
+      // No table exists yet, so no duplicates to drop
       return incomingHoodieRecords;
     }
   }
 
+  /**
+   * Determines if a record should be included in the result after deduplication.
+   *
+   * @param record            The Hoodie record to evaluate.
+   * @param failOnDuplicates  Whether to fail on detecting duplicates.
+   * @return true if the record should be included; false otherwise.
+   */
+  private static boolean shouldIncludeRecord(HoodieRecord<?> record, boolean failOnDuplicates) {
+    if (!record.isCurrentLocationKnown()) {
+      return true;
+    }
+    if (failOnDuplicates) {
+      // Fail if duplicates are found and the flag is set
+      throw new HoodieDuplicateKeyException(record.getRecordKey());
+    }
+    return false;
+  }
+
   @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-      Map<String, String> parameters) {
-    HoodieWriteConfig writeConfig =
-        HoodieWriteConfig.newBuilder().withPath(parameters.get("path")).withProps(parameters).build();
-    return dropDuplicates(new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig);
+  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
+                                                     JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                                     Map<String, String> parameters,
+                                                     boolean failOnDuplicates) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(parameters.get("path"))
+        .withProps(parameters).build();
+    return doDropDuplicates(
+        new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig, failOnDuplicates);
   }
 }

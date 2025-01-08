@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
+import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -36,9 +36,12 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.io.File
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+import scala.collection.Seq
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
@@ -379,7 +382,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 12.0, 1000)
       )
 
-      assertThrows[HoodieException] {
+      assertThrows[HoodieDuplicateKeyException] {
         try {
           spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
         } catch {
@@ -450,7 +453,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2", 12.0)
       )
       spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
-      assertThrows[HoodieException] {
+      assertThrows[HoodieDuplicateKeyException] {
         try {
           spark.sql(s"insert into $tableName select 1, 'a1', 10")
         } catch {
@@ -2789,7 +2792,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     )
 
     if (expectExceptionOnSecondBatch) {
-      assertThrows[HoodieException] {
+      assertThrows[HoodieDuplicateKeyException] {
         try {
           spark.sql(
             s"""
@@ -2877,7 +2880,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          """.stripMargin)
 
     // drop dups is not supported in bulk_insert row writer path.
-    assertThrows[HoodieException] {
+    assertThrows[HoodieDuplicateKeyException] {
       try {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
       } catch {
@@ -3226,3 +3229,4 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 }
+

@@ -1200,7 +1200,8 @@ object HoodieSparkSqlWriterInternal {
       incomingRecords
     } else {
       // Perform deduplication
-      val deduplicatedRecords = DataSourceUtils.dropDuplicates(jsc, incomingRecords, parameters.asJava)
+      val deduplicatedRecords = DataSourceUtils.dropDuplicates(
+        jsc, incomingRecords, parameters.asJava, shouldFailWhenDuplicatesFound(hoodieConfig))
       // Check if duplicates were found and fail if necessary
       if (shouldFailWhenDuplicatesFound(hoodieConfig) &&
         deduplicatedRecords.count() < incomingRecords.count()) {
