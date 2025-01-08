@@ -35,6 +35,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Column, SparkSession}
+import org.apache.spark.storage.StorageLevel
 
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.JavaConverters._
@@ -87,27 +88,32 @@ class PartitionStatsIndexSupport(spark: SparkSession,
       val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
       loadTransposed(queryReferencedColumns, readInMemory, Option.empty, Option.empty) {
         transposedPartitionStatsDF => {
-          val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-            .collect()
-            .map(_.getString(0))
-            .toSet
-          if (allPartitions.nonEmpty) {
-            // PARTITION_STATS index exist for all or some columns in the filters
-            // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
-            //       column in a filter does not have the stats available, by making sure such a
-            //       filter does not prune any partition.
-            val indexSchema = transposedPartitionStatsDF.schema
-            val indexedCols : Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
-            // to be fixed. HUDI-8836.
-            val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
-            Some(transposedPartitionStatsDF.where(new Column(indexFilter))
-              .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+          try {
+            transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
+            val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
               .collect()
               .map(_.getString(0))
-              .toSet)
-          } else {
-            // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
-            Option.empty
+              .toSet
+            if (allPartitions.nonEmpty) {
+              // PARTITION_STATS index exist for all or some columns in the filters
+              // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
+              //       column in a filter does not have the stats available, by making sure such a
+              //       filter does not prune any partition.
+              val indexSchema = transposedPartitionStatsDF.schema
+              val indexedCols: Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
+              // to be fixed. HUDI-8836.
+              val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
+              Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                .collect()
+                .map(_.getString(0))
+                .toSet)
+            } else {
+              // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
+              Option.empty
+            }
+          } finally {
+            transposedPartitionStatsDF.unpersist()
           }
         }
       }

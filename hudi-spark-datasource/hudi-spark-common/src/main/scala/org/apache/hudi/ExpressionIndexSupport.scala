@@ -107,24 +107,29 @@ class ExpressionIndexSupport(spark: SparkSession,
         val expressionIndexRecords = loadExpressionIndexPartitionStatRecords(indexDefinition, readInMemory)
         loadTransposed(queryReferencedColumns, readInMemory, expressionIndexRecords, expressionIndexQuery) {
           transposedPartitionStatsDF => {
-            val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-              .collect()
-              .map(_.getString(0))
-              .toSet
-            if (allPartitions.nonEmpty) {
-              // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
-              //       column in a filter does not have the stats available, by making sure such a
-              //       filter does not prune any partition.
-              val indexSchema = transposedPartitionStatsDF.schema
-              val indexFilter = Seq(expressionIndexQuery).map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema, isExpressionIndex = true)).reduce(And)
-              Some(transposedPartitionStatsDF.where(new Column(indexFilter))
-                .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+            try {
+              transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
+              val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
                 .collect()
                 .map(_.getString(0))
-                .toSet)
-            } else {
-              // Partition stats do not exist, skip the pruning
-              Option.empty
+                .toSet
+              if (allPartitions.nonEmpty) {
+                // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
+                //       column in a filter does not have the stats available, by making sure such a
+                //       filter does not prune any partition.
+                val indexSchema = transposedPartitionStatsDF.schema
+                val indexFilter = Seq(expressionIndexQuery).map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema, isExpressionIndex = true)).reduce(And)
+                Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                  .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                  .collect()
+                  .map(_.getString(0))
+                  .toSet)
+              } else {
+                // Partition stats do not exist, skip the pruning
+                Option.empty
+              }
+            } finally {
+              transposedPartitionStatsDF.unpersist()
             }
           }
         }

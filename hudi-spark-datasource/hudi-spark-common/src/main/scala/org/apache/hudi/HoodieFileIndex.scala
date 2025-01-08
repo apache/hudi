@@ -331,7 +331,7 @@ case class HoodieFileIndex(spark: SparkSession,
             case _: HoodieException => (false, listMatchingPartitionPaths(Seq.empty))
           }
         } else if (isExpressionIndexEnabled) {
-          val expressionIndexSupport = new ExpressionIndexSupport(spark, schema, metadataConfig, metaClient)
+          val expressionIndexSupport = getExpressionIndexSupport
           val exprIndexPrunedPartitionsOpt = expressionIndexSupport.prunePartitions(this, dataFilters, filterReferencedColumns)
           if (exprIndexPrunedPartitionsOpt.nonEmpty) {
             (true, exprIndexPrunedPartitionsOpt.get.map(e => convertToPartitionPath(e)).toSeq)
@@ -354,6 +354,10 @@ case class HoodieFileIndex(spark: SparkSession,
     (prunedPartitionsTuple._1, getInputFileSlices(prunedPartitionsTuple._2: _*).asScala.map(
       { case (partition, fileSlices) =>
         (Option.apply(partition), fileSlices.asScala.map(f => f.withLogFiles(includeLogFiles)).toSeq) }).toSeq)
+  }
+
+  private def getExpressionIndexSupport: ExpressionIndexSupport = {
+    indicesSupport.find(indexSupport => indexSupport.isInstanceOf[ExpressionIndexSupport]).get.asInstanceOf[ExpressionIndexSupport]
   }
 
   /**
@@ -501,7 +505,7 @@ object HoodieFileIndex extends Logging {
     val Strict: Val   = Val("strict")
   }
 
-  private def collectReferencedColumns(spark: SparkSession, queryFilters: Seq[Expression], schema: StructType): Seq[String] = {
+  def collectReferencedColumns(spark: SparkSession, queryFilters: Seq[Expression], schema: StructType): Seq[String] = {
     val resolver = spark.sessionState.analyzer.resolver
     val refs = queryFilters.flatMap(_.references)
     schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }

@@ -357,27 +357,22 @@ public class HoodieTableMetadataUtil {
   /**
    * Convert commit action to metadata records for the enabled partition types.
    *
-   * @param context                          - Engine context to use
-   * @param hoodieConfig                     - Hudi configs
-   * @param commitMetadata                   - Commit action metadata
-   * @param instantTime                      - Action instant time
-   * @param dataMetaClient                   - HoodieTableMetaClient for data
-   * @param metadataConfig                   - HoodieMetadataConfig
-   * @param enabledPartitionTypes            - List of enabled MDT partitions
-   * @param bloomFilterType                  - Type of generated bloom filter records
-   * @param bloomIndexParallelism            - Parallelism for bloom filter record generation
+   * @param context               - Engine context to use
+   * @param hoodieConfig          - Hudi configs
+   * @param commitMetadata        - Commit action metadata
+   * @param instantTime           - Action instant time
+   * @param dataMetaClient        - HoodieTableMetaClient for data
+   * @param tableMetadata
+   * @param metadataConfig        - HoodieMetadataConfig
+   * @param enabledPartitionTypes - List of enabled MDT partitions
+   * @param bloomFilterType       - Type of generated bloom filter records
+   * @param bloomIndexParallelism - Parallelism for bloom filter record generation
    * @return Map of partition to metadata records for the commit action
    */
-  public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext context,
-                                                                               HoodieConfig hoodieConfig,
-                                                                               HoodieCommitMetadata commitMetadata,
-                                                                               String instantTime,
-                                                                               HoodieTableMetaClient dataMetaClient,
-                                                                               HoodieMetadataConfig metadataConfig,
-                                                                               List<MetadataPartitionType> enabledPartitionTypes,
-                                                                               String bloomFilterType,
-                                                                               int bloomIndexParallelism, Integer writesFileIdEncoding,
-                                                                               EngineType engineType) {
+  public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext context, HoodieConfig hoodieConfig, HoodieCommitMetadata commitMetadata,
+                                                                               String instantTime, HoodieTableMetaClient dataMetaClient, HoodieTableMetadata tableMetadata,
+                                                                               HoodieMetadataConfig metadataConfig, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType,
+                                                                               int bloomIndexParallelism, Integer writesFileIdEncoding, EngineType engineType) {
     final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
         convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
@@ -397,9 +392,10 @@ public class HoodieTableMetadataUtil {
     if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS)) {
       checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient),
           "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
-      HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> partitionRangeMetadata = convertMetadataToPartitionStatsColumnRangeMetadata(commitMetadata, context,
-          dataMetaClient, metadataConfig);
-      final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatsRecords(partitionRangeMetadata, dataMetaClient);
+      // Generate Hoodie Pair data of partition name and list of column range metadata for all the files in that partition
+      HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata = convertMetadataToPartitionStatsColumnRangeMetadata(commitMetadata, context,
+          dataMetaClient, tableMetadata, metadataConfig);
+      final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatsRecords(columnRangeMetadata, dataMetaClient);
       partitionToRecordsMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);
     }
     if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX)) {
@@ -2369,7 +2365,7 @@ public class HoodieTableMetadataUtil {
     return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound, indexPartitionOpt);
   }
 
-  public static HoodieData<HoodieRecord> collectAndProcessEIPartitionStatRecords(
+  public static HoodieData<HoodieRecord> collectAndProcessExprIndexPartitionStatRecords(
       HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata, boolean isTightBound, Option<String> indexPartitionOpt) {
 
     // Step 1: Group by partition name
@@ -2454,16 +2450,16 @@ public class HoodieTableMetadataUtil {
     return readColumnRangeMetadataFrom(partitionPath, fileName, datasetMetaClient, columnsToIndex, maxBufferSize);
   }
 
-  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> partitionRangeMetadataPartitionPair,
+  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadataPartitionPair,
                                                                                 HoodieTableMetaClient dataMetaClient) {
-    return convertMetadataToPartitionStatsRecords(partitionRangeMetadataPartitionPair.flatMapValues(list -> list.stream().flatMap(List::stream).iterator()),
+    return convertMetadataToPartitionStatsRecords(columnRangeMetadataPartitionPair.flatMapValues(List::iterator),
         Option.empty(), isShouldScanColStatsForTightBound(dataMetaClient));
   }
 
-  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> partitionRangeMetadataPartitionPair,
+  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataPartitionPair,
                                                                                 Option<String> indexPartitionOpt, boolean isTightBound) {
     try {
-      return partitionRangeMetadataPartitionPair
+      return columnRangeMetadataPartitionPair
           .groupByKey()
           .map(pair -> {
             final String partitionName = pair.getLeft();
@@ -2475,10 +2471,11 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  public static HoodiePairData<String, List<List<HoodieColumnRangeMetadata<Comparable>>>> convertMetadataToPartitionStatsColumnRangeMetadata(HoodieCommitMetadata commitMetadata,
-                                                                                                                                             HoodieEngineContext engineContext,
-                                                                                                                                             HoodieTableMetaClient dataMetaClient,
-                                                                                                                                             HoodieMetadataConfig metadataConfig) {
+  public static HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> convertMetadataToPartitionStatsColumnRangeMetadata(HoodieCommitMetadata commitMetadata,
+                                                                                                                                       HoodieEngineContext engineContext,
+                                                                                                                                       HoodieTableMetaClient dataMetaClient,
+                                                                                                                                       HoodieTableMetadata tableMetadata,
+                                                                                                                                       HoodieMetadataConfig metadataConfig) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     if (allWriteStats.isEmpty()) {
@@ -2515,18 +2512,12 @@ public class HoodieTableMetadataUtil {
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       boolean shouldScanColStatsForTightBound = isShouldScanColStatsForTightBound(dataMetaClient);
 
-      HoodieTableMetadata tableMetadata;
-      if (shouldScanColStatsForTightBound) {
-        tableMetadata = HoodieTableMetadata.create(engineContext, dataMetaClient.getStorage(), metadataConfig, dataMetaClient.getBasePath().toString());
-      } else {
-        tableMetadata = null;
-      }
       return engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
         final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
         // Step 1: Collect Column Metadata for Each File part of current commit metadata
-        List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionedWriteStat.stream()
-            .map(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, validColumnsToIndex, tableSchema))
-            .collect(Collectors.toList());
+        List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
+            .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, validColumnsToIndex, tableSchema).stream())
+            .collect(toList());
         if (shouldScanColStatsForTightBound) {
           checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
           // Collect Column Metadata for Each File part of active file system view of latest snapshot
@@ -2549,7 +2540,7 @@ public class HoodieTableMetadataUtil {
                   .collectAsList();
           // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
           // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
-          fileColumnMetadata.add(partitionColumnMetadata);
+          fileColumnMetadata.addAll(partitionColumnMetadata);
         }
 
         return Pair.of(partitionName, fileColumnMetadata);

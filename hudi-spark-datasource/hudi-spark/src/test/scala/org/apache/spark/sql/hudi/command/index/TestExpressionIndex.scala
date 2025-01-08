@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.DataSourceWriteOptions.{HIVE_PASS, HIVE_USER, HIVE_USE_PRE_APACHE_INPUT_FORMAT, INSERT_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.HoodieFileIndex.collectReferencedColumns
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils
@@ -36,6 +37,7 @@ import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.expression.HoodieExpressionIndex
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
@@ -875,6 +877,108 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     }
   }
 
+  @Test
+  def testPrunePartitions(): Unit = {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName + s"_prune_partitions_$tableType"
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+
+        spark.sql(
+          s"""
+           CREATE TABLE $tableName (
+             |    ts LONG,
+             |    id STRING,
+             |    rider STRING,
+             |    driver STRING,
+             |    fare DOUBLE,
+             |    dateDefault STRING,
+             |    date STRING,
+             |    city STRING,
+             |    state STRING
+             |) USING HUDI
+             |options(
+             |    primaryKey ='id',
+             |    type = '$tableType',
+             |    hoodie.metadata.enable = 'true',
+             |    hoodie.datasource.write.recordkey.field = 'id',
+             |    hoodie.enable.data.skipping = 'true'
+             |)
+             |PARTITIONED BY (state)
+             |location '$basePath'
+             |""".stripMargin)
+
+        spark.sql("set hoodie.parquet.small.file.limit=0")
+        if (HoodieSparkUtils.gteqSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled=false")
+        }
+
+        spark.sql(
+          s"""
+             |insert into $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+             |  (1695414527,'trip1','rider-A','driver-K',19.10, '2020-11-30 01:30:40', '2020-11-30', 'san_francisco','california'),
+             |  (1695414531,'trip6','rider-C','driver-K',17.14, '2021-11-30 01:30:40', '2021-11-30', 'san_diego','california'),
+             |  (1695332066,'trip3','rider-E','driver-O',93.50, '2022-11-30 01:30:40', '2022-11-30', 'austin','texas'),
+             |  (1695516137,'trip4','rider-F','driver-P',34.15, '2023-11-30 01:30:40', '2023-11-30', 'houston','texas')
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |insert into $tableName(ts, id, rider, driver, fare, dateDefault, date, city, state) VALUES
+             |  (1695414520,'trip2','rider-C','driver-M',27.70,'2024-11-30 01:30:40', '2024-11-30', 'sunnyvale','california'),
+             |  (1699349649,'trip5','rider-A','driver-Q',3.32, '2019-11-30 01:30:40', '2019-11-30', 'san_diego','texas')
+             |""".stripMargin)
+
+        val tableSchema: StructType =
+          StructType(
+            Seq(
+              StructField("ts", LongType),
+              StructField("id", StringType),
+              StructField("rider", StringType),
+              StructField("driver", StringType),
+              StructField("fare", DoubleType),
+              StructField("dateDefault", StringType),
+              StructField("date", StringType),
+              StructField("city", StringType),
+              StructField("state", StringType)
+            )
+          )
+
+        val opts = Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true")
+        var metaClient = createMetaClient(spark, basePath)
+        val fromUnixTimeExpr = resolveExpr(spark, unapply(functions.from_unixtime(functions.col("ts"), "yyyy-MM-dd")).get, tableSchema)
+        val literal = Literal.create("2023-11-07")
+        val dataFilter = EqualTo(fromUnixTimeExpr, literal)
+        val commonOpts = opts + ("path" -> metaClient.getBasePath.toString)
+        var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
+        val filterReferencedColumns = HoodieFileIndex.collectReferencedColumns(spark, Seq(dataFilter), tableSchema)
+        val metadataConfig = HoodieMetadataConfig.newBuilder
+          .enable(true)
+          .build()
+        var exprIndexSupport = new ExpressionIndexSupport(spark, tableSchema, metadataConfig, metaClient)
+        // Validate no partition pruning when index is not yet defined
+        assertTrue(exprIndexSupport.prunePartitions(fileIndex, Seq(dataFilter), filterReferencedColumns).isEmpty)
+
+        spark.sql(s"create index idx_ts on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')")
+        metaClient = createMetaClient(spark, basePath)
+        // validate partition pruning after index is created
+        fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
+        exprIndexSupport = new ExpressionIndexSupport(spark, tableSchema, metadataConfig, metaClient)
+        assertEquals(Set("state=texas"), exprIndexSupport.prunePartitions(fileIndex, Seq(dataFilter), filterReferencedColumns).get)
+        spark.sql(s"drop index idx_ts on $tableName")
+
+        spark.sql(s"create index idx_ts on $tableName using bloom_filters(ts)")
+        metaClient = createMetaClient(spark, basePath)
+        // validate partition pruning after index is created
+        fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
+        exprIndexSupport = new ExpressionIndexSupport(spark, tableSchema, metadataConfig, metaClient)
+        assertTrue(exprIndexSupport.prunePartitions(fileIndex, Seq(dataFilter), filterReferencedColumns).isEmpty)
+        spark.sql(s"drop index idx_ts on $tableName")
+      }
+    }
+  }
+
   /**
    * Test expression index partition pruning with partition stats.
    */
@@ -882,7 +986,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   def testPartitionPruningWithPartitionStats(): Unit = {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName + s"_pruning_partition_filters_$tableType"
+        val tableName = generateTableName + s"_partition_pruning_with_partition_stats_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
@@ -982,7 +1086,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isTableMOR = tableType.equals("mor")
-        val tableName = generateTableName + s"_pruning_partition_filters_$tableType"
+        val tableName = generateTableName + s"_partition_pruning_after_update_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
@@ -1055,11 +1159,27 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         var dataFilter = EqualTo(riderExpr, literal)
         verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
 
+        // Validate partition stat records
+        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
+          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
+          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
+          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-D", "RIDER-F"),
+        )
+
         spark.sql(s"update $tableName set rider = 'rider-G' where id = 'trip5'")
         metaClient = createMetaClient(spark, basePath)
         literal = Literal.create("RIDER-D")
         dataFilter = EqualTo(riderExpr, literal)
         verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true, isNoScanExpected = !isTableMOR)
+
+        // Validate partition stat records after update
+        // For MOR table, min value would still be RIDER-D since the update is in log file and old parquet file with value RIDER-D is still present
+        val partitionMinRiderValue = if (isTableMOR) "RIDER-D" else "RIDER-E"
+        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
+          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
+          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
+          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), partitionMinRiderValue, "RIDER-G"),
+        )
 
         if (isTableMOR) {
           spark.sql("set hoodie.compact.inline=true")
@@ -1070,6 +1190,14 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         literal = Literal.create("RIDER-D")
         dataFilter = EqualTo(riderExpr, literal)
         verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true, isNoScanExpected = true)
+
+        // Validate partition stat records after update
+        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
+          s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
+          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
+          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-E", "RIDER-H"),
+        )
+
         if (isTableMOR) {
           spark.sql("set hoodie.compact.inline=false")
         }
@@ -1780,6 +1908,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       .withColumn(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_RELATIVE_FILE_PATH, lit("c/d/123141ab-701b-4ba4-b60b-e6acd9e9103e-0_329-224134-258390_2131313124.parquet"))
       .withColumn(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_FILE_SIZE, lit(100))
     val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5", HoodieWriteConfig.newBuilder().withPath("a/b").build(), "", "random")
+      .getExpressionIndexRecords
     // Since there is only one partition file pair there is only one bloom filter record
     assertEquals(1, bloomFilterRecords.collectAsList().size())
     assertFalse(bloomFilterRecords.isEmpty)

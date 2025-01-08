@@ -35,7 +35,7 @@ public interface HoodieExpressionIndex<S, T> extends Serializable {
   String HOODIE_EXPRESSION_INDEX_PARTITION = "_hoodie_expression_index_partition";
   String HOODIE_EXPRESSION_INDEX_FILE_SIZE = "_hoodie_expression_index_file_size";
 
-  String HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX = "_partition_stat_";
+  String HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX = "__partition_stat__";
 
   String EXPRESSION_OPTION = "expr";
   String TRIM_STRING_OPTION = "trimString";

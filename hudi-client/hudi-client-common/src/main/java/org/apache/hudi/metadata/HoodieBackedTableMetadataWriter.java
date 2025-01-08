@@ -110,6 +110,7 @@ import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWr
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
@@ -608,7 +609,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     int fileGroupCount = dataWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
     int parallelism = Math.min(partitionFilePathSizeTriplet.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
     Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient);
-    return Pair.of(fileGroupCount, getExpressionIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime, true));
+    return Pair.of(fileGroupCount, getExpressionIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime,
+        indexDefinition.getIndexType().equals(PARTITION_NAME_COLUMN_STATS)));
   }
 
   HoodieIndexDefinition getIndexDefinition(String indexName) {
@@ -1090,7 +1092,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     processAndCommit(instantTime, () -> {
       Map<String, HoodieData<HoodieRecord>> partitionToRecordMap =
           HoodieTableMetadataUtil.convertMetadataToRecords(
-              engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient,
+              engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient, getTableMetadata(),
               dataWriteConfig.getMetadataConfig(),
               enabledPartitionTypes, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding(), getEngineType());
@@ -1113,7 +1115,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     processAndCommit(instantTime, () -> {
       Map<String, HoodieData<HoodieRecord>> partitionToRecordMap =
           HoodieTableMetadataUtil.convertMetadataToRecords(
-              engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient, dataWriteConfig.getMetadataConfig(),
+              engineContext, dataWriteConfig, commitMetadata, instantTime, dataMetaClient, getTableMetadata(), dataWriteConfig.getMetadataConfig(),
               enabledPartitionTypes, dataWriteConfig.getBloomFilterType(), dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding(), getEngineType());
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(records, commitMetadata);
       partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), records.union(additionalUpdates));
