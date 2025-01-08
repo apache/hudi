@@ -1979,9 +1979,7 @@ public class TestHiveSyncTool {
   }
 
   private String getLastCommitCompletionTimeSynced() {
-    return hiveClient.getActiveTimeline()
-        .getInstantsOrderedByCompletionTime()
-        .skip(hiveClient.getActiveTimeline().countInstants() - 1).findFirst().get().getCompletionTime();
+    return hiveClient.getActiveTimeline().getLatestCompletionTime().get();
   }
 
   private void reInitHiveSyncClient() {
