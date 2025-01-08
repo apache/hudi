@@ -27,15 +27,16 @@ import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.ColumnIndexID
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Column, SparkSession}
 
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.JavaConverters._
 
 class PartitionStatsIndexSupport(spark: SparkSession,
@@ -96,7 +97,9 @@ class PartitionStatsIndexSupport(spark: SparkSession,
             //       column in a filter does not have the stats available, by making sure such a
             //       filter does not prune any partition.
             val indexSchema = transposedPartitionStatsDF.schema
-            val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema)).reduce(And)
+            val indexedCols : Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
+            // to be fixed. HUDI-8836.
+            val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
             Some(transposedPartitionStatsDF.where(new Column(indexFilter))
               .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
               .collect()
