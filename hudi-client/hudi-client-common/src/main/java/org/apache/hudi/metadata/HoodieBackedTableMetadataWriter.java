@@ -98,7 +98,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.config.HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
@@ -536,11 +535,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Find the columns to index
     final List<String> columnsToIndex = HoodieTableMetadataUtil.getColumnsToIndex(dataMetaClient.getTableConfig(),
         dataWriteConfig.getMetadataConfig(), Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient)), true);
+
+    final int fileGroupCount = dataWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
     if (columnsToIndex.isEmpty()) {
-      // atleast meta fields will be chosen for indexing. So, we should not reach this state unless virtual keys are enabled and
-      // all col types are unsupported among the ones configured.
-      throw new HoodieException("No columns are found eligible to be indexed. Can you try setting right value for " + COLUMN_STATS_INDEX_FOR_COLUMNS.key()
-          + ". Current value set : " + dataWriteConfig.getMetadataConfig().getColumnsEnabledForColumnStatsIndex());
+      // this can only happen if meta fields are disabled and cols to index is not explicitly overridden.
+      return Pair.of(columnsToIndex, Pair.of(fileGroupCount, engineContext.emptyHoodieData()));
     }
 
     LOG.info("Indexing {} columns for column stats index", columnsToIndex.size());
@@ -552,7 +551,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         dataWriteConfig.getMetadataConfig().getMaxReaderBufferSize(),
         columnsToIndex);
 
-    final int fileGroupCount = dataWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
     return Pair.of(columnsToIndex, Pair.of(fileGroupCount, records));
   }
 

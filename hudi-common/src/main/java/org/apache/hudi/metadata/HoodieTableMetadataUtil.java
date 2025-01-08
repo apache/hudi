@@ -1564,13 +1564,15 @@ public class HoodieTableMetadataUtil {
       return columnsToIndex.stream().filter(fieldName -> !META_COL_SET_TO_INDEX.contains(fieldName) && !fieldName.contains(".")
           && (topLevelEligibleFields.isEmpty() || topLevelEligibleFields.contains(fieldName)));
     }
-    if (isTableInitializing) {
-      return Stream.empty();
+    if (tableSchema.isLeft()) {
+      return getFirstNFieldNames(tableSchema.asLeft().stream(), metadataConfig.maxColumnsToIndexForColStats());
     } else {
-      if (tableSchema.isLeft()) {
-        return getFirstNFieldNames(tableSchema.asLeft().stream(), metadataConfig.maxColumnsToIndexForColStats());
-      } else {
+      if (tableSchema.asRight().get().isPresent()) {
         return tableSchema.asRight().get().map(schema -> getFirstNSupportedFieldNames(schema, metadataConfig.maxColumnsToIndexForColStats(), recordType)).orElse(Stream.empty());
+      } else if (isTableInitializing) {
+        return Stream.empty();
+      } else {
+        throw new HoodieMetadataException("Cannot initialize col stats with empty list of cols");
       }
     }
   }
