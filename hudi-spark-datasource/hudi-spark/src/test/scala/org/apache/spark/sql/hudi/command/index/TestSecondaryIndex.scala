@@ -241,6 +241,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       // Verify initial state of secondary index
       val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
       validateSecondaryIndex(basePath, tableName, initialKeys)
+      val initialRecordsCount = spark.sql(s"select _row_key from $tableName").count()
 
       // Step 3: Perform Update Operations on Subset of Records
       var updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
@@ -271,6 +272,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       // Verify secondary index after compaction
       updateKeys = updateDf.select("_row_key").collect().map(_.getString(0))
       validateSecondaryIndex(basePath, tableName, updateKeys)
+      // Verify count of records
+      assertEquals(initialRecordsCount, spark.sql(s"select _row_key from $tableName").count())
 
       // Step 5: Trigger Clustering with this update as the clustering frequency is set to 4 commits
       updateRecords = recordsToStrings(dataGen.generateUniqueUpdates(getInstantTime, 10, HoodieTestDataGenerator.TRIP_FLATTENED_SCHEMA)).asScala
