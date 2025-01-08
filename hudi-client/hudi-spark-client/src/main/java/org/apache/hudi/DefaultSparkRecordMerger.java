@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
@@ -34,10 +33,6 @@ import org.apache.hudi.merge.SparkRecordMergingUtils;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
-
-import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
-import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
-import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
  * Record merger for spark that implements the default merger strategy
