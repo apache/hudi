@@ -125,7 +125,7 @@ public class TestSparkClusteringPlanPartitionFilter {
       fakeTimeBasedPartitionsPath.add("20220301" + (i >= 10 ? String.valueOf(i) : "0" + i));
       fakeTimeBasedPartitionsPath.add("20220302" + (i >= 10 ? String.valueOf(i) : "0" + i));
     }
-    filterPartitions =(List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
+    filterPartitions = (List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(2, filterPartitions.size());
 
     int hourOfDay = DateTime.now().getHourOfDay();
