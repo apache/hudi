@@ -118,10 +118,11 @@ public class TestHoodieDeleteBlock {
 
   public void testDeleteBlockWithValidation(DeleteRecord[] deleteRecords) throws IOException {
     List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    String baseFileInstantTime = "001";
     for (DeleteRecord dr : deleteRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, new HashMap<>());
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, baseFileInstantTime, false, new HashMap<>());
     byte[] contentBytes = deleteBlock.getContentBytes(HoodieTestUtils.getDefaultStorage());
     HoodieDeleteBlock deserializeDeleteBlock = new HoodieDeleteBlock(
         Option.of(contentBytes), null, true, Option.empty(), new HashMap<>(), new HashMap<>());

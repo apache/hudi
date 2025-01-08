@@ -145,10 +145,23 @@ public abstract class HoodieLogBlock {
     return LogReaderUtils.decodeRecordPositionsHeader(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
   }
 
-  protected void addRecordPositionsToHeader(Set<Long> positionSet, int numRecords) {
+  /**
+   * @return base file instant time of the record positions if the record positions are enabled
+   * in the log block; {@code null} otherwise.
+   */
+  public String getBaseFileInstantTimeOfPositions() {
+    return logBlockHeader.get(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
+  }
+
+  protected void addRecordPositionsToHeader(String baseInstantTimeForPositions,
+                                            Set<Long> positionSet,
+                                            int numRecords) {
     if (positionSet.size() == numRecords) {
       try {
         logBlockHeader.put(HeaderMetadataType.RECORD_POSITIONS, LogReaderUtils.encodePositions(positionSet));
+        logBlockHeader.put(
+            HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS,
+            baseInstantTimeForPositions);
       } catch (IOException e) {
         LOG.error("Cannot write record positions to the log block header.", e);
       }
@@ -208,7 +221,8 @@ public abstract class HoodieLogBlock {
     COMPACTED_BLOCK_TIMES(HoodieTableVersion.FIVE),
     RECORD_POSITIONS(HoodieTableVersion.SIX),
     BLOCK_IDENTIFIER(HoodieTableVersion.SIX),
-    IS_PARTIAL(HoodieTableVersion.EIGHT);
+    IS_PARTIAL(HoodieTableVersion.EIGHT),
+    BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS(HoodieTableVersion.EIGHT);
 
     @SuppressWarnings("unused")
     private final HoodieTableVersion earliestTableVersion;

@@ -43,6 +43,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+
 /**
  * A Single Record managed by Hoodie.
  */
@@ -259,6 +261,13 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   public boolean isCurrentLocationKnown() {
     return this.currentLocation != null;
+  }
+
+  public String getCurrentBaseFileInstantTime() {
+    if (isCurrentLocationKnown()) {
+      return this.currentLocation.getInstantTime();
+    }
+    return EMPTY_STRING;
   }
 
   public long getCurrentPosition() {

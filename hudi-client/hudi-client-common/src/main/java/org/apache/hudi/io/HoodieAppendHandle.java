@@ -53,6 +53,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
@@ -80,6 +81,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
 
 /**
@@ -97,6 +99,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private final List<HoodieRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted), along with their position in log block, in memory before they are flushed to disk
   private final List<Pair<DeleteRecord, Long>> recordsToDeleteWithPositions = new ArrayList<>();
+  // Base file instant time of the delete positions;
+  // "null" means uninitialized, "" (empty String) means not valid
+  private String baseFileInstantTimeForDeletePositions;
   // Incoming records to be written to logs.
   protected Iterator<HoodieRecord<T>> recordItr;
   // Writer to log into the file group's latest slice.
@@ -487,9 +492,17 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             getUpdatedHeader(header, config), keyField));
       }
 
+      if (shouldWriteRecordPositions
+          && !recordsToDeleteWithPositions.isEmpty()
+          && StringUtils.isNullOrEmpty(baseFileInstantTimeForDeletePositions)) {
+        LOG.warn("Base file instant time of delete positions cannot be determined, possibly "
+            + "due to inserts or different base file instant times for the input records.");
+      }
+
       if (appendDeleteBlocks && !recordsToDeleteWithPositions.isEmpty()) {
-        blocks.add(new HoodieDeleteBlock(recordsToDeleteWithPositions, shouldWriteRecordPositions,
-            getUpdatedHeader(header, config)));
+        blocks.add(new HoodieDeleteBlock(
+            recordsToDeleteWithPositions, baseFileInstantTimeForDeletePositions,
+            shouldWriteRecordPositions, getUpdatedHeader(header, config)));
       }
 
       if (!blocks.isEmpty()) {
@@ -498,6 +511,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         recordList.clear();
         if (appendDeleteBlocks) {
           recordsToDeleteWithPositions.clear();
+          baseFileInstantTimeForDeletePositions = null;
         }
       }
     } catch (Exception e) {
@@ -619,6 +633,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
     } else {
       long position = shouldWriteRecordPositions ? record.getCurrentPosition() : -1L;
+      if (baseFileInstantTimeForDeletePositions != null) {
+        if (!baseFileInstantTimeForDeletePositions.equals(record.getCurrentBaseFileInstantTime())) {
+          baseFileInstantTimeForDeletePositions = EMPTY_STRING;
+        }
+      } else {
+        baseFileInstantTimeForDeletePositions = record.getCurrentBaseFileInstantTime();
+      }
       recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(record.getKey(), orderingVal), position));
     }
     numberOfRecords++;
