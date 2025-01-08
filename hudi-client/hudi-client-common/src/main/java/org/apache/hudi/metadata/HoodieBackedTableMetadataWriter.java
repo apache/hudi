@@ -1186,7 +1186,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     // Return early if there are no write stats.
-    if (allWriteStats.isEmpty()) {
+    if (allWriteStats.isEmpty() || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
       return engineContext.emptyHoodieData();
     }
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);

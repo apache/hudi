@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -93,6 +94,7 @@ public class SecondaryIndexRecordGenerationUtils {
    * @param engineType      engine type (e.g. SPARK, FLINK or JAVA)
    * @return {@link HoodieData} of {@link HoodieRecord} to be updated in the metadata table for the given secondary index partition
    */
+  @VisibleForTesting
   public static HoodieData<HoodieRecord> convertWriteStatsToSecondaryIndexRecords(List<HoodieWriteStat> allWriteStats,
                                                                                   String instantTime,
                                                                                   HoodieIndexDefinition indexDefinition,
