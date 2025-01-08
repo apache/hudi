@@ -42,9 +42,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -58,8 +56,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimest
  * @see HoodieTimeline
  */
 public class HoodieDefaultTimeline implements HoodieTimeline {
-  private static final Map<Class<?>, DatumReader<?>> DATUM_READERS = new ConcurrentHashMap<>();
-
   private static final long serialVersionUID = 1L;
 
   private static final String HASHING_ALGORITHM = "SHA-256";
@@ -547,7 +543,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public <T> T deserializeInstantContent(HoodieInstant instant, Class<T> clazz) throws IOException {
     if (SpecificRecord.class.isAssignableFrom(clazz)) {
-      DatumReader<T> reader = (DatumReader<T>) DATUM_READERS.computeIfAbsent(clazz, SpecificDatumReader::new);
+      DatumReader<T> reader = new SpecificDatumReader<>(clazz);
       try (InputStream inputStream = getInstantContentStream(instant);
            DataFileStream<T> fileReader = new DataFileStream<>(inputStream, reader)) {
         ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);

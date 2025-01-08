@@ -45,15 +45,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
  * Utils for Hudi timeline metadata.
  */
 public class TimelineMetadataUtils {
-  private static final Map<Class<?>, DatumWriter<?>> DATUM_WRITERS = new ConcurrentHashMap<>();
-
   private static final Integer DEFAULT_VERSION = 1;
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime,
@@ -109,7 +106,7 @@ public class TimelineMetadataUtils {
 
   public static <T extends SpecificRecordBase> Option<HoodieInstantWriter> getInstantWriter(T metadata) {
     return Option.of(outputStream -> {
-      DatumWriter<T> datumWriter = (DatumWriter<T>) DATUM_WRITERS.computeIfAbsent(metadata.getClass(), SpecificDatumWriter::new);
+      DatumWriter<T> datumWriter = (DatumWriter<T>) new SpecificDatumWriter<>(metadata.getClass());
       try (DataFileWriter<T> fileWriter = new DataFileWriter<>(datumWriter)) {
         fileWriter.create(metadata.getSchema(), outputStream);
         fileWriter.append(metadata);
