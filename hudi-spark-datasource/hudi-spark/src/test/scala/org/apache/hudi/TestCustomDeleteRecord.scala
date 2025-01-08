@@ -22,6 +22,7 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger, OverwriteWithLatestMerger}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
@@ -30,11 +31,11 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 class TestCustomDeleteRecord extends SparkClientFunctionalTestHarness {
-  val expectedEventTimeBased = Seq(
+  val expectedEventTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(
     (10, "5", "rider-E", "driver-E", 17.85, "i"),
     (10, "3", "rider-C", "driver-C", 33.9, "i"),
     (10, "2", "rider-B", "driver-B", 27.7, "i"))
-  val expectedCommitTimeBased = Seq(
+  val expectedCommitTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(
     (10, "5", "rider-E", "driver-E", 17.85, "i"),
     (10, "3", "rider-C", "driver-C", 33.9, "i"))
 
@@ -45,9 +46,21 @@ class TestCustomDeleteRecord extends SparkClientFunctionalTestHarness {
                       recordType: String,
                       positionUsed: String,
                       mergeMode: String): Unit = {
+    val mergeClasses = List(
+      classOf[DefaultSparkRecordMerger].getName,
+      classOf[OverwriteWithLatestSparkRecordMerger].getName,
+      classOf[HoodieAvroRecordMerger].getName,
+      classOf[OverwriteWithLatestMerger].getName
+    ).mkString(",")
+    val mergeStrategy = if (mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name)) {
+      HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID
+    } else {
+      HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
+    }
     val sparkOpts: Map[String, String] = Map(
       HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
-      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName)
+      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> mergeClasses,
+      HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key -> mergeStrategy)
     val fgReaderOpts: Map[String, String] = Map(
       HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> useFgReader,
       HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> positionUsed,
@@ -116,6 +129,10 @@ class TestCustomDeleteRecord extends SparkClientFunctionalTestHarness {
 object TestCustomDeleteRecord {
   def provideParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
+      Arguments.of("true", "COPY_ON_WRITE", "AVRO", "false", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "true", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "COPY_ON_WRITE", "AVRO", "false", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "true", "COMMIT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "COMMIT_TIME_ORDERING"),

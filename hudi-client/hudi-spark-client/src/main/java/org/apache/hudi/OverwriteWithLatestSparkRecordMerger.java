@@ -40,6 +40,9 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
 
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    if (newer.isDelete(newSchema, props)) {
+      return Option.empty();
+    }
     return Option.of(Pair.of(newer, newSchema));
   }
 }

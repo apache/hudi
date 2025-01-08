@@ -20,11 +20,13 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
@@ -32,6 +34,10 @@ import org.apache.hudi.merge.SparkRecordMergingUtils;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
  * Record merger for spark that implements the default merger strategy
@@ -48,36 +54,28 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
 
-    if (newer instanceof HoodieSparkRecord) {
-      HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
-      if (newSparkRecord.isDelete(newSchema, props)) {
-        // Delete record
-        return Option.empty();
-      }
-    } else {
-      if (newer.getData() == null) {
-        // Delete record
-        return Option.empty();
-      }
+    if (newer instanceof HoodieEmptyRecord) {
+      return Option.empty();
     }
+    HoodieSparkRecord newRecord = (HoodieSparkRecord) newer;
+    if (older instanceof HoodieEmptyRecord) {
+      return newRecord.isDelete(newSchema, props)
+          ? Option.empty() : Option.of(Pair.of(newer, newSchema));
+    }
+    HoodieSparkRecord oldRecord = (HoodieSparkRecord) older;
+    Comparable newOrderingVal = newRecord.getOrderingValue(newSchema, props);
+    Comparable oldOrderingVal = oldRecord.getOrderingValue(oldSchema, props);
 
-    if (older instanceof HoodieSparkRecord) {
-      HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
-      if (oldSparkRecord.isDelete(oldSchema, props)) {
-        // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    } else {
-      if (older.getData() == null) {
-        // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
-      }
+    // The same logic as fg reader.
+    if (newOrderingVal.equals(0) && newRecord.isDelete(newSchema, props)) {
+      return Option.empty();
     }
-    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      return Option.of(Pair.of(older, oldSchema));
-    } else {
-      return Option.of(Pair.of(newer, newSchema));
+    if (!oldOrderingVal.equals(0) && oldOrderingVal.compareTo(newOrderingVal) > 0) {
+      return oldRecord.isDelete(oldSchema, props)
+          ? Option.empty() : Option.of(Pair.of(older, oldSchema));
     }
+    return newRecord.isDelete(newSchema, props)
+        ? Option.empty() : Option.of(Pair.of(newer, newSchema));
   }
 
   @Override

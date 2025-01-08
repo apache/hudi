@@ -19,13 +19,19 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Properties;
+
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 
 /**
  * Base class for all AVRO record based payloads, that can be ordered based on a field.
@@ -68,7 +74,7 @@ public abstract class BaseAvroPayload implements Serializable {
    * We will not do deserialization in this method.
    */
   public boolean isDeleted(Schema schema, Properties props) {
-    return isDeletedRecord;
+    return isDeletedRecord || isCustomDeleteRecord(schema, props);
   }
 
   /**
@@ -93,5 +99,24 @@ public abstract class BaseAvroPayload implements Serializable {
     }
     Object deleteMarker = genericRecord.get(isDeleteKey);
     return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
+  }
+
+  boolean isCustomDeleteRecord(Schema schema, Properties props) {
+    String deleteKeyField = props.getProperty(DELETE_KEY);
+    if (StringUtils.isNullOrEmpty(deleteKeyField)) {
+      return false;
+    }
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER)),
+        () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
+    if (schema.getField(deleteKeyField) == null) {
+      return false;
+    }
+    try {
+      GenericRecord record = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+      Object deleteMarker = record.get(deleteKeyField);
+      return deleteMarker != null && props.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
+    } catch (IOException e) {
+      throw new HoodieException("Cannot deserialize records", e);
+    }
   }
 }
