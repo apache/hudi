@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OperationModeAwareness;
+import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -77,11 +78,14 @@ public class HoodieRecordUtils {
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
                                                       List<String> mergerClassList, String recordMergerStrategy) {
+    HoodieRecordMerger defaultMerger = recordMergerStrategy.equals(HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID)
+        ? HoodieAvroRecordMerger.INSTANCE : OverwriteWithLatestMerger.INSTANCE;
+
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
-      return HoodieAvroRecordMerger.INSTANCE;
+      return defaultMerger;
     } else {
       return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
-          .orElse(HoodieAvroRecordMerger.INSTANCE);
+          .orElse(defaultMerger);
     }
   }
 

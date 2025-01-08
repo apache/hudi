@@ -42,37 +42,36 @@ class TestCustomDeleteRecord extends SparkClientFunctionalTestHarness {
   @ParameterizedTest
   @MethodSource(Array("provideParams"))
   def testCustomDelete(useFgReader: String,
-                      tableType: String,
-                      recordType: String,
-                      positionUsed: String,
-                      mergeMode: String): Unit = {
-    val mergeClasses = List(
+                       tableType: String,
+                       recordType: String,
+                       positionUsed: String,
+                       mergeMode: String): Unit = {
+    val sparkMergeClasses = List(
       classOf[DefaultSparkRecordMerger].getName,
-      classOf[OverwriteWithLatestSparkRecordMerger].getName,
+      classOf[OverwriteWithLatestSparkRecordMerger].getName).mkString(",")
+    val avroMergerClasses = List(
       classOf[HoodieAvroRecordMerger].getName,
-      classOf[OverwriteWithLatestMerger].getName
-    ).mkString(",")
+      classOf[OverwriteWithLatestMerger].getName).mkString(",")
+
     val mergeStrategy = if (mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name)) {
       HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID
     } else {
       HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
     }
-    val sparkOpts: Map[String, String] = Map(
+    val mergeOpts: Map[String, String] = Map(
       HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
-      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> mergeClasses,
+      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key ->
+        (if (recordType.equals("SPARK")) sparkMergeClasses else avroMergerClasses),
       HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key -> mergeStrategy)
     val fgReaderOpts: Map[String, String] = Map(
       HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> useFgReader,
       HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> positionUsed,
-      HoodieWriteConfig.RECORD_MERGE_MODE.key -> mergeMode)
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> mergeMode
+    )
     val deleteOpts: Map[String, String] = Map(
       DELETE_KEY -> "delete",
       DELETE_MARKER -> "d")
-    val opts = if (recordType.equals("SPARK")) {
-      sparkOpts ++ fgReaderOpts ++ deleteOpts
-    } else {
-      fgReaderOpts ++ deleteOpts
-    }
+    val opts = mergeOpts ++ fgReaderOpts ++ deleteOpts
     val columns = Seq("ts", "key", "rider", "driver", "fare", "delete")
 
     val data = Seq(
@@ -130,13 +129,22 @@ object TestCustomDeleteRecord {
   def provideParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
       Arguments.of("true", "COPY_ON_WRITE", "AVRO", "false", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "true", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "COPY_ON_WRITE", "AVRO", "true", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "COPY_ON_WRITE", "AVRO", "false", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "true", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "COPY_ON_WRITE", "AVRO", "true", "COMMIT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "COMMIT_TIME_ORDERING"))
+      Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "false", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "true", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "false", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "COPY_ON_WRITE", "SPARK", "true", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "SPARK", "false", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "EVENT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "SPARK", "false", "COMMIT_TIME_ORDERING"),
+      Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "COMMIT_TIME_ORDERING")
+    )
   }
 
   def validate(expectedDf: Dataset[Row], actualDf: Dataset[Row]): Unit = {
