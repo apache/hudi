@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -71,6 +72,8 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_ME
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
@@ -569,6 +572,24 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     }
 
     Object deleteMarker = readerContext.getValue(record.get(), schema, HOODIE_IS_DELETED_FIELD);
-    return deleteMarker instanceof Boolean && (boolean) deleteMarker;
+    if (deleteMarker instanceof Boolean && (boolean) deleteMarker) {
+      return true;
+    }
+
+    return isCustomDeleteRecord(record, schema, props);
+  }
+
+  boolean isCustomDeleteRecord(Option<T> record, Schema schema, TypedProperties props) {
+    String deleteKeyField = props.getProperty(DELETE_KEY);
+    if (StringUtils.isNullOrEmpty(deleteKeyField)) {
+      return false;
+    }
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER)),
+        () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
+    if (schema.getField(deleteKeyField) == null) {
+      return false;
+    }
+    Object deleteMarker = readerContext.getValue(record.get(), schema, deleteKeyField);
+    return deleteMarker != null && props.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
   }
 }
