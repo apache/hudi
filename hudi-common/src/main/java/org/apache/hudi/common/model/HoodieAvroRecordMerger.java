@@ -54,9 +54,6 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   }
 
   private Option<IndexedRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
-    if (newer.isDelete(schema, props)) {
-      return Option.empty();
-    }
     Option<IndexedRecord> previousAvroData = older.toIndexedRecord(schema, props).map(HoodieAvroIndexedRecord::getData);
     if (!previousAvroData.isPresent()) {
       return Option.empty();
