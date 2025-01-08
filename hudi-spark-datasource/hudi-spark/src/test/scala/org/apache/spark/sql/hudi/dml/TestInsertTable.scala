@@ -352,7 +352,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test Insert Into Non Partitioned Table") {
     withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))(withTempDir { tmp =>
       val tableName = generateTableName
-      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      spark.sql(s"set hoodie.datasource.insert.dup.policy=fail")
       // Create none partitioned cow table
       spark.sql(
         s"""
@@ -394,7 +394,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
       // Create table with dropDup is true
       val tableName2 = generateTableName
-      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = true")
+      spark.sql("set hoodie.datasource.insert.dup.policy=drop")
       spark.sql(
         s"""
            |create table $tableName2 (
@@ -417,15 +417,14 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10.0, 1000)
       )
       // disable this config to avoid affect other test in this class.
-      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = false")
-      spark.sql(s"set hoodie.sql.insert.mode=upsert")
+      spark.sql("set hoodie.datasource.insert.dup.policy=none")
     })
   }
 
   test("Test Insert Into None Partitioned Table strict mode with no preCombineField") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      spark.sql(s"set hoodie.datasource.insert.dup.policy=fail")
       // Create none partitioned cow table
       spark.sql(
         s"""
@@ -464,7 +463,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
 
       // disable this config to avoid affect other test in this class.
-      spark.sql(s"set hoodie.sql.insert.mode=upsert")
+      spark.sql(s"set hoodie.datasource.insert.dup.policy=none")
     }
   }
 
