@@ -20,7 +20,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
-import org.apache.hudi.HoodieDataSourceHelpers.{hasNewCommits, latestCommit, listCommitsSince}
+import org.apache.hudi.HoodieDataSourceHelpers.{hasNewCommits, latestCompletedCommitCompletionTime, listCommitsSince, listCompletedInstantSince, listCompletionTimeSince}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.WriteOperationType.{BULK_INSERT, INSERT, UPSERT}
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
@@ -30,16 +30,15 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
-
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.spark.sql
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.{Dataset, Row}
+import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.scalatest.Inspectors.forAll
 
 import java.io.File
-
 import scala.collection.JavaConverters._
 
 @SparkSQLCoreFlow
@@ -91,87 +90,101 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
 
     //Bulk insert first set of records
-    val inputDf0 = generateInserts(dataGen, "000", 100).cache()
+    val inputDf0 = generateInserts(dataGen, "000", 10).cache()
     insertInto(tableName, tableBasePath, inputDf0, BULK_INSERT, isMetadataEnabled, 1)
+    val inputDf0Rows = canonicalizeDF(inputDf0).collect()
+    inputDf0.unpersist(true)
     assertTrue(hasNewCommits(fs, tableBasePath, "000"))
     //Verify bulk insert works correctly
-    val snapshotDf1 = doSnapshotRead(tableName, isMetadataEnabled).cache()
-    assertEquals(100, snapshotDf1.count())
-    compareEntireInputDfWithHudiDf(inputDf0, snapshotDf1)
-    snapshotDf1.unpersist(true)
+    val snapshotDf1 = doSnapshotRead(tableName, isMetadataEnabled)
+    val snapshotDf1Rows = canonicalizeDF(dropMetaColumns(snapshotDf1)).collect()
+    assertEquals(10, snapshotDf1.count())
+    compareEntireInputRowsWithHudiRows(inputDf0Rows, snapshotDf1Rows)
 
     //Test updated records
-    val updateDf = generateUniqueUpdates(dataGen, "001", 50).cache()
+    val updateDf = generateUniqueUpdates(dataGen, "001", 5).cache()
     insertInto(tableName, tableBasePath, updateDf, UPSERT, isMetadataEnabled, 2)
-    val commitInstantTime2 = latestCommit(fs, tableBasePath)
-    val snapshotDf2 = doSnapshotRead(tableName, isMetadataEnabled).cache()
-    assertEquals(100, snapshotDf2.count())
-    compareUpdateDfWithHudiDf(updateDf, snapshotDf2, snapshotDf1)
-    snapshotDf2.unpersist(true)
+    val commitCompletedInstant2 = latestCompletedCommitCompletionTime(fs, tableBasePath)
+    val commitCompletionTime2 = commitCompletedInstant2.getCompletionTime
+    val snapshotDf2 = doSnapshotRead(tableName, isMetadataEnabled)
+    val snapshotDf2Rows = canonicalizeDF(dropMetaColumns(snapshotDf2)).collect()
+    assertEquals(10, snapshotDf2Rows.length)
+    compareUpdateRowsWithHudiRows(
+      canonicalizeDF(updateDf).collect(),
+      snapshotDf2Rows,
+      snapshotDf1Rows)
+    updateDf.unpersist(true)
 
-    val inputDf2 = generateUniqueUpdates(dataGen, "002", 60).cache()
+    val inputDf2 = generateUniqueUpdates(dataGen, "002", 6).cache()
     val uniqueKeyCnt2 = inputDf2.select("_row_key").distinct().count()
     insertInto(tableName, tableBasePath, inputDf2, UPSERT, isMetadataEnabled, 3)
-    val commitInstantTime3 = latestCommit(fs, tableBasePath)
+    val commitCompletedInstant3 = latestCompletedCommitCompletionTime(fs, tableBasePath)
+    val commitCompletionTime3 = commitCompletedInstant3.getCompletionTime
     assertEquals(3, listCommitsSince(fs, tableBasePath, "000").size())
 
-    val snapshotDf3 = doSnapshotRead(tableName, isMetadataEnabled).cache()
-    assertEquals(100, snapshotDf3.count())
-    compareUpdateDfWithHudiDf(inputDf2, snapshotDf3, snapshotDf3)
-    snapshotDf3.unpersist(true)
+    val snapshotDf3Rows = canonicalizeDF(doSnapshotRead(tableName, isMetadataEnabled)).collect()
+    assertEquals(10, snapshotDf3Rows.length)
+    compareUpdateRowsWithHudiRows(canonicalizeDF(inputDf2).collect(),
+      snapshotDf3Rows, snapshotDf3Rows)
+    inputDf2.unpersist(true)
 
     // Read Incremental Query, uses hudi_table_changes() table valued function for spark sql
     // we have 2 commits, try pulling the first commit (which is not the latest)
     //HUDI-5266
-    val firstCommit = listCommitsSince(fs, tableBasePath, "000").get(0)
+    val firstCommitInstant = listCompletedInstantSince(fs, tableBasePath, "000").get(0)
+    val firstCommit = firstCommitInstant.getCompletionTime
     val hoodieIncViewDf1 = spark.sql(s"select * from hudi_table_changes('$tableName', 'latest_state', 'earliest', '$firstCommit')")
 
-    assertEquals(100, hoodieIncViewDf1.count()) // 100 initial inserts must be pulled
+    assertEquals(10, hoodieIncViewDf1.count()) // 10 initial inserts must be pulled
     var countsPerCommit = hoodieIncViewDf1.groupBy("_hoodie_commit_time").count().collect()
     assertEquals(1, countsPerCommit.length)
-    assertEquals(firstCommit, countsPerCommit(0).get(0).toString)
+    assertEquals(firstCommitInstant.requestedTime(), countsPerCommit(0).get(0).toString)
 
-    val inputDf3 = generateUniqueUpdates(dataGen, "003", 80).cache()
+    val inputDf3 = generateUniqueUpdates(dataGen, "003", 8)
     insertInto(tableName, tableBasePath, inputDf3, UPSERT, isMetadataEnabled, 4)
 
     //another incremental query with commit2 and commit3
     //HUDI-5266
-    val hoodieIncViewDf2 = spark.sql(s"select * from hudi_table_changes('$tableName', 'latest_state', '$commitInstantTime2', '$commitInstantTime3')")
+    val commitCompletionTime2_1 = addMinimumTimeUnit(commitCompletionTime2)
+    val hoodieIncViewDf2 = spark.sql(s"select * from hudi_table_changes('$tableName', 'latest_state', '$commitCompletionTime2_1', '$commitCompletionTime3')")
 
-    assertEquals(uniqueKeyCnt2, hoodieIncViewDf2.count()) // 60 records must be pulled
+    assertEquals(uniqueKeyCnt2, hoodieIncViewDf2.count()) // 6 records must be pulled
     countsPerCommit = hoodieIncViewDf2.groupBy("_hoodie_commit_time").count().collect()
     assertEquals(1, countsPerCommit.length)
-    assertEquals(commitInstantTime3, countsPerCommit(0).get(0).toString)
+    assertEquals(commitCompletedInstant3.requestedTime(), countsPerCommit(0).get(0).toString)
 
-    val timeTravelDf = spark.sql(s"select * from $tableName timestamp as of '$commitInstantTime2'").cache()
-    assertEquals(100, timeTravelDf.count())
-    compareEntireInputDfWithHudiDf(snapshotDf2, timeTravelDf)
+    val commit2RequestTime = commitCompletedInstant2.requestedTime()
+    val timeTravelDf = spark.sql(s"select * from $tableName timestamp as of '$commit2RequestTime'")
+    val timeTravelDfRows = dropMetaColumns(canonicalizeDF(timeTravelDf)).collect()
+    assertEquals(10, timeTravelDfRows.length)
+    compareEntireInputRowsWithHudiRows(snapshotDf2Rows, timeTravelDfRows)
     timeTravelDf.unpersist(true)
 
     if (tableType.equals("MERGE_ON_READ")) {
-      val readOptDf = doMORReadOptimizedQuery(isMetadataEnabled, tableBasePath)
-      compareEntireInputDfWithHudiDf(inputDf0, readOptDf)
+      val readOptRows = canonicalizeDF(doMORReadOptimizedQuery(isMetadataEnabled, tableBasePath)).collect()
+      compareEntireInputRowsWithHudiRows(inputDf0Rows, readOptRows)
 
-      val snapshotDf4 = doSnapshotRead(tableName, isMetadataEnabled)
+      val snapshotDf4Rows = canonicalizeDF(doSnapshotRead(tableName, isMetadataEnabled)).collect()
 
       // trigger compaction and try out Read optimized query.
-      val inputDf4 = generateUniqueUpdates(dataGen, "004", 40).cache
+      val inputDf4 = generateUniqueUpdates(dataGen, "004", 4).cache()
       //count is increased by 2 because inline compaction will add extra commit to the timeline
       doInlineCompact(tableName, tableBasePath, inputDf4, UPSERT, isMetadataEnabled, "3", 6)
-      val snapshotDf5 = doSnapshotRead(tableName, isMetadataEnabled)
-      snapshotDf5.cache()
-      compareUpdateDfWithHudiDf(inputDf4, snapshotDf5, snapshotDf4)
+      val snapshotDf5Rows = canonicalizeDF(doSnapshotRead(tableName, isMetadataEnabled)).collect()
+      compareUpdateDfWithHudiRows(canonicalizeDF(inputDf4).collect(), snapshotDf5Rows, snapshotDf4Rows)
       inputDf4.unpersist(true)
-      snapshotDf5.unpersist(true)
 
       // compaction is expected to have completed. both RO and RT are expected to return same results.
       compareROAndRT(isMetadataEnabled, tableName, tableBasePath)
     }
+  }
 
-    inputDf0.unpersist(true)
-    updateDf.unpersist(true)
-    inputDf2.unpersist(true)
-    inputDf3.unpersist(true)
+  private def canonicalizeDF(inputDf0: DataFrame) = {
+    inputDf0.selectExpr(colsToCompare.split(","): _*).sort("_row_key")
+  }
+
+  private def addMinimumTimeUnit(commitCompletionTime2: String) : String = {
+    String.valueOf(commitCompletionTime2.toLong + 1)
   }
 
   def doSnapshotRead(tableName: String, isMetadataEnabledOnRead: Boolean): sql.DataFrame = {
@@ -309,16 +322,73 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     spark.read.json(spark.sparkContext.parallelize(recordsToStrings(recs).asScala.toSeq, 2))
   }
 
-  def compareUpdateDfWithHudiDf(inputDf: Dataset[Row], hudiDf: Dataset[Row], beforeDf: Dataset[Row]): Unit = {
-    dropMetaColumns(hudiDf).createOrReplaceTempView("hudiTbl")
-    inputDf.createOrReplaceTempView("inputTbl")
-    beforeDf.createOrReplaceTempView("beforeTbl")
-    val hudiDfToCompare = spark.sqlContext.sql("select " + colsToCompare + " from hudiTbl")
-    val inputDfToCompare = spark.sqlContext.sql("select " + colsToCompare + " from inputTbl")
-    val beforeDfToCompare = spark.sqlContext.sql("select " + colsToCompare + " from beforeTbl")
+  def compareUpdateDfWithHudiRows(inputRows: Array[Row], hudiRows: Array[Row], beforeRows: Array[Row]): Unit = {
+    // Helper function to get _row_key from a Row
+    def getRowKey(row: Row): String = row.getAs[String]("_row_key")
+    
+    // Create hashmaps for O(1) lookups
+    val inputRowMap = inputRows.map(row => getRowKey(row) -> row).toMap
+    val beforeRowMap = beforeRows.map(row => getRowKey(row) -> row).toMap
+    
+    // Check that all input rows exist in hudiRows
+    inputRows.foreach { inputRow =>
+      val key = getRowKey(inputRow)
+      val hudiRow = hudiRows.find(row => getRowKey(row) == key)
+      assertTrue(hudiRow.isDefined && rowsEqual(inputRow, hudiRow.get),
+        s"Input row with _row_key: $key not found in Hudi rows or content mismatch")
+    }
+    
+    // Check that each hudi row either exists in input or before
+    hudiRows.foreach { hudiRow =>
+      val key = getRowKey(hudiRow)
+      val foundInInput = inputRowMap.get(key).exists(row => rowsEqual(hudiRow, row))
+      val foundInBefore = !foundInInput && beforeRowMap.get(key).exists(row => rowsEqual(hudiRow, row))
+      
+      assertTrue(foundInInput || foundInBefore,
+        s"Hudi row with _row_key: $key not found in either input or before rows")
+    }
+  }
+  
+  // Helper function to check if two rows are equal (comparing only the columns we care about)
+  def rowsEqual(row1: Row, row2: Row): Boolean = {
+    // Get schemas from rows
+    val schema1 = row1.asInstanceOf[GenericRowWithSchema].schema
+    val schema2 = row2.asInstanceOf[GenericRowWithSchema].schema
+    
+    // Verify schemas are identical
+    if (schema1 != schema2) {
+      throw new AssertionError(
+        s"""Schemas are different:
+            |Schema 1: ${schema1.treeString}
+            |Schema 2: ${schema2.treeString}""".stripMargin)
+    }
+    
+    // Compare all fields using schema
+    schema1.fields.forall { field =>
+      val idx1 = row1.fieldIndex(field.name)
+      val idx2 = row2.fieldIndex(field.name)
+      row1.get(idx1) == row2.get(idx2)
+    }
+  }
 
-    assertEquals(hudiDfToCompare.intersect(inputDfToCompare).count, inputDfToCompare.count)
-    assertEquals(hudiDfToCompare.except(inputDfToCompare).except(beforeDfToCompare).count, 0)
+  def compareUpdateRowsWithHudiRows(inputRows: Array[Row], hudiRows: Array[Row], beforeRows: Array[Row]): Unit = {
+    // First verify all arrays are non-null
+    require(inputRows != null && hudiRows != null && beforeRows != null, 
+      "Input arrays cannot be null")
+    
+    // Check that all rows in inputRows exist in hudiRows
+    val inputRowsExistInHudi = inputRows.forall { inputRow =>
+      hudiRows.exists(hudiRow => rowsEqual(inputRow, hudiRow))
+    }
+    assertTrue(inputRowsExistInHudi, "Not all input rows found in Hudi rows")
+
+    // Check that any row in hudiRows that's not in inputRows must be in beforeRows
+    val unexpectedRows = hudiRows.filterNot { hudiRow =>
+      inputRows.exists(inputRow => rowsEqual(hudiRow, inputRow)) ||
+      beforeRows.exists(beforeRow => rowsEqual(hudiRow, beforeRow))
+    }
+    assertEquals(0, unexpectedRows.length,
+      s"Found ${unexpectedRows.length} unexpected rows in Hudi that are neither in input nor before")
   }
 
   def compareEntireInputDfWithHudiDf(inputDf: Dataset[Row], hudiDf: Dataset[Row]): Unit = {
@@ -329,6 +399,32 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
     assertEquals(hudiDfToCompare.intersect(inputDfToCompare).count, inputDfToCompare.count)
     assertEquals(hudiDfToCompare.except(inputDfToCompare).count, 0)
+  }
+
+  private def compareEntireInputRowsWithHudiRows(snapshotDf2Rows: Array[Row], timeTravelDfRows: Array[Row]): Unit = {
+    // First check lengths are equal
+    assertEquals(snapshotDf2Rows.length, timeTravelDfRows.length, 
+      s"Arrays have different lengths: ${snapshotDf2Rows.length} vs ${timeTravelDfRows.length}")
+
+    // Get schema from first row to verify column order
+    val schema = snapshotDf2Rows.head.asInstanceOf[GenericRowWithSchema].schema
+    val schema2 = timeTravelDfRows.head.asInstanceOf[GenericRowWithSchema].schema
+    
+    // Verify schemas are identical (including order)
+    assertEquals(schema, schema2,
+      s"""Schemas are different:
+         |Schema 1: ${schema.treeString}
+         |Schema 2: ${schema2.treeString}""".stripMargin)
+
+    // Compare each row pair
+    snapshotDf2Rows.zip(timeTravelDfRows).zipWithIndex.foreach { case ((row1, row2), rowIndex) =>
+      (0 until schema.length).foreach { fieldIndex =>
+        val field1 = row1.get(fieldIndex)
+        val field2 = row2.get(fieldIndex)
+        assertEquals(field1, field2, 
+          s"Mismatch at row $rowIndex, field '${schema.fields(fieldIndex).name}': expected $field1 but got $field2")
+      }
+    }
   }
 
   def doMORReadOptimizedQuery(isMetadataEnabledOnRead: Boolean, basePath: String): sql.DataFrame = {

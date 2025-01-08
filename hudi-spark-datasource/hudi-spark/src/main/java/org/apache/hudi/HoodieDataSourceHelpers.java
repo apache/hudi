@@ -76,11 +76,19 @@ public class HoodieDataSourceHelpers {
 
   // this is used in the integration test script: docker/demo/sparksql-incremental.commands
   public static List<String> listCompletionTimeSince(FileSystem fs, String basePath,
-      String instantTimestamp) {
+                                                     String instantTimestamp) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
     return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE)
         .getInstantsOrderedByCompletionTime()
         .map(HoodieInstant::getCompletionTime)
+        .collect(Collectors.toList());
+  }
+
+  public static List<HoodieInstant> listCompletedInstantSince(FileSystem fs, String basePath,
+                                                              String instantTimestamp) {
+    HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
+    return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE)
+        .getInstantsOrderedByCompletionTime()
         .collect(Collectors.toList());
   }
 
@@ -96,6 +104,20 @@ public class HoodieDataSourceHelpers {
   public static String latestCommit(HoodieStorage storage, String basePath) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(storage, basePath);
     return timeline.lastInstant().get().requestedTime();
+  }
+
+  /**
+   * Returns the last successful write operation's completed instant.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public static HoodieInstant latestCompletedCommitCompletionTime(FileSystem fs, String basePath) {
+    HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
+    return timeline.lastInstant().get();
+  }
+
+  public static HoodieInstant latestCompletedCommitCompletionTime(HoodieStorage storage, String basePath) {
+    HoodieTimeline timeline = allCompletedCommitsCompactions(storage, basePath);
+    return timeline.lastInstant().get();
   }
 
   /**
