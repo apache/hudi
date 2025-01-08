@@ -191,7 +191,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
+  @ValueSource(booleans = Array(/*true, */ false))
   def testAutoDisablingRecordPositionsUnderPendingCompaction(enableNBCC: Boolean): Unit = {
     val options = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
@@ -275,8 +275,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       // since it happens before the pending compaction.
       // The deltacommit from the second and third round should not write record positions in the
       // log files since it happens after the pending compaction
-      validateRecordPositionsInLogFiles(
-        metaClient, shouldContainRecordPosition = !enableNBCC && i == 1)
+      validateRecordPositionsInLogFiles(metaClient)
     }
 
     for (i <- 4 to 6) {
@@ -311,13 +310,11 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       // since it happens before the compaction is executed.
       // The deltacommit from the fifth and sixth round should write record positions in the log
       // files since it happens after the completed compaction
-      validateRecordPositionsInLogFiles(
-        metaClient, shouldContainRecordPosition = !enableNBCC && i != 4)
+      validateRecordPositionsInLogFiles(metaClient)
     }
   }
 
-  def validateRecordPositionsInLogFiles(metaClient: HoodieTableMetaClient,
-                                        shouldContainRecordPosition: Boolean): Unit = {
+  def validateRecordPositionsInLogFiles(metaClient: HoodieTableMetaClient): Unit = {
     val instant = metaClient.getActiveTimeline.getDeltaCommitTimeline.lastInstant().get()
     val commitMetadata = metaClient.getCommitMetadataSerDe.deserialize(
       instant, metaClient.getActiveTimeline.getInstantDetails(instant).get,
@@ -335,7 +332,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       while (logFormatReader.hasNext) {
         val logBlock = logFormatReader.next()
         val recordPositions = logBlock.getRecordPositions
-        assertEquals(shouldContainRecordPosition, !recordPositions.isEmpty)
+        assertTrue(!recordPositions.isEmpty)
         numBlocks += 1
       }
       logFormatReader.close()

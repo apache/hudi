@@ -122,8 +122,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.readStats = new HoodieReadStats();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
-        tableConfig.getRecordMergeMode(), props, this.logFiles.isEmpty(), isSkipMerge,
-        shouldUseRecordPosition, readStats);
+        tableConfig.getRecordMergeMode(), props, hoodieBaseFileOption, this.logFiles.isEmpty(),
+        isSkipMerge, shouldUseRecordPosition, readStats);
   }
 
   /**
@@ -133,6 +133,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                              HoodieTableMetaClient hoodieTableMetaClient,
                                                              RecordMergeMode recordMergeMode,
                                                              TypedProperties props,
+                                                             Option<HoodieBaseFile> baseFileOption,
                                                              boolean hasNoLogFiles,
                                                              boolean isSkipMerge,
                                                              boolean shouldUseRecordPosition,
@@ -142,9 +143,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     } else if (isSkipMerge) {
       return new HoodieUnmergedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);
-    } else if (shouldUseRecordPosition) {
+    } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new HoodiePositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);
+          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(),
+          Option.empty(), baseFileOption.get().getCommitTime(), props, readStats);
     } else {
       return new HoodieKeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);

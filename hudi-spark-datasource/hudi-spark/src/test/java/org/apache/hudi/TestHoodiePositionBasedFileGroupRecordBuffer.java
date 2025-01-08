@@ -133,12 +133,14 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
     readStats = new HoodieReadStats();
+    // TODO(yihua): Add more tests
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
         mergeMode,
         partitionNameOpt,
         partitionFields,
+        "",
         props,
         readStats);
   }
@@ -169,7 +171,8 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     for (DeleteRecord dr : deletedRecords) {
       deleteRecordList.add(Pair.of(dr, position++));
     }
-    return new HoodieDeleteBlock(deleteRecordList, true, getHeader());
+    // TODO(yihua)
+    return new HoodieDeleteBlock(deleteRecordList, "001", true, getHeader());
   }
 
   public HoodieDeleteBlock getDeleteBlockWithoutPositions() throws IOException, URISyntaxException {
@@ -179,7 +182,8 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     for (DeleteRecord dr : deletedRecords) {
       deleteRecordList.add(Pair.of(dr, -1L));
     }
-    return new HoodieDeleteBlock(deleteRecordList, true, getHeader());
+    // TODO(yihua)
+    return new HoodieDeleteBlock(deleteRecordList, "001", true, getHeader());
   }
 
   @Test

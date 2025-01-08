@@ -227,6 +227,7 @@ public class HoodieFileSliceTestUtils {
       Schema schema,
       Properties props,
       boolean writePositions,
+      String baseFileInstantTime,
       Map<String, Long> keyToPositionMap
   ) {
     List<HoodieRecord> hoodieRecords = records.stream()
@@ -241,6 +242,7 @@ public class HoodieFileSliceTestUtils {
             r -> Pair.of(DeleteRecord.create(
                 r.getKey(), r.getOrderingValue(schema, props)), r.getCurrentLocation().getPosition()))
             .collect(Collectors.toList()),
+        baseFileInstantTime,
         writePositions,
         header
     );
@@ -291,6 +293,7 @@ public class HoodieFileSliceTestUtils {
       List<IndexedRecord> records,
       Schema schema,
       String fileId,
+      String baseFileInstantTime,
       String logInstantTime,
       int version,
       HoodieLogBlock.HoodieLogBlockType blockType,
@@ -315,7 +318,7 @@ public class HoodieFileSliceTestUtils {
         writer.appendBlock(dataBlock);
       } else {
         HoodieDeleteBlock deleteBlock = getDeleteBlock(
-            records, header, schema, PROPERTIES, writePositions, keyToPositionMap);
+            records, header, schema, PROPERTIES, writePositions, baseFileInstantTime, keyToPositionMap);
         writer.appendBlock(deleteBlock);
       }
     }
@@ -373,6 +376,7 @@ public class HoodieFileSliceTestUtils {
           records,
           schema,
           fileId,
+          baseFilePlan.getInstantTime(),
           logFilePlan.getInstantTime(),
           i,
           blockType,

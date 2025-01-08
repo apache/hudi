@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -43,6 +44,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -84,19 +86,32 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                          Map<FooterMetadataType, String> footer,
                          String keyFieldName) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
-    if (shouldWriteRecordPositions) {
-      records.sort((o1, o2) -> {
-        long v1 = o1.getCurrentPosition();
-        long v2 = o2.getCurrentPosition();
-        return Long.compare(v1, v2);
-      });
-      if (isPositionValid(records.get(0).getCurrentPosition())) {
-        addRecordPositionsToHeader(
-            records.stream().map(HoodieRecord::getCurrentPosition).collect(Collectors.toSet()),
-            records.size());
+    if (shouldWriteRecordPositions && !records.isEmpty()) {
+      String baseFileInstantTime = records.get(0).getCurrentBaseFileInstantTime();
+      for (HoodieRecord record : records) {
+        if (!baseFileInstantTime.equals(record.getCurrentBaseFileInstantTime())) {
+          baseFileInstantTime = EMPTY_STRING;
+          break;
+        }
+      }
+      if (StringUtils.isNullOrEmpty(baseFileInstantTime)) {
+        LOG.warn("Base file instant time of delete positions cannot be determined, possibly "
+            + "due to inserts or different base file instant times for the input records.");
       } else {
-        LOG.warn("There are records without valid positions. "
-            + "Skip writing record positions to the data block header.");
+        records.sort((o1, o2) -> {
+          long v1 = o1.getCurrentPosition();
+          long v2 = o2.getCurrentPosition();
+          return Long.compare(v1, v2);
+        });
+        if (isPositionValid(records.get(0).getCurrentPosition())) {
+          addRecordPositionsToHeader(
+              baseFileInstantTime,
+              records.stream().map(HoodieRecord::getCurrentPosition).collect(Collectors.toSet()),
+              records.size());
+        } else {
+          LOG.warn("There are records without valid positions. "
+              + "Skip writing record positions to the data block header.");
+        }
       }
     }
     this.records = Option.of(records);
