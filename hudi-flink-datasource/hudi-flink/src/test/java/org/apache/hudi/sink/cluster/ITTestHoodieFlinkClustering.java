@@ -73,6 +73,8 @@ import org.apache.flink.types.Row;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.HashMap;
@@ -544,21 +546,24 @@ public class ITTestHoodieFlinkClustering {
     TestData.checkWrittenData(tempFile, expected, 4);
   }
 
-  @Test
-  public void testInsertWithDifferentRecordKeyNullabilityAndClustering() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testInsertWithDifferentRecordKeyNullabilityAndClustering(boolean withPk) throws Exception {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
     tableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
 
-    // create a table without primary key defined, so that the nullability of the record key field
-    // would be nullable.
+    // if create a table without primary key, the nullability of the record key field is nullable
+    // otherwise, the nullability is not nullable.
+    String pkConstraint = withPk ? ",  primary key (uuid) not enforced\n" : "";
     String tblWithoutPkDDL = "create table t1(\n"
         + "  `uuid` VARCHAR(20)\n"
         + ",  `name` VARCHAR(10)\n"
         + ",  `age` INT\n"
         + ",  `ts` TIMESTAMP(3)\n"
         + ",  `partition` VARCHAR(10)\n"
+        + pkConstraint
         + ")\n"
         + "PARTITIONED BY (`partition`)\n"
         + "with (\n"

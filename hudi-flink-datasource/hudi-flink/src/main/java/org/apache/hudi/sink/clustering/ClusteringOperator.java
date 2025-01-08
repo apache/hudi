@@ -20,17 +20,16 @@ package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.adapter.Utils;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -43,8 +42,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.SchemaCompatibilityException;
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -93,6 +90,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
@@ -288,7 +286,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .withStorage(table.getStorage())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(clusteringOp.getDeltaFilePaths())
-            .withReaderSchema(reconcileSchemaWithNullability(clusteringOp))
+            .withReaderSchema(reconcileSchemaWithRecordKeyNullability(readerSchema))
             .withLatestInstantTime(instantTime)
             .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
             .withReverseReader(writeConfig.getCompactionReverseLogReadEnabled())
@@ -330,7 +328,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     List<Iterator<RowData>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
       Iterable<IndexedRecord> indexedRecords = () -> {
         try {
-          Schema reconciledSchema = reconcileSchemaWithNullability(clusteringOp);
+          Schema reconciledSchema = reconcileSchemaWithRecordKeyNullability(readerSchema);
           HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorage())
               .getReaderFactory(table.getConfig().getRecordMerger().getRecordType());
           HoodieAvroFileReader fileReader = (HoodieAvroFileReader) fileReaderFactory.getFileReader(
@@ -351,23 +349,18 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
 
   /**
    * Since there exists discrepancies between flink and spark dealing with nullability of primary key field,
-   * and there may be some files written by spark, we reconcile read schema against write schema to promote
-   * the nullability, so that schema validating would not fail.
+   * and there may be some files written by spark, we force update the nullability of record key to nullable,
+   * so that schema validating would not fail.
    *
-   * @param clusteringOperation the cluster operation
+   * @param schema the original schema to be updated
    * @return schema that has nullability constraints reconciled
    */
-  private Schema reconcileSchemaWithNullability(ClusteringOperation clusteringOperation) {
-    String instantTs = StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath())
-        ? FSUtils.getCommitTime(clusteringOperation.getDeltaFilePaths().get(0))
-        : FSUtils.getCommitTime(clusteringOperation.getDataFilePath());
-    try {
-      TableSchemaResolver schemaResolver = new TableSchemaResolver(table.getMetaClient());
-      Schema writeSchema = schemaResolver.getTableAvroSchema(instantTs);
-      return AvroSchemaEvolutionUtils.reconcileSchemaWithNullability(readerSchema, writeSchema);
-    } catch (Exception e) {
-      throw new SchemaCompatibilityException("Failed to read schema for given instant: " + instantTs, e);
+  private Schema reconcileSchemaWithRecordKeyNullability(Schema schema) {
+    Option<String[]> recordKeyOp = table.getMetaClient().getTableConfig().getRecordKeyFields();
+    if (recordKeyOp.isEmpty()) {
+      return schema;
     }
+    return AvroSchemaUtils.createSchemaWithNullabilityUpdate(schema, Arrays.asList(recordKeyOp.get()), true);
   }
 
   /**

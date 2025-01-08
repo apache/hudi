@@ -214,46 +214,5 @@ public class AvroSchemaEvolutionUtils {
 
     return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
   }
-
-  /**
-   * Reconciles nullability requirement b/w {@code source} and {@code target} schemas.
-   * For example,if colA in source is non-nullable, but is nullable in target, output schema will have colA as nullable.
-   *
-   * @param sourceSchema source schema that needs reconciliation
-   * @param targetSchema target schema that source schema will be reconciled against
-   * @return schema (based off {@code source} one) that has nullability constraints reconciled
-   */
-  public static Schema reconcileSchemaWithNullability(Schema sourceSchema, Schema targetSchema) {
-    if (targetSchema.getType() == Schema.Type.NULL || targetSchema.getFields().isEmpty()) {
-      return sourceSchema;
-    }
-    if (sourceSchema == null || sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty()) {
-      return targetSchema;
-    }
-    InternalSchema targetInternalSchema = convert(targetSchema);
-    // Use existing fieldIds for consistent field ordering between commits when shouldReorderColumns is true
-    InternalSchema sourceInternalSchema = convert(sourceSchema, Collections.emptyMap());
-
-    List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
-    List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
-
-    List<String> nullableUpdateColsInSource = new ArrayList<>();
-    colNamesSourceSchema.forEach(field -> {
-      // handle columns that needs to be made nullable
-      if (colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
-        nullableUpdateColsInSource.add(field);
-      }
-    });
-
-    if (nullableUpdateColsInSource.isEmpty()) {
-      //standardize order of unions
-      return convert(sourceInternalSchema, sourceSchema.getFullName());
-    }
-
-    TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(sourceInternalSchema);
-    schemaChange = reduce(nullableUpdateColsInSource, schemaChange,
-        (change, field) -> change.updateColumnNullability(field, true));
-    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
-  }
 }
 
