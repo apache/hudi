@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -53,6 +54,8 @@ import java.util.Properties;
 
 import scala.Function1;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
@@ -230,22 +233,37 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     if (null == data) {
       return true;
     }
-
     // Use metadata filed to decide.
     Schema.Field operationField = recordSchema.getField(OPERATION_METADATA_FIELD);
     if (null != operationField
         && HoodieOperation.isDeleteRecord((String) data.get(operationField.pos(), StringType))) {
       return true;
     }
-
     // Use data field to decide.
-    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) == null) {
+    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) != null) {
+      Object deleteMarker = data.get(
+          recordSchema.getField(HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
+      if (deleteMarker instanceof Boolean && (boolean) deleteMarker) {
+        return true;
+      }
+    }
+    // Use custom field to decide.
+    return isCustomDeleteRecord(recordSchema, props);
+  }
+
+  boolean isCustomDeleteRecord(Schema schema, Properties props) {
+    String deleteKeyField = props.getProperty(DELETE_KEY);
+    if (StringUtils.isNullOrEmpty(deleteKeyField)) {
       return false;
     }
-
-    Object deleteMarker = data.get(
-        recordSchema.getField(HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
-    return deleteMarker instanceof Boolean && (boolean) deleteMarker;
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER)),
+        () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
+    if (schema.getField(deleteKeyField) == null) {
+      return false;
+    }
+    int pos = schema.getField(deleteKeyField).pos();
+    Object deleteMarker = data.get(pos, StringType);
+    return deleteMarker != null && props.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
   }
 
   @Override

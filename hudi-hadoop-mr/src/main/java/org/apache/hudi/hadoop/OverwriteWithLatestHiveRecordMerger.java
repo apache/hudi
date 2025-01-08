@@ -38,7 +38,14 @@ public class OverwriteWithLatestHiveRecordMerger extends HoodieHiveRecordMerger 
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older,
+                                                  Schema oldSchema,
+                                                  HoodieRecord newer,
+                                                  Schema newSchema,
+                                                  TypedProperties props) throws IOException {
+    if (newer.isDelete(newSchema, props)) {
+      return Option.empty();
+    }
     return Option.of(Pair.of(newer, newSchema));
   }
 }
