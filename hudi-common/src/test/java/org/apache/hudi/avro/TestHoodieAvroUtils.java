@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.table.log.AbstractHoodieLogRecordScanner;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -55,6 +56,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -92,6 +95,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests hoodie avro utilities.
  */
 public class TestHoodieAvroUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieAvroUtils.class);
 
   private static String EVOLVED_SCHEMA = "{\"type\": \"record\",\"name\": \"testrec1\",\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
@@ -700,7 +705,8 @@ public class TestHoodieAvroUtils {
       assertEquals((int) ChronoUnit.DAYS.between(
               LocalDate.ofEpochDay(0), ((Date) value).toLocalDate()),
           ((GenericRecord) wrapperValue).get(0));
-      assertTrue(((Date)value).equals((Date)unwrapAvroValueWrapper(wrapperValue)));
+      LOG.warn("AAA Expected " + value +", actual : before unwrap " + wrapperValue +", after unwrapping " + (unwrapAvroValueWrapper(wrapperValue)));
+      assertEquals(((Date)value), (Date)unwrapAvroValueWrapper(wrapperValue));
     } else if (value instanceof LocalDate) {
       assertEquals((int) ChronoUnit.DAYS.between(LocalDate.ofEpochDay(0), (LocalDate) value),
           ((GenericRecord) wrapperValue).get(0));
