@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.JavaTaskContextSupplier;
+import org.apache.hudi.client.utils.LazyConcatenatingIterator;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
@@ -32,12 +33,8 @@ import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.log.HoodieFileSliceReader;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
@@ -47,6 +44,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -59,10 +57,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
@@ -167,55 +164,16 @@ public abstract class JavaExecutionStrategy<T>
   private List<HoodieRecord<T>> readRecordsForGroupWithLogs(List<ClusteringOperation> clusteringOps,
                                                             String instantTime) {
     HoodieWriteConfig config = getWriteConfig();
-    HoodieTable table = getHoodieTable();
     List<HoodieRecord<T>> records = new ArrayList<>();
+    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new JavaTaskContextSupplier(), config);
+    LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
 
-    clusteringOps.forEach(clusteringOp -> {
-      long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new JavaTaskContextSupplier(), config);
-      LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
-      Option<HoodieFileReader> baseFileReader = Option.empty();
-      HoodieMergedLogRecordScanner scanner = null;
-      try {
-        Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-        scanner = HoodieMergedLogRecordScanner.newBuilder()
-            .withStorage(table.getStorage())
-            .withBasePath(table.getMetaClient().getBasePath())
-            .withLogFilePaths(clusteringOp.getDeltaFilePaths())
-            .withReaderSchema(readerSchema)
-            .withLatestInstantTime(instantTime)
-            .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-            .withReverseReader(config.getCompactionReverseLogReadEnabled())
-            .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withSpillableMapBasePath(config.getSpillableMapBasePath())
-            .withPartition(clusteringOp.getPartitionPath())
-            .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
-            .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-            .withRecordMerger(config.getRecordMerger())
-            .build();
+    List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>(clusteringOps.size());
+    clusteringOps.forEach(op -> suppliers.add(() -> getRecordIteratorWithLogFiles(op, instantTime, maxMemoryPerCompaction)));
+    LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers);
 
-        baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
-            ? Option.empty()
-            : Option.of(HoodieIOFactory.getIOFactory(table.getStorage()).getReaderFactory(recordType)
-            .getFileReader(config, new StoragePath(clusteringOp.getDataFilePath())));
-        HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-        Option<BaseKeyGenerator> keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
-        Iterator<HoodieRecord<T>> fileSliceReader = new HoodieFileSliceReader(baseFileReader, scanner, readerSchema, tableConfig.getPreCombineField(), writeConfig.getRecordMerger(),
-            tableConfig.getProps(),
-            tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
-                tableConfig.getPartitionFieldProp())), keyGeneratorOpt);
-        fileSliceReader.forEachRemaining(records::add);
-      } catch (IOException e) {
-        throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
-            + " and " + clusteringOp.getDeltaFilePaths(), e);
-      } finally {
-        if (scanner != null) {
-          scanner.close();
-        }
-        if (baseFileReader.isPresent()) {
-          baseFileReader.get().close();
-        }
-      }
-    });
+    lazyIterator.forEachRemaining(records::add);
+    lazyIterator.close();
     return records;
   }
 
@@ -224,21 +182,32 @@ public abstract class JavaExecutionStrategy<T>
    */
   private List<HoodieRecord<T>> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
     List<HoodieRecord<T>> records = new ArrayList<>();
-    clusteringOps.forEach(clusteringOp -> {
-      try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(getHoodieTable().getStorage())
-          .getReaderFactory(recordType)
-          .getFileReader(getHoodieTable().getConfig(), new StoragePath(clusteringOp.getDataFilePath()))) {
-        Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-        Iterator<HoodieRecord> recordIterator = baseFileReader.getRecordIterator(readerSchema);
-        // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-        //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-        //       it since these records will be put into the records(List).
-        recordIterator.forEachRemaining(record -> records.add(record.copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchema, new Properties(), Option.empty())));
-      } catch (IOException e) {
-        throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
-            + " and " + clusteringOp.getDeltaFilePaths(), e);
-      }
-    });
+    List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>(clusteringOps.size());
+    clusteringOps.forEach(op -> suppliers.add(() -> getRecordIteratorWithBaseFileOnly(op)));
+    LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers);
+
+    lazyIterator.forEachRemaining(records::add);
+    lazyIterator.close();
     return records;
+  }
+
+  @Override
+  protected Option<BaseKeyGenerator> getKeyGenerator() {
+    try {
+      return Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(writeConfig.getProps())));
+    } catch (IOException e) {
+      throw new HoodieClusteringException("Error creating key generator", e);
+    }
+  }
+
+  @Override
+  protected HoodieFileReader getBaseOrBootstrapFileReader(StorageConfiguration<?> storageConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp) {
+    try {
+      return HoodieIOFactory.getIOFactory(getHoodieTable().getStorage())
+          .getReaderFactory(recordType)
+          .getFileReader(getHoodieTable().getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
+    } catch (IOException e) {
+      throw new HoodieClusteringException("Error reading base file", e);
+    }
   }
 }

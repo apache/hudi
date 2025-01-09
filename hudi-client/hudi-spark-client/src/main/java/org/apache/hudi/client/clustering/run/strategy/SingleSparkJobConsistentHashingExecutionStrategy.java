@@ -59,15 +59,23 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-public class SingleSparkConsistentBucketClusteringExecutionStrategy<T> extends SingleSparkJobExecutionStrategy<T> {
+/**
+ * Execution strategy for table with {@link org.apache.hudi.index.HoodieIndex.BucketIndexEngineType#CONSISTENT_HASHING} to perform bucket resizing.
+ * This strategy will split a clustering plan into multiple operations and perform the operations in a single spark job, each operation will be a single task.
+ * <p>
+ * There are two types of operations:
+ * <li> <b>Split</b>: Split a bucket into multiple buckets
+ * <li> <b>Merge</b>: Merge multiple buckets into a single bucket
+ */
+public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleSparkJobExecutionStrategy<T> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SingleSparkConsistentBucketClusteringExecutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SingleSparkJobConsistentHashingExecutionStrategy.class);
 
   private final String indexKeyFields;
   private final Schema readerSchema;
 
-  public SingleSparkConsistentBucketClusteringExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext,
-                                                                HoodieWriteConfig writeConfig) {
+  public SingleSparkJobConsistentHashingExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext,
+                                                          HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
     this.indexKeyFields = table.getConfig().getBucketIndexHashField();
     this.readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
@@ -86,9 +94,13 @@ public class SingleSparkConsistentBucketClusteringExecutionStrategy<T> extends S
     return performBucketSplitForGroup(clusteringGroup, strategyParams, preserveHoodieMetadata, schema, taskContextSupplier, instantTime);
   }
 
-  private List<ConsistentHashingNode> deconstructNodes(ClusteringGroupInfo clusteringGroupInfo) {
+  private List<ConsistentHashingNode> decodeConsistentHashingNodes(ClusteringGroupInfo clusteringGroupInfo) {
+    Option<Map<String, String>> extraMetadata = clusteringGroupInfo.getExtraMetadata();
+    ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
+    String json = extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY);
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(json), "Child nodes should not be null or empty for consistent hashing operations");
     try {
-      return ConsistentHashingNode.fromJsonString(clusteringGroupInfo.getExtraMetadata().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
+      return ConsistentHashingNode.fromJsonString(json);
     } catch (Exception e) {
       throw new HoodieClusteringException("Failed to parse child nodes from metadata", e);
     }
@@ -98,9 +110,11 @@ public class SingleSparkConsistentBucketClusteringExecutionStrategy<T> extends S
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig);
     LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
-    String partition = clusteringGroup.getExtraMetadata().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
+    Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
+    ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
+    String partition = extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(partition), "Partition should not be null or empty");
-    List<ConsistentHashingNode> nodes = deconstructNodes(clusteringGroup);
+    List<ConsistentHashingNode> nodes = decodeConsistentHashingNodes(clusteringGroup);
     Option<ConsistentHashingNode> newBucket = Option.fromJavaOptional(nodes.stream().filter(node -> node.getTag() == ConsistentHashingNode.NodeTag.REPLACE).findFirst());
     ValidationUtils.checkArgument(newBucket.isPresent(), "New bucket should be present for merge operation");
     ConsistentHashingNode newBucketNode = newBucket.get();
@@ -182,10 +196,12 @@ public class SingleSparkConsistentBucketClusteringExecutionStrategy<T> extends S
   private List<WriteStatus> performBucketSplitForGroup(ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams, boolean preserveHoodieMetadata, SerializableSchema schema,
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
     ValidationUtils.checkArgument(clusteringGroup.getOperations().size() == 1, "Split operation should have only one operation");
-    String partition = clusteringGroup.getExtraMetadata().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
+    Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
+    ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
+    String partition = extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(partition), "Partition should not be null or empty");
-    List<ConsistentHashingNode> nodes = deconstructNodes(clusteringGroup);
-    Integer seqNo = Integer.parseInt(clusteringGroup.getExtraMetadata().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_SEQUENCE_NUMBER_KEY));
+    List<ConsistentHashingNode> nodes = decodeConsistentHashingNodes(clusteringGroup);
+    Integer seqNo = Integer.parseInt(extraMetadata.get().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_SEQUENCE_NUMBER_KEY));
     HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata((short) 0, partition, instantTime, 0, seqNo + 1, Collections.emptyList());
     metadata.setChildrenNodes(nodes);
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);

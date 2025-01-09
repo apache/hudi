@@ -21,15 +21,8 @@ package org.apache.hudi.client.clustering.run.strategy;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ClusteringOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.log.HoodieFileSliceReader;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -59,68 +52,7 @@ public abstract class SparkJobExecutionStrategy<T, I, K, O> extends ClusteringEx
     this.readerSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
   }
 
-  protected ClosableIterator<HoodieRecord<T>> getRecordIteratorWithLogFiles(ClusteringOperation operation, String instantTime, long maxMemory) {
-    HoodieWriteConfig config = getWriteConfig();
-    HoodieTable table = getHoodieTable();
-    StorageConfiguration<?> storageConf = table.getStorageConf();
-    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-    String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
-    Option<String[]> partitionFields = tableConfig.getPartitionFields();
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(table.getStorage())
-        .withBasePath(table.getMetaClient().getBasePath())
-        .withLogFilePaths(operation.getDeltaFilePaths())
-        .withReaderSchema(readerSchemaWithMetaFields)
-        .withLatestInstantTime(instantTime)
-        .withMaxMemorySizeInBytes(maxMemory)
-        .withReverseReader(config.getCompactionReverseLogReadEnabled())
-        .withBufferSize(config.getMaxDFSStreamBufferSize())
-        .withSpillableMapBasePath(config.getSpillableMapBasePath())
-        .withPartition(operation.getPartitionPath())
-        .withOptimizedLogBlocksScan(config.enableOptimizedLogBlocksScan())
-        .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
-        .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .withRecordMerger(config.getRecordMerger())
-        .withTableMetaClient(table.getMetaClient())
-        .build();
-
-    Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(operation.getDataFilePath())
-        ? Option.empty()
-        : Option.of(getBaseOrBootstrapFileReader(storageConf, bootstrapBasePath, partitionFields, operation));
-    Option<BaseKeyGenerator> keyGeneratorOp = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
-    try {
-      return new HoodieFileSliceReader(baseFileReader, scanner, readerSchemaWithMetaFields, tableConfig.getPreCombineField(), config.getRecordMerger(),
-          tableConfig.getProps(),
-          tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
-              tableConfig.getPartitionFieldProp())), keyGeneratorOp);
-    } catch (IOException e) {
-      throw new HoodieClusteringException("Error reading file slices", e);
-    }
-  }
-
-  protected ClosableIterator<HoodieRecord<T>> getRecordIteratorWithBaseFileOnly(ClusteringOperation operation) {
-    StorageConfiguration<?> storageConf = getHoodieTable().getStorageConf();
-    HoodieTableConfig tableConfig = getHoodieTable().getMetaClient().getTableConfig();
-    String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
-    Option<String[]> partitionFields = tableConfig.getPartitionFields();
-    HoodieFileReader baseFileReader = getBaseOrBootstrapFileReader(storageConf, bootstrapBasePath, partitionFields, operation);
-
-    Option<BaseKeyGenerator> keyGeneratorOp = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
-    // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-    //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-    //       it since these records will be shuffled later.
-    ClosableIterator<HoodieRecord> baseRecordsIterator;
-    try {
-      baseRecordsIterator = baseFileReader.getRecordIterator(readerSchemaWithMetaFields);
-    } catch (IOException e) {
-      throw new HoodieClusteringException("Error reading base file", e);
-    }
-    return new CloseableMappingIterator(
-        baseRecordsIterator,
-        rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchemaWithMetaFields, writeConfig.getProps(), keyGeneratorOp));
-  }
-
-  private HoodieFileReader getBaseOrBootstrapFileReader(StorageConfiguration<?> storageConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp) {
+  protected HoodieFileReader getBaseOrBootstrapFileReader(StorageConfiguration<?> storageConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp) {
     StoragePath dataFilePath = new StoragePath(clusteringOp.getDataFilePath());
     HoodieStorage storage = new HoodieHadoopStorage(dataFilePath, storageConf);
     try {
@@ -146,5 +78,10 @@ public abstract class SparkJobExecutionStrategy<T, I, K, O> extends ClusteringEx
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading base file", e);
     }
+  }
+
+  @Override
+  protected Option<BaseKeyGenerator> getKeyGenerator() {
+    return HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
   }
 }

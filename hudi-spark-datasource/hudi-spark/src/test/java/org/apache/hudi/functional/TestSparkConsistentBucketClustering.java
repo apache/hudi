@@ -81,7 +81,7 @@ import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
-import static org.apache.hudi.config.HoodieClusteringConfig.SINGLE_SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY;
+import static org.apache.hudi.config.HoodieClusteringConfig.SINGLE_SPARK_JOB_CONSISTENT_HASHING_EXECUTION_STRATEGY;
 import static org.apache.hudi.config.HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY;
 
 @Tag("functional")
@@ -98,7 +98,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     setup(maxFileSize, options, false);
   }
 
-  public void setup(int maxFileSize, Map<String, String> options, boolean single) throws IOException {
+  public void setup(int maxFileSize, Map<String, String> options, boolean singleJob) throws IOException {
     initPath();
     initSparkContexts();
     initTestDataGenerator();
@@ -115,7 +115,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(maxFileSize).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringPlanStrategyClass(SparkConsistentBucketClusteringPlanStrategy.class.getName())
-            .withClusteringExecutionStrategyClass(single ? SINGLE_SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY : SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY)
+            .withClusteringExecutionStrategyClass(singleJob ? SINGLE_SPARK_JOB_CONSISTENT_HASHING_EXECUTION_STRATEGY : SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY)
             .withClusteringUpdatesStrategy(SparkConsistentBucketDuplicateUpdateStrategy.class.getName()).build())
         .build();
 

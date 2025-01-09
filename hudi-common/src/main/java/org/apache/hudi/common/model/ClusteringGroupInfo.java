@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
 import java.util.List;
@@ -75,8 +76,8 @@ public class ClusteringGroupInfo implements Serializable {
     this.numOutputGroups = numOutputGroups;
   }
 
-  public Map<String, String> getExtraMetadata() {
-    return extraMetadata;
+  public Option<Map<String, String>> getExtraMetadata() {
+    return Option.ofNullable(extraMetadata);
   }
 
   @Override
