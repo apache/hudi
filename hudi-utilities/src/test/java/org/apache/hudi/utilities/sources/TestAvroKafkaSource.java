@@ -163,7 +163,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
 
-    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", SCHEMA_PATH);
+    props.put("hoodie.streamer.schemaprovider.source.schema.file", SCHEMA_PATH);
     SchemaProvider schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
         UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
 
