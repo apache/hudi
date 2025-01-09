@@ -295,6 +295,19 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
+  protected def withSparkSqlSessionConfig(configNameValues: (String, String)*)(f: => Unit): Unit = {
+    try {
+      configNameValues.foreach { case (configName, configValue) =>
+        spark.sql(s"set $configName=$configValue")
+      }
+      f
+    } finally {
+      configNameValues.foreach { case (configName, _) =>
+        spark.sql(s"reset $configName")
+      }
+    }
+  }
+
   protected def withRecordType(recordTypes: Seq[HoodieRecordType] = Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),
                                recordConfig: Map[HoodieRecordType, Map[String, String]] = Map.empty)(f: => Unit) {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
