@@ -26,7 +26,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
-import org.apache.hudi.utilities.exception.HoodieSourceConfigException;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -169,14 +169,14 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
 
     AvroKafkaSource avroSourceWithConfluentConfigException = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     // this should throw io.confluent.common.config.ConfigException because of missing `schema.registry.url` config
-    assertThrows(HoodieSourceConfigException.class, () -> avroSourceWithConfluentConfigException.fetchNewData(Option.empty(), Long.MAX_VALUE));
+    assertThrows(HoodieReadFromSourceException.class, () -> avroSourceWithConfluentConfigException.readFromCheckpoint(Option.empty(), Long.MAX_VALUE));
 
     props.setProperty("schema.registry.url", "schema-registry-url");
     // add invalid brokers address in the props
     props.setProperty("bootstrap.servers", "unknownhost");
     AvroKafkaSource avroSourceWithKafkaConfiException = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     // this should throw org.apache.kafka.common.config.ConfigException because of invalid kafka broker address
-    assertThrows(HoodieSourceConfigException.class, () -> avroSourceWithKafkaConfiException.fetchNewData(Option.empty(), Long.MAX_VALUE));
+    assertThrows(HoodieReadFromSourceException.class, () -> avroSourceWithKafkaConfiException.readFromCheckpoint(Option.empty(), Long.MAX_VALUE));
   }
 
   @Test
