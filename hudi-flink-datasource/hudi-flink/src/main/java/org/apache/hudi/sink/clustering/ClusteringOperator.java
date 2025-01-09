@@ -361,7 +361,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     if (recordKeyOp.isEmpty() || Arrays.stream(recordKeyOp.get()).anyMatch(s -> !fieldNames.contains(s))) {
       return schema;
     }
-    return AvroSchemaUtils.forceNullableColumns(schema, Arrays.asList(recordKeyOp.get()), true);
+    return AvroSchemaUtils.forceNullableColumns(schema, Arrays.asList(recordKeyOp.get()));
   }
 
   /**

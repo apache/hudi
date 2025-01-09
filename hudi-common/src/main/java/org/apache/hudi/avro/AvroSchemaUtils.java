@@ -598,24 +598,22 @@ public class AvroSchemaUtils {
   }
 
   /**
-   * Create a new schema by change the nullabilities of the given columns.
+   * Create a new schema by force changing the nullabilities of the given columns.
    *
    * @param schema original schema
-   * @param nullableUpdateCols columns that would be updated with given nullability
-   * @param nullable nullability of column type
+   * @param columns columns that would be updated with given nullability
    * @return a new schema with the nullabilities of the given columns updated
    */
-  public static Schema forceNullableColumns(
-          Schema schema, List<String> nullableUpdateCols, boolean nullable) {
-    List<String> filterCols = nullableUpdateCols.stream()
-            .filter(col -> schema.getField(col).schema().isNullable() != nullable).collect(Collectors.toList());
+  public static Schema forceNullableColumns(Schema schema, List<String> columns) {
+    List<String> filterCols = columns.stream()
+            .filter(col -> !schema.getField(col).schema().isNullable()).collect(Collectors.toList());
     if (filterCols.isEmpty()) {
       return schema;
     }
     InternalSchema internalSchema = convert(schema);
     TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(internalSchema);
     schemaChange = reduce(filterCols, schemaChange,
-            (change, field) -> change.updateColumnNullability(field, nullable));
+            (change, field) -> change.updateColumnNullability(field, true));
     return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
   }
 }
