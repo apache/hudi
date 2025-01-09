@@ -33,7 +33,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
-import org.apache.hudi.common.table.log.AbstractHoodieLogRecordScanner;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -705,7 +704,7 @@ public class TestHoodieAvroUtils {
       assertEquals((int) ChronoUnit.DAYS.between(
               LocalDate.ofEpochDay(0), ((Date) value).toLocalDate()),
           ((GenericRecord) wrapperValue).get(0));
-      LOG.warn("AAA Expected " + value +", actual : before unwrap " + wrapperValue +", after unwrapping " + (unwrapAvroValueWrapper(wrapperValue)));
+      LOG.warn("AAA Expected " + value + ", actual : before unwrap " + wrapperValue + ", after unwrapping " + (unwrapAvroValueWrapper(wrapperValue)));
       assertEquals(((Date)value), (Date)unwrapAvroValueWrapper(wrapperValue));
     } else if (value instanceof LocalDate) {
       assertEquals((int) ChronoUnit.DAYS.between(LocalDate.ofEpochDay(0), (LocalDate) value),
