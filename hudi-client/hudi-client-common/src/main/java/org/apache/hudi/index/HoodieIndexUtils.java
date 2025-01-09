@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -36,6 +37,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -458,6 +460,28 @@ public class HoodieIndexUtils {
         return tagRecord(oldRecord.newInstance(), location);
       default:
         throw new HoodieIndexException("Unsupported record type: " + recordType);
+    }
+  }
+
+  /**
+   * Register a metadata index.
+   * Index definitions are stored in user-specified path or, by default, in .hoodie/.index_defs/index.json.
+   * For the first time, the index definition file will be created if not exists.
+   * For the second time, the index definition file will be updated if exists.
+   * Table Config is updated if necessary.
+   */
+  public static void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
+    LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
+    // build HoodieIndexMetadata and then add to index definition file
+    boolean indexDefnUpdated = metaClient.buildIndexDefinition(indexDefinition);
+    if (indexDefnUpdated) {
+      String indexMetaPath = metaClient.getIndexDefinitionPath();
+      // update table config if necessary
+      if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
+          || !metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()) {
+        metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(indexMetaPath)));
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+      }
     }
   }
 }

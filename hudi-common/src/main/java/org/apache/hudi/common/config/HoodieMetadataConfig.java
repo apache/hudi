@@ -35,6 +35,8 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+
 /**
  * Configurations used by the HUDI Metadata Table.
  */
@@ -394,6 +396,20 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating secondary index.");
 
+  public static final ConfigProperty<String> SECONDARY_INDEX_NAME = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.name")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Name of the secondary index. It is optional and default is the name of the column, prefixed by '" + PARTITION_NAME_SECONDARY_INDEX_PREFIX + "'.");
+
+  public static final ConfigProperty<String> SECONDARY_INDEX_COLUMN = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.column")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Column for which secondary index will be built.");
+
   // Config to specify metadata index to delete
   public static final ConfigProperty<String> DROP_METADATA_INDEX = ConfigProperty
       .key(METADATA_PREFIX + ".index.drop")
@@ -563,6 +579,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getSecondaryIndexParallelism() {
     return getInt(SECONDARY_INDEX_PARALLELISM);
+  }
+
+  public String getSecondaryIndexColumn() {
+    return getString(SECONDARY_INDEX_COLUMN);
+  }
+
+  public String getSecondaryIndexName() {
+    return getString(SECONDARY_INDEX_NAME);
   }
 
   public String getMetadataIndexToDrop() {
@@ -769,6 +793,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withPartitionStatsIndexParallelism(int parallelism) {
       metadataConfig.setValue(PARTITION_STATS_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withSecondaryIndexForColumn(String column) {
+      metadataConfig.setValue(SECONDARY_INDEX_COLUMN, column);
+      return this;
+    }
+
+    public Builder withSecondaryIndexName(String name) {
+      metadataConfig.setValue(SECONDARY_INDEX_NAME, name);
       return this;
     }
 

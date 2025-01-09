@@ -187,6 +187,7 @@ public class HoodieIndexer {
       if (PARTITION_NAME_RECORD_INDEX.equals(p)) {
         props.setProperty(RECORD_INDEX_ENABLE_PROP.key(), "true");
       }
+      // TODO: check if we need to set other indexes as well
     });
 
     return UtilHelpers.retry(retry, () -> {

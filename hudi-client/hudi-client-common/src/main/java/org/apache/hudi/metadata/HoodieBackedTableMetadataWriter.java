@@ -269,7 +269,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
       // Otherwise, we use the timestamp of the latest completed action.
       String initializationTime = dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-      initializeFromFilesystem(initializationTime, metadataPartitionsToInit, inflightInstantTimestamp);
+      initializeFromFilesystem(initializationTime, metadataPartitionsToInit);
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       return true;
     } catch (IOException e) {
@@ -337,10 +337,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    *
    * @param initializationTime       - Timestamp to use for the commit
    * @param partitionsToInit         - List of MDT partitions to initialize
-   * @param inflightInstantTimestamp - Current action instant responsible for this initialization
    */
-  private void initializeFromFilesystem(String initializationTime, List<MetadataPartitionType> partitionsToInit,
-                                           Option<String> inflightInstantTimestamp) throws IOException {
+  private void initializeFromFilesystem(String initializationTime, List<MetadataPartitionType> partitionsToInit) throws IOException {
     Set<String> pendingDataInstants = getPendingDataInstants(dataMetaClient);
 
     // FILES partition is always required and is initialized first
@@ -628,6 +626,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeSecondaryIndexPartition(String indexName) throws IOException {
+    // TODO:  does index definition already exist at this point, in case we're coming via the indexer?
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
@@ -1049,6 +1048,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   public void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos, String instantTime) throws IOException {
+    // TODO: so we need to create an index definition in case we're coming via the indexer
     if (indexPartitionInfos.isEmpty()) {
       LOG.warn("No partition to index in the plan");
       return;
@@ -1074,7 +1074,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     dataMetaClient.getTableConfig().setMetadataPartitionsInflight(dataMetaClient, partitionPaths);
 
     // initialize partitions
-    initializeFromFilesystem(instantTime, partitionTypes, Option.empty());
+    initializeFromFilesystem(instantTime, partitionTypes);
   }
 
   /**
