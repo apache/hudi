@@ -173,8 +173,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
         })
         .collect(Collectors.toList());
 
-    partitionPaths.removeAll(processedPartitions);
     missingPartitions.addAll(partitionPaths);
+    missingPartitions.removeAll(processedPartitions);
 
     if (clusteringGroups.isEmpty()) {
       LOG.warn("No data available to cluster");
