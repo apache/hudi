@@ -526,3 +526,9 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-13584][INTERNAL] Fix NPEs when serializing timeline (#1119)
 [ENG-13584][INTERNAL] Update readers to deserialize Avro data from input stream  (#1107)
 [AUDIT-1071]: Changelog for release-v1.66.0 (#1114)
+
+--- [2025-01-09 04:09:48] [release-v1.68.1] ---
+[ENG-17683][INTERNAL] Add column mismatch test coverage (#1050)
+[ENG-20127][INTERNAL] Fixing resource closure and heartbeat stopping in HoodieStreamer (#1123)
+[ENG-13584][INTERNAL] Avoid any race condition on conflicting schema for readers/writers (#1122)
+[AUDIT-1071]: Changelog for release-v1.68.0 (#1121)
