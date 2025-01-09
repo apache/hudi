@@ -401,13 +401,13 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         val e1 = intercept[AnalysisException] {
           spark.sql(s"update $tableName set id = 2 where id = 1")
         }
-        assert(e1.getMessage.contains("Detected update query with disallowed assignment clause for primaryKey field `id`"))
+        assert(e1.getMessage.contains("Detected disallowed assignment clause in UPDATE statement for record key field `id`"))
 
         // Try to update partition column (should fail)
         val e2 = intercept[AnalysisException] {
           spark.sql(s"update $tableName set pt = '2022' where id = 1")
         }
-        assert(e2.getMessage.contains("Detected update query with disallowed assignment clause for partition field `pt`"))
+        assert(e2.getMessage.contains("Detected disallowed assignment clause in UPDATE statement for partition field `pt`"))
 
         // Verify data remains unchanged after failed updates
         checkAnswer(s"select id, name, price, ts, pt from $tableName")(

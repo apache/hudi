@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
 import org.apache.hudi.SparkAdapterSupport
+
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -44,12 +45,11 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
   /**
    * Validate there is no assignment clause for the given attribute in the given table.
    *
-   * @param resolver The resolver to use
-   * @param fields The fields from the target table who should not have any assignment clause
-   * @param tableId Table identifier (for error messages)
-   * @param fieldType Type of the attribute to be validated (for error messages)
-   * @param assignments The assignments clause of the merge into action
-   *
+   * @param resolver    The resolver to use
+   * @param fields      The fields from the target table who should not have any assignment clause
+   * @param tableId     Table identifier (for error messages)
+   * @param fieldType   Type of the attribute to be validated (for error messages)
+   * @param assignments The assignments clause
    *
    * @throws AnalysisException if assignment clause for the given target table attribute is found
    */
@@ -62,8 +62,8 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     fields.foreach(field => if (assignments.exists {
       case (attr, _) => resolver(attr.name, field)
     }) {
-      throw new AnalysisException(s"Detected update query with disallowed assignment clause for $fieldType " +
-        s"`$field` for table `$tableId`")
+      throw new AnalysisException(s"Detected disallowed assignment clause in UPDATE statement for $fieldType " +
+        s"`$field` for table `$tableId`. Please remove the assignment clause to avoid the error.")
     })
   }
 
@@ -95,7 +95,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
       sparkSession.sessionState.conf.resolver,
       hoodieCatalogTable.tableConfig.getRecordKeyFields.orElse(Array.empty),
       tableId,
-      "primaryKey field",
+      "record key field",
       assignedAttributes
     )
 
