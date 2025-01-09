@@ -278,7 +278,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   /**
    * Columns that relation has to read from the storage to properly execute on its semantic: for ex,
-   * for Merge-on-Read tables key fields as well and pre-combine field comprise mandatory set of columns,
+   * for Merge-on-Read tables key fields as well and precombine field comprise mandatory set of columns,
    * meaning that regardless of whether this columns are being requested by the query they will be fetched
    * regardless so that relation is able to combine records properly (if necessary)
    *

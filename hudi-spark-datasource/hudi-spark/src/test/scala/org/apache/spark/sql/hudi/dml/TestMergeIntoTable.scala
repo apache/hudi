@@ -727,7 +727,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         //
         // 2) set source column name to be different with target column
         //
-        val errorMessage = "Failed to resolve pre-combine field `v` w/in the source-table output"
+        val errorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
 
         checkException(
           s"""
@@ -815,9 +815,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       )
 
       //
-      // 2.a) set source column name to be different with target column (should fail unable to match pre-combine field)
+      // 2.a) set source column name to be different with target column (should fail unable to match precombine field)
       //
-      val failedToResolveErrorMessage = "Failed to resolve pre-combine field `v` w/in the source-table output"
+      val failedToResolveErrorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
 
       checkException(
         s"""merge into $tableName1 t0

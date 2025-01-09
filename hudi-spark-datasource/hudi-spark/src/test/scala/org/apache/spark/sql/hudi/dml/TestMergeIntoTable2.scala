@@ -1034,171 +1034,179 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto Anti-Patterns of assignment clauses") {
     Seq("cow", "mor").foreach { tableType =>
-      withRecordType()(withTempDir { tmp =>
-        log.info(s"Testing table type $tableType")
-        spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = false")
-        val tableName = generateTableName
-        // Create table with primaryKey and preCombineField
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts int,
-             |  dt string
-             |) using hudi
-             | tblproperties (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
-             | partitioned by(dt)
-             | location '${tmp.getCanonicalPath}'
-         """.stripMargin)
+      Seq("COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING").foreach { mergeMode =>
+        withRecordType()(withTempDir { tmp =>
+          withSparkSqlSessionConfig(DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "false") {
+            log.info(s"Testing table type $tableType with merge mode $mergeMode")
 
-        // Insert initial data
-        spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, '2021-03-21')")
+            val tableName = generateTableName
+            // Create table with primaryKey and preCombineField
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  ts int,
+                 |  dt string
+                 |) using hudi
+                 | tblproperties (
+                 |  type = '$tableType',
+                 |  primaryKey = 'id',
+                 |  preCombineField = 'ts',
+                 |  hoodie.record.merge.mode = '$mergeMode'
+                 | )
+                 | partitioned by(dt)
+                 | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
 
-        // Test 1: Update statements where at least one misses primary key assignment
-        if (tableType.equals("mor")) {
-          checkException(
-            s"""
-               |merge into $tableName as t0
-               |using (
-               |  select 1 as id, 'a1' as name, 11 as price, 1001 as ts, '2021-03-21' as dt
-               |) as s0
-               |on t0.id = s0.id
-               |when matched and s0.id = 1 then update set
-               |  name = s0.name,
-               |  price = s0.price,
-               |  ts = s0.ts,
-               |  dt = s0.dt
-               |when matched and s0.id = 2 then update set *
-           """.stripMargin
-          )("No matching assignment found for target table primaryKey field `id`")
+            // Insert initial data
+            spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, '2021-03-21')")
 
-          checkException(
-            s"""
-               |merge into $tableName as t0
-               |using (
-               |  select 1 as id, 'a1' as name, 11 as price, 1001 as ts, '2021-03-21' as dt
-               |) as s0
-               |on t0.id = s0.id
-               |when matched then update set
-               |  name = s0.name,
-               |  price = s0.price,
-               |  ts = s0.ts,
-               |  dt = s0.dt
-           """.stripMargin
-          )("No matching assignment found for target table primaryKey field `id`")
-        }
+            // Test 1: Update statements where at least one misses primary key assignment
+            if (tableType.equals("mor")) {
+              checkException(
+                s"""
+                   |merge into $tableName as t0
+                   |using (
+                   |  select 1 as id, 'a1' as name, 11 as price, 1001 as ts, '2021-03-21' as dt
+                   |) as s0
+                   |on t0.id = s0.id
+                   |when matched and s0.id = 1 then update set
+                   |  name = s0.name,
+                   |  price = s0.price,
+                   |  ts = s0.ts,
+                   |  dt = s0.dt
+                   |when matched and s0.id = 2 then update set *
+               """.stripMargin
+              )("No matching assignment found for target table record key field `id`")
 
-        // Test 2: At least one partial insert assignment clause misses primary key.
-        checkException(
-          s"""
-             |merge into $tableName as t0
-             |using (
-             |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
-             |) as s0
-             |on t0.id = s0.id
-             |when not matched and s0.id = 1 then insert (name, price, ts, dt)
-             |values (s0.name, s0.price, s0.ts, s0.dt)
-             |when not matched and s0.id = 2 then insert *
-           """.stripMargin
-        )("No matching assignment found for target table primaryKey field `id`")
+              checkException(
+                s"""
+                   |merge into $tableName as t0
+                   |using (
+                   |  select 1 as id, 'a1' as name, 11 as price, 1001 as ts, '2021-03-21' as dt
+                   |) as s0
+                   |on t0.id = s0.id
+                   |when matched then update set
+                   |  name = s0.name,
+                   |  price = s0.price,
+                   |  ts = s0.ts,
+                   |  dt = s0.dt
+               """.stripMargin
+              )("No matching assignment found for target table record key field `id`")
+            }
 
-        checkException(
-          s"""
-             |merge into $tableName as t0
-             |using (
-             |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
-             |) as s0
-             |on t0.id = s0.id
-             |when not matched then insert (name, price, ts, dt)
-             |values (s0.name, s0.price, s0.ts, s0.dt)
-           """.stripMargin
-        )("No matching assignment found for target table primaryKey field `id`")
+            // Test 2: At least one partial insert assignment clause misses primary key.
+            checkException(
+              s"""
+                 |merge into $tableName as t0
+                 |using (
+                 |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
+                 |) as s0
+                 |on t0.id = s0.id
+                 |when not matched and s0.id = 1 then insert (name, price, ts, dt)
+                 |values (s0.name, s0.price, s0.ts, s0.dt)
+                 |when not matched and s0.id = 2 then insert *
+               """.stripMargin
+            )("No matching assignment found for target table record key field `id`")
 
-        // Test 3: Partial insert at least one missing setting the preCombineField
-        checkException(
-          s"""
-             |merge into $tableName as t0
-             |using (
-             |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
-             |) as s0
-             |on t0.id = s0.id
-             |when not matched and s0.id = 1 then insert (id, name, price, dt)
-             |values (s0.id, s0.name, s0.price, s0.dt)
-             |when not matched and s0.id = 2 then insert *
-         """.stripMargin
-        )("No matching assignment found for target table pre-combine field `ts`")
+            checkException(
+              s"""
+                 |merge into $tableName as t0
+                 |using (
+                 |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
+                 |) as s0
+                 |on t0.id = s0.id
+                 |when not matched then insert (name, price, ts, dt)
+                 |values (s0.name, s0.price, s0.ts, s0.dt)
+               """.stripMargin
+            )("No matching assignment found for target table record key field `id`")
 
-        checkException(
-          s"""
-             |merge into $tableName as t0
-             |using (
-             |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
-             |) as s0
-             |on t0.id = s0.id
-             |when not matched then insert (id, name, price, dt)
-             |values (s0.id, s0.name, s0.price, s0.dt)
-         """.stripMargin
-        )("No matching assignment found for target table pre-combine field `ts`")
+            // Test 3: Partial insert missing preCombineField - only validate for EVENT_TIME_ORDERING
+            val mergeStmt =
+              s"""
+                 |merge into $tableName as t0
+                 |using (
+                 |  select 2 as id, 'a2' as name, 12 as price, 1002 as ts, '2021-03-21' as dt
+                 |) as s0
+                 |on t0.id = s0.id
+                 |when not matched and s0.id = 1 then insert (id, name, price, dt)
+                 |values (s0.id, s0.name, s0.price, s0.dt)
+                 |when not matched and s0.id = 2 then insert *
+               """.stripMargin
 
-        // Verify original data remains unchanged
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a1", 10.0, 1000, "2021-03-21")
-        )
-      })
+            if (mergeMode == "EVENT_TIME_ORDERING") {
+              checkException(mergeStmt)(
+                "No matching assignment found for target table precombine field `ts`"
+              )
+            } else {
+              // For COMMIT_TIME_ORDERING, this should execute without error
+              spark.sql(mergeStmt)
+            }
+
+            // Verify data state
+            if (mergeMode == "COMMIT_TIME_ORDERING") {
+              checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1")(
+                Seq(1, "a1", 10.0, 1000, "2021-03-21")
+              )
+            } else {
+              // For EVENT_TIME_ORDERING, original data should be unchanged due to exception
+              checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+                Seq(1, "a1", 10.0, 1000, "2021-03-21")
+              )
+            }
+          }
+        })
+      }
     }
   }
 
   test("Test merge into Allowed-patterns of assignment clauses") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = false")
+        withSparkSqlSessionConfig(DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "false") {
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  value int,
+               |  ts int
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | partitioned by(value)
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey ='id',
+               |  preCombineField = 'ts'
+               | )
+          """.stripMargin)
 
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  value int,
-             |  ts int
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | partitioned by(value)
-             | tblproperties (
-             |  type = '$tableType',
-             |  primaryKey ='id',
-             |  preCombineField = 'ts'
-             | )
-       """.stripMargin)
+          spark.sql(s"insert into $tableName select 1 as id, 'a1' as name, 10 as value, 1000 as ts")
 
-        spark.sql(s"insert into $tableName select 1 as id, 'a1' as name, 10 as value, 1000 as ts")
+          // Test case 1: COW primary key column is not mandatory in the update assignment clause.
+          // Covered by test "Test MergeInto with more than once update actions"
 
-        // Test case 1: COW primary key column is not mandatory in the update assignment clause.
-        // Covered by test "Test MergeInto with more than once update actions"
+          // Test case 2: When partial update feature is on, primary key column is not mandatory in the update
+          // assignment clause. Covered by test class org/apache/spark/sql/hudi/dml/TestPartialUpdateForMergeInto.scala.
 
-        // Test case 2: When partial update feature is on, primary key column is not mandatory in the update
-        // assignment clause. Covered by test class org/apache/spark/sql/hudi/dml/TestPartialUpdateForMergeInto.scala.
+          // Test case 3: Precombine key column is not mandatory in the update assignment clause.
+          spark.sql(
+            s"""
+               |merge into $tableName h0
+               |using (
+               |  select 1 as id, 1003 as ts
+               | ) s0
+               | on h0.id = s0.id
+               | when matched then update set h0.id = s0.id
+               |""".stripMargin)
 
-        // Test case 3: Precombine key column is not mandatory in the update assignment clause.
-        spark.sql(
-          s"""
-             |merge into $tableName h0
-             |using (
-             |  select 1 as id, 1003 as ts
-             | ) s0
-             | on h0.id = s0.id
-             | when matched then update set h0.id = s0.id
-             |""".stripMargin)
-
-        checkAnswer(s"select id, name, value, ts from $tableName")(
-          Seq(1, "a1", 10, 1000)
-        )
+          checkAnswer(s"select id, name, value, ts from $tableName")(
+            Seq(1, "a1", 10, 1000)
+          )
+        }
       }
     })
   }
