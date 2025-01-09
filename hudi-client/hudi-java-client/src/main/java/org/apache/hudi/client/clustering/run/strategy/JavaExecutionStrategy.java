@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.JavaTaskContextSupplier;
 import org.apache.hudi.client.utils.LazyConcatenatingIterator;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -43,7 +42,6 @@ import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -193,11 +191,7 @@ public abstract class JavaExecutionStrategy<T>
 
   @Override
   protected Option<BaseKeyGenerator> getKeyGenerator() {
-    try {
-      return Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(writeConfig.getProps())));
-    } catch (IOException e) {
-      throw new HoodieClusteringException("Error creating key generator", e);
-    }
+    return Option.empty();
   }
 
   @Override
