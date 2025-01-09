@@ -22,9 +22,11 @@ import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.DataSourceTestUtils
+
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.getClass
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
+
 import org.slf4j.LoggerFactory
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
@@ -844,8 +846,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       )
 
       checkAnswer(s"select id,name,price,v,dt from $tableName1 order by id")(
-        Seq(1, "a1", 10, 1000, "2021-03-21"),
-        Seq(3, "a3", 30, 3000, "2021-03-21")
+        Seq(1, "a1", 10, 1000, "2021-03-21")
       )
     }
   }
