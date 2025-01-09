@@ -107,8 +107,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
   }
 
   def isHudiCallCommand(name: Seq[String]): Boolean = {
-    val builder = HoodieProcedures.newBuilder(name.last)
-    builder != null;
+    name.nonEmpty && HoodieProcedures.newBuilder(name.last) != null
   }
 
   /**
