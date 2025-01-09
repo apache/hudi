@@ -755,6 +755,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withSecondaryIndexParallelism(int parallelism) {
+      metadataConfig.setValue(SECONDARY_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());

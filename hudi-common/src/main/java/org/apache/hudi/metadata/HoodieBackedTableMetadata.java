@@ -42,7 +42,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -67,7 +66,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -75,7 +73,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
@@ -801,52 +798,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Map<String, String> getSecondaryKeysForRecordKeys(List<String> recordKeys, String partitionName) {
-    if (recordKeys.isEmpty()) {
-      return Collections.emptyMap();
-    }
-
-    // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
-    List<FileSlice> partitionFileSlices =
-        partitionFileSliceMap.computeIfAbsent(partitionName, k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
-    if (partitionFileSlices.isEmpty()) {
-      return Collections.emptyMap();
-    }
-
-    // Parallel lookup keys from each file slice
-    Map<String, String> reverseSecondaryKeyMap = new HashMap<>(recordKeys.size());
-    getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Lookup secondary keys from metadata table partition " + partitionName);
-    List<Pair<String, String>> secondaryToRecordKeyPairList = getEngineContext().flatMap(partitionFileSlices,
-        (SerializableFunction<FileSlice, Stream<Pair<String, String>>>) v1 -> reverseLookupSecondaryKeys(partitionName, recordKeys, v1)
-            .entrySet().stream()
-            .map(entry -> Pair.of(entry.getKey(), entry.getValue())).collect(Collectors.toList()).stream(), partitionFileSlices.size());
-
-    secondaryToRecordKeyPairList.forEach(pair -> reverseSecondaryKeyMap.put(pair.getKey(), pair.getValue()));
-    return reverseSecondaryKeyMap;
-  }
-
-  private Map<String, String> reverseLookupSecondaryKeys(String partitionName, List<String> recordKeys, FileSlice fileSlice) {
-    Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers = getOrCreateReaders(partitionName, fileSlice);
-    try {
-      HoodieSeekingFileReader<?> baseFileReader = readers.getKey();
-      HoodieMetadataLogRecordReader logRecordScanner = readers.getRight();
-      if (baseFileReader == null && logRecordScanner == null) {
-        return Collections.emptyMap();
-      }
-      Set<String> keySet = new HashSet<>(recordKeys);
-      Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords =
-          fetchBaseFileAllRecordsByPayloadForSecIndex(baseFileReader, keySet, partitionName);
-      return reverseLookupSecondaryKeysInternal(keySet, baseFileRecords, logRecordScanner);
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error merging records from metadata table for  " + recordKeys.size() + " key : ", ioe);
-    } finally {
-      if (!reuse) {
-        closeReader(readers);
-      }
-    }
-  }
-
-  @Override
   public Map<String, Set<String>> getSecondaryIndexRecords(List<String> keys, String partitionName) {
     if (keys.isEmpty()) {
       return Collections.emptyMap();
@@ -865,67 +816,5 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .collectAsList()
         .stream()
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
-  }
-
-  private Map<String, HoodieRecord<HoodieMetadataPayload>> fetchBaseFileAllRecordsByPayloadForSecIndex(HoodieSeekingFileReader reader, Set<String> keySet, String partitionName) throws IOException {
-    if (reader == null) {
-      // No base file at all
-      return Collections.emptyMap();
-    }
-
-    ClosableIterator<HoodieRecord<?>> recordIterator = reader.getRecordIterator();
-
-    return toStream(recordIterator).map(record -> {
-      GenericRecord data = (GenericRecord) record.getData();
-      return composeRecord(data, partitionName);
-    }).filter(record -> {
-      return keySet.contains(SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey()));
-    }).collect(Collectors.toMap(HoodieRecord::getRecordKey, record -> record));
-  }
-
-  @VisibleForTesting
-  public static Map<String, String> reverseLookupSecondaryKeysInternal(Set<String> recordKeySet,
-                                                                       Map<String, HoodieRecord<HoodieMetadataPayload>> baseFileRecords,
-                                                                       HoodieMetadataLogRecordReader logRecordScanner) {
-    Set<String> deletedRecordsFromLogs = new HashSet<>();
-    Map<String, HoodieRecord<HoodieMetadataPayload>> logRecordsMap = new HashMap<>();
-    // Note that: we read the log records from the oldest to the latest!!!
-    // If we change the read order, we need update the following logic accordingly.
-    logRecordScanner.getRecords().forEach(logRecord -> {
-      String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(logRecord.getRecordKey());
-      if (recordKeySet.contains(recordKey)) {
-        HoodieMetadataPayload payload = logRecord.getData();
-        if (!payload.isDeleted()) { // process only valid records.
-          logRecordsMap.put(logRecord.getRecordKey(), logRecord);
-        } else {
-          deletedRecordsFromLogs.add(logRecord.getRecordKey());
-        }
-      }
-    });
-
-    Map<String, String> recordKeyMap = new HashMap<>();
-    if (baseFileRecords == null || baseFileRecords.isEmpty()) {
-      logRecordsMap.forEach((key, value) -> {
-        if (!value.getData().secondaryIndexMetadata.getIsDeleted()) {
-          recordKeyMap.put(
-              SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(key),
-              SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
-        }
-      });
-    } else {
-      // Iterate over all provided log-records, merging them into existing records
-      logRecordsMap.forEach((key, value) -> baseFileRecords.merge(key, value, (oldRecord, newRecord) -> {
-        Option<HoodieRecord<HoodieMetadataPayload>> mergedRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldRecord, newRecord);
-        return mergedRecord.orElse(null);
-      }));
-      baseFileRecords.forEach((key, value) -> {
-        if (!deletedRecordsFromLogs.contains(key)) {
-          recordKeyMap.put(
-              SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(value.getRecordKey()),
-              SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(value.getRecordKey()));
-        }
-      });
-    }
-    return recordKeyMap;
   }
 }
