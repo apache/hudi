@@ -617,6 +617,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   /**
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
    * handle it.
+   * TODO:
+   * 1. what is the purpose of this method? should the HoodieRecord be added to a queue and consumed by an iterator?
    */
   private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
     checkState(partitionNameOverrideOpt.isPresent() || partitionPathFieldOpt.isPresent(),
@@ -675,6 +677,7 @@ public abstract class AbstractHoodieLogRecordScanner {
           processDataBlock((HoodieDataBlock) lastBlock, keySpecOpt);
           break;
         case DELETE_BLOCK:
+          // TODO: same question as processDataBlock
           Arrays.stream(((HoodieDeleteBlock) lastBlock).getRecordsToDelete()).forEach(this::processNextDeletedRecord);
           break;
         case CORRUPT_BLOCK:
@@ -797,7 +800,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     return validBlockInstants;
   }
 
-  private Pair<ClosableIterator<HoodieRecord>, Schema> getRecordsIterator(
+  protected Pair<ClosableIterator<HoodieRecord>, Schema> getRecordsIterator(
       HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
     ClosableIterator<HoodieRecord> blockRecordsIterator;
     if (keySpecOpt.isPresent()) {

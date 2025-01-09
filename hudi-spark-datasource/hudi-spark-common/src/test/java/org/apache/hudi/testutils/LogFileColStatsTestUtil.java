@@ -33,6 +33,7 @@ import org.apache.spark.sql.catalyst.expressions.GenericRow;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -59,12 +60,21 @@ public class LogFileColStatsTestUtil {
           .withBufferSize(maxBufferSize)
           .withLatestInstantTime(latestCommitTime)
           .withReaderSchema(writerSchemaOpt.get())
-          .withLogRecordScannerCallback(records::add)
           .build();
-      scanner.scan();
+
+      Iterator<HoodieRecord<?>> recordIterator = scanner.iterator();
+      while (recordIterator.hasNext()) {
+        try {
+          records.add(recordIterator.next());
+        } catch (Exception e) {
+          throw new HoodieException("Error while inserting record into queue", e);
+        }
+      }
+
       if (records.isEmpty()) {
         return Option.empty();
       }
+
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
           collectColumnRangeMetadata(records, fieldsToIndex, filePath, writerSchemaOpt.get());
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>(columnRangeMetadataMap.values());

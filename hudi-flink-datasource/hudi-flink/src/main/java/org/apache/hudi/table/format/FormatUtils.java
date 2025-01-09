@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -237,10 +238,16 @@ public class FormatUtils {
     ) {
       List<HoodieProducer<HoodieRecord<?>>> producers = new ArrayList<>();
       producers.add(new FunctionBasedQueueProducer<>(queue -> {
-        HoodieUnMergedLogRecordScanner scanner =
-            scannerBuilder.withLogRecordScannerCallback(queue::insertRecord).build();
-        // Scan all the delta-log files, filling in the queue
-        scanner.scan();
+        HoodieUnMergedLogRecordScanner scanner = scannerBuilder.build();
+        // Use the iterator to process records
+        Iterator<HoodieRecord<?>> recordIterator = scanner.iterator();
+        while (recordIterator.hasNext()) {
+          try {
+            queue.insertRecord(recordIterator.next());
+          } catch (Exception e) {
+            throw new HoodieException("Error while inserting record into queue", e);
+          }
+        }
         return null;
       }));
 
