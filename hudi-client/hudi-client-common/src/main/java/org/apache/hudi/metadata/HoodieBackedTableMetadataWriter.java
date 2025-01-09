@@ -110,7 +110,6 @@ import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWr
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
@@ -568,15 +567,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   /**
    * Generates expression index records
+   *
    * @param partitionFilePathAndSizeTriplet Triplet of file path, file size and partition name to which file belongs
-   * @param indexDefinition Hoodie Index Definition for the expression index for which records need to be generated
-   * @param metaClient Hoodie Table Meta Client
-   * @param parallelism Parallelism to use for engine operations
-   * @param readerSchema Schema of reader
-   * @param storageConf Storage Config
-   * @param instantTime Instant time
-   * @param shouldGeneratePartitionStatRecords Whether partition stat records need to be generated along with the file level expression index
-   *                                           records. Partition stat records need to be generated when bootstrapping the index
+   * @param indexDefinition                 Hoodie Index Definition for the expression index for which records need to be generated
+   * @param metaClient                      Hoodie Table Meta Client
+   * @param parallelism                     Parallelism to use for engine operations
+   * @param readerSchema                    Schema of reader
+   * @param storageConf                     Storage Config
+   * @param instantTime                     Instant time
    * @return HoodieData wrapper of expression index HoodieRecords
    */
   protected abstract HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
@@ -584,7 +582,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                                         HoodieTableMetaClient metaClient,
                                                                         int parallelism, Schema readerSchema,
                                                                         StorageConfiguration<?> storageConf,
-                                                                        String instantTime, boolean shouldGeneratePartitionStatRecords);
+                                                                        String instantTime);
 
   protected abstract EngineType getEngineType();
 
@@ -609,8 +607,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     int fileGroupCount = dataWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
     int parallelism = Math.min(partitionFilePathSizeTriplet.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
     Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient);
-    return Pair.of(fileGroupCount, getExpressionIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime,
-        indexDefinition.getIndexType().equals(PARTITION_NAME_COLUMN_STATS)));
+    return Pair.of(fileGroupCount, getExpressionIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime));
   }
 
   HoodieIndexDefinition getIndexDefinition(String indexName) {
@@ -1155,7 +1152,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param instantTime    timestamp at of the current update commit
    */
   protected HoodieData<HoodieRecord> getExpressionIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
-    throw new UnsupportedOperationException("");
+    throw new UnsupportedOperationException("Expression Index only supported with SPARK engine.");
   }
 
   private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap,

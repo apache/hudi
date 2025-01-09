@@ -76,7 +76,6 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,6 +101,10 @@ import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createBloomFilterMetadataRecord;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createColumnStatsRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
@@ -132,7 +135,6 @@ public class SparkMetadataWriterUtils {
     };
   }
 
-  @NotNull
   public static List<Row> getRowsWithExpressionIndexMetadata(List<Row> rowsForFilePath, String partition, String filePath, long fileSize) {
     return rowsForFilePath.stream().map(row -> {
       scala.collection.immutable.Seq<Object> indexMetadata = JavaScalaConverters.convertJavaListToScalaList(Arrays.asList(partition, filePath, fileSize));
@@ -147,15 +149,15 @@ public class SparkMetadataWriterUtils {
 
   @SuppressWarnings("checkstyle:LineLength")
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex, String columnToIndex,
-                                                                                             Option<java.util.function.Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
+                                                                                             Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
     // Aggregate col stats related data for the column to index
     Dataset<Row> columnRangeMetadataDataset = dataset
         .select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
         .groupBy(SparkMetadataWriterUtils.getExpressionIndexColumns())
-        .agg(functions.count(functions.when(functions.col(columnToIndex).isNull(), 1)).alias("nullCount"),
-            functions.min(columnToIndex).alias("minValue"),
-            functions.max(columnToIndex).alias("maxValue"),
-            functions.count(columnToIndex).alias("valueCount"));
+        .agg(functions.count(functions.when(functions.col(columnToIndex).isNull(), 1)).alias(COLUMN_STATS_FIELD_NULL_COUNT),
+            functions.min(columnToIndex).alias(COLUMN_STATS_FIELD_MIN_VALUE),
+            functions.max(columnToIndex).alias(COLUMN_STATS_FIELD_MAX_VALUE),
+            functions.count(columnToIndex).alias(COLUMN_STATS_FIELD_VALUE_COUNT));
     // Generate column stat records using the aggregated data
     HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> rangeMetadataHoodieJavaRDD = HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD())
         .flatMapToPair((SerializableFunction<Row, Iterator<? extends Pair<String, HoodieColumnRangeMetadata<Comparable>>>>)
@@ -186,6 +188,7 @@ public class SparkMetadataWriterUtils {
             });
 
     if (partitionRecordsFunctionOpt.isPresent()) {
+      // TODO: make this configurable
       rangeMetadataHoodieJavaRDD.persist("MEMORY_AND_DISK_SER");
     }
     HoodieData<HoodieRecord> colStatRecords = rangeMetadataHoodieJavaRDD.map(pair ->
@@ -208,7 +211,7 @@ public class SparkMetadataWriterUtils {
     Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
         // row.get(1) refers to partition path value and row.get(2) refers to file name.
         .groupByKey((MapFunction<Row, Pair>) row -> Pair.of(row.getString(1), row.getString(2)), Encoders.kryo(Pair.class))
-        .flatMapGroups((FlatMapGroupsFunction<Pair, Row, HoodieRecord>)  ((pair, iterator) -> {
+        .flatMapGroups((FlatMapGroupsFunction<Pair, Row, HoodieRecord>) ((pair, iterator) -> {
           String partition = pair.getLeft().toString();
           String relativeFilePath = pair.getRight().toString();
           String fileName = FSUtils.getFileName(relativeFilePath, partition);
@@ -281,17 +284,18 @@ public class SparkMetadataWriterUtils {
 
   /**
    * Generates expression index records
+   *
    * @param partitionFilePathAndSizeTriplet Triplet of file path, file size and partition name to which file belongs
-   * @param indexDefinition Hoodie Index Definition for the expression index for which records need to be generated
-   * @param metaClient Hoodie Table Meta Client
-   * @param parallelism Parallelism to use for engine operations
-   * @param readerSchema Schema of reader
-   * @param instantTime Instant time
-   * @param engineContext HoodieEngineContext
-   * @param dataWriteConfig Write Config for the data table
-   * @param metadataWriteConfig Write config for the metadata table
-   * @param partitionRecordsFunctionOpt Function used to generate partition stat records for the EI. It takes the column range metadata generated for the provided partition files as input
-   *                                    and uses those to generate the final partition stats
+   * @param indexDefinition                 Hoodie Index Definition for the expression index for which records need to be generated
+   * @param metaClient                      Hoodie Table Meta Client
+   * @param parallelism                     Parallelism to use for engine operations
+   * @param readerSchema                    Schema of reader
+   * @param instantTime                     Instant time
+   * @param engineContext                   HoodieEngineContext
+   * @param dataWriteConfig                 Write Config for the data table
+   * @param metadataWriteConfig             Write config for the metadata table
+   * @param partitionRecordsFunctionOpt     Function used to generate partition stat records for the EI. It takes the column range metadata generated for the provided partition files as input
+   *                                        and uses those to generate the final partition stats
    * @return ExpressionIndexComputationMetadata containing both EI column stat records and partition stat records if partitionRecordsFunctionOpt is provided
    */
   @SuppressWarnings("checkstyle:LineLength")
@@ -339,8 +343,8 @@ public class SparkMetadataWriterUtils {
     }
   }
 
-  private static Iterator<Row> getExpressionIndexRecordsIterator(HoodieTableMetaClient metaClient, Schema readerSchema, HoodieWriteConfig dataWriteConfig, Pair<String, Pair<String, Long>> entry,
-                                                       SQLContext sqlContext) {
+  private static Iterator<Row> getExpressionIndexRecordsIterator(HoodieTableMetaClient metaClient, Schema readerSchema, HoodieWriteConfig dataWriteConfig,
+                                                                 Pair<String, Pair<String, Long>> entry, SQLContext sqlContext) {
     String partition = entry.getKey();
     Pair<String, Long> filePathSizePair = entry.getValue();
     String filePath = filePathSizePair.getKey();
@@ -358,8 +362,8 @@ public class SparkMetadataWriterUtils {
    *
    * @param commitMetadata Hoodie commit metadata
    * @param indexPartition Partition name for the expression index
-   * @param engineContext  Hoodie engine context
-   * @param tableMetadata
+   * @param engineContext  Engine context
+   * @param tableMetadata  Metadata table reader
    * @param dataMetaClient Data table meta client
    * @param metadataConfig Hoodie metadata config
    * @return HoodiePairData of partition name and list of column range metadata for the partitions
@@ -424,7 +428,6 @@ public class SparkMetadataWriterUtils {
                 .collectAsList();
         return Pair.of(partitionName, partitionColumnMetadata);
       });
-
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);
     }
