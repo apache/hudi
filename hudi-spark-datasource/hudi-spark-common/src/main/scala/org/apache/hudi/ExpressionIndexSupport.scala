@@ -34,7 +34,7 @@ import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.common.util.{StringUtils, collection}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.expression.HoodieExpressionIndex
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.{PARTITION_NAME_COLUMN_STATS, getPartitionStatsIndexKey}
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
@@ -118,7 +118,8 @@ class ExpressionIndexSupport(spark: SparkSession,
                 //       column in a filter does not have the stats available, by making sure such a
                 //       filter does not prune any partition.
                 val indexSchema = transposedPartitionStatsDF.schema
-                val indexFilter = Seq(expressionIndexQuery).map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema, isExpressionIndex = true)).reduce(And)
+                val indexedCols : Seq[String] = indexDefinition.getSourceFields.asScala.toSeq
+                val indexFilter = Seq(expressionIndexQuery).map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex = true, indexedCols = indexedCols)).reduce(And)
                 Some(transposedPartitionStatsDF.where(new Column(indexFilter))
                   .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
                   .collect()

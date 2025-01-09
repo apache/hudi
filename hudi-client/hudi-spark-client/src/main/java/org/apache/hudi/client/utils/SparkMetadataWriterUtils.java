@@ -38,7 +38,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
@@ -83,7 +82,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -188,7 +186,7 @@ public class SparkMetadataWriterUtils {
             });
 
     if (partitionRecordsFunctionOpt.isPresent()) {
-      // TODO: make this configurable
+      // TODO: HUDI-8848: Allow configurable storage level while computing expression index update
       rangeMetadataHoodieJavaRDD.persist("MEMORY_AND_DISK_SER");
     }
     HoodieData<HoodieRecord> colStatRecords = rangeMetadataHoodieJavaRDD.map(pair ->
@@ -371,12 +369,10 @@ public class SparkMetadataWriterUtils {
   public static HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> getExpressionIndexPartitionStatUpdates(HoodieCommitMetadata commitMetadata, String indexPartition,
                                                                                                                            HoodieEngineContext engineContext, HoodieTableMetadata tableMetadata,
                                                                                                                            HoodieTableMetaClient dataMetaClient, HoodieMetadataConfig metadataConfig) {
-    List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
-        .flatMap(Collection::stream).collect(Collectors.toList());
-    if (allWriteStats.isEmpty()) {
-      return engineContext.emptyHoodieData().mapToPair(o -> Pair.of("", new ArrayList<>()));
-    }
+    // In this function we iterate over all the partitions modified by the commit and fetch the latest files in those partitions
+    // We fetch stored Expression index records for these latest files and return HoodiePairData of partition name and list of column range metadata of these files
 
+    // Step 1: Validate that partition stats is supported for the column data type
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexPartition, dataMetaClient);
     List<String> columnsToIndex = Collections.singletonList(indexDefinition.getSourceFields().get(0));
     try {
@@ -396,17 +392,13 @@ public class SparkMetadataWriterUtils {
       if (validColumnsToIndex.isEmpty()) {
         return engineContext.emptyHoodieData().mapToPair(o -> Pair.of("", new ArrayList<>()));
       }
-      LOG.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
-      // Group by partitionPath and then gather write stats lists,
-      // where each inner list contains HoodieWriteStat objects that have the same partitionPath.
-      List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(allWriteStats.stream()
-          .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath))
-          .values());
 
+      // Step 2: Compute expression index records for the modified partitions
+      LOG.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
+      List<String> partitionPaths = new ArrayList<>(commitMetadata.getWritePartitionPaths());
       HoodieTableFileSystemView fileSystemView = getFileSystemView(dataMetaClient);
-      int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-      return engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
-        final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
+      int parallelism = Math.max(Math.min(partitionPaths.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
+      return engineContext.parallelize(partitionPaths, parallelism).mapToPair(partitionName -> {
         checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
         // Collect Column Metadata for Each File part of active file system view of latest snapshot
         // Get all file names, including log files, in a set from the file slices
