@@ -103,7 +103,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           // Use the same base path as above
           spark.sql(s"""CREATE TABLE $tableName USING hudi LOCATION '$basePath'""")
           // create expression index
-          spark.sql(s"""create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd HH:mm');""")
+          spark.sql(s"""create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd HH:mm')""")
           // ts=100000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-02'
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 100000)")
           // ts=10000000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'
@@ -1163,7 +1163,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
           s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
           Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-D", "RIDER-F"),
+          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-D", "RIDER-F")
         )
 
         spark.sql(s"update $tableName set rider = 'rider-G' where id = 'trip5'")
@@ -1178,7 +1178,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
           s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
           Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), partitionMinRiderValue, "RIDER-G"),
+          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), partitionMinRiderValue, "RIDER-G")
         )
 
         if (isTableMOR) {
@@ -1195,7 +1195,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') " +
           s"where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
           Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=california", "rider"), "RIDER-A", "RIDER-C"),
-          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-E", "RIDER-H"),
+          Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "state=texas", "rider"), "RIDER-E", "RIDER-H")
         )
 
         if (isTableMOR) {
