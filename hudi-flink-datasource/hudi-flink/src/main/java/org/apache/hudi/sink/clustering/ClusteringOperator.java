@@ -169,7 +169,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.table = writeClient.getHoodieTable();
 
     this.schema = AvroSchemaConverter.convertToSchema(rowType);
-    this.readerSchema = this.schema;
+    this.readerSchema = reconcileSchemaWithRecordKeyNullability(schema);
     this.requiredPos = getRequiredPositions();
 
     this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType);
@@ -286,7 +286,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .withStorage(table.getStorage())
             .withBasePath(table.getMetaClient().getBasePath())
             .withLogFilePaths(clusteringOp.getDeltaFilePaths())
-            .withReaderSchema(reconcileSchemaWithRecordKeyNullability(readerSchema))
+            .withReaderSchema(readerSchema)
             .withLatestInstantTime(instantTime)
             .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
             .withReverseReader(writeConfig.getCompactionReverseLogReadEnabled())
@@ -328,13 +328,12 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     List<Iterator<RowData>> iteratorsForPartition = clusteringOps.stream().map(clusteringOp -> {
       Iterable<IndexedRecord> indexedRecords = () -> {
         try {
-          Schema reconciledSchema = reconcileSchemaWithRecordKeyNullability(readerSchema);
           HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorage())
               .getReaderFactory(table.getConfig().getRecordMerger().getRecordType());
           HoodieAvroFileReader fileReader = (HoodieAvroFileReader) fileReaderFactory.getFileReader(
               table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
 
-          return new CloseableMappingIterator<>(fileReader.getRecordIterator(reconciledSchema), HoodieRecord::getData);
+          return new CloseableMappingIterator<>(fileReader.getRecordIterator(readerSchema), HoodieRecord::getData);
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);
@@ -357,10 +356,12 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
    */
   private Schema reconcileSchemaWithRecordKeyNullability(Schema schema) {
     Option<String[]> recordKeyOp = table.getMetaClient().getTableConfig().getRecordKeyFields();
-    if (recordKeyOp.isEmpty()) {
+    List<String> fieldNames = rowType.getFieldNames();
+    // check if table has valid record keys.
+    if (recordKeyOp.isEmpty() || Arrays.stream(recordKeyOp.get()).anyMatch(s -> !fieldNames.contains(s))) {
       return schema;
     }
-    return AvroSchemaUtils.createSchemaWithNullabilityUpdate(schema, Arrays.asList(recordKeyOp.get()), true);
+    return AvroSchemaUtils.forceNullableColumns(schema, Arrays.asList(recordKeyOp.get()), true);
   }
 
   /**

@@ -605,14 +605,16 @@ public class AvroSchemaUtils {
    * @param nullable nullability of column type
    * @return a new schema with the nullabilities of the given columns updated
    */
-  public static Schema createSchemaWithNullabilityUpdate(
+  public static Schema forceNullableColumns(
           Schema schema, List<String> nullableUpdateCols, boolean nullable) {
-    if (nullableUpdateCols.isEmpty()) {
+    List<String> filterCols = nullableUpdateCols.stream()
+            .filter(col -> schema.getField(col).schema().isNullable() != nullable).collect(Collectors.toList());
+    if (filterCols.isEmpty()) {
       return schema;
     }
     InternalSchema internalSchema = convert(schema);
     TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(internalSchema);
-    schemaChange = reduce(nullableUpdateCols, schemaChange,
+    schemaChange = reduce(filterCols, schemaChange,
             (change, field) -> change.updateColumnNullability(field, nullable));
     return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
   }
