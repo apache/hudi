@@ -48,8 +48,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,10 +76,10 @@ public class ITTestBucketStreamWrite {
     // this test is to ensure that the correct fileId can be fetched when recovering from a rollover when a new
     // fileGroup is created for a bucketId
     String tablePath = tempFile.getAbsolutePath();
-    doWrite(tablePath, isCow);
-    doDeleteCommit(tablePath, isCow);
-    doWrite(tablePath, isCow);
-    doWrite(tablePath, isCow);
+    doWrite(tablePath, isCow, 1);
+    doDeleteCommit(tablePath);
+    doWrite(tablePath, isCow, 1);
+    doWrite(tablePath, isCow, 1);
 
     if (isCow) {
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
@@ -91,7 +89,7 @@ public class ITTestBucketStreamWrite {
     }
   }
 
-  private static void doDeleteCommit(String tablePath, boolean isCow) throws Exception {
+  private static void doDeleteCommit(String tablePath) throws Exception {
     // create metaClient
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tablePath);
 
@@ -127,16 +125,7 @@ public class ITTestBucketStreamWrite {
     });
   }
 
-  private static String getWriteToken(String relativeFilePath) {
-    Pattern writeTokenPattern = Pattern.compile("_((\\d+)-(\\d+)-(\\d+))_");
-    Matcher matcher = writeTokenPattern.matcher(relativeFilePath);
-    if (!matcher.find()) {
-      throw new RuntimeException("Invalid relative file path: " + relativeFilePath);
-    }
-    return matcher.group(1);
-  }
-
-  private static void doWrite(String path, boolean isCow) throws InterruptedException, ExecutionException {
+  private static void doWrite(String path, boolean isCow, int bucketNum) throws InterruptedException, ExecutionException {
     // create hoodie table and perform writes
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
@@ -146,7 +135,7 @@ public class ITTestBucketStreamWrite {
     // use bucket index
     options.put(FlinkOptions.TABLE_TYPE.key(), isCow ? FlinkOptions.TABLE_TYPE_COPY_ON_WRITE : FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     options.put(FlinkOptions.INDEX_TYPE.key(), IndexType.BUCKET.name());
-    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), "1");
+    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), String.valueOf(bucketNum));
 
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
