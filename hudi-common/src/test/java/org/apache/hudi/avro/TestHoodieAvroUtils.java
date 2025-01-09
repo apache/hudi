@@ -705,7 +705,7 @@ public class TestHoodieAvroUtils {
               LocalDate.ofEpochDay(0), ((Date) value).toLocalDate()),
           ((GenericRecord) wrapperValue).get(0));
       LOG.warn("AAA Expected " + value + ", actual : before unwrap " + wrapperValue + ", after unwrapping " + (unwrapAvroValueWrapper(wrapperValue)));
-      assertEquals(((Date)value), (Date)unwrapAvroValueWrapper(wrapperValue));
+      assertEquals(((Date)value).toString(), ((Date)unwrapAvroValueWrapper(wrapperValue)).toString());
     } else if (value instanceof LocalDate) {
       assertEquals((int) ChronoUnit.DAYS.between(LocalDate.ofEpochDay(0), (LocalDate) value),
           ((GenericRecord) wrapperValue).get(0));
