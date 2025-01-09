@@ -165,7 +165,8 @@ public class HoodieStreamer implements Serializable {
         cfg.runBootstrap ? null : new StreamSyncService(cfg, sparkEngineContext, fs, conf, Option.ofNullable(this.properties), sourceProfileSupplier));
   }
 
-  private static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
+  @VisibleForTesting
+  public static TypedProperties combineProperties(Config cfg, Option<TypedProperties> propsOverride, Configuration hadoopConf) {
     HoodieConfig hoodieConfig = new HoodieConfig();
     // Resolving the properties in a consistent way:
     //   1. Properties override always takes precedence

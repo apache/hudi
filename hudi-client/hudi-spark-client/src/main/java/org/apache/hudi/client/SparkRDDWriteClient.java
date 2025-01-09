@@ -357,7 +357,7 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected void releaseResources(String instantTime) {
+  public void releaseResources(String instantTime) {
     super.releaseResources(instantTime);
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
   }

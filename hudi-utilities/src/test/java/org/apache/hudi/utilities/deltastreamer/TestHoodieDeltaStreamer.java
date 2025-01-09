@@ -24,6 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkRecordMerger;
 import org.apache.hudi.HoodieSparkUtils$;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -80,6 +81,7 @@ import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieIndexer;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.SourceTestConfig;
@@ -147,6 +149,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1003,6 +1006,75 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertFalse(meta.getFs().exists(new Path(replacedFilePath)));
     }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  /**
+   * Tests that we release resources even on failures scenarios.
+   * @param testFailureCase
+   * @throws Exception
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testReleaseResources(boolean testFailureCase) throws Exception {
+    String tableBasePath = basePath + "/inlineClusteringPending";
+    int totalRecords = 1000;
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.continuousMode = false;
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+    cfg.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    ds.sync();
+    ds.shutdownGracefully();
+    // assert ingest successful
+    TestHelpers.assertAtLeastNCommits(1, tableBasePath, fs);
+
+    // schedule a clustering job to build a clustering plan and leave it in pending state.
+    HoodieClusteringJob clusteringJob = initialHoodieClusteringJob(tableBasePath, null, false, "schedule");
+    clusteringJob.cluster(0);
+    HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tableBasePath).build();
+    assertEquals(1, tableMetaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants().size());
+
+    // do another ingestion with inline clustering enabled
+    cfg.configs.addAll(getTableServicesConfigs(totalRecords, "false", "true", "2", "", ""));
+    // based on if we want to test happy path or failure scenario, set the right value for retryLastPendingInlineClusteringJob.
+    cfg.retryLastPendingInlineClusteringJob = !testFailureCase;
+    TypedProperties properties = HoodieStreamer.combineProperties(cfg, Option.empty(), jsc.hadoopConfiguration());
+    SchemaProvider schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, properties, jsc),
+        properties, jsc, cfg.transformerClassNames);
+
+    try (TestReleaseResourcesStreamSync streamSync = new TestReleaseResourcesStreamSync(cfg, sparkSession, schemaProvider, properties,
+        jsc, fs, jsc.hadoopConfiguration(), client -> true)) {
+      assertTrue(streamSync.releaseResourcesCalledSet.isEmpty());
+      try {
+        streamSync.syncOnce();
+        if (testFailureCase) {
+          fail("Should not reach here when there is conflict w/ pending clustering and when retryLastPendingInlineClusteringJob is set to false");
+        }
+      } catch (HoodieException e) {
+        if (!testFailureCase) {
+          fail("Should not reach here when retryLastPendingInlineClusteringJob is set to true");
+        }
+      }
+
+      tableMetaClient = HoodieTableMetaClient.reload(tableMetaClient);
+      Option<HoodieInstant> failedInstant = tableMetaClient.getActiveTimeline().getCommitTimeline().lastInstant();
+      assertTrue(failedInstant.isPresent());
+      assertTrue(testFailureCase ? !failedInstant.get().isCompleted() : failedInstant.get().isCompleted());
+
+      if (testFailureCase) {
+        // validate that release resource is invoked
+        assertEquals(1, streamSync.releaseResourcesCalledSet.size());
+        assertTrue(streamSync.releaseResourcesCalledSet.contains(failedInstant.get().getTimestamp()));
+      } else {
+        assertTrue(streamSync.releaseResourcesCalledSet.isEmpty());
+      }
+
+      // validate heartbeat is closed or expired.
+      HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
+          (long) HoodieWriteConfig.CLIENT_HEARTBEAT_INTERVAL_IN_MS.defaultValue(), HoodieWriteConfig.CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
+      assertTrue(heartbeatClient.isHeartbeatExpired(failedInstant.get().getTimestamp()));
+      heartbeatClient.close();
+    }
   }
 
   private List<String> getAllMultiWriterConfigs() {
@@ -3103,6 +3175,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     public Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline) throws IOException {
       return super.getLatestCommitMetadataWithValidCheckpointInfo(timeline);
+    }
+  }
+
+  class TestReleaseResourcesStreamSync extends DeltaSync {
+
+    private final Set<String> releaseResourcesCalledSet = new HashSet<>();
+
+    public TestReleaseResourcesStreamSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider, TypedProperties props,
+                                          JavaSparkContext jssc, FileSystem fs, Configuration conf,
+                                          Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+      super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
+    }
+
+    @Override
+    protected void releaseResources(String instantTime) {
+      super.releaseResources(instantTime);
+      releaseResourcesCalledSet.add(instantTime);
     }
   }
 
