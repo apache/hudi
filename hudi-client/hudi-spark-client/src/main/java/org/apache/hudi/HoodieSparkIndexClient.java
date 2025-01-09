@@ -41,7 +41,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StorageSchemes;
-import org.apache.hudi.table.action.index.functional.BaseHoodieIndexClient;
+import org.apache.hudi.table.action.index.BaseHoodieIndexClient;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -61,6 +61,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.index.HoodieIndexUtils.register;
 import static org.apache.hudi.index.expression.ExpressionIndexSparkFunctions.IDENTITY_FUNCTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;

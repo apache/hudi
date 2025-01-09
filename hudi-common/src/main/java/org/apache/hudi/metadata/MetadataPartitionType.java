@@ -23,10 +23,12 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.generic.GenericRecord;
@@ -82,6 +84,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_REC
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_IS_DELETED;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsRecords;
 
@@ -469,6 +472,23 @@ public enum MetadataPartitionType {
       }
     }
     throw new IllegalArgumentException("No MetadataPartitionType for partition path: " + partitionPath);
+  }
+
+  /**
+   * Given metadata config and table config, determine whether a new index definition is required.
+   */
+  public static boolean isNewSecondaryIndexDefinitionRequired(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
+    String secondaryIndexColumn = metadataConfig.getSecondaryIndexColumn();
+    if (StringUtils.isNullOrEmpty(secondaryIndexColumn)) {
+      return false;
+    }
+    // check the index definition already exists or not for this column
+    return dataMetaClient.getIndexMetadata().isEmpty() || !isIndexDefinitionPresentForColumn(secondaryIndexColumn, PARTITION_NAME_SECONDARY_INDEX, dataMetaClient);
+  }
+
+  private static boolean isIndexDefinitionPresentForColumn(String indexedColumn, String indexType, HoodieTableMetaClient dataMetaClient) {
+    return dataMetaClient.getIndexMetadata().isPresent() && dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+        .anyMatch(indexDefinition -> indexDefinition.getSourceFields().contains(indexedColumn) && indexDefinition.getIndexType().equals(indexType));
   }
 
   @Override
