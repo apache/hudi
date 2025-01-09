@@ -607,8 +607,6 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
     properties.setProperty("hoodie.streamer.source.hoodieincr.path", basePath());
     properties.setProperty("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
-    // TODO: [HUDI-7081] get rid of this
-    properties.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     properties.putAll(extraProps);
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
