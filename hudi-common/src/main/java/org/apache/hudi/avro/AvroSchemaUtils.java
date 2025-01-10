@@ -591,4 +591,20 @@ public class AvroSchemaUtils {
   public static String createSchemaErrorString(String errorMessage, Schema writerSchema, Schema tableSchema) {
     return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
   }
+
+  public static Schema projectSchema(Schema schema, List<String> fieldNames, Schema.Field newField) {
+    List<Schema.Field> fieldList = fieldNames.stream().map(name -> {
+      Schema.Field originalField = schema.getField(name);
+      return new Schema.Field(
+          originalField.name(),
+          originalField.schema(),
+          originalField.doc(),
+          originalField.defaultVal());
+    }).collect(Collectors.toList());
+    fieldList.add(newField);
+    Schema newSchema = Schema.createRecord(
+        schema.getName(), "", schema.getNamespace(), false);
+    newSchema.setFields(fieldList);
+    return newSchema;
+  }
 }
