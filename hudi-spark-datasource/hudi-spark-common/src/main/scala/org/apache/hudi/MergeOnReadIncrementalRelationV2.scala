@@ -205,15 +205,7 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
       .analyze()
 
   protected lazy val includedCommits: immutable.Seq[HoodieInstant] = queryContext.getInstants.asScala.toList
-
-  protected lazy val commitsMetadata = includedCommits.map(
-    i => {
-      if (queryContext.getArchivedInstants.contains(i)) {
-        getCommitMetadata(i, queryContext.getArchivedTimeline)
-      } else {
-        getCommitMetadata(i, queryContext.getActiveTimeline)
-      }
-    }).asJava
+  protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
 
   protected lazy val affectedFilesInCommits: java.util.List[StoragePathInfo] = {
     listAffectedFilesForCommits(conf, metaClient.getBasePath, commitsMetadata)
