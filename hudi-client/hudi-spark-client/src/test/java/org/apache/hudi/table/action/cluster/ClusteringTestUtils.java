@@ -26,12 +26,16 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -109,6 +113,16 @@ public class ClusteringTestUtils {
     // Schedule and execute clustering.
     String clusteringCommitTime = clusteringClient.createNewInstantTime();
     return runClusteringOnInstant(clusteringClient, skipExecution, shouldCommit, clusteringCommitTime);
+  }
+
+  public static HoodieClusteringPlan getClusteringPlan(HoodieTableMetaClient client, HoodieInstant clusteringInstant) {
+    return ClusteringUtils.getClusteringPlan(client, clusteringInstant).get().getRight();
+  }
+
+  public static HoodieClusteringPlan getClusteringPlan(HoodieTableMetaClient client, String clusteringInstantString) {
+    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION,
+        clusteringInstantString, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    return getClusteringPlan(client, clusteringInstant);
   }
 
   public static String runClusteringOnInstant(SparkRDDWriteClient clusteringClient, boolean skipExecution, boolean shouldCommit, String clusteringCommitTime) {

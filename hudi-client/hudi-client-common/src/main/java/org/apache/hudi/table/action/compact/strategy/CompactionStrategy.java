@@ -80,9 +80,10 @@ public abstract class CompactionStrategy implements IncrementalPartitionAwareStr
     // Strategy implementation can overload this method to set specific compactor-id
     Set<String> missingPartitions = new HashSet<>(partitionPair.getRight());
     List<HoodieCompactionOperation> operationsToProcess = orderAndFilter(writeConfig, operations, pendingCompactionPlans, missingPartitions);
+    List<String> res = writeConfig.isIncrementalTableServiceEnable() ? new ArrayList<>(missingPartitions) : new ArrayList<>();
     return HoodieCompactionPlan.newBuilder()
         .setOperations(operationsToProcess)
-        .setMissingSchedulePartitions(new ArrayList<>(missingPartitions))
+        .setMissingSchedulePartitions(res)
         .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION).build();
   }
 

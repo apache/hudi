@@ -53,6 +53,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
 public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends BaseActionExecutor<T, I, K, O, R> {
 
@@ -70,11 +71,13 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
    * @return
    */
   public List<String> getPartitions(Object strategy, TableServiceType type) {
-    if (strategy instanceof IncrementalPartitionAwareStrategy) {
+    if (config.isIncrementalTableServiceEnable() && strategy instanceof IncrementalPartitionAwareStrategy) {
       try {
         // get incremental partitions.
+        LOG.info("Start to fetch incremental partitions for " + type);
         Set<String> incrementalPartitions = getIncrementalPartitions(type);
         if (!incrementalPartitions.isEmpty()) {
+          LOG.info("Fetched incremental partitions for " + type + ". " + incrementalPartitions);
           return new ArrayList<>(incrementalPartitions);
         }
       } catch (Exception ex) {
@@ -83,6 +86,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
     }
 
     // fall back to get all partitions
+    LOG.info("Start to fetch all partitions for " + type);
     return FSUtils.getAllPartitionPaths(context, table.getMetaClient().getStorage(),
         config.getMetadataConfig(), table.getMetaClient().getBasePath());
   }
@@ -101,10 +105,10 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
 
     // compute [leftBoundary, rightBoundary) as time window
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    Set<String> partitionsInCommitMeta = table.getActiveTimeline().filterCompletedInstants().getCommitsTimeline().getInstants().stream().flatMap(instant -> {
-      if (!instant.getAction().equals(CLUSTERING_ACTION)) {
+    Set<String> partitionsInCommitMeta = table.getActiveTimeline().filterCompletedInstants().getCommitsTimeline().getInstantsAsStream().flatMap(instant -> {
+      if (!ClusteringUtils.isClusteringInstant(activeTimeline, instant, table.getMetaClient().getInstantGenerator())) {
         String completionTime = instant.getCompletionTime();
-        if (completionTime.compareTo(leftBoundary) <= 0 && completionTime.compareTo(rightBoundary) > 0) {
+        if (completionTime.compareTo(leftBoundary) >= 0 && completionTime.compareTo(rightBoundary) < 0) {
           try {
             HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, activeTimeline);
             return metadata.getWriteStats().stream().map(HoodieWriteStat::getPartitionPath);

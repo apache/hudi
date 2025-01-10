@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -58,7 +59,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
   /**
    * Create Clustering group based on files eligible for clustering in the partition.
    */
-  protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
+  protected Pair<Stream<HoodieClusteringGroup>, Boolean> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
     HoodieWriteConfig writeConfig = getWriteConfig();
 
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
@@ -71,6 +72,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
             - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
 
     long totalSizeSoFar = 0;
+    boolean isAllSlicesIncluded = true;
 
     for (FileSlice currentSlice : sortedFileSlices) {
       long currentSize = currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
@@ -86,6 +88,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
         // if fileSliceGroups's size reach the max group, stop loop
         if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
           LOG.info("Having generated the maximum number of groups : " + writeConfig.getClusteringMaxNumGroups());
+          isAllSlicesIncluded = false;
           break;
         }
       }
@@ -105,12 +108,12 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       }
     }
 
-    return fileSliceGroups.stream().map(fileSliceGroup ->
+    return Pair.of(fileSliceGroups.stream().map(fileSliceGroup ->
         HoodieClusteringGroup.newBuilder()
             .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
             .setNumOutputFileGroups(fileSliceGroup.getRight())
             .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
-            .build());
+            .build()), isAllSlicesIncluded);
   }
 
   /**
@@ -156,25 +159,49 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       return Option.empty();
     }
 
-    Set<String> processedPartitions = new HashSet<>();
-    List<HoodieClusteringGroup> clusteringGroups = getEngineContext()
-        .flatMap(
-            partitionPaths,
-            partitionPath -> {
-              List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-              return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
-            },
-            partitionPaths.size())
-        .stream()
-        .limit(getWriteConfig().getClusteringMaxNumGroups())
-        .peek(clusteringGroup -> {
-          String partitionPath = clusteringGroup.getSlices().get(0).getPartitionPath();
-          processedPartitions.add(partitionPath);
-        })
-        .collect(Collectors.toList());
+    List<Pair<List<HoodieClusteringGroup>, String>> res = getEngineContext().map(partitionPaths, partitionPath -> {
+      List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
+      Pair<Stream<HoodieClusteringGroup>, Boolean> resultPair = buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible);
 
-    missingPartitions.addAll(partitionPaths);
-    missingPartitions.removeAll(processedPartitions);
+      List<HoodieClusteringGroup> clusteringGroups = resultPair.getLeft().collect(Collectors.toList());
+      Boolean isAllSlicesIncluded = resultPair.getRight();
+      int limit = getWriteConfig().getClusteringMaxNumGroups();
+
+      // return missed partition path
+      // Because the files in the current partition have not been completely processed.
+      if (clusteringGroups.size() > getWriteConfig().getClusteringMaxNumGroups()) {
+        return Pair.of(clusteringGroups.subList(0, limit), partitionPath);
+      } else if (!isAllSlicesIncluded) {
+        return Pair.of(clusteringGroups, partitionPath);
+      } else {
+        return Pair.of(clusteringGroups, "");
+      }
+    }, partitionPaths.size());
+
+    int limit = getWriteConfig().getClusteringMaxNumGroups();
+    List<HoodieClusteringGroup> clusteringGroups;
+    if (config.isIncrementalTableServiceEnable()) {
+      Set<String> skippedPartitions = new HashSet<>();
+      List<HoodieClusteringGroup> collectedGroups = res.stream().flatMap(pair -> {
+        String missingPartition = pair.getRight();
+        if (!StringUtils.isNullOrEmpty(missingPartition)) {
+          skippedPartitions.add(missingPartition);
+        }
+        return pair.getLeft().stream();
+      }).collect(Collectors.toList());
+
+      clusteringGroups = collectedGroups.stream().limit(limit).collect(Collectors.toList());
+      collectedGroups.subList(Math.min(limit, collectedGroups.size()), collectedGroups.size()).forEach(group -> {
+        String missed = group.getSlices().get(0).getPartitionPath();
+        skippedPartitions.add(missed);
+      });
+
+      skippedPartitions.addAll(missingPartitions);
+      missingPartitions = new ArrayList<>(skippedPartitions);
+    } else {
+      clusteringGroups = res.stream().flatMap(pair -> pair.getLeft().stream()).limit(limit).collect(Collectors.toList());
+      missingPartitions = Collections.emptyList();
+    }
 
     if (clusteringGroups.isEmpty()) {
       LOG.warn("No data available to cluster");
