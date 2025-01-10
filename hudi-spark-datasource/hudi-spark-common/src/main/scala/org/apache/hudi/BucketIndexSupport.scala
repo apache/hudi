@@ -45,7 +45,7 @@ class BucketIndexSupport(spark: SparkSession,
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  private val keyGenerator = {
+  private lazy val keyGenerator = {
     val props = new TypedProperties(metadataConfig.getProps())
     TypedProperties.putAll(props, metaClient.getTableConfig.getProps)
     HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)

@@ -19,6 +19,10 @@
 
 package org.apache.hudi.index.expression;
 
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
+
 import org.apache.spark.sql.Column;
 
 import java.io.Serializable;
@@ -71,5 +75,28 @@ public class HoodieSparkExpressionIndex implements HoodieExpressionIndex<Column,
     }
     sparkFunction.validateOptions(options);
     return sparkFunction.apply(orderedSourceValues, options);
+  }
+
+  public static class ExpressionIndexComputationMetadata {
+    HoodieData<HoodieRecord> expressionIndexRecords;
+    Option<HoodieData<HoodieRecord>> partitionStatRecordsOpt;
+
+    public ExpressionIndexComputationMetadata(HoodieData<HoodieRecord> expressionIndexRecords, Option<HoodieData<HoodieRecord>> partitionStatRecordsOpt) {
+      this.expressionIndexRecords = expressionIndexRecords;
+      this.partitionStatRecordsOpt = partitionStatRecordsOpt;
+    }
+
+    public ExpressionIndexComputationMetadata(HoodieData<HoodieRecord> expressionIndexRecords) {
+      this.expressionIndexRecords = expressionIndexRecords;
+      this.partitionStatRecordsOpt = Option.empty();
+    }
+
+    public HoodieData<HoodieRecord> getExpressionIndexRecords() {
+      return expressionIndexRecords;
+    }
+
+    public Option<HoodieData<HoodieRecord>> getPartitionStatRecordsOption() {
+      return partitionStatRecordsOpt;
+    }
   }
 }
