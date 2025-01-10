@@ -82,6 +82,7 @@ public class TestClusteringPlanActionExecutor extends SparkClientFunctionalTestH
       assertEquals(0, clusteringPlan.getMissingSchedulePartitions().size());
     }
   }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testPartitionsForIncrClusteringWithRegexFilter(boolean enableIncrTableService) throws Exception {
@@ -98,8 +99,6 @@ public class TestClusteringPlanActionExecutor extends SparkClientFunctionalTestH
     // For partitions filtered out by the regular expression, they will not be recorded in the missingPartitions
     assertEquals(0, clusteringPlan.getMissingSchedulePartitions().size());
   }
-
-
 
   private HoodieWriteConfig buildWriteConfig(boolean enableIncrTableService, Properties properties, int maxClusteringGroup) {
     properties.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
@@ -127,7 +126,7 @@ public class TestClusteringPlanActionExecutor extends SparkClientFunctionalTestH
 
   private String doClustering(HoodieWriteConfig writeConfig) throws IOException {
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
-    return ClusteringTestUtils.runClustering(client, false, true);
+      return ClusteringTestUtils.runClustering(client, false, true);
     }
   }
 }
