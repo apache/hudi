@@ -36,14 +36,15 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
-import org.apache.hudi.testutils.ArrayWritableTestUtil;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.testutils.ArrayWritableTestUtil;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
@@ -151,6 +152,13 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
   }
 
   @Override
+  public void bootstrapTable(List<HoodieRecord> recordList,
+                             Map<String, String> writeConfigs) {
+    throw new HoodieNotSupportedException(
+        "HUDI-8773: Not supporting bootstrap table testing at the file group reader layer in Hive yet.");
+  }
+
+  @Override
   public void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> writeConfigs) {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
@@ -200,7 +208,8 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
   }
 
   @Override
-  public void validateRecordsInFileGroup(String tablePath, List<ArrayWritable> actualRecordList, Schema schema, FileSlice fileSlice, boolean isSkipMerge) {
+  public void validateRecordsInFileGroup(String tablePath, List<ArrayWritable> actualRecordList, Schema schema, FileSlice fileSlice,
+                                         boolean skipMerge) {
     assertEquals(HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA), schema);
     String fileGroupId = fileSlice.getFileId();
     try {
@@ -208,10 +217,10 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
       HoodieReaderContext<ArrayWritable> readerContext = getHoodieReaderContext(tablePath, schema, storageConf);
       Map<String, ArrayWritable> recordMap = new HashMap<>();
       for (ArrayWritable record : actualRecordList) {
-        recordMap.put(createUniqueKey(readerContext, schema, record, isSkipMerge), record);
+        recordMap.put(createUniqueKey(readerContext, schema, record, skipMerge), record);
       }
 
-      RecordReader<NullWritable, ArrayWritable> reader = createRecordReader(tablePath, isSkipMerge);
+      RecordReader<NullWritable, ArrayWritable> reader = createRecordReader(tablePath, skipMerge);
       // use reader to read log file.
       NullWritable key = reader.createKey();
       ArrayWritable value = reader.createValue();
@@ -221,14 +230,14 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
         if (readerContext.getValue(value, schema, HoodieRecord.FILENAME_METADATA_FIELD).toString().contains(fileGroupId)) {
           //only evaluate records from the specified filegroup. Maybe there is a way to get
           //hive to do this?
-          String uniqueKey = createUniqueKey(readerContext, schema, value, isSkipMerge);
+          String uniqueKey = createUniqueKey(readerContext, schema, value, skipMerge);
           Integer seenCount = logFileCounts.get(uniqueKey);
           boolean isLogFile = isLogFileRec(readerContext, schema, value);
-          if (!isSkipMerge || seenCount == null) {
+          if (!skipMerge || seenCount == null) {
             ArrayWritable compVal = recordMap.remove(uniqueKey);
             assertNotNull(compVal);
             ArrayWritableTestUtil.assertArrayWritableEqual(schema, value, compVal, USE_FAKE_PARTITION);
-            if (isSkipMerge && isLogFile) {
+            if (skipMerge && isLogFile) {
               logFileCounts.put(uniqueKey, 1);
             }
           } else {
