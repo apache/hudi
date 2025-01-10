@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
@@ -72,7 +73,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.SparkBroadcastManager;
@@ -325,12 +325,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
+      long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
+      LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
+      Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-
         Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> {
-          long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
-          LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
-          return getRecordIteratorWithLogFiles(clusteringOp, instantTime, maxMemoryPerCompaction);
+          Option<HoodieFileReader> baseOrBootstrapFileReader = getBaseOrBootstrapFileReader(clusteringOp);
+
+          return getRecordIteratorWithLogFiles(clusteringOp, instantTime, maxMemoryPerCompaction, keyGeneratorOpt, baseOrBootstrapFileReader);
         };
         suppliers.add(iteratorSupplier);
       });
@@ -345,11 +347,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                    List<ClusteringOperation> clusteringOps) {
     int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
 
+    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism)
         .mapPartitions(clusteringOpsPartition -> {
           List<Supplier<ClosableIterator<HoodieRecord<T>>>> iteratorGettersForPartition = new ArrayList<>();
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-            Supplier<ClosableIterator<HoodieRecord<T>>> recordIteratorGetter = () -> getRecordIteratorWithBaseFileOnly(clusteringOp);
+            Option<HoodieFileReader> baseOrBootstrapFileReader = getBaseOrBootstrapFileReader(clusteringOp);
+            ValidationUtils.checkArgument(baseOrBootstrapFileReader.isPresent(), "Base file reader must be present for clustering operation");
+            Supplier<ClosableIterator<HoodieRecord<T>>> recordIteratorGetter = () -> getRecordIteratorWithBaseFileOnly(keyGeneratorOpt, baseOrBootstrapFileReader.get());
             iteratorGettersForPartition.add(recordIteratorGetter);
           });
 
@@ -529,12 +534,18 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     return writeStatusRDDArray;
   }
 
-  protected HoodieFileReader getBaseOrBootstrapFileReader(StorageConfiguration<?> storageConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp) {
-    StoragePath dataFilePath = new StoragePath(clusteringOp.getDataFilePath());
-    HoodieStorage storage = new HoodieHadoopStorage(dataFilePath, storageConf);
+  protected Option<HoodieFileReader> getBaseOrBootstrapFileReader(ClusteringOperation clusteringOp) {
+    HoodieStorage storage = getHoodieTable().getStorage();
+    StorageConfiguration<?> storageConf = getHoodieTable().getStorageConf();
+    HoodieTableConfig tableConfig = getHoodieTable().getMetaClient().getTableConfig();
+    String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
+    Option<String[]> partitionFields = tableConfig.getPartitionFields();
+    Option<HoodieFileReader> baseFileReaderOpt = ClusteringUtils.getBaseFileReader(storage, recordType, writeConfig, clusteringOp.getDataFilePath());
+    if (baseFileReaderOpt.isEmpty()) {
+      return Option.empty();
+    }
     try {
-      HoodieFileReader baseFileReader = getHoodieSparkIOFactory(storage).getReaderFactory(recordType)
-          .getFileReader(writeConfig, dataFilePath);
+      HoodieFileReader baseFileReader = baseFileReaderOpt.get();
       // handle bootstrap path
       if (StringUtils.nonEmpty(clusteringOp.getBootstrapFilePath()) && StringUtils.nonEmpty(bootstrapBasePath)) {
         String bootstrapFilePath = clusteringOp.getBootstrapFilePath();
@@ -545,21 +556,16 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           partitionValues = getPartitionFieldVals(partitionFields, partitionFilePath, bootstrapBasePath, baseFileReader.getSchema(),
               storageConf.unwrapAs(Configuration.class));
         }
-        baseFileReader = getHoodieSparkIOFactory(storage).getReaderFactory(recordType).newBootstrapFileReader(
+        return Option.of(getHoodieSparkIOFactory(storage).getReaderFactory(recordType).newBootstrapFileReader(
             baseFileReader,
             getHoodieSparkIOFactory(storage).getReaderFactory(recordType).getFileReader(
                 writeConfig, new StoragePath(bootstrapFilePath)), partitionFields,
-            partitionValues);
+            partitionValues));
       }
-      return baseFileReader;
+      return baseFileReaderOpt;
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading base file", e);
     }
-  }
-
-  @Override
-  protected Option<BaseKeyGenerator> getKeyGenerator() {
-    return HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
   }
 
 }
