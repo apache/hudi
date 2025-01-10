@@ -65,6 +65,7 @@ import org.apache.hudi.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.HoodieRowConcatHandle;
 import org.apache.hudi.io.HoodieRowMergeHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -819,12 +820,20 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("The merge handle class to use to merge the records from a base file with an iterator of incoming records"
           + " or a map of updates and deletes from log files at a file group level.");
 
+  public static final ConfigProperty<String> CONCAT_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.write.concat.handle.class")
+      .defaultValue(HoodieRowConcatHandle.class.getName())
+      .markAdvanced()
+      .sinceVersion("0.15.1")
+      .withDocumentation("The merge handle class to use to concat the records from a base file with an iterator of incoming records.");
+
   public static final ConfigProperty<Boolean> MERGE_HANDLE_PERFORM_FALLBACK = ConfigProperty
       .key("hoodie.write.merge.handle.fallback")
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("0.15.1")
-      .withDocumentation("When using a custom Hoodie Merge Handle Implementation controlled by the config" + MERGE_HANDLE_CLASS_NAME.key()
+      .withDocumentation("When using a custom Hoodie Merge Handle Implementation controlled by the config " + MERGE_HANDLE_CLASS_NAME.key()
+          + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
               + " enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
 
   /**
@@ -1466,6 +1475,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getMergeHandleClassName() {
     return getStringOrDefault(MERGE_HANDLE_CLASS_NAME);
+  }
+
+  public String getConcatHandleClassName() {
+    return getStringOrDefault(CONCAT_HANDLE_CLASS_NAME);
   }
 
   public int getFinalizeWriteParallelism() {
@@ -3272,6 +3285,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withMergeHandleClassName(String className) {
       writeConfig.setValue(MERGE_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withConcatHandleClassName(String className) {
+      writeConfig.setValue(CONCAT_HANDLE_CLASS_NAME, className);
       return this;
     }
 
