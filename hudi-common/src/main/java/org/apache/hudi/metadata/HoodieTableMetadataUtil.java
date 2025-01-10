@@ -27,7 +27,6 @@ import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
-import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -122,6 +121,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -244,13 +244,19 @@ public class HoodieTableMetadataUtil {
       // with the values from this record
       targetFields.forEach(field -> {
         ColumnStats colStats = allColumnStats.computeIfAbsent(field.name(), ignored -> new ColumnStats());
-
         Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(recordSchema, field.name());
         Object fieldValue;
         if (record.getRecordType() == HoodieRecordType.AVRO) {
           fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{field.name()}, recordSchema, false)[0];
+          if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
+            fieldValue = java.sql.Date.valueOf(fieldValue.toString());
+          }
+
         } else if (record.getRecordType() == HoodieRecordType.SPARK) {
           fieldValue = record.getColumnValues(recordSchema, new String[]{field.name()}, false)[0];
+          if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
+            fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
+          }
         } else {
           throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
         }
@@ -752,7 +758,7 @@ public class HoodieTableMetadataUtil {
     });
 
     List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig,
-        Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)));
+        Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)), false);
 
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
@@ -1261,6 +1267,9 @@ public class HoodieTableMetadataUtil {
                                                                           int columnStatsIndexParallelism,
                                                                           int maxReaderBufferSize,
                                                                           List<String> columnsToIndex) {
+    if ((partitionToAppendedFiles.isEmpty() && partitionToDeletedFiles.isEmpty())) {
+      return engineContext.emptyHoodieData();
+    }
     LOG.info("Indexing {} columns for column stats index", columnsToIndex.size());
 
     // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
@@ -1481,7 +1490,7 @@ public class HoodieTableMetadataUtil {
         tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
 
     return getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig,
-        Lazy.eagerly(tableSchema));
+        Lazy.eagerly(tableSchema), false);
   }
 
   @VisibleForTesting
@@ -1493,7 +1502,7 @@ public class HoodieTableMetadataUtil {
   public static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                HoodieMetadataConfig metadataConfig,
                                                List<String> columnNames) {
-    return getColumnsToIndex(tableConfig, metadataConfig, Either.left(columnNames), Option.empty());
+    return getColumnsToIndex(tableConfig, metadataConfig, Either.left(columnNames), false, Option.empty());
   }
 
   @VisibleForTesting
@@ -1501,21 +1510,23 @@ public class HoodieTableMetadataUtil {
                                                HoodieMetadataConfig metadataConfig,
                                                Lazy<Option<Schema>> tableSchema,
                                                Option<HoodieRecordType> recordType) {
-    return getColumnsToIndex(tableConfig, metadataConfig, Either.right(tableSchema), recordType);
+    return getColumnsToIndex(tableConfig, metadataConfig, Either.right(tableSchema), false, recordType);
   }
 
   @VisibleForTesting
   public static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                HoodieMetadataConfig metadataConfig,
-                                               Lazy<Option<Schema>> tableSchema) {
-    return getColumnsToIndex(tableConfig, metadataConfig, Either.right(tableSchema), Option.empty());
+                                               Lazy<Option<Schema>> tableSchema,
+                                               boolean isTableInitializing) {
+    return getColumnsToIndex(tableConfig, metadataConfig, Either.right(tableSchema), isTableInitializing, Option.empty());
   }
 
   private static List<String> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                 HoodieMetadataConfig metadataConfig,
                                                 Either<List<String>, Lazy<Option<Schema>>> tableSchema,
+                                                boolean isTableInitializing,
                                                 Option<HoodieRecordType> recordType) {
-    Stream<String> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetaFields(metadataConfig, tableSchema, recordType);
+    Stream<String> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetaFields(metadataConfig, tableSchema, isTableInitializing, recordType);
     if (!tableConfig.populateMetaFields()) {
       return columnsToIndexWithoutRequiredMetas.collect(Collectors.toList());
     }
@@ -1531,14 +1542,19 @@ public class HoodieTableMetadataUtil {
    *
    * @param metadataConfig       metadata config
    * @param tableSchema          either a list of the columns in the table, or a lazy option of the table schema
+   * @param isTableInitializing true if table is being initialized.
    * @param recordType           Option of record type. Used to determine which types are valid to index
    * @return list of columns that should be indexed
    */
   private static Stream<String> getColumnsToIndexWithoutRequiredMetaFields(HoodieMetadataConfig metadataConfig,
                                                                            Either<List<String>, Lazy<Option<Schema>>> tableSchema,
+                                                                           boolean isTableInitializing,
                                                                            Option<HoodieRecordType> recordType) {
     List<String> columnsToIndex = metadataConfig.getColumnsEnabledForColumnStatsIndex();
     if (!columnsToIndex.isEmpty()) {
+      if (isTableInitializing) {
+        return columnsToIndex.stream();
+      }
       // filter for top level fields here.
       List<String> topLevelEligibleFields = tableSchema.isLeft() ? tableSchema.asLeft() :
           (tableSchema.asRight().get().map(schema -> schema.getFields().stream()
@@ -1551,12 +1567,17 @@ public class HoodieTableMetadataUtil {
     if (tableSchema.isLeft()) {
       return getFirstNFieldNames(tableSchema.asLeft().stream(), metadataConfig.maxColumnsToIndexForColStats());
     } else {
-      return tableSchema.asRight().get()
-          .map(schema -> getFirstNFieldNames(schema, metadataConfig.maxColumnsToIndexForColStats(), recordType)).orElse(Stream.empty());
+      if (tableSchema.asRight().get().isPresent()) {
+        return tableSchema.asRight().get().map(schema -> getFirstNSupportedFieldNames(schema, metadataConfig.maxColumnsToIndexForColStats(), recordType)).orElse(Stream.empty());
+      } else if (isTableInitializing) {
+        return Stream.empty();
+      } else {
+        throw new HoodieMetadataException("Cannot initialize col stats with empty list of cols");
+      }
     }
   }
 
-  private static Stream<String> getFirstNFieldNames(Schema tableSchema, int n, Option<HoodieRecordType> recordType) {
+  private static Stream<String> getFirstNSupportedFieldNames(Schema tableSchema, int n, Option<HoodieRecordType> recordType) {
     return getFirstNFieldNames(tableSchema.getFields().stream()
         .filter(field -> isColumnTypeSupported(field.schema(), recordType)).map(Schema.Field::name), n);
   }
@@ -1781,7 +1802,15 @@ public class HoodieTableMetadataUtil {
   }
 
   private static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType) {
-    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
+    // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
+    if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
+      return (schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
+          && schema.getType() != Schema.Type.ENUM);
+    }
+    // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
+    // HUDI-8585 will add support for BYTES and FIXED
+    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
+        && schema.getType() != Schema.Type.ENUM && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
@@ -2389,8 +2418,12 @@ public class HoodieTableMetadataUtil {
                                                                              HoodieMetadataConfig metadataConfig,
                                                                              HoodieTableMetaClient dataTableMetaClient,
                                                                              Option<Schema> writerSchemaOpt) {
+    if (partitionInfoList.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
     Lazy<Option<Schema>> lazyWriterSchemaOpt = writerSchemaOpt.isPresent() ? Lazy.eagerly(writerSchemaOpt) : Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient));
-    final List<String> columnsToIndex = getColumnsToIndex(dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt);
+    final List<String> columnsToIndex = getColumnsToIndex(dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt,
+        dataTableMetaClient.getActiveTimeline().filterCompletedInstants().empty());
     if (columnsToIndex.isEmpty()) {
       LOG.warn("No columns to index for partition stats index");
       return engineContext.emptyHoodieData();
@@ -2483,7 +2516,7 @@ public class HoodieTableMetadataUtil {
       HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
       Option<Schema> tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
       Lazy<Option<Schema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
-      List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt);
+      List<String> columnsToIndex = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt, false);
       if (columnsToIndex.isEmpty()) {
         return engineContext.emptyHoodieData();
       }
@@ -2518,18 +2551,19 @@ public class HoodieTableMetadataUtil {
               .filter(Objects::nonNull)
               .collect(Collectors.toSet());
           // Fetch metadata table COLUMN_STATS partition records for above files
-          List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
-              tableMetadata.getRecordsByKeyPrefixes(generateKeyPrefixes(validColumnsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
-                  // schema and properties are ignored in getInsertValue, so simply pass as null
-                  .map(record -> record.getData().getInsertValue(null, null))
-                  .filter(Option::isPresent)
-                  .map(data -> ((HoodieMetadataRecord) data.get()).getColumnStatsMetadata())
-                  .filter(stats -> fileNames.contains(stats.getFileName()))
-                  .map(HoodieColumnRangeMetadata::fromColumnStats)
-                  .collectAsList();
-          // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
-          // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
-          fileColumnMetadata.addAll(partitionColumnMetadata);
+          List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
+              .getRecordsByKeyPrefixes(generateKeyPrefixes(validColumnsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
+              // schema and properties are ignored in getInsertValue, so simply pass as null
+              .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
+              .filter(Option::isPresent)
+              .map(colStatsOpt -> colStatsOpt.get())
+              .filter(stats -> fileNames.contains(stats.getFileName()))
+              .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
+          if (!partitionColumnMetadata.isEmpty()) {
+            // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
+            // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
+            fileColumnMetadata.addAll(partitionColumnMetadata);
+          }
         }
 
         return Pair.of(partitionName, fileColumnMetadata);
@@ -2564,17 +2598,8 @@ public class HoodieTableMetadataUtil {
   @VisibleForTesting
   public static boolean validateDataTypeForPartitionStats(String columnToIndex, Schema tableSchema) {
     Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(tableSchema, columnToIndex);
-    // Exclude fields based on logical type
-    if ((fieldSchema.getType() == Schema.Type.INT || fieldSchema.getType() == Schema.Type.LONG)
-        && fieldSchema.getLogicalType() != null) {
-
-      // Skip fields with logical types DATE or TIME_MILLIS for INT, TIMESTAMP_MILLIS for LONG
-      String logicalType = fieldSchema.getLogicalType().getName();
-      return !logicalType.equals("date") && !logicalType.equals("timestamp-millis") && !logicalType.equals("timestamp-micros") && !logicalType.equals("time-millis")
-          && !logicalType.equals("time-micros") && !logicalType.equals("local-timestamp-millis") && !logicalType.equals("local-timestamp-micros");
-    }
-    // Include other supported primitive types
-    return SUPPORTED_TYPES_PARTITION_STATS.contains(fieldSchema.getType());
+    // to be fixed HUDI-8680.
+    return isColumnTypeSupported(fieldSchema, Option.of(HoodieRecordType.SPARK));
   }
 
   /**

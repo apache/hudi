@@ -30,9 +30,9 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.avro.Schema
 import org.apache.commons.io.FileUtils
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{expr, lit}
@@ -48,7 +48,6 @@ import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.time.Instant
 import java.util.{Collections, Date, UUID}
-
 import scala.collection.JavaConverters._
 
 /**
@@ -541,7 +540,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName,
-        DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getCanonicalName)
+        DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getCanonicalName,
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
@@ -731,7 +731,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
-        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test")
+        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
       val df = spark.range(0, 1000).toDF("keyid")
         .withColumn("col3", expr("keyid"))
         .withColumn("age", lit(1))

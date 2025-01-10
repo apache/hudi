@@ -117,7 +117,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "c1,c2,c3,c5,c6,c7,c8" // ignore c4
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c6,c7,c8" // ignore c4
     )
 
     expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
@@ -140,7 +140,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val metadataOpts2 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "c1,c2,c3,c5,c7,c8" // ignore c4,c6
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7,c8" // ignore c4,c6
     )
 
     expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
@@ -162,7 +162,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val metadataOpts3 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "c1,c2,c3,c5,c7" // ignore c4,c5,c8.
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7" // ignore c4,c5,c8.
     )
     // disable col stats
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts3, commonOpts,
@@ -187,7 +187,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "c1,c2,c3,c4,c5,c6,c7,c8,c9.car_brand"
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c7,c8,c9.car_brand"
     )
 
     val commonOpts = Map(
@@ -216,7 +216,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testMetadataColumnStatsIndexInitializationWithUpserts(tableType: HoodieTableType, partitionCol : String): Unit = {
     val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
     val metadataOpts = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true"
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     val commonOpts = Map(
@@ -226,9 +227,9 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      PARTITIONPATH_FIELD.key() -> partitionCol,
+      PARTITIONPATH_FIELD.key -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "5"
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "5"
     ) ++ metadataOpts
 
     // inserts
@@ -331,7 +332,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testMetadataColumnStatsIndexInitializationWithRollbacks(tableType: HoodieTableType, partitionCol : String): Unit = {
     val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
     val metadataOpts = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true"
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     val commonOpts = Map(

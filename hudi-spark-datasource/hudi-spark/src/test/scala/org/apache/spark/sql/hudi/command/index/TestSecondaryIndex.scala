@@ -28,6 +28,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
 import org.apache.hudi.metadata.SecondaryIndexKeyUtils
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
@@ -36,7 +37,6 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
-
 import scala.collection.JavaConverters._
 
 class TestSecondaryIndex extends HoodieSparkSqlTestBase {
@@ -97,6 +97,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
         checkAnswer(s"show indexes from default.$tableName")(
+          Seq("column_stats", "column_stats", ""),
           Seq("record_index", "record_index", "")
         )
 
@@ -107,6 +108,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         // Secondary index is created by default for non record key column when index type is not specified
         spark.sql(s"create index idx_name on $tableName (name)")
         checkAnswer(s"show indexes from default.$tableName")(
+          Seq("column_stats", "column_stats", ""),
           Seq("secondary_index_idx_name", "secondary_index", "name"),
           Seq("record_index", "record_index", "")
         )
@@ -119,6 +121,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
         // Both indexes should be shown
         checkAnswer(s"show indexes from $tableName")(
+          Seq("column_stats", "column_stats", ""),
           Seq("secondary_index_idx_name", "secondary_index", "name"),
           Seq("secondary_index_idx_price", "secondary_index", "price"),
           Seq("record_index", "record_index", "")
@@ -127,6 +130,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         checkAnswer(s"drop index idx_name on $tableName")()
         // show index shows only one index after dropping
         checkAnswer(s"show indexes from $tableName")(
+          Seq("column_stats", "column_stats", ""),
           Seq("secondary_index_idx_price", "secondary_index", "price"),
           Seq("record_index", "record_index", "")
         )
@@ -138,6 +142,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         // drop index should work now
         checkAnswer(s"drop index idx_name on $tableName")()
         checkAnswer(s"show indexes from $tableName")(
+          Seq("column_stats", "column_stats", ""),
           Seq("secondary_index_idx_price", "secondary_index", "price"),
           Seq("record_index", "record_index", "")
         )
@@ -150,16 +155,19 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .build()
         assertFalse(metaClient.getTableConfig.getRelativeIndexDefinitionPath.get().contains(metaClient.getBasePath))
         assertTrue(metaClient.getIndexDefinitionPath.contains(metaClient.getBasePath.toString))
-        val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.values().stream().findFirst().get()
+        val indexDefinition = metaClient.getIndexMetadata.get().getIndexDefinitions.values().stream()
+          .filter(indexDefn => indexDefn.getIndexType.equals(PARTITION_NAME_SECONDARY_INDEX)).findFirst().get()
 
         metaClient.getTableConfig.setMetadataPartitionState(metaClient, indexDefinition.getIndexName, false)
         checkAnswer(s"drop index idx_price on $tableName")()
         checkAnswer(s"show indexes from $tableName")(
+          Seq("column_stats", "column_stats", ""),
           Seq("record_index", "record_index", "")
         )
 
         // Drop the record index and show index should show no index
         checkAnswer(s"drop index record_index on $tableName")()
+        checkAnswer(s"drop index column_stats on $tableName")()
         checkAnswer(s"show indexes from $tableName")()
 
         checkException(s"drop index idx_price on $tableName")("Index does not exist: idx_price")

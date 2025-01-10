@@ -286,8 +286,12 @@ public class HoodieTableMetaClient implements Serializable {
       StoragePath indexDefinitionPath =
           new StoragePath(basePath, tableConfig.getRelativeIndexDefinitionPath().get());
       try {
-        return Option.of(HoodieIndexMetadata.fromJson(
-            new String(FileIOUtils.readDataFromPath(storage, indexDefinitionPath).get())));
+        Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
+        if (bytesOpt.isPresent()) {
+          return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+        } else {
+          return Option.of(new HoodieIndexMetadata());
+        }
       } catch (IOException e) {
         throw new HoodieIOException("Could not load expression index metadata at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
       }
