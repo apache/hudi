@@ -83,7 +83,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
             .flatMap(
                     partitionPaths, partitionPath -> {
                     List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-                    return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
+                    return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).getLeft().limit(getWriteConfig().getClusteringMaxNumGroups());
                 },
                     partitionPaths.size())
             .stream()
