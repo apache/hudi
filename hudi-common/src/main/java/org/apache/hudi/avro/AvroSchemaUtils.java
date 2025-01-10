@@ -25,12 +25,12 @@ import org.apache.hudi.exception.InvalidUnionTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
-
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaCompatibility;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
+
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaCompatibility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -608,6 +608,22 @@ public class AvroSchemaUtils {
     return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
   }
 
+  public static Schema projectSchema(Schema schema, List<String> fieldNames, Schema.Field newField) {
+    List<Schema.Field> fieldList = fieldNames.stream().map(name -> {
+      Schema.Field originalField = schema.getField(name);
+      return new Schema.Field(
+          originalField.name(),
+          originalField.schema(),
+          originalField.doc(),
+          originalField.defaultVal());
+    }).collect(Collectors.toList());
+    fieldList.add(newField);
+    Schema newSchema = Schema.createRecord(
+        schema.getName(), "", schema.getNamespace(), false);
+    newSchema.setFields(fieldList);
+    return newSchema;
+  }
+
   /**
    * Create a new schema by force changing all the fields as nullable.
    *
@@ -616,14 +632,14 @@ public class AvroSchemaUtils {
    */
   public static Schema asNullable(Schema schema) {
     List<String> filterCols = schema.getFields().stream()
-            .filter(f -> !f.schema().isNullable()).map(Schema.Field::name).collect(Collectors.toList());
+        .filter(f -> !f.schema().isNullable()).map(Schema.Field::name).collect(Collectors.toList());
     if (filterCols.isEmpty()) {
       return schema;
     }
     InternalSchema internalSchema = convert(schema);
     TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(internalSchema);
     schemaChange = reduce(filterCols, schemaChange,
-            (change, field) -> change.updateColumnNullability(field, true));
+        (change, field) -> change.updateColumnNullability(field, true));
     return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
   }
 }
