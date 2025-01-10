@@ -22,7 +22,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.List;
-import java.util.Set;
 
 /**
  * Marking strategy interface.
