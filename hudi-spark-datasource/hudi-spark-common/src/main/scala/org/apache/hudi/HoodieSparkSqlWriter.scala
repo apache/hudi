@@ -638,7 +638,7 @@ class HoodieSparkSqlWriterInternal {
       // force disable schema validate, now we support schema evolution, no need to do validate
       "false"
     } else {
-      parameters.getOrElse(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key(), "true")
+      parameters.getOrElse(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key(), HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue())
     }
     // correct internalSchema, internalSchema should contain hoodie metadata columns.
     val correctInternalSchema = internalSchemaOpt.map { internalSchema =>
