@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.DoubleWrapper;
 import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.IntWrapper;
+import org.apache.hudi.avro.model.LocalDateWrapper;
 import org.apache.hudi.avro.model.LongWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.avro.model.TimestampMicrosWrapper;
@@ -684,7 +685,7 @@ public class TestHoodieAvroUtils {
         new Object[][] {
             {new Timestamp(1690766971000L), TimestampMicrosWrapper.class},
             {new Date(1672560000000L), DateWrapper.class},
-            {LocalDate.of(2023, 1, 1), DateWrapper.class},
+            {LocalDate.of(2023, 1, 1), LocalDateWrapper.class},
             {new BigDecimal("12345678901234.2948"), DecimalWrapper.class}
         };
     return Stream.of(data).map(Arguments::of);
@@ -708,7 +709,7 @@ public class TestHoodieAvroUtils {
     } else if (value instanceof LocalDate) {
       assertEquals((int) ChronoUnit.DAYS.between(LocalDate.ofEpochDay(0), (LocalDate) value),
           ((GenericRecord) wrapperValue).get(0));
-      assertTrue(Date.valueOf((LocalDate)value).equals((Date)unwrapAvroValueWrapper(wrapperValue)));
+      assertEquals(value, unwrapAvroValueWrapper(wrapperValue));
     } else {
       assertEquals("0.000000000000000",
           ((BigDecimal) value)

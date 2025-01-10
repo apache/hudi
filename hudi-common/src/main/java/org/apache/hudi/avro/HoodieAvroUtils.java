@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.DoubleWrapper;
 import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.IntWrapper;
+import org.apache.hudi.avro.model.LocalDateWrapper;
 import org.apache.hudi.avro.model.LongWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.avro.model.TimestampMicrosWrapper;
@@ -147,6 +148,7 @@ public class HoodieAvroUtils {
   private static final Lazy<TimestampMicrosWrapper.Builder> TIMESTAMP_MICROS_WRAPPER_BUILDER_STUB = Lazy.lazily(TimestampMicrosWrapper::newBuilder);
   private static final Lazy<DecimalWrapper.Builder> DECIMAL_WRAPPER_BUILDER_STUB = Lazy.lazily(DecimalWrapper::newBuilder);
   private static final Lazy<DateWrapper.Builder> DATE_WRAPPER_BUILDER_STUB = Lazy.lazily(DateWrapper::newBuilder);
+  private static final Lazy<LocalDateWrapper.Builder> LOCAL_DATE_WRAPPER_BUILDER_STUB = Lazy.lazily(LocalDateWrapper::newBuilder);
 
   private static final long MILLIS_PER_DAY = 86400000L;
 
@@ -1413,14 +1415,20 @@ public class HoodieAvroUtils {
   public static Object wrapValueIntoAvro(Comparable<?> value) {
     if (value == null) {
       return null;
-    } else if (value instanceof Date || value instanceof LocalDate) {
+    } else if (value instanceof Date) {
       // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
       //       rely on logical types to do proper encoding of the native Java types,
       //       and hereby have to encode value manually
-      LocalDate localDate = value instanceof LocalDate
-          ? (LocalDate) value
-          : ((Date) value).toLocalDate();
+      LocalDate localDate = ((Date) value).toLocalDate();
       return DateWrapper.newBuilder(DATE_WRAPPER_BUILDER_STUB.get())
+          .setValue((int) localDate.toEpochDay())
+          .build();
+    } else if (value instanceof LocalDate) {
+      // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+      //       rely on logical types to do proper encoding of the native Java types,
+      //       and hereby have to encode value manually
+      LocalDate localDate = (LocalDate) value;
+      return LocalDateWrapper.newBuilder(LOCAL_DATE_WRAPPER_BUILDER_STUB.get())
           .setValue((int) localDate.toEpochDay())
           .build();
     } else if (value instanceof BigDecimal) {
@@ -1480,6 +1488,8 @@ public class HoodieAvroUtils {
 
     if (avroValueWrapper instanceof DateWrapper) {
       return Date.valueOf(LocalDate.ofEpochDay(((DateWrapper) avroValueWrapper).getValue()));
+    } else if (avroValueWrapper instanceof LocalDateWrapper) {
+      return LocalDate.ofEpochDay(((LocalDateWrapper) avroValueWrapper).getValue());
     } else if (avroValueWrapper instanceof DecimalWrapper) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
       return AVRO_DECIMAL_CONVERSION.fromBytes(((DecimalWrapper) avroValueWrapper).getValue(), valueSchema, valueSchema.getLogicalType());
@@ -1515,6 +1525,8 @@ public class HoodieAvroUtils {
       return null;
     } else if (DateWrapper.class.getSimpleName().equals(wrapperClassName)) {
       return Date.valueOf(LocalDate.ofEpochDay((Integer)((Record) avroValueWrapper).get(0)));
+    } else if (LocalDateWrapper.class.getSimpleName().equals(wrapperClassName)) {
+      return LocalDate.ofEpochDay((Integer)((Record) avroValueWrapper).get(0));
     } else if (TimestampMicrosWrapper.class.getSimpleName().equals(wrapperClassName)) {
       Instant instant = microsToInstant((Long)((Record) avroValueWrapper).get(0));
       return Timestamp.from(instant);
@@ -1529,8 +1541,10 @@ public class HoodieAvroUtils {
   private static Pair<Boolean, String> getIsValueWrapperObfuscated(GenericRecord record, String subFieldName) {
     Object statsValue = ((GenericRecord) record.get(SCHEMA_FIELD_ID_COLUMN_STATS)).get(subFieldName);
     if (statsValue != null) {
-      boolean toReturn = ((GenericRecord) statsValue).getSchema().getName().equals(DateWrapper.class.getSimpleName())
-          || ((GenericRecord) statsValue).getSchema().getName().equals(TimestampMicrosWrapper.class.getSimpleName());
+      String statsValueSchemaClassName = ((GenericRecord) statsValue).getSchema().getName();
+      boolean toReturn = statsValueSchemaClassName.equals(DateWrapper.class.getSimpleName())
+          || statsValueSchemaClassName.equals(LocalDateWrapper.class.getSimpleName())
+          || statsValueSchemaClassName.equals(TimestampMicrosWrapper.class.getSimpleName());
       if (toReturn) {
         return Pair.of(true, ((GenericRecord) statsValue).getSchema().getName());
       }

@@ -181,7 +181,6 @@ stages:
       - job: UT_FT_2
         displayName: UT flink & FT common & flink & spark-client & hudi-spark
         timeoutInMinutes: '120'
-        condition: false
         steps:
           - task: Maven@4
             displayName: maven install
@@ -216,7 +215,6 @@ stages:
       - job: UT_FT_3
         displayName: UT spark-datasource Java Tests & DDL
         timeoutInMinutes: '120'
-        condition: false
         steps:
           - task: Maven@4
             displayName: maven install
@@ -251,7 +249,6 @@ stages:
       - job: UT_FT_4
         displayName: UT spark-datasource DML & others
         timeoutInMinutes: '120'
-        condition: false
         steps:
           - task: Maven@4
             displayName: maven install
@@ -277,7 +274,6 @@ stages:
       - job: UT_FT_5
         displayName: UT FT Hudi Streamer
         timeoutInMinutes: '90'
-        condition: false
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
@@ -317,7 +313,6 @@ stages:
       - job: UT_FT_6
         displayName: UT FT other modules
         timeoutInMinutes: '90'
-        condition: false
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
