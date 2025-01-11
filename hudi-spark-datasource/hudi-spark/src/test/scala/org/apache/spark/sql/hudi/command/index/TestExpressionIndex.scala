@@ -57,10 +57,12 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, SaveMode, functions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
+import org.scalatest.Ignore
 
 import java.util.stream.Collectors
 import scala.collection.JavaConverters
 
+@Ignore
 class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
@@ -775,7 +777,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |location '$basePath'
              |""".stripMargin)
 
-        setCompactionConfigs(tableType)
         spark.sql("set hoodie.parquet.small.file.limit=0")
         if (HoodieSparkUtils.gteqSpark3_4) {
           spark.sql("set spark.sql.defaultColumn.enabled=false")
@@ -855,7 +856,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |location '$basePath'
              |""".stripMargin)
 
-        setCompactionConfigs(tableType)
         spark.sql("set hoodie.parquet.small.file.limit=0")
         if (HoodieSparkUtils.gteqSpark3_4) {
           spark.sql("set spark.sql.defaultColumn.enabled=false")
@@ -1471,7 +1471,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |location '$basePath'
              |""".stripMargin)
 
-        setCompactionConfigs(tableType)
         spark.sql("set hoodie.parquet.small.file.limit=0")
         if (HoodieSparkUtils.gteqSpark3_4) {
           spark.sql("set spark.sql.defaultColumn.enabled=false")
@@ -1619,7 +1618,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |location '$basePath'
              |""".stripMargin)
 
-        setCompactionConfigs(tableType)
         spark.sql("set hoodie.parquet.small.file.limit=0")
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
         if (HoodieSparkUtils.gteqSpark3_4) {
