@@ -29,7 +29,6 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 
-import org.apache.spark.package$;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -237,17 +236,14 @@ public class SparkDatasetTestUtils {
         .withBulkInsertParallelism(2);
   }
 
-  private static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
+  public static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
       throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, ClassNotFoundException {
-    // TODO [HUDI-8298] only spark 3 needed
-    if (package$.MODULE$.SPARK_VERSION().startsWith("2.")) {
-      Method spark2method = encoder.getClass().getMethod("toRow", Object.class);
-      return (InternalRow) spark2method.invoke(encoder, row);
-    } else {
-      Class<?> serializerClass = Class.forName("org.apache.spark.sql.catalyst.encoders.ExpressionEncoder$Serializer");
-      Object serializer = encoder.getClass().getMethod("createSerializer").invoke(encoder);
-      Method aboveSpark2method = serializerClass.getMethod("apply", Object.class);
-      return (InternalRow) aboveSpark2method.invoke(serializer, row);
+    Object serializer = encoder.createSerializer();
+    try {
+      Method applyMethod = serializer.getClass().getMethod("apply", Object.class);
+      return (InternalRow) applyMethod.invoke(serializer, row);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to serialize row", e);
     }
   }
 }
