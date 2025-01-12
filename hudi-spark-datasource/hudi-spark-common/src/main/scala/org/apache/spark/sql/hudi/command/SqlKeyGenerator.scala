@@ -29,6 +29,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.joda.time.format.DateTimeFormat
+import org.apache.hudi.common.util.PartitionPathEncodeUtils
 
 import java.sql.Timestamp
 import java.util
@@ -152,7 +153,11 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
       // in this case.
       if (partitionFragments.size != partitionSchema.get.size) {
         partitionPath
-      } else {
+      }
+      else if (partitionPath == PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH) {
+        partitionPath
+      }
+      else {
         partitionFragments.zip(partitionSchema.get.fields).map {
           case (partitionValue, partitionField) =>
             val hiveStylePrefix = s"${partitionField.name}="
