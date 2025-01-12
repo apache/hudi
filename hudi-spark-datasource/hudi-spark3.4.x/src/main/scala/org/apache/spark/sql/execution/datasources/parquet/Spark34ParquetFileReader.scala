@@ -19,13 +19,13 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
+import org.apache.hudi.common.util
+import org.apache.orc.{OrcFile, Reader, TypeDescription}
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -38,23 +38,27 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector
+import org.apache.spark.sql.vectorized.ColumnarBatch
 
-class Spark34ParquetReader(enableVectorizedReader: Boolean,
-                           datetimeRebaseModeInRead: String,
-                           int96RebaseModeInRead: String,
-                           enableParquetFilterPushDown: Boolean,
-                           pushDownDate: Boolean,
-                           pushDownTimestamp: Boolean,
-                           pushDownDecimal: Boolean,
-                           pushDownInFilterThreshold: Int,
-                           pushDownStringPredicate: Boolean,
-                           isCaseSensitive: Boolean,
-                           timestampConversion: Boolean,
-                           enableOffHeapColumnVector: Boolean,
-                           capacity: Int,
-                           returningBatch: Boolean,
-                           enableRecordFilter: Boolean,
-                           timeZoneId: Option[String]) extends SparkParquetReaderBase(
+import scala.collection.JavaConverters._
+
+class Spark34ParquetFileReader(enableVectorizedReader: Boolean,
+                               datetimeRebaseModeInRead: String,
+                               int96RebaseModeInRead: String,
+                               enableParquetFilterPushDown: Boolean,
+                               pushDownDate: Boolean,
+                               pushDownTimestamp: Boolean,
+                               pushDownDecimal: Boolean,
+                               pushDownInFilterThreshold: Int,
+                               pushDownStringPredicate: Boolean,
+                               isCaseSensitive: Boolean,
+                               timestampConversion: Boolean,
+                               enableOffHeapColumnVector: Boolean,
+                               capacity: Int,
+                               returningBatch: Boolean,
+                               enableRecordFilter: Boolean,
+                               timeZoneId: Option[String]) extends SparkFileReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
   pushDownDate = pushDownDate,
@@ -224,7 +228,7 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
   }
 }
 
-object Spark34ParquetReader extends SparkParquetReaderBuilder {
+object Spark34ParquetFileReader extends SparkParquetReaderBuilder {
   /**
    * Get parquet file reader
    *
@@ -237,7 +241,7 @@ object Spark34ParquetReader extends SparkParquetReaderBuilder {
   def build(vectorized: Boolean,
             sqlConf: SQLConf,
             options: Map[String, String],
-            hadoopConf: Configuration): SparkParquetReader = {
+            hadoopConf: Configuration): SparkFileReader = {
     //set hadoopconf
     hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
     hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
@@ -256,13 +260,13 @@ object Spark34ParquetReader extends SparkParquetReaderBuilder {
 
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
-        throw new IllegalArgumentException(
-          "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
-            "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false."))
+          throw new IllegalArgumentException(
+            "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
+              "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false."))
         .equals("true")
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
-    new Spark34ParquetReader(
+    new Spark34ParquetFileReader(
       enableVectorizedReader = vectorized,
       datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
       int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,
