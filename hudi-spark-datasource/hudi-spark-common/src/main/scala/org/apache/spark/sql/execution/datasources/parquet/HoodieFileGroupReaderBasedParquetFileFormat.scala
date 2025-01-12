@@ -214,7 +214,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   }
 
   private def buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping,
-                                     parquetFileReader: SparkParquetReader,
+                                     parquetFileReader: SparkFileReader,
                                      storageConf: StorageConfiguration[Configuration],
                                      props: TypedProperties,
                                      requiredSchema: StructType): Iterator[InternalRow] = {
@@ -277,7 +277,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     }
   }
 
-  private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkParquetReader, requestedSchema: StructType,
+  private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkFileReader, requestedSchema: StructType,
                            remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchema: StructType,
                            partitionSchema: StructType, outputSchema: StructType, filters: Seq[Filter],
                            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
