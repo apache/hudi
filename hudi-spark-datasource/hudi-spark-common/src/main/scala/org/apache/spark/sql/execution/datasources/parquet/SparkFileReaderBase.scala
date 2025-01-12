@@ -31,19 +31,19 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
-                                      enableParquetFilterPushDown: Boolean,
-                                      pushDownDate: Boolean,
-                                      pushDownTimestamp: Boolean,
-                                      pushDownDecimal: Boolean,
-                                      pushDownInFilterThreshold: Int,
-                                      isCaseSensitive: Boolean,
-                                      timestampConversion: Boolean,
-                                      enableOffHeapColumnVector: Boolean,
-                                      capacity: Int,
-                                      returningBatch: Boolean,
-                                      enableRecordFilter: Boolean,
-                                      timeZoneId: Option[String]) extends SparkParquetReader {
+abstract class SparkFileReaderBase(enableVectorizedReader: Boolean,
+                                   enableParquetFilterPushDown: Boolean,
+                                   pushDownDate: Boolean,
+                                   pushDownTimestamp: Boolean,
+                                   pushDownDecimal: Boolean,
+                                   pushDownInFilterThreshold: Int,
+                                   isCaseSensitive: Boolean,
+                                   timestampConversion: Boolean,
+                                   enableOffHeapColumnVector: Boolean,
+                                   capacity: Int,
+                                   returningBatch: Boolean,
+                                   enableRecordFilter: Boolean,
+                                   timeZoneId: Option[String]) extends SparkFileReader {
   /**
    * Read an individual parquet file
    *
@@ -113,5 +113,21 @@ trait SparkParquetReaderBuilder {
   def build(vectorized: Boolean,
             sqlConf: SQLConf,
             options: Map[String, String],
-            hadoopConf: Configuration): SparkParquetReader
+            hadoopConf: Configuration): SparkFileReader
+}
+
+trait SparkOrcReaderBuilder {
+  /**
+   * Get parquet file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return properties needed for reading a parquet file
+   */
+  def build(vectorized: Boolean,
+            sqlConf: SQLConf,
+            options: Map[String, String],
+            hadoopConf: Configuration): SparkFileReader
 }

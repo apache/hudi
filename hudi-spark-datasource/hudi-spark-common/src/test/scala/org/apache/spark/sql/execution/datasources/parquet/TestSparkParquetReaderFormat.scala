@@ -32,7 +32,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
 /**
- * Class used to test [[SparkParquetReader]]
+ * Class used to test [[SparkFileReader]]
  * This class should have the same functionality as [[ParquetFileFormat]]
  */
 class TestSparkParquetReaderFormat extends ParquetFileFormat with SparkAdapterSupport {

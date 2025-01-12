@@ -39,8 +39,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.datasources.FileFormat;
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
 import org.apache.spark.sql.hudi.SparkAdapter;
+import org.apache.spark.sql.execution.datasources.parquet.SparkFileReader;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.util.SerializableConfiguration;
@@ -109,11 +109,11 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
       throw new HoodieException("Table config broadcast is not initialized.");
     }
 
-    SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
-    if (sparkParquetReader != null) {
+    SparkFileReader sparkFileReader = parquetReaderBroadcast.getValue();
+    if (sparkFileReader != null) {
       List<Filter> filters = Collections.emptyList();
       return new SparkFileFormatInternalRowReaderContext(
-          sparkParquetReader,
+          sparkFileReader,
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           new HadoopStorageConfiguration(configurationBroadcast.getValue().value()),
