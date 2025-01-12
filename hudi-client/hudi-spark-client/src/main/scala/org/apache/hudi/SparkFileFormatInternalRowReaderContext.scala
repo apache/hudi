@@ -39,7 +39,7 @@ import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkFileReader}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
@@ -53,13 +53,13 @@ import scala.collection.mutable
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param parquetFileReader A reader that transforms a [[PartitionedFile]] to an iterator of
+ * @param fileReader A reader that transforms a [[PartitionedFile]] to an iterator of
  *                          [[InternalRow]]. This is required for reading the base file and
  *                          not required for reading a file group with only log files.
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
-class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
+class SparkFileFormatInternalRowReaderContext(fileReader: SparkFileReader,
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
@@ -92,7 +92,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-      new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
+      new CloseableInternalRowIterator(fileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
