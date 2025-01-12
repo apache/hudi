@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
-public class TestSparkParquetReader extends TestBootstrapReadBase {
+public class TestSparkFileReader extends TestBootstrapReadBase {
 
   @Test
   public void testReader() {

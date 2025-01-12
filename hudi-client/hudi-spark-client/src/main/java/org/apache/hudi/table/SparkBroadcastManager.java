@@ -41,7 +41,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.execution.datasources.FileFormat;
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.execution.datasources.parquet.SparkFileReader;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.util.SerializableConfiguration;
@@ -63,9 +63,9 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
   private final transient HoodieEngineContext context;
   private final transient HoodieTableMetaClient metaClient;
 
-  protected Option<SparkParquetReader> parquetReaderOpt = Option.empty();
+  protected Option<SparkFileReader> parquetReaderOpt = Option.empty();
   protected Broadcast<SQLConf> sqlConfBroadcast;
-  protected Broadcast<SparkParquetReader> parquetReaderBroadcast;
+  protected Broadcast<SparkFileReader> parquetReaderBroadcast;
   protected Broadcast<SerializableConfiguration> configurationBroadcast;
 
   public SparkBroadcastManager(HoodieEngineContext context, HoodieTableMetaClient metaClient) {
@@ -113,11 +113,11 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
       throw new HoodieException("Spark Parquet reader broadcast is not initialized.");
     }
 
-    SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
-    if (sparkParquetReader != null) {
+    SparkFileReader sparkFileReader = parquetReaderBroadcast.getValue();
+    if (sparkFileReader != null) {
       List<Filter> filters = new ArrayList<>();
       return Option.of(new SparkFileFormatInternalRowReaderContext(
-          sparkParquetReader,
+          sparkFileReader,
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq()));
     } else {
