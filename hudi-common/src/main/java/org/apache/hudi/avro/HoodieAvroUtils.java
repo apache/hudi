@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -1550,5 +1551,31 @@ public class HoodieAvroUtils {
       }
     }
     return Pair.of(false, null);
+  }
+
+  /**
+   * Returns field name and the resp data type of the field. The data type will always refer to the leaf node.
+   * for eg, for a.b.c, we turn Pair.of(a.b.c, DataType(c))
+   * @param schema schema of table.
+   * @param fieldName field name of interest.
+   * @return
+   */
+  @VisibleForTesting
+  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName) {
+    return getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING);
+  }
+
+  @VisibleForTesting
+  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName, String prefix) {
+    if (!fieldName.contains(".")) {
+      return Pair.of(prefix + fieldName, schema.getField(fieldName));
+    } else {
+      int rootFieldIndex = fieldName.indexOf(".");
+      Schema.Field rootField = schema.getField(fieldName.substring(0, rootFieldIndex));
+      if (rootField == null) {
+        throw new HoodieException("Failed to find " + fieldName + " in the table schema ");
+      }
+      return getSchemaForField(rootField.schema(), fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1));
+    }
   }
 }

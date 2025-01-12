@@ -44,6 +44,7 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -63,6 +64,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.computeRevivedAndDeletedKeys;
@@ -381,7 +383,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     addNColumns(colNames, HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue() + 10);
     List<String> expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     addNColumns(expected, HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue());
-    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
+        Lazy.eagerly(Option.of(getTableSchema(expected))), false));
 
     //test with table schema < default
     int tableSchemaSize = HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue() - 10;
@@ -390,7 +393,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     addNColumns(colNames, tableSchemaSize);
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     addNColumns(expected, tableSchemaSize);
-    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(getTableSchema(expected))), false));
 
     //test with max val < tableSchema
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -401,7 +404,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     addNColumns(colNames, HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue() + 10);
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     addNColumns(expected, 3);
-    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(getTableSchema(expected))), false));
 
     //test with max val > tableSchema
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -412,12 +415,12 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     addNColumns(colNames, tableSchemaSize);
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     addNColumns(expected, tableSchemaSize);
-    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(getTableSchema(expected))), false));
 
     //test with list of cols and a nested field as well.
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
-        .withColumnStatsIndexForColumns("col_1,col_7,col_11,col12.col12_1")
+        .withColumnStatsIndexForColumns("col_1,col_7,col_11,col_12.col12_1")
         .build();
     colNames = new ArrayList<>();
     addNColumns(colNames, 15);
@@ -425,7 +428,21 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_1");
     expected.add("col_7");
     expected.add("col_11");
-    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+    expected.add("col_12.col12_1");
+
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .requiredString("col_1")
+        .requiredString("col_7")
+        .requiredString("col_11")
+        .name("col_12").type().record("NestedRecord")
+        .fields()
+        .requiredString("col12_1")
+        .endRecord()
+        .noDefault()
+        .endRecord();
+
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(schema)), false));
 
     //test with list of cols longer than config
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -439,7 +456,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_1");
     expected.add("col_7");
     expected.add("col_11");
-    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(getTableSchema(expected))), false));
 
     //test with list of cols including meta cols than config
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -452,10 +469,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_1");
     expected.add("col_7");
     expected.add("col_11");
-    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+    expected.add("_hoodie_commit_seqno");
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(getTableSchema(expected))), false));
 
     //test with avro schema
-    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES);
+    schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withColumnStatsIndexForColumns("booleanField,decimalField,localTimestampMillisField")
@@ -474,6 +492,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .build();
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     expected.add("firstname");
+    expected.add("student.lastname");
     assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(schema)), false));
 
     //test with avro schema with max cols set
@@ -524,7 +543,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     addNColumns(colNames, tableSchemaSize);
     expected = new ArrayList<>();
     addNColumns(expected, tableSchemaSize);
-    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(getTableSchema(expected))), false));
 
     //test with meta cols disabled with col list
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -537,7 +556,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_1");
     expected.add("col_7");
     expected.add("col_11");
-    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, colNames));
+    assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(getTableSchema(expected))), false));
 
     //test with meta cols disabled with avro schema
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -555,6 +574,12 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     for (int i = 0; i < n; i++) {
       list.add("col_" + i);
     }
+  }
+
+  private Schema getTableSchema(List<String> fieldNames) {
+    List<Schema.Field> fields = fieldNames.stream()
+        .map(fieldName -> new Schema.Field(fieldName, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE)).collect(Collectors.toList());
+    return Schema.createRecord("Test_Hoodie_Record", "", "", false, fields);
   }
 
   @Test
