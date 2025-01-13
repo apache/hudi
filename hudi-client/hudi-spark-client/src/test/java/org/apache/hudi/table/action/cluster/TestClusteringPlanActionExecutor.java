@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
@@ -148,6 +149,9 @@ public class TestClusteringPlanActionExecutor extends SparkClientFunctionalTestH
         assertEquals(1, clusteringPlan2.getMissingSchedulePartitions().size());
         assertTrue(clusteringPlan2.getMissingSchedulePartitions().contains(TOMORROW));
         break;
+      }
+      default: {
+        throw new HoodieException("Un-support mode" + mode);
       }
     }
   }
