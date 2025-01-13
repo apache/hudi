@@ -21,9 +21,9 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.HoodieSparkUtils.isSpark3
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -232,11 +232,6 @@ trait SparkAdapter extends Serializable {
                               sqlConf: SQLConf,
                               options: Map[String, String],
                               hadoopConf: Configuration): SparkFileReader
-
-  def createOrcFileReader(vectorized: Boolean,
-                          sqlConf: SQLConf,
-                          options: Map[String, String],
-                          hadoopConf: Configuration): SparkFileReader
 
   /**
    * use new qe execute
