@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.CachingIterator;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -42,7 +43,7 @@ public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
 
   private boolean hasNextInternal() {
     if (iterator == null) {
-      iterator = records.values().iterator();
+      iterator = (records instanceof ExternalSpillableMap) ? ((ExternalSpillableMap) records).iterator() : records.values().iterator();
     }
     if (iterator.hasNext()) {
       nextRecord = iterator.next();
