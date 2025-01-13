@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.IncrementalPartitionAwareStrategy;
+import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
 import org.apache.hudi.util.Lazy;
 
@@ -127,7 +129,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
   }
 
   @Override
-  public Option<HoodieClusteringPlan> generateClusteringPlan(Lazy<List<String>> partitions) {
+  public Option<HoodieClusteringPlan> generateClusteringPlan(ClusteringPlanActionExecutor executor, Lazy<List<String>> partitions) {
     if (!checkPrecondition()) {
       return Option.empty();
     }
@@ -138,7 +140,10 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     String partitionSelected = config.getClusteringPartitionSelected();
     LOG.info("Scheduling clustering partitionSelected: {}", partitionSelected);
-    List<String> partitionPaths;
+    List<String> partitionPaths = new ArrayList<>();
+    List<String> missingPartitions = new ArrayList<>();
+    List<HoodieClusteringGroup> clusteringGroups;
+    int clusteringMaxNumGroups = getWriteConfig().getClusteringMaxNumGroups();
 
     if (StringUtils.isNullOrEmpty(partitionSelected)) {
       // get matched partitions if set
@@ -146,11 +151,14 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       // filter the partition paths if needed to reduce list status
     } else {
       partitionPaths = Arrays.asList(partitionSelected.split(","));
+      // Users may temporarily set specific partitions for clustering.
+      // Ensure the coherence of the missing partitions.
+      missingPartitions = (List<String>)executor.fetchMissingPartitions(TableServiceType.CLUSTER).getRight();
     }
 
     Pair<List<String>, List<String>> partitionsPair = filterPartitionPaths(getWriteConfig(), partitionPaths);
     partitionPaths = partitionsPair.getLeft();
-    List<String> missingPartitions = partitionsPair.getRight();
+    missingPartitions.addAll(partitionsPair.getRight());
     LOG.info("Scheduling clustering partitionPaths: {}", partitionPaths);
     LOG.info("Missing Scheduled clustering partitionPaths: {}", missingPartitions);
 
@@ -161,37 +169,35 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     List<Pair<List<HoodieClusteringGroup>, String>> res = getEngineContext().map(partitionPaths, partitionPath -> {
       List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-      Pair<Stream<HoodieClusteringGroup>, Boolean> resultPair = buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible);
-
-      List<HoodieClusteringGroup> clusteringGroups = resultPair.getLeft().collect(Collectors.toList());
-      Boolean isAllSlicesIncluded = resultPair.getRight();
-      int limit = getWriteConfig().getClusteringMaxNumGroups();
-
+      Pair<Stream<HoodieClusteringGroup>, Boolean> groupPair = buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible);
+      List<HoodieClusteringGroup> clusteringGroupsPartition = groupPair.getLeft().collect(Collectors.toList());
+      Boolean allProcessed = groupPair.getRight();
       // return missed partition path
-      // Because the files in the current partition have not been completely processed.
-      if (clusteringGroups.size() > getWriteConfig().getClusteringMaxNumGroups()) {
-        return Pair.of(clusteringGroups.subList(0, limit), partitionPath);
-      } else if (!isAllSlicesIncluded) {
-        return Pair.of(clusteringGroups, partitionPath);
+      // because the candidate fileSlices in the current partition have not been completely processed.
+      if (clusteringGroupsPartition.size() > clusteringMaxNumGroups) {
+        return Pair.of(clusteringGroupsPartition.subList(0, clusteringMaxNumGroups), partitionPath);
+      } else if (!allProcessed) {
+        return Pair.of(clusteringGroupsPartition, partitionPath);
       } else {
-        return Pair.of(clusteringGroups, "");
+        return Pair.of(clusteringGroupsPartition, "");
       }
     }, partitionPaths.size());
 
-    int limit = getWriteConfig().getClusteringMaxNumGroups();
-    List<HoodieClusteringGroup> clusteringGroups;
     if (config.isIncrementalTableServiceEnable()) {
       Set<String> skippedPartitions = new HashSet<>();
       List<HoodieClusteringGroup> collectedGroups = res.stream().flatMap(pair -> {
         String missingPartition = pair.getRight();
         if (!StringUtils.isNullOrEmpty(missingPartition)) {
+          // missingPartition value is not empty, which means it related candidate fileSlices all not all processed.
+          // so that we need to mark this kind of partition as missing partition.
           skippedPartitions.add(missingPartition);
         }
         return pair.getLeft().stream();
       }).collect(Collectors.toList());
 
-      clusteringGroups = collectedGroups.stream().limit(limit).collect(Collectors.toList());
-      collectedGroups.subList(Math.min(limit, collectedGroups.size()), collectedGroups.size()).forEach(group -> {
+      clusteringGroups = collectedGroups.stream().limit(clusteringMaxNumGroups).collect(Collectors.toList());
+      // sublist of collectedGroups are skipped, marking related partition as missing partitions.
+      collectedGroups.subList(Math.min(clusteringMaxNumGroups, collectedGroups.size()), collectedGroups.size()).forEach(group -> {
         String missed = group.getSlices().get(0).getPartitionPath();
         skippedPartitions.add(missed);
       });
@@ -199,7 +205,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       skippedPartitions.addAll(missingPartitions);
       missingPartitions = new ArrayList<>(skippedPartitions);
     } else {
-      clusteringGroups = res.stream().flatMap(pair -> pair.getLeft().stream()).limit(limit).collect(Collectors.toList());
+      clusteringGroups = res.stream().flatMap(pair -> pair.getLeft().stream()).limit(clusteringMaxNumGroups).collect(Collectors.toList());
       missingPartitions = Collections.emptyList();
     }
 

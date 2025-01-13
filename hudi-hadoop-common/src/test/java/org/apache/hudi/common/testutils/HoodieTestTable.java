@@ -376,6 +376,19 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
+  public HoodieTestTable addCluster(
+      String instantTime,
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata,
+      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      HoodieReplaceCommitMetadata completeReplaceMetadata,
+      String completionTime) throws Exception {
+    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
+    createInflightClusterCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, completionTime, completeReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
   public HoodieTestTable addRequestedReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
     currentInstantTime = instantTime;

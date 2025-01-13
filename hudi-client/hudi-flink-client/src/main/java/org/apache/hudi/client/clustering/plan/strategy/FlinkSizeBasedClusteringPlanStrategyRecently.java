@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
@@ -62,7 +63,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
   }
 
   @Override
-  public Option<HoodieClusteringPlan> generateClusteringPlan(Lazy<List<String>> partitions) {
+  public Option<HoodieClusteringPlan> generateClusteringPlan(ClusteringPlanActionExecutor executor, Lazy<List<String>> partitions) {
     if (!checkPrecondition()) {
       return Option.empty();
     }

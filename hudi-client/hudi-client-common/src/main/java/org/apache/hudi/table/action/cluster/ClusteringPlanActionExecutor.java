@@ -89,7 +89,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseTableServicePl
 
     Lazy<List<String>> partitions = Lazy.lazily(() -> getPartitions(strategy, TableServiceType.CLUSTER));
 
-    return strategy.generateClusteringPlan(partitions);
+    return strategy.generateClusteringPlan(this, partitions);
   }
 
   @Override

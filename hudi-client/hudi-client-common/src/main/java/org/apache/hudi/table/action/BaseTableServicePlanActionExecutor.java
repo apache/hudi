@@ -89,7 +89,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
         config.getMetadataConfig(), table.getMetaClient().getBasePath());
   }
 
-  private Set<String> getIncrementalPartitions(TableServiceType type) {
+  public Set<String> getIncrementalPartitions(TableServiceType type) {
     Pair<Option<HoodieInstant>, List<String>> missingPair = fetchMissingPartitions(type);
     if (!missingPair.getLeft().isPresent()) {
       // Last complete table service commit maybe archived.
@@ -122,7 +122,11 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
     return partitionsInCommitMeta;
   }
 
-  private Pair<Option<HoodieInstant>, List<String>> fetchMissingPartitions(TableServiceType tableServiceType) {
+  public Pair<Option<HoodieInstant>, List<String>> fetchMissingPartitions(TableServiceType tableServiceType) {
+    if (!config.isIncrementalTableServiceEnable()) {
+      return Pair.of(Option.empty(), new ArrayList<>());
+    }
+
     Option<HoodieInstant> instant = Option.empty();
     List<String> missingPartitions = new ArrayList<>();
 
