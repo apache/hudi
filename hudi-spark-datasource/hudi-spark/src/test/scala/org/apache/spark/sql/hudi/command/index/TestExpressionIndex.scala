@@ -57,15 +57,14 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, SaveMode, functions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
-import org.scalatest.Ignore
 
 import java.util.stream.Collectors
 import scala.collection.JavaConverters
 
-@Ignore
 class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
+    spark.sql("set hoodie.metadata.index.column.stats.enable=false")
     initQueryIndexConf()
   }
 
@@ -777,6 +776,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |location '$basePath'
              |""".stripMargin)
 
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.parquet.small.file.limit=0")
         if (HoodieSparkUtils.gteqSpark3_4) {
           spark.sql("set spark.sql.defaultColumn.enabled=false")
@@ -856,6 +856,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |location '$basePath'
              |""".stripMargin)
 
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.parquet.small.file.limit=0")
         if (HoodieSparkUtils.gteqSpark3_4) {
           spark.sql("set spark.sql.defaultColumn.enabled=false")
@@ -1471,6 +1472,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |location '$basePath'
              |""".stripMargin)
 
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.parquet.small.file.limit=0")
         if (HoodieSparkUtils.gteqSpark3_4) {
           spark.sql("set spark.sql.defaultColumn.enabled=false")
@@ -1618,6 +1620,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              |location '$basePath'
              |""".stripMargin)
 
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.parquet.small.file.limit=0")
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
         if (HoodieSparkUtils.gteqSpark3_4) {
@@ -1942,7 +1945,9 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     if (shouldRollback) {
       // rollback the operation
       val lastCompletedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant()
-      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), getWriteConfig(Map.empty, metaClient.getBasePath.toString))
+      val writeConfig = getWriteConfig(Map.empty, metaClient.getBasePath.toString)
+      writeConfig.setValue("hoodie.metadata.index.column.stats.enable", "false")
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), writeConfig)
       writeClient.rollback(lastCompletedInstant.get().requestedTime)
       // validate the expression index
       checkAnswer(metadataSql)(
@@ -1968,7 +1973,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         HoodieWriteConfig.TBL_NAME.key -> tableName,
         RECORDKEY_FIELD.key -> "c1",
         PRECOMBINE_FIELD.key -> "c1",
-        PARTITIONPATH_FIELD.key() -> "c8"
+        PARTITIONPATH_FIELD.key() -> "c8",
+        "hoodie.metadata.index.column.stats.enable" -> "false"
       )
       val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json-partition-pruning").toString
 
@@ -2055,7 +2061,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         PRECOMBINE_FIELD.key -> "c1",
         PARTITIONPATH_FIELD.key() -> "c8",
         // setting IndexType to be INMEMORY to simulate Global Index nature
-        HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.INMEMORY.name()
+        HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.INMEMORY.name(),
+        "hoodie.metadata.index.column.stats.enable" -> "false"
       )
       val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json-partition-pruning").toString
 
