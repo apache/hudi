@@ -50,6 +50,8 @@ public class HoodieCleanConfig extends HoodieConfig {
 
   private static final String CLEANER_COMMITS_RETAINED_KEY = "hoodie.cleaner.commits.retained";
   private static final String CLEANER_HOURS_RETAINED_KEY = "hoodie.cleaner.hours.retained";
+
+  private static final String CLEANER_ROLLBACK_ONLY_KEY = "hoodie.cleaner.rollback_only";
   private static final String CLEANER_FILE_VERSIONS_RETAINED_KEY = "hoodie.cleaner.fileversions.retained";
 
   public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
@@ -109,6 +111,11 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation("When " + KEEP_LATEST_BY_HOURS.name() + " cleaning policy is used, the number of hours for which commits need to be retained. "
           + "This config provides a more flexible option as compared to number of commits retained for cleaning service. Setting this property ensures "
           + "all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
+
+  public static final ConfigProperty<String> CLEANER_ROLLBACK_ONLY = ConfigProperty.key(CLEANER_ROLLBACK_ONLY_KEY)
+          .defaultValue("false")
+          .markAdvanced()
+          .withDocumentation("TODO");
 
   public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
       .key(CLEANER_FILE_VERSIONS_RETAINED_KEY)

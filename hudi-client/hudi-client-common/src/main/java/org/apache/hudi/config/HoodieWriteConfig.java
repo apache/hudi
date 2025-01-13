@@ -1499,6 +1499,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCleanConfig.CLEANER_HOURS_RETAINED);
   }
 
+  public boolean getCleanerRollbackOnly() {
+    return getBoolean(HoodieCleanConfig.CLEANER_ROLLBACK_ONLY);
+  }
+
   public int getMaxCommitsToKeep() {
     return getInt(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP);
   }
