@@ -31,7 +31,7 @@ hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.InProcessLock
 
 ## Distributed Locking 
 A pre-requisite for distributed co-ordination in Hudi, like many other distributed database systems is a distributed lock provider, that different processes can use to plan, schedule and 
-execute actions on the Hudi timeline in a concurrent fashion. Locks are also used to [generate TrueTime](timeline#truetime-generation), as discussed before.
+execute actions on the Hudi timeline in a concurrent fashion. Locks are also used to [generate TrueTime](https://hudi.apache.org/docs/timeline/#truetime-generation), as discussed before.
 
 External locking is typically used in conjunction with optimistic concurrency control 
 because it provides a way to prevent conflicts that might occur when two or more transactions (commits in our case) attempt to modify the same resource concurrently. 
