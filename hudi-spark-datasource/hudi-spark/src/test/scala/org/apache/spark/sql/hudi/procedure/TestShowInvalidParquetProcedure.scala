@@ -125,7 +125,7 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call show_invalid_parquet Procedure and Specify Partitions") {
+  test("Test Call show_invalid_parquet Procedure, Specify Partitions and/or Instants.") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = s"${tmp.getCanonicalPath}/$tableName"
