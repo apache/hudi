@@ -383,12 +383,13 @@ public class ConfigUtils {
    * config, if exists, is returned if the config is not found in the properties.
    *
    * @param props          Configs in {@link Map}.
-   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @param configProperty {@link ConfigProperty} config to fetch.
    * @return String value if the config exists; default String value if the config does not exist
-   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
+   * and there is default value defined in the {@link ConfigProperty} config and is convertible to
+   * String type; {@code null} otherwise.
    */
   public static String getStringWithAltKeys(Map<String, Object> props,
-                                            ConfigProperty<String> configProperty) {
+                                            ConfigProperty<?> configProperty) {
     return getStringWithAltKeys(props::get, configProperty);
   }
 
@@ -398,12 +399,13 @@ public class ConfigUtils {
    * config, if exists, is returned if the config is not found in the properties.
    *
    * @param keyMapper      Mapper function to map the key to values.
-   * @param configProperty {@link ConfigProperty} config of String type to fetch.
+   * @param configProperty {@link ConfigProperty} config to fetch.
    * @return String value if the config exists; default String value if the config does not exist
-   * and there is default value defined in the {@link ConfigProperty} config; {@code null} otherwise.
+   * and there is default value defined in the {@link ConfigProperty} config and is convertible to
+   * String type; {@code null} otherwise.
    */
   public static String getStringWithAltKeys(Function<String, Object> keyMapper,
-                                            ConfigProperty<String> configProperty) {
+                                            ConfigProperty<?> configProperty) {
     Object value = keyMapper.apply(configProperty.key());
     if (value != null) {
       return value.toString();
@@ -417,7 +419,7 @@ public class ConfigUtils {
         return value.toString();
       }
     }
-    return configProperty.hasDefaultValue() ? configProperty.defaultValue() : null;
+    return configProperty.hasDefaultValue() ? configProperty.defaultValue().toString() : null;
   }
 
   /**

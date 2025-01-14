@@ -128,6 +128,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
    * In Spark 3.0.x, UPDATE and DELETE can appear at most once in MATCHED clauses in a MERGE INTO statement.
    * Refer to: `org.apache.spark.sql.catalyst.parser.AstBuilder#visitMergeIntoTable`
    *
+   * The test also provides test coverage for "Test merge into allowed patterns of assignment clauses".
    */
   test("Test MergeInto with more than once update actions") {
 
@@ -726,7 +727,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         //
         // 2) set source column name to be different with target column
         //
-        val errorMessage = "Failed to resolve pre-combine field `v` w/in the source-table output"
+        val errorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
 
         checkException(
           s"""
@@ -814,9 +815,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       )
 
       //
-      // 2.a) set source column name to be different with target column (should fail unable to match pre-combine field)
+      // 2.a) set source column name to be different with target column (should fail unable to match precombine field)
       //
-      val failedToResolveErrorMessage = "Failed to resolve pre-combine field `v` w/in the source-table output"
+      val failedToResolveErrorMessage = "Failed to resolve precombine field `v` w/in the source-table output"
 
       checkException(
         s"""merge into $tableName1 t0
