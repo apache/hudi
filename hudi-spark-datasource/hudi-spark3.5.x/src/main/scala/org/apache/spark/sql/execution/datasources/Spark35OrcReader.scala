@@ -17,22 +17,19 @@
  * under the License.
  */
 
-package org.apache.spark.sql.execution.datasources.orc
+package org.apache.spark.sql.execution.datasources
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.orc.{OrcFile, Reader, TypeDescription}
 import org.apache.parquet.hadoop.ParquetInputFormat
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.{FileFormat, PartitionedFile}
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetOptions, ParquetReadSupport, SparkFileReader, SparkFileReaderBase, SparkOrcReaderBuilder, SparkParquetReaderBuilder}
+import org.apache.spark.sql.execution.datasources.parquet._
 import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, ShortType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter}
