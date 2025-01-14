@@ -39,6 +39,7 @@ import org.scalatest.Inspectors.forAll
 
 import java.io.File
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 
 @SparkSQLCoreFlow
