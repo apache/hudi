@@ -540,3 +540,12 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-20127][INTERNAL] Fixing resource closure and heartbeat stopping in HoodieStreamer (#1123)
 [ENG-13584][INTERNAL] Avoid any race condition on conflicting schema for readers/writers (#1122)
 [AUDIT-1071]: Changelog for release-v1.68.0 (#1121)
+
+--- [2025-01-14 21:21:15] [release-v1.75.0] ---
+[AUDIT-1071] Add fetch-depth: 0 to checkout in bot.yml (#1138)
+[ENG-7182][HUDI-8811] Handle Kafka source configuration-related failures with specific exception handling (#1117)
+[ENG-20196][HUDI-8860] Avoid calling values() on ExternalSpillableMap (#1135)
+[ENG-19953][HUDI-8857] Log shortened list of files instead of all files in MDT validator to avoid huge log message (#1132)
+[ENG-20198][INTERNAL] create custom concat handle config (#1128)
+[ENG-19830][INTERNAL] Add publish-adhoc-jar github workflow yaml for hudi-internal (#1130)
+[AUDIT-1071]: Changelog for release-v1.70.0 (#1131)
