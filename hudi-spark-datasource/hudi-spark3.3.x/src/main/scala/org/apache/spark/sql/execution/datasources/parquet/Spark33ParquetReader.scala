@@ -57,7 +57,7 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
                            capacity: Int,
                            returningBatch: Boolean,
                            enableRecordFilter: Boolean,
-                           timeZoneId: Option[String]) extends SparkParquetReaderBase(
+                           timeZoneId: Option[String]) extends SparkFileReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
   pushDownDate = pushDownDate,
@@ -238,7 +238,7 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
   def build(vectorized: Boolean,
             sqlConf: SQLConf,
             options: Map[String, String],
-            hadoopConf: Configuration): SparkParquetReader = {
+            hadoopConf: Configuration): SparkFileReader = {
     //set hadoopconf
     hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
     hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
