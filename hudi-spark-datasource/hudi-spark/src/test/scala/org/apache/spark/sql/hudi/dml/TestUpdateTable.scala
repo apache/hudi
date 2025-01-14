@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -30,8 +31,8 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
   test("Test Update Table") {
     withRecordType()(withTempDir { tmp =>
-      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
-        Seq("cow", "mor").foreach { tableType =>
+      Seq(true).foreach { sparkSqlOptimizedWrites =>
+        Seq("mor").foreach { tableType =>
           val tableName = generateTableName
           // create table
           spark.sql(

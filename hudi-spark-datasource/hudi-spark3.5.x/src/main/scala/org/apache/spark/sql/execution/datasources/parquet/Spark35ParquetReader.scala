@@ -20,11 +20,12 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.DataSourceWriteOptions.SPARK_READ_ATTACH_ROW_POSITION
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
-import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
+import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.hadoop.{ParquetInputFormat, ParquetRecordReader}
@@ -36,7 +37,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{LongType, StructType}
 
 class Spark35ParquetReader(enableVectorizedReader: Boolean,
                            datetimeRebaseModeInRead: String,
@@ -53,7 +54,8 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
                            capacity: Int,
                            returningBatch: Boolean,
                            enableRecordFilter: Boolean,
-                           timeZoneId: Option[String]) extends SparkParquetReaderBase(
+                           timeZoneId: Option[String],
+                           attachRowPosition: Boolean) extends SparkParquetReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
   pushDownDate = pushDownDate,
@@ -91,6 +93,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
+    requiredSchema.add(ParquetFileFormat.ROW_INDEX_TEMPORARY_COLUMN_NAME, LongType, nullable = true)
     val schemaEvolutionUtils = new Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
       partitionSchema, internalSchemaOpt)
 
@@ -285,6 +288,9 @@ object Spark35ParquetReader extends SparkParquetReaderBuilder {
       capacity = sqlConf.parquetVectorizedReaderBatchSize,
       returningBatch = returningBatch,
       enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
-      timeZoneId = Some(sqlConf.sessionLocalTimeZone))
+      timeZoneId = Some(sqlConf.sessionLocalTimeZone),
+      attachRowPosition = sqlConf.getConfString(
+        SPARK_READ_ATTACH_ROW_POSITION.key,
+        SPARK_READ_ATTACH_ROW_POSITION.defaultValue.toString).toBoolean)
   }
 }

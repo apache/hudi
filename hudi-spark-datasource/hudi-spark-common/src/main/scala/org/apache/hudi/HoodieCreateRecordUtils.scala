@@ -18,26 +18,27 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, PAYLOAD_CLASS_NAME, PRECOMBINE_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, PRECOMBINE_FIELD}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.TaskContext
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, HoodieInternalRowUtils}
 import org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeRowWriter
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, HoodieInternalRowUtils}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -225,12 +226,13 @@ object HoodieCreateRecordUtils {
     else {
       None
     }
-    val recordLocation: Option[HoodieRecordLocation] = if (instantTime.isDefined && fileName.isDefined) {
-      val fileId = FSUtils.getFileId(fileName.get)
-      Some(new HoodieRecordLocation(instantTime.get, fileId))
+    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields) {
+      Option(avroRec.get(ParquetFileFormat.ROW_INDEX_TEMPORARY_COLUMN_NAME)).map(_.asInstanceOf[Long])
     } else {
       None
     }
+    val recordLocation: Option[HoodieRecordLocation] =
+      createHoodieRecordLocation(instantTime, fileName, recordPosition)
     (hoodieKey, recordLocation)
   }
 
@@ -264,13 +266,27 @@ object HoodieCreateRecordUtils {
       None
     }
 
-    val recordLocation: Option[HoodieRecordLocation] = if (instantTime.isDefined && fileName.isDefined) {
-      val fileId = FSUtils.getFileId(fileName.get)
-      Some(new HoodieRecordLocation(instantTime.get, fileId))
+    val recordPosition: Option[Long] = if (fetchRecordLocationFromMetaFields) {
+      // TODO(yihua): fix
+      Option(sourceRow.getLong(6))
     } else {
       None
     }
 
+    val recordLocation: Option[HoodieRecordLocation] =
+      createHoodieRecordLocation(instantTime, fileName, recordPosition)
+
     (new HoodieKey(recordKey, partitionPath), recordLocation)
+  }
+
+  private def createHoodieRecordLocation(instantTime: Option[String],
+                                         fileName: Option[String],
+                                         recordPosition: Option[Long]) = {
+    if (instantTime.isDefined && fileName.isDefined && recordPosition.isDefined) {
+      val fileId = FSUtils.getFileId(fileName.get)
+      Some(new HoodieRecordLocation(instantTime.get, fileId, recordPosition.get))
+    } else {
+      None
+    }
   }
 }
