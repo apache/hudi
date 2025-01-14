@@ -287,7 +287,10 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
     }
     List<R> result = new ArrayList<>(inMemoryMap.size() + diskBasedMap.size());
     result.addAll(inMemoryMap.values());
-    result.addAll(diskBasedMap.values());
+    Iterator<R> iterator = diskBasedMap.iterator();
+    while (iterator.hasNext()) {
+      result.add(iterator.next());
+    }
     return result;
   }
 
