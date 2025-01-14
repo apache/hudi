@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -401,15 +402,26 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         val e1 = intercept[AnalysisException] {
           spark.sql(s"update $tableName set id = 2 where id = 1")
         }
-        assert(e1.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for record key field `id`" +
-          s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+
+        if (gteqSpark3_4) {
+          assert(e1.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for record key field `id`" +
+            s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+        } else {
+          assert(e1.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for record key field `id`" +
+            s" for table `default.$tableName`. Please remove the assignment clause to avoid the error."))
+        }
 
         // Try to update partition column (should fail)
         val e2 = intercept[AnalysisException] {
           spark.sql(s"update $tableName set pt = '2022' where id = 1")
         }
-        assert(e2.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for partition field `pt`" +
-          s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+        if (gteqSpark3_4) {
+          assert(e2.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for partition field `pt`" +
+            s" for table `spark_catalog.default.$tableName`. Please remove the assignment clause to avoid the error."))
+        } else {
+          assert(e2.getMessage.contains(s"Detected disallowed assignment clause in UPDATE statement for partition field `pt`" +
+            s" for table `default.$tableName`. Please remove the assignment clause to avoid the error."))
+        }
 
         // Verify data remains unchanged after failed updates
         checkAnswer(s"select id, name, price, ts, pt from $tableName")(
