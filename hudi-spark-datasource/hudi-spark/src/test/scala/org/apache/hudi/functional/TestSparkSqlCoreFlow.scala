@@ -360,7 +360,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     assertEquals(deltaRowsMap.size, deltaRows.length)
     assertEquals(beforeRowsMap.size, beforeRows.length)
 
-    // Check that all input rows exist in hudiRows
+    // Check that all input rows exist in afterRows
     deltaRows.foreach { inputRow =>
       val key = getRowKey(inputRow)
       val hudiRow = afterRows.find(row => getRowKey(row) == key)
