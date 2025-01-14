@@ -29,7 +29,7 @@ import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTable
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
-import org.apache.hudi.HoodieSparkSqlWriterInternal.handleInsertDuplicates
+import org.apache.hudi.HoodieSparkSqlWriterInternal.{handleInsertDuplicates, shouldDropDuplicatesForInserts, shouldFailWhenDuplicatesFound}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
@@ -552,8 +552,10 @@ class HoodieSparkSqlWriterInternal {
     // or INSERT_DUP_POLICY is `drop` or `fail`.
     // Auto-correct the operation to "insert" if OPERATION is set to "upsert" wrongly
     // or not set (in which case it will be set as "upsert" by parametersWithWriteDefaults()) .
-    if ((hoodieConfig.getBoolean(INSERT_DROP_DUPS) || hoodieConfig.contains(INSERT_DUP_POLICY.key)) &&
-      operation == WriteOperationType.UPSERT) {
+    if ((hoodieConfig.getBoolean(INSERT_DROP_DUPS) ||
+      shouldDropDuplicatesForInserts(hoodieConfig) ||
+      shouldFailWhenDuplicatesFound(hoodieConfig))
+      && operation == WriteOperationType.UPSERT) {
 
       log.warn(s"$UPSERT_OPERATION_OPT_VAL is not applicable " +
         s"when $INSERT_DROP_DUPS is set to be true, or $INSERT_DUP_POLICY is set to fail or drop, " +
