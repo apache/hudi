@@ -21,8 +21,10 @@ import org.apache.hudi.AutoRecordKeyGenerationUtils.getClass
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+
 import org.slf4j.LoggerFactory
 
 class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
@@ -1054,7 +1056,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                  |  type = '$tableType',
                  |  primaryKey = 'id',
                  |  preCombineField = 'ts',
-                 |  hoodie.record.merge.mode = '$mergeMode'
+                 |  recordMergeMode = '$mergeMode'
                  | )
                  | partitioned by(dt)
                  | location '${tmp.getCanonicalPath}'
@@ -1147,8 +1149,9 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
             // Verify data state
             if (mergeMode == "COMMIT_TIME_ORDERING") {
-              checkAnswer(s"select id, name, price, ts, dt from $tableName where id = 1")(
-                Seq(1, "a1", 10.0, 1000, "2021-03-21")
+              checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
+                Seq(1, "a1", 10.0, 1000, "2021-03-21"),
+                Seq(2, "a2", 12.0, 1002, "2021-03-21")
               )
             } else {
               // For EVENT_TIME_ORDERING, original data should be unchanged due to exception
@@ -1165,47 +1168,50 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   test("Test merge into Allowed-patterns of assignment clauses") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSparkSqlSessionConfig(DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "false") {
-          val tableName = generateTableName
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  name string,
-               |  value int,
-               |  ts int
-               |) using hudi
-               | location '${tmp.getCanonicalPath}/$tableName'
-               | partitioned by(value)
-               | tblproperties (
-               |  type = '$tableType',
-               |  primaryKey ='id',
-               |  preCombineField = 'ts'
-               | )
-          """.stripMargin)
+        Seq("COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING").foreach { mergeMode =>
+          withSparkSqlSessionConfig(DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "false") {
+            val tableName = generateTableName
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 |  id int,
+                 |  name string,
+                 |  value int,
+                 |  ts int
+                 |) using hudi
+                 | location '${tmp.getCanonicalPath}/$tableName'
+                 | partitioned by(value)
+                 | tblproperties (
+                 |  type = '$tableType',
+                 |  primaryKey ='id',
+                 |  preCombineField = 'ts',
+                 |  recordMergeMode = '$mergeMode'
+                 | )
+            """.stripMargin)
 
-          spark.sql(s"insert into $tableName select 1 as id, 'a1' as name, 10 as value, 1000 as ts")
+            spark.sql(s"insert into $tableName select 1 as id, 'a1' as name, 10 as value, 1000 as ts")
 
-          // Test case 1: COW primary key column is not mandatory in the update assignment clause.
-          // Covered by test "Test MergeInto with more than once update actions"
+            // Test case 1: COW primary key column is not mandatory in the update assignment clause.
+            // Covered by test "Test MergeInto with more than once update actions"
 
-          // Test case 2: When partial update feature is on, primary key column is not mandatory in the update
-          // assignment clause. Covered by test class org/apache/spark/sql/hudi/dml/TestPartialUpdateForMergeInto.scala.
+            // Test case 2: When partial update feature is on, primary key column is not mandatory in the update
+            // assignment clause. Covered by test class org/apache/spark/sql/hudi/dml/TestPartialUpdateForMergeInto.scala.
 
-          // Test case 3: Precombine key column is not mandatory in the update assignment clause.
-          spark.sql(
-            s"""
-               |merge into $tableName h0
-               |using (
-               |  select 1 as id, 1003 as ts
-               | ) s0
-               | on h0.id = s0.id
-               | when matched then update set h0.id = s0.id
-               |""".stripMargin)
+            // Test case 3: Precombine key column is not mandatory in the update assignment clause.
+            spark.sql(
+              s"""
+                 |merge into $tableName h0
+                 |using (
+                 |  select 1 as id, 1003 as ts
+                 | ) s0
+                 | on h0.id = s0.id
+                 | when matched then update set h0.id = s0.id
+                 |""".stripMargin)
 
-          checkAnswer(s"select id, name, value, ts from $tableName")(
-            Seq(1, "a1", 10, 1000)
-          )
+            checkAnswer(s"select id, name, value, ts from $tableName")(
+              Seq(1, "a1", 10, 1000)
+            )
+          }
         }
       }
     })
