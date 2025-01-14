@@ -32,7 +32,7 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter}
+import scala.jdk.CollectionConverters._
 
 class Spark35OrcReader(enableVectorizedReader: Boolean,
                        datetimeRebaseModeInRead: String,
