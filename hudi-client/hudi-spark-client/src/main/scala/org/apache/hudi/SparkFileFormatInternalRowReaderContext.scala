@@ -61,7 +61,7 @@ import scala.collection.mutable
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
-class SparkFileFormatInternalRowReaderContext(fileReader: SparkFileReader,
+class SparkFileFormatInternalRowReaderContext(fileReaders: java.util.Map[String, SparkFileReader],
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
@@ -97,6 +97,7 @@ class SparkFileFormatInternalRowReaderContext(fileReader: SparkFileReader,
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
+      val fileReader = if (fileInfo.filePath.toString.endsWith("orc")) fileReaders.get("orc") else fileReaders.get("parquet")
       new CloseableInternalRowIterator(fileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
