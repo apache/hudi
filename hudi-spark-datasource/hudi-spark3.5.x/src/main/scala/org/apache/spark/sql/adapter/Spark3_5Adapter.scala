@@ -18,7 +18,6 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark35HoodieFileScanRDD
-
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
@@ -34,7 +33,8 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35LegacyHoodieParquetFileFormat, Spark35ParquetReader, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.orc.Spark35OrcReader
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35LegacyHoodieParquetFileFormat, Spark35ParquetReader, SparkFileReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.SQLConf
@@ -147,11 +147,27 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
   override def createParquetFileReader(vectorized: Boolean,
                                        sqlConf: SQLConf,
                                        options: Map[String, String],
-                                       hadoopConf: Configuration): SparkParquetReader = {
+                                       hadoopConf: Configuration): SparkFileReader = {
     Spark35ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.sc.stop(exitCode)
+  }
+
+  /**
+   * Get orc file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return parquet file reader
+   */
+  override def createOrcFileReader(vectorized: Boolean,
+                                   sqlConf: SQLConf,
+                                   options: Map[String, String],
+                                   hadoopConf: Configuration): SparkFileReader = {
+    Spark35OrcReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 }

@@ -20,13 +20,15 @@
 package org.apache.spark.sql.execution.datasources.orc
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.orc.{OrcFile, Reader, TypeDescription}
 import org.apache.parquet.hadoop.ParquetInputFormat
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FileFormat, PartitionedFile}
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetOptions, ParquetReadSupport, SparkFileReader, SparkFileReaderBase, SparkParquetReaderBuilder}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetOptions, ParquetReadSupport, SparkFileReader, SparkFileReaderBase, SparkOrcReaderBuilder, SparkParquetReaderBuilder}
 import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
@@ -35,7 +37,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter}
 
-class SparkOrcFileReader(enableVectorizedReader: Boolean,
+class Spark34OrcFileReader(enableVectorizedReader: Boolean,
                            datetimeRebaseModeInRead: String,
                            int96RebaseModeInRead: String,
                            enableParquetFilterPushDown: Boolean,
@@ -43,7 +45,6 @@ class SparkOrcFileReader(enableVectorizedReader: Boolean,
                            pushDownTimestamp: Boolean,
                            pushDownDecimal: Boolean,
                            pushDownInFilterThreshold: Int,
-                           pushDownStringPredicate: Boolean,
                            isCaseSensitive: Boolean,
                            timestampConversion: Boolean,
                            enableOffHeapColumnVector: Boolean,
@@ -151,7 +152,7 @@ class SparkOrcFileReader(enableVectorizedReader: Boolean,
   }
 }
 
-object SparkOrcFileReader extends SparkParquetReaderBuilder {
+object Spark34OrcFileReader extends SparkOrcReaderBuilder {
   /**
    * Get parquet file reader
    *
@@ -179,7 +180,6 @@ object SparkOrcFileReader extends SparkParquetReaderBuilder {
         SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
         SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.defaultValueString).toBoolean
     )
-    hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
 
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
@@ -189,7 +189,7 @@ object SparkOrcFileReader extends SparkParquetReaderBuilder {
         .equals("true")
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
-    new SparkOrcFileReader(
+    new Spark34OrcFileReader(
       enableVectorizedReader = vectorized,
       datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
       int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,
@@ -198,7 +198,6 @@ object SparkOrcFileReader extends SparkParquetReaderBuilder {
       pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp,
       pushDownDecimal = sqlConf.parquetFilterPushDownDecimal,
       pushDownInFilterThreshold = sqlConf.parquetFilterPushDownInFilterThreshold,
-      pushDownStringPredicate = sqlConf.parquetFilterPushDownStringPredicate,
       isCaseSensitive = sqlConf.caseSensitiveAnalysis,
       timestampConversion = sqlConf.isParquetINT96TimestampConversion,
       enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled,
@@ -208,3 +207,4 @@ object SparkOrcFileReader extends SparkParquetReaderBuilder {
       timeZoneId = Some(sqlConf.sessionLocalTimeZone))
   }
 }
+

@@ -41,7 +41,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
+import org.apache.spark.sql.execution.datasources.parquet.SparkFileReader
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
@@ -52,7 +52,6 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.mockito.Mockito
 
 import java.util
-
 import scala.collection.JavaConverters._
 
 /**
@@ -99,7 +98,9 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, storageConf: StorageConfiguration[_]): HoodieReaderContext[InternalRow] = {
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
-    new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty)
+    val readers = new util.HashMap[String, SparkFileReader]()
+    readers.put("parquet", reader)
+    new SparkFileFormatInternalRowReaderContext(readers, Seq.empty, Seq.empty)
   }
 
   override def commitToTable(recordList: util.List[HoodieRecord[_]], operation: String, options: util.Map[String, String]): Unit = {
@@ -148,8 +149,9 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   @Test
   def testGetOrderingValue(): Unit = {
-    val reader = Mockito.mock(classOf[SparkParquetReader])
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty)
+    val reader = Mockito.mock(classOf[SparkFileReader])
+    val readers: Map[String, SparkFileReader] = Map("parquet" -> reader)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(readers.asJava, Seq.empty, Seq.empty)
     val orderingFieldName = "col2"
     val avroSchema = new Schema.Parser().parse(
       "{\"type\": \"record\",\"name\": \"test\",\"namespace\": \"org.apache.hudi\",\"fields\": ["
