@@ -17,41 +17,38 @@
  * under the License.
  */
 
-package org.apache.spark.sql.execution.datasources.orc
+package org.apache.spark.sql.execution.datasources
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.orc.{OrcFile, Reader, TypeDescription}
 import org.apache.parquet.hadoop.ParquetInputFormat
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.{FileFormat, PartitionedFile}
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetOptions, ParquetReadSupport, SparkFileReader, SparkFileReaderBase, SparkOrcReaderBuilder, SparkParquetReaderBuilder}
+import org.apache.spark.sql.execution.datasources.parquet._
 import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, ShortType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter}
 
-class Spark35OrcFileReader(enableVectorizedReader: Boolean,
-                           datetimeRebaseModeInRead: String,
-                           int96RebaseModeInRead: String,
-                           enableParquetFilterPushDown: Boolean,
-                           pushDownDate: Boolean,
-                           pushDownTimestamp: Boolean,
-                           pushDownDecimal: Boolean,
-                           pushDownInFilterThreshold: Int,
-                           isCaseSensitive: Boolean,
-                           timestampConversion: Boolean,
-                           enableOffHeapColumnVector: Boolean,
-                           capacity: Int,
-                           returningBatch: Boolean,
-                           enableRecordFilter: Boolean,
-                           timeZoneId: Option[String]) extends SparkFileReaderBase(
+class Spark35OrcReader(enableVectorizedReader: Boolean,
+                       datetimeRebaseModeInRead: String,
+                       int96RebaseModeInRead: String,
+                       enableParquetFilterPushDown: Boolean,
+                       pushDownDate: Boolean,
+                       pushDownTimestamp: Boolean,
+                       pushDownDecimal: Boolean,
+                       pushDownInFilterThreshold: Int,
+                       isCaseSensitive: Boolean,
+                       timestampConversion: Boolean,
+                       enableOffHeapColumnVector: Boolean,
+                       capacity: Int,
+                       returningBatch: Boolean,
+                       enableRecordFilter: Boolean,
+                       timeZoneId: Option[String]) extends SparkFileReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
   pushDownDate = pushDownDate,
@@ -82,7 +79,7 @@ class Spark35OrcFileReader(enableVectorizedReader: Boolean,
                                 internalSchemaOpt: util.Option[InternalSchema],
                                 filters: Seq[Filter],
                                 sharedConf: Configuration): Iterator[InternalRow] = {
-    val path = new Path(file.filePath)
+    val path = file.filePath.toPath
     val reader: Reader = OrcFile.createReader(path, OrcFile.readerOptions(sharedConf))
 
     // Create the row batch
@@ -152,7 +149,7 @@ class Spark35OrcFileReader(enableVectorizedReader: Boolean,
   }
 }
 
-object Spark34OrcFileReader extends SparkOrcReaderBuilder {
+object Spark35OrcReader extends SparkOrcReaderBuilder {
   /**
    * Get parquet file reader
    *
@@ -189,7 +186,7 @@ object Spark34OrcFileReader extends SparkOrcReaderBuilder {
         .equals("true")
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
-    new Spark34OrcFileReader(
+    new Spark35OrcReader(
       enableVectorizedReader = vectorized,
       datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
       int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,
