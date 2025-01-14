@@ -75,7 +75,7 @@ public class TestBaseTableServicePlanActionExecutor {
   /**
    * Clustering commit : cl
    * Commit : c
-   * |requestTime<---commit type --->completionTime|(written partitions in current commit)
+   * |requestTime<---commit type--->completionTime|(written partitions in current commit)
    *
    * ---------------------------------------------------------------------------------------------------> timeline
    * |0<------cl1------>2|
@@ -105,7 +105,7 @@ public class TestBaseTableServicePlanActionExecutor {
     prepareTimeline(metaClient, instants);
 
     DummyTableServicePlanActionExecutor executor = new DummyTableServicePlanActionExecutor(context, writeConfig, getMockHoodieTable(metaClient), "0008");
-    Set<String> incrementalPartitions = (Set<String>)executor.getIncrementalPartitions(TableServiceType.CLUSTER);
+    Set<String> incrementalPartitions = (Set<String>)executor.getIncrementalPartitions(TableServiceType.CLUSTER).getRight();
 
     assertEquals(incrementalPartitions.size(), 2);
     assertTrue(incrementalPartitions.contains("0001"));

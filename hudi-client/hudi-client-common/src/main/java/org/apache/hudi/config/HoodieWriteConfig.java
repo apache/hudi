@@ -809,11 +809,11 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "Hudi write client and user is not expected to manually change the value.");
 
   public static final ConfigProperty<Boolean> INCREMENTAL_TABLE_SERVICE_ENABLE = ConfigProperty
-      .key("hoodie.incremental.tableservice.enable")
+      .key("hoodie.incremental.tableservice.enabled")
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("Whether to enable incremental table service.");
+      .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL

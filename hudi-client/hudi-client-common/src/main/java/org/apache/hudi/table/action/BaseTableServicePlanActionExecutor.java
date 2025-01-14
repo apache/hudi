@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -52,6 +53,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
 public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends BaseActionExecutor<T, I, K, O, R> {
 
@@ -73,53 +76,81 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
       try {
         // get incremental partitions.
         LOG.info("Start to fetch incremental partitions for " + type);
-        Set<String> incrementalPartitions = getIncrementalPartitions(type);
-        if (!incrementalPartitions.isEmpty()) {
-          LOG.info("Fetched incremental partitions for " + type + ". " + incrementalPartitions);
+        Pair<Option<HoodieInstant>, Set<String>> lastInstantAndIncrPartitions = getIncrementalPartitions(type);
+        Option<HoodieInstant> lastCompleteTableServiceInstant = lastInstantAndIncrPartitions.getLeft();
+        Set<String> incrementalPartitions = lastInstantAndIncrPartitions.getRight();
+
+        if (incrementalPartitions.isEmpty()) {
+          // handle the case the writer just commits the empty commits continuously
+          // the incremental partition list is empty we just skip the scheduling
+          LOG.info("Incremental partitions are empty. Skip current schedule " + instantTime);
+          return Collections.emptyList();
+        } else if (lastCompleteTableServiceInstant.isPresent()) {
+          LOG.info("Fetched incremental partitions for " + type + ". " + incrementalPartitions + ". Instant " + instantTime);
           return new ArrayList<>(incrementalPartitions);
+        } else {
+          // Last complete table service commit maybe archived.
+          // fall back to get all partitions.
+          LOG.info("No previous completed table service instant, fall back to get all partitions");
         }
       } catch (Exception ex) {
         LOG.warn("Failed to get incremental partitions", ex);
       }
     }
 
-    // fall back to get all partitions
-    LOG.info("Start to fetch all partitions for " + type);
+    // get all partitions
+    LOG.info("Start to fetch all partitions for " + type + ". Instant " + instantTime);
     return FSUtils.getAllPartitionPaths(context, table.getMetaClient().getStorage(),
         config.getMetadataConfig(), table.getMetaClient().getBasePath());
   }
 
-  public Set<String> getIncrementalPartitions(TableServiceType type) {
+  public Pair<Option<HoodieInstant>, Set<String>> getIncrementalPartitions(TableServiceType type) {
     Pair<Option<HoodieInstant>, List<String>> missingPair = fetchMissingPartitions(type);
-    if (!missingPair.getLeft().isPresent()) {
-      // Last complete table service commit maybe archived.
-      return Collections.emptySet();
-    }
-
+    Option<HoodieInstant> lastCompleteTableServiceInstant = missingPair.getLeft();
     List<String> missingPartitions = missingPair.getRight();
 
-    String leftBoundary = missingPair.getLeft().get().requestedTime();
+    String leftBoundary = lastCompleteTableServiceInstant.isPresent() ?
+        missingPair.getLeft().get().requestedTime() : HoodieTimeline.INIT_INSTANT_TS;
     String rightBoundary = instantTime;
-
     // compute [leftBoundary, rightBoundary) as time window
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    Set<String> partitionsInCommitMeta = table.getActiveTimeline().filterCompletedInstants().getCommitsTimeline().getInstantsAsStream().flatMap(instant -> {
-      if (!ClusteringUtils.isClusteringInstant(activeTimeline, instant, table.getMetaClient().getInstantGenerator())) {
-        String completionTime = instant.getCompletionTime();
-        if (completionTime.compareTo(leftBoundary) >= 0 && completionTime.compareTo(rightBoundary) < 0) {
+    Set<String> partitionsInCommitMeta = table.getActiveTimeline().filterCompletedInstants().getCommitsTimeline().getInstantsAsStream()
+        .filter(this::filterCommitByTableType).flatMap(instant -> {
           try {
-            HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, activeTimeline);
-            return metadata.getWriteStats().stream().map(HoodieWriteStat::getPartitionPath);
+            String completionTime = instant.getCompletionTime();
+            if (completionTime.compareTo(leftBoundary) >= 0 && completionTime.compareTo(rightBoundary) < 0) {
+              HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, activeTimeline);
+              // ignore all the clustering operation for both mor and cow table
+              if (!metadata.getOperationType().equals(WriteOperationType.CLUSTER)) {
+                return metadata.getWriteStats().stream().map(HoodieWriteStat::getPartitionPath);
+              }
+            }
+            return Stream.empty();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get commit meta " + instant, e);
           }
-        }
-      }
-      return Stream.empty();
-    }).collect(Collectors.toSet());
+        }).collect(Collectors.toSet());
 
     partitionsInCommitMeta.addAll(missingPartitions);
-    return partitionsInCommitMeta;
+    return Pair.of(lastCompleteTableServiceInstant, partitionsInCommitMeta);
+  }
+
+  private boolean filterCommitByTableType(HoodieInstant instant) {
+    // for completed replace commit, need CommitMetadata to distinguish clustering or insert overwrite
+    switch (table.getMetaClient().getTableType()) {
+      case MERGE_ON_READ: {
+        // for mor only take cares of delta commit and replace commit
+        Set<String> operations = CollectionUtils.createSet(DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
+        return operations.contains(instant.getAction());
+      }
+      case COPY_ON_WRITE: {
+        // for mor only take cares of commit and replace commit
+        Set<String> operations = CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION);
+        return operations.contains(instant.getAction());
+      }
+      default:
+        throw new HoodieException("Un-supported table type " + table.getMetaClient().getTableType());
+    }
   }
 
   public Pair<Option<HoodieInstant>, List<String>> fetchMissingPartitions(TableServiceType tableServiceType) {

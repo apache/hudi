@@ -24,17 +24,23 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import java.util.List;
 
 /**
- * Marking strategy interface.
+ * Marking interface for table service strategy that utilize incremental partitions.
  *
- * Any Strategy implement this `IncrementalPartitionAwareStrategy` could have the ability to perform incremental partitions processing.
- * At this time, Incremental partitions should be passed to the current strategy.
+ * <p> Any strategy class that implements this `IncrementalPartitionAwareStrategy` could have the ability to perform incremental partitions processing.
+ * Currently, Incremental partitions will be passed to the strategy instance as a best-effort. In the following cases, the partitions would fallback to full partition list:
+ *
+ * <ul>
+ *   <li> Executing Table Service for the first time. </li>
+ *   <li> The last completed table service instant is archived. </li>
+ *   <li> Any exception thrown during retrieval of incremental partitions. </li>
+ * </ul>
  */
 public interface IncrementalPartitionAwareStrategy {
   
   /**
    * Filter the given incremental partitions.
    * @param writeConfig
-   * @param incrementalPartitions
+   * @param partitions
    * @return Pair of final processing partition paths and filtered partitions which will be recorded as missing partitions.
    * Different strategies can individually implement whether to record, or which partitions to record as missing partitions.
    */

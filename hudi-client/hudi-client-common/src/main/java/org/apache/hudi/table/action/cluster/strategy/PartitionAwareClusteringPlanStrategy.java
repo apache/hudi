@@ -60,6 +60,8 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
   /**
    * Create Clustering group based on files eligible for clustering in the partition.
+   * return stream of HoodieClusteringGroup and boolean partial Scheduled indicating whether all given fileSlices in the current partition have been processed.
+   * For example, if some file slices will not be processed due to writeConfig.getClusteringMaxNumGroups(), then return false
    */
   protected Pair<Stream<HoodieClusteringGroup>, Boolean> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
     HoodieWriteConfig writeConfig = getWriteConfig();
@@ -74,7 +76,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
             - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
 
     long totalSizeSoFar = 0;
-    boolean isAllSlicesIncluded = true;
+    boolean partialScheduled = true;
 
     for (FileSlice currentSlice : sortedFileSlices) {
       long currentSize = currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
@@ -90,7 +92,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
         // if fileSliceGroups's size reach the max group, stop loop
         if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
           LOG.info("Having generated the maximum number of groups : " + writeConfig.getClusteringMaxNumGroups());
-          isAllSlicesIncluded = false;
+          partialScheduled = false;
           break;
         }
       }
@@ -115,17 +117,14 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
             .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
             .setNumOutputFileGroups(fileSliceGroup.getRight())
             .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
-            .build()), isAllSlicesIncluded);
+            .build()), partialScheduled);
   }
 
   /**
    * Return list of partition paths to be considered for clustering.
    */
   public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitions) {
-    ArrayList<String> missingPartitions = new ArrayList<>();
-    List<String> filteredPartitions = ClusteringPlanPartitionFilter.filter(partitions, getWriteConfig(), missingPartitions);
-    LOG.debug("Filtered to the following partitions: " + filteredPartitions);
-    return Pair.of(filteredPartitions, missingPartitions);
+    return ClusteringPlanPartitionFilter.filter(partitions, getWriteConfig());
   }
 
   @Override
