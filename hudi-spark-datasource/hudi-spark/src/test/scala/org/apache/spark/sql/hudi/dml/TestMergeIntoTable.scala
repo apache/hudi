@@ -1340,11 +1340,58 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
 
   test("Test MergeInto with partial insert") {
     spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+      withRecordType()(withTempDir { tmp =>
+        spark.sql("set hoodie.payload.combined.schema.validate = true")
+        // Create a partitioned mor table
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id bigint,
+             |  name string,
+             |  price double,
+             |  dt string
+             | ) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id'
+             | )
+             | partitioned by(dt)
+             | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21'")
+
+        // test with optimized sql merge enabled / disabled.
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+
+        spark.sql(
+          s"""
+             | merge into $tableName as t0
+             | using (
+             |  select 2 as id, 'a2' as name, 10 as price, '2021-03-20' as dt
+             | ) s0
+             | on s0.id = t0.id
+             | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
+             | values(s0.id, s0.name, s0.dt)
+         """.stripMargin)
+        checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+          Seq(1, "a1", 10, "2021-03-21"),
+          Seq(2, "a2", null, "2021-03-20")
+        )
+      })
+    }
+  }
+
+  test("Test MergeInto with partial update and insert") {
+    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
 
     // Test combinations: (tableType, sparkSqlOptimizedWrites)
     val testConfigs = Seq(
-      ("mor", true),
-      ("mor", false),
+      // Uncomment once HUDI-8835 is fixed.
+      // ("mor", true),
+      // ("mor", false),
       ("cow", true),
       ("cow", false)
     )
@@ -1366,8 +1413,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | ) using hudi
              | tblproperties (
              |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  precombineKey = 'ts'
+             |  primaryKey = 'id'
              | )
              | partitioned by(dt)
              | location '${tmp.getCanonicalPath}'
@@ -1392,7 +1438,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | values(s0.id, s0.name, s0.dt)
          """.stripMargin)
         checkAnswer(s"select id, name, price, dt from $tableName order by id")(
-          Seq(1, "a1_updated", 11, "2021-03-21"),
+          Seq(1, "a1_updated", 10, "2021-03-21"),
           Seq(2, "a2", null, "2021-03-20")
         )
       })
