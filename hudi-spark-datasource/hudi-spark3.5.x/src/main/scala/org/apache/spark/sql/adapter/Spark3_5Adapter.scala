@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.orc.Spark35OrcReader
+import org.apache.spark.sql.execution.datasources.Spark35OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35LegacyHoodieParquetFileFormat, Spark35ParquetReader, SparkFileReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
