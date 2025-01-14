@@ -64,8 +64,10 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
   private final transient HoodieTableMetaClient metaClient;
 
   protected Option<SparkFileReader> parquetReaderOpt = Option.empty();
+  protected Option<SparkFileReader> orcReaderOpt = Option.empty();
   protected Broadcast<SQLConf> sqlConfBroadcast;
   protected Broadcast<SparkFileReader> parquetReaderBroadcast;
+  protected Broadcast<SparkFileReader> orcReaderBroadcast;
   protected Broadcast<SerializableConfiguration> configurationBroadcast;
 
   public SparkBroadcastManager(HoodieEngineContext context, HoodieTableMetaClient metaClient) {
@@ -104,7 +106,10 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
     parquetReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
+    orcReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createOrcFileReader(
+        false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
     parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());
+    orcReaderBroadcast = jsc.broadcast(orcReaderOpt.get());
   }
 
   @Override
@@ -113,11 +118,17 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
       throw new HoodieException("Spark Parquet reader broadcast is not initialized.");
     }
 
-    SparkFileReader sparkFileReader = parquetReaderBroadcast.getValue();
-    if (sparkFileReader != null) {
+    Map<String, SparkFileReader> fileReaders = new HashMap<>();
+    if (orcReaderBroadcast.getValue() != null) {
+      fileReaders.put("orc", orcReaderBroadcast.getValue());
+    }
+    if (parquetReaderBroadcast.getValue() != null) {
+      fileReaders.put("parquet", parquetReaderBroadcast.getValue());
+    }
+    if (!fileReaders.isEmpty()) {
       List<Filter> filters = new ArrayList<>();
       return Option.of(new SparkFileFormatInternalRowReaderContext(
-          sparkFileReader,
+          fileReaders,
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq()));
     } else {
