@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
@@ -94,6 +95,15 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
       KafkaSourceUtil.configureSchemaDeserializer(schemaProvider, props);
     }
     offsetGen = new KafkaOffsetGen(props);
+  }
+
+  @VisibleForTesting
+  AvroKafkaSource(TypedProperties properties, KafkaOffsetGen kafkaOffsetGen, JavaSparkContext sparkContext, SparkSession sparkSession, HoodieIngestionMetrics metrics, StreamContext streamContext) {
+    super(properties, sparkContext, sparkSession, SourceType.AVRO, metrics,
+        new DefaultStreamContext(UtilHelpers.getSchemaProviderForKafkaSource(streamContext.getSchemaProvider(), properties, sparkContext), streamContext.getSourceProfileSupplier()));
+    this.originalSchemaProvider = streamContext.getSchemaProvider();
+    this.deserializerClassName = getStringWithAltKeys(props, KAFKA_AVRO_VALUE_DESERIALIZER_CLASS, true);
+    this.offsetGen = kafkaOffsetGen;
   }
 
   @Override
