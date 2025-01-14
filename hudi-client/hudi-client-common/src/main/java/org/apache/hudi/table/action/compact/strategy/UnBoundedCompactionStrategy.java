@@ -20,8 +20,10 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -34,8 +36,9 @@ import java.util.Set;
 public class UnBoundedCompactionStrategy extends CompactionStrategy {
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig config,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionWorkloads, Set<String> missingPartitions) {
-    return operations;
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig config,
+                                                                            List<HoodieCompactionOperation> operations,
+                                                                            List<HoodieCompactionPlan> pendingCompactionWorkloads) {
+    return Pair.of(operations, Collections.emptyList());
   }
 }

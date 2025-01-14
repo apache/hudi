@@ -30,6 +30,8 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -52,8 +54,9 @@ public class TestHoodieCompactionStrategy {
   private static final Random RANDOM = new Random();
   private String[] partitionPaths = {"2017/01/01", "2017/01/02", "2017/01/03"};
 
-  @Test
-  public void testUnBounded() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testUnBounded(boolean enableIncrTableService) {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
     sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
     sizesMap.put(110 * MB, new ArrayList<>());
@@ -61,26 +64,39 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
     UnBoundedCompactionStrategy strategy = new UnBoundedCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIncrementalTableServiceEnable(enableIncrTableService)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).build()).build();
-    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
+    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap).getLeft();
+    Pair<List<HoodieCompactionOperation>, List<String>> resPair = writeConfig.getCompactionStrategy()
+        .orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = resPair.getLeft();
+    List<String> missingPartitions = resPair.getRight();
+
     assertEquals(operations, returned, "UnBounded should not re-order or filter");
+    assertEquals(missingPartitions.size(), 0);
   }
 
-  @Test
-  public void testBoundedIOSimple() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBoundedIOSimple(boolean enableIncrTableService) {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
     sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
     sizesMap.put(110 * MB, new ArrayList<>());
     sizesMap.put(100 * MB, Collections.singletonList(MB));
     sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
     BoundedIOCompactionStrategy strategy = new BoundedIOCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withIncrementalTableServiceEnable(enableIncrTableService)
+        .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
         .build();
-    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
-
+    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap).getLeft();
+    Pair<List<HoodieCompactionOperation>, List<String>> resPair = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = resPair.getLeft();
+    List<String> missingPartitions = resPair.getRight();
+    if (enableIncrTableService) {
+      assertEquals(1, missingPartitions.stream().distinct().count());
+    }
     assertTrue(returned.size() < operations.size(), "BoundedIOCompaction should have resulted in fewer compactions");
     assertEquals(2, returned.size(), "BoundedIOCompaction should have resulted in 2 compactions being chosen");
     // Total size of all the log files
@@ -90,8 +106,9 @@ public class TestHoodieCompactionStrategy {
         "Should chose the first 2 compactions which should result in a total IO of 610 MB");
   }
 
-  @Test
-  public void testLogFileSizeCompactionSimple() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testLogFileSizeCompactionSimple(boolean enableIncrTableService) {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
     sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
     sizesMap.put(110 * MB, new ArrayList<>());
@@ -102,9 +119,17 @@ public class TestHoodieCompactionStrategy {
             HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(1205)
                 .withLogFileSizeThresholdBasedCompaction(100 * 1024 * 1024).build())
         .build();
-    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
-
+    Pair<List<HoodieCompactionOperation>, Map<Long, String>> operationAndPartition = createCompactionOperations(writeConfig, sizesMap);
+    List<HoodieCompactionOperation> operations = operationAndPartition.getLeft();
+    Pair<List<HoodieCompactionOperation>, List<String>> resPair = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = resPair.getLeft();
+    List<String> missingPartitions = resPair.getRight();
+    if (enableIncrTableService) {
+      String missedPart1 = operationAndPartition.getRight().get(110 * MB);
+      String missedPart2 = operationAndPartition.getRight().get(100 * MB);
+      assertTrue(missingPartitions.contains(missedPart1));
+      assertTrue(missingPartitions.contains(missedPart2));
+    }
     assertTrue(returned.size() < operations.size(),
         "LogFileSizeBasedCompactionStrategy should have resulted in fewer compactions");
     assertEquals(2, returned.size(), "LogFileSizeBasedCompactionStrategy should have resulted in 2 compaction");
@@ -115,8 +140,9 @@ public class TestHoodieCompactionStrategy {
         "Should chose the first 2 compactions which should result in a total IO of 1594 MB");
   }
 
-  @Test
-  public void testDayBasedCompactionSimple() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDayBasedCompactionSimple(boolean enableIncrTableService) {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
     sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
     sizesMap.put(110 * MB, new ArrayList<>());
@@ -134,10 +160,16 @@ public class TestHoodieCompactionStrategy {
 
     DayBasedCompactionStrategy strategy = new DayBasedCompactionStrategy();
     HoodieWriteConfig writeConfig =
-        HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(HoodieCompactionConfig.newBuilder()
+        HoodieWriteConfig.newBuilder().withPath("/tmp")
+            .withIncrementalTableServiceEnable(enableIncrTableService)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(1).build()).build();
-
-    List<String> filterPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths)).getLeft();
+    Pair<List<String>, List<String>> resPair = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths));
+    List<String> filterPartitions = resPair.getLeft();
+    List<String> missingPartitions = resPair.getRight();
+    if (enableIncrTableService) {
+      assertTrue(missingPartitions.isEmpty());
+    }
     assertEquals(1, filterPartitions.size(), "DayBasedCompactionStrategy should have resulted in fewer partitions");
 
     List<HoodieCompactionOperation> operations = createCompactionOperationsForPartition(writeConfig, sizesMap, keyToPartitionMap, filterPartitions);
@@ -155,8 +187,9 @@ public class TestHoodieCompactionStrategy {
     assertTrue(comparison >= 0, "DayBasedCompactionStrategy should sort partitions in descending order");
   }
 
-  @Test
-  public void testDayBasedCompactionWithIOBounded() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDayBasedCompactionWithIOBounded(boolean enableIncrTableService) {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
     sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
     sizesMap.put(110 * MB, new ArrayList<>());
@@ -175,6 +208,7 @@ public class TestHoodieCompactionStrategy {
     DayBasedCompactionStrategy strategy = new DayBasedCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
+        .withIncrementalTableServiceEnable(enableIncrTableService)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy)
             .withTargetPartitionsPerDayBasedCompaction(1)
@@ -186,7 +220,13 @@ public class TestHoodieCompactionStrategy {
     assertEquals(1, filterPartitions.size(), "DayBasedCompactionStrategy should have resulted in fewer partitions");
 
     List<HoodieCompactionOperation> operations = createCompactionOperationsForPartition(writeConfig, sizesMap, keyToPartitionMap, filterPartitions);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
+    Pair<List<HoodieCompactionOperation>, List<String>> resPair = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = resPair.getLeft();
+    List<String> missingPartitions = resPair.getRight();
+    if (enableIncrTableService) {
+      assertEquals(1, missingPartitions.size());
+      assertTrue(missingPartitions.contains(partitionPaths[2]));
+    }
 
     assertEquals(1, returned.size(),
         "DayBasedAndBoundedIOCompactionStrategy should have resulted in fewer compactions");
@@ -204,9 +244,10 @@ public class TestHoodieCompactionStrategy {
     assertEquals(390, (long) returnedSize,
         "Should chose the first and the third compactions which should result in a total IO of 591 MB");
   }
-  
-  @Test
-  public void testBoundedPartitionAwareCompactionSimple() {
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBoundedPartitionAwareCompactionSimple(boolean enableIncrTableService) {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
     sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
     sizesMap.put(110 * MB, new ArrayList<>());
@@ -238,10 +279,17 @@ public class TestHoodieCompactionStrategy {
 
     BoundedPartitionAwareCompactionStrategy strategy = new BoundedPartitionAwareCompactionStrategy();
     HoodieWriteConfig writeConfig =
-        HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(HoodieCompactionConfig.newBuilder()
+        HoodieWriteConfig.newBuilder().withPath("/tmp")
+            .withIncrementalTableServiceEnable(enableIncrTableService)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(2).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
+    Pair<List<HoodieCompactionOperation>, List<String>> resPair = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = resPair.getLeft();
+    List<String> missingPartitions = resPair.getRight();
+    if (enableIncrTableService) {
+      assertTrue(missingPartitions.isEmpty());
+    }
 
     assertTrue(returned.size() < operations.size(),
         "BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions");
@@ -254,8 +302,9 @@ public class TestHoodieCompactionStrategy {
     assertTrue(comparison >= 0, "BoundedPartitionAwareCompactionStrategy should sort partitions in descending order");
   }
 
-  @Test
-  public void testUnboundedPartitionAwareCompactionSimple() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testUnboundedPartitionAwareCompactionSimple(boolean enableIncrTableService) {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
     sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
     sizesMap.put(110 * MB, new ArrayList<>());
@@ -287,10 +336,17 @@ public class TestHoodieCompactionStrategy {
 
     UnBoundedPartitionAwareCompactionStrategy strategy = new UnBoundedPartitionAwareCompactionStrategy();
     HoodieWriteConfig writeConfig =
-        HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(HoodieCompactionConfig.newBuilder()
+        HoodieWriteConfig.newBuilder().withPath("/tmp")
+            .withIncrementalTableServiceEnable(enableIncrTableService)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(2).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
+    Pair<List<HoodieCompactionOperation>, List<String>> resPair = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = resPair.getLeft();
+    List<String> missingPartitions = resPair.getRight();
+    if (enableIncrTableService) {
+      assertTrue(missingPartitions.isEmpty());
+    }
 
     assertTrue(returned.size() < operations.size(),
         "UnBoundedPartitionAwareCompactionStrategy should not include last "
@@ -299,8 +355,9 @@ public class TestHoodieCompactionStrategy {
         "BoundedPartitionAwareCompactionStrategy should have resulted in 1 compaction");
   }
 
-  @Test
-  public void testLogFileLengthBasedCompactionStrategy() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testLogFileLengthBasedCompactionStrategy(boolean enableIncrTableService) {
     Map<Long, List<Long>> sizesMap = new HashMap<>();
     sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
     sizesMap.put(110 * MB, new ArrayList<>());
@@ -311,8 +368,17 @@ public class TestHoodieCompactionStrategy {
             HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(1024)
                 .withCompactionLogFileNumThreshold(2).build())
         .build();
-    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
-    List<HoodieCompactionOperation> returned = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>(), Collections.emptySet());
+    Pair<List<HoodieCompactionOperation>, Map<Long, String>> operationAndPartition = createCompactionOperations(writeConfig, sizesMap);
+    List<HoodieCompactionOperation> operations = operationAndPartition.getLeft();
+    Pair<List<HoodieCompactionOperation>, List<String>> resPair = writeConfig.getCompactionStrategy().orderAndFilter(writeConfig, operations, new ArrayList<>());
+    List<HoodieCompactionOperation> returned = resPair.getLeft();
+    List<String> missingPartitions = resPair.getRight();
+    if (enableIncrTableService) {
+      Map<Long, String> partition = operationAndPartition.getRight();
+      assertTrue(missingPartitions.contains(partition.get(110 * MB)));
+      assertTrue(missingPartitions.contains(partition.get(100 * MB)));
+
+    }
 
     assertTrue(returned.size() < operations.size(),
         "LogFileLengthBasedCompactionStrategy should have resulted in fewer compactions");
@@ -439,12 +505,12 @@ public class TestHoodieCompactionStrategy {
     return writeConfig;
   }
 
-  private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,
+  private Pair<List<HoodieCompactionOperation>, Map<Long, String>> createCompactionOperations(HoodieWriteConfig config,
                                                                      Map<Long, List<Long>> sizesMap) {
     Map<Long, String> keyToPartitionMap = sizesMap.keySet().stream()
         .map(e -> Pair.of(e, partitionPaths[RANDOM.nextInt(partitionPaths.length - 1)]))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    return createCompactionOperations(config, sizesMap, keyToPartitionMap);
+    return Pair.of(createCompactionOperations(config, sizesMap, keyToPartitionMap), keyToPartitionMap);
   }
 
   private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,

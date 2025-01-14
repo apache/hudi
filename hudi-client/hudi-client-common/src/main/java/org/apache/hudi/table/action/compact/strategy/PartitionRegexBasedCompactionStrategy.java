@@ -21,7 +21,7 @@ package org.apache.hudi.table.action.compact.strategy;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -35,6 +35,6 @@ public class PartitionRegexBasedCompactionStrategy extends CompactionStrategy {
   public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
     String regex = writeConfig.getCompactionSpecifyPartitionPathRegex();
     Pattern pattern = Pattern.compile(regex);
-    return Pair.of(allPartitionPaths.stream().filter(pattern.asPredicate()).collect(Collectors.toList()), new ArrayList<>());
+    return Pair.of(allPartitionPaths.stream().filter(pattern.asPredicate()).collect(Collectors.toList()), Collections.emptyList());
   }
 }

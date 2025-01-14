@@ -58,7 +58,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_P
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestClusteringPlanActionExecutor extends SparkClientFunctionalTestHarness {
+public class TestIncrementalClustering extends SparkClientFunctionalTestHarness {
 
   private static final String TODAY;
   private static final String YESTERDAY;

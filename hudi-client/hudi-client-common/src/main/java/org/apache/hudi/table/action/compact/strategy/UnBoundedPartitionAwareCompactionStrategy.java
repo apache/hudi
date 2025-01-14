@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -41,15 +42,15 @@ import java.util.stream.Collectors;
 public class UnBoundedPartitionAwareCompactionStrategy extends CompactionStrategy {
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig config,
-      final List<HoodieCompactionOperation> operations, final List<HoodieCompactionPlan> pendingCompactionWorkloads, Set<String> missingPartitions) {
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig config,
+      final List<HoodieCompactionOperation> operations, final List<HoodieCompactionPlan> pendingCompactionWorkloads) {
     BoundedPartitionAwareCompactionStrategy boundedPartitionAwareCompactionStrategy =
         new BoundedPartitionAwareCompactionStrategy();
     List<HoodieCompactionOperation> operationsToExclude =
-        boundedPartitionAwareCompactionStrategy.orderAndFilter(config, operations, pendingCompactionWorkloads, missingPartitions);
+        boundedPartitionAwareCompactionStrategy.orderAndFilter(config, operations, pendingCompactionWorkloads).getLeft();
     List<HoodieCompactionOperation> allOperations = new ArrayList<>(operations);
     allOperations.removeAll(operationsToExclude);
-    return allOperations;
+    return Pair.of(allOperations, Collections.emptyList());
   }
 
   @Override
@@ -59,7 +60,9 @@ public class UnBoundedPartitionAwareCompactionStrategy extends CompactionStrateg
             .map(partitionPath -> partitionPath.replace("-", "/")).collect(Collectors.toList());
     BoundedPartitionAwareCompactionStrategy boundedPartitionAwareCompactionStrategy =
         new BoundedPartitionAwareCompactionStrategy();
-    Pair<List<String>, List<String>> partitionPair = boundedPartitionAwareCompactionStrategy.filterPartitionPaths(writeConfig, allPartitionPaths);
-    return Pair.of(partitionPair.getRight(), partitionPair.getLeft());
+    List<String> partitionsToExclude =
+        boundedPartitionAwareCompactionStrategy.filterPartitionPaths(writeConfig, partitionPaths).getLeft();
+    allPartitionPaths.removeAll(partitionsToExclude);
+    return Pair.of(allPartitionPaths, Collections.emptyList());
   }
 }

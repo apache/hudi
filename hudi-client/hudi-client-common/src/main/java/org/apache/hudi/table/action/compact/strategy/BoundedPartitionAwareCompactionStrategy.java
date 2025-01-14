@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -48,44 +48,33 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
       ThreadLocal.withInitial(() -> new SimpleDateFormat(DayBasedCompactionStrategy.DATE_PARTITION_FORMAT));
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans, Set<String> missingPartitions) {
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig,
+      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // The earliest partition to compact - current day minus the target partitions limit
     String earliestPartitionPathToCompact =
         dateFormat.get().format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
     // Filter out all partitions greater than earliestPartitionPathToCompact
-
-    return operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet()
+    List<HoodieCompactionOperation> res = operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet()
         .stream().sorted(Map.Entry.comparingByKey(DayBasedCompactionStrategy.comparator))
-        .filter(e -> {
-          if (DayBasedCompactionStrategy.comparator.compare(earliestPartitionPathToCompact, e.getKey()) >= 0) {
-            return true;
-          } else {
-            missingPartitions.add(e.getKey());
-            return false;
-          }
-        }).flatMap(e -> e.getValue().stream()).collect(Collectors.toList());
+        .filter(e -> DayBasedCompactionStrategy.comparator.compare(earliestPartitionPathToCompact, e.getKey()) >= 0)
+        .flatMap(e -> e.getValue().stream()).collect(Collectors.toList());
+
+    return Pair.of(res, Collections.emptyList());
   }
 
+  /**
+   * For BoundedPartitionAwareCompactionStrategy, we will not record rolled partitions as missing partitions.
+   */
   @Override
   public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
     // The earliest partition to compact - current day minus the target partitions limit
     String earliestPartitionPathToCompact =
         dateFormat.get().format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
-
-    ArrayList<String> partitionsToProcess = new ArrayList<>();
-    ArrayList<String> missingPartitions = new ArrayList<>();
-
     // Get all partitions and sort them
-    partitionPaths.stream().map(partition -> partition.replace("/", "-"))
-        .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/")).forEach(partition -> {
-          if (DayBasedCompactionStrategy.comparator.compare(earliestPartitionPathToCompact, partition) >= 0) {
-            partitionsToProcess.add(partition);
-          } else {
-            missingPartitions.add(partition);
-          }
-        });
-    return Pair.of(partitionsToProcess, missingPartitions);
+    List<String> res = partitionPaths.stream().map(partition -> partition.replace("/", "-"))
+        .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
+        .filter(e -> DayBasedCompactionStrategy.comparator.compare(earliestPartitionPathToCompact, e) >= 0).collect(Collectors.toList());
+    return Pair.of(res, Collections.emptyList());
   }
 
   public static Date getDateAtOffsetFromToday(int offset) {

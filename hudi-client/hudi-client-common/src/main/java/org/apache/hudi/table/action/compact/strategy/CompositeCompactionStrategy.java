@@ -25,8 +25,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 /**
  * CompositeCompactionStrategy chains multiple compaction strategies together.
@@ -42,13 +42,15 @@ public class CompositeCompactionStrategy extends CompactionStrategy {
   }
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans,
-                                                        Set<String> missingPartitions) {
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     List<HoodieCompactionOperation> finalOperations = operations;
+    List<String> missingPartitions = new ArrayList<>();
     for (CompactionStrategy strategy : strategies) {
-      finalOperations = strategy.orderAndFilter(writeConfig, finalOperations, pendingCompactionPlans, missingPartitions);
+      Pair<List<HoodieCompactionOperation>, List<String>> resPair = strategy.orderAndFilter(writeConfig, finalOperations, pendingCompactionPlans);
+      finalOperations = resPair.getLeft();
+      missingPartitions.addAll(resPair.getRight());
     }
-    return finalOperations;
+    return Pair.of(finalOperations, missingPartitions);
   }
 
   @Override
@@ -61,7 +63,7 @@ public class CompositeCompactionStrategy extends CompactionStrategy {
       partitionsToProcess = innerRes.getLeft();
       missingPartitions.addAll(innerRes.getRight());
     }
-    return Pair.of(partitionsToProcess, missingPartitions);
+    return writeConfig.isIncrementalTableServiceEnable() ? Pair.of(partitionsToProcess, missingPartitions) : Pair.of(partitionsToProcess, Collections.emptyList());
   }
 
   @Override

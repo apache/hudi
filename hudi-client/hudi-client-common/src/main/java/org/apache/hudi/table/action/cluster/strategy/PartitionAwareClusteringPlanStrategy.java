@@ -205,7 +205,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       missingPartitions = new ArrayList<>(skippedPartitions);
     } else {
       clusteringGroups = res.stream().flatMap(pair -> pair.getLeft().stream()).limit(clusteringMaxNumGroups).collect(Collectors.toList());
-      missingPartitions = Collections.emptyList();
+      missingPartitions = null;
     }
 
     if (clusteringGroups.isEmpty()) {

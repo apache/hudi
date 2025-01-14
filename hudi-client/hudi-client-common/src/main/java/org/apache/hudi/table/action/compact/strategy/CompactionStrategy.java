@@ -28,13 +28,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.IncrementalPartitionAwareStrategy;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Strategy for compaction. Pluggable implementation to define how compaction should be done. The over-ridden
@@ -78,13 +76,16 @@ public abstract class CompactionStrategy implements IncrementalPartitionAwareStr
   public HoodieCompactionPlan generateCompactionPlan(HoodieWriteConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans, Map<String, String> params, Pair<List<String>, List<String>> partitionPair) {
     // Strategy implementation can overload this method to set specific compactor-id
-    Set<String> missingPartitions = new HashSet<>(partitionPair.getRight());
-    List<HoodieCompactionOperation> operationsToProcess = orderAndFilter(writeConfig, operations, pendingCompactionPlans, missingPartitions);
-    List<String> res = writeConfig.isIncrementalTableServiceEnable() ? new ArrayList<>(missingPartitions) : new ArrayList<>();
+    Pair<List<HoodieCompactionOperation>, List<String>> resPair = orderAndFilter(writeConfig, operations, pendingCompactionPlans);
+    List<HoodieCompactionOperation> operationsToProcess = resPair.getLeft();
+    List<String> missingPartitions = resPair.getRight();
+    missingPartitions.addAll(partitionPair.getRight());
+    List<String> res = writeConfig.isIncrementalTableServiceEnable() ? missingPartitions.stream().distinct().collect(Collectors.toList()) : null;
     return HoodieCompactionPlan.newBuilder()
         .setOperations(operationsToProcess)
         .setMissingSchedulePartitions(res)
-        .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION).build();
+        .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION)
+        .build();
   }
 
   /**
@@ -96,9 +97,9 @@ public abstract class CompactionStrategy implements IncrementalPartitionAwareStr
    * @param pendingCompactionPlans Pending Compaction Plans for strategy to schedule next compaction plan
    * @return list of compactions to perform in this run
    */
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans, Set<String> missingPartitions) {
-    return operations;
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig,
+      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+    return Pair.of(operations, Collections.emptyList());
   }
 
   /**
