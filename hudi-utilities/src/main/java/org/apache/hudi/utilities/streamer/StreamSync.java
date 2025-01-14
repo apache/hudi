@@ -926,7 +926,7 @@ public class StreamSync implements Serializable, Closeable {
       JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.emptyRDD());
       // filter dupes if needed
       if (cfg.filterDupes) {
-        records = DataSourceUtils.doDropDuplicates(hoodieSparkContext, records, writeClient.getConfig(), false);
+        records = DataSourceUtils.handleDuplicates(hoodieSparkContext, records, writeClient.getConfig(), false);
       }
 
       HoodieWriteResult writeResult = null;

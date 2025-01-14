@@ -1294,8 +1294,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT_OVERWRITE))
     assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT_OVERWRITE_TABLE))
     assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.UPSERT))
+    assertFalse(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT_PREPPED))
     assertTrue(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT))
-    assertTrue(HoodieSparkSqlWriterInternal.isDeduplicationNeeded(WriteOperationType.INSERT_PREPPED))
   }
 
   private def fetchActualSchema(): Schema = {

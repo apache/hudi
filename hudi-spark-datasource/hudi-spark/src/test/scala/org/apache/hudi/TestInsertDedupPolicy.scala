@@ -22,8 +22,8 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieUpsertException
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-import org.apache.spark.SparkException
 import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -45,7 +45,9 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
     (10, "3", "rider-C", "driver-C", 33.90, 10),
     (11, "5", "rider-C", "driver-C", 3.3, 3))
   val expectedForNone: Seq[(Int, String, String, String, Double, Int)] = Seq(
+    (10, "1", "rider-A", "driver-A", 19.10, 7),
     (11, "1", "rider-A", "driver-A", 1.1, 1),
+    (10, "2", "rider-B", "driver-B", 27.70, 1),
     (11, "2", "rider-B", "driver-B", 2.2, 2),
     (10, "3", "rider-C", "driver-C", 33.90, 10),
     (11, "5", "rider-C", "driver-C", 3.3, 3))
@@ -53,21 +55,14 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
   @ParameterizedTest
   @MethodSource(Array("provideParams"))
   def testInsertLogic(tableType: String,
-                      recordType: String,
                       dedupPolicy: String): Unit = {
-    val sparkOpts: Map[String, String] = Map(
-      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
-      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName)
     val fgReaderOpts: Map[String, String] = Map(
       HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true",
       HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> "true",
-      HoodieWriteConfig.RECORD_MERGE_MODE.key -> "EVENT_TIME_ORDERING")
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> "EVENT_TIME_ORDERING",
+      DataSourceWriteOptions.OPERATION.key -> INSERT_OPERATION_OPT_VAL)
     val insertDedupPolicy: Map[String, String] = Map(INSERT_DUP_POLICY.key -> dedupPolicy)
-    val opts = if (recordType.equals("SPARK")) {
-      sparkOpts ++ fgReaderOpts ++ insertDedupPolicy
-    } else {
-      fgReaderOpts ++ insertDedupPolicy
-    }
+    val opts = fgReaderOpts ++ insertDedupPolicy
     val columns = Seq("ts", "key", "rider", "driver", "fare", "number")
 
     // Write the first batch of data.
@@ -86,7 +81,7 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
     if (dedupPolicy.equals(FAIL_INSERT_DUP_POLICY)) {
       // Write and check throws.
       Assertions.assertThrows(
-        classOf[SparkException],
+        classOf[HoodieUpsertException],
         () => insertsWithDup.write.format("hudi").options(opts).mode(SaveMode.Append).save(basePath)
       )
     } else {
@@ -105,18 +100,12 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
 object TestInsertDedupPolicy {
   def provideParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      Arguments.of("MERGE_ON_READ", "AVRO", NONE_INSERT_DUP_POLICY),
-      Arguments.of("MERGE_ON_READ", "SPARK", NONE_INSERT_DUP_POLICY),
-      Arguments.of("MERGE_ON_READ", "AVRO", DROP_INSERT_DUP_POLICY),
-      Arguments.of("MERGE_ON_READ", "SPARK", DROP_INSERT_DUP_POLICY),
-      Arguments.of("MERGE_ON_READ", "AVRO", FAIL_INSERT_DUP_POLICY),
-      Arguments.of("MERGE_ON_READ", "SPARK", FAIL_INSERT_DUP_POLICY),
-      Arguments.of("COPY_ON_WRITE", "AVRO", NONE_INSERT_DUP_POLICY),
-      Arguments.of("COPY_ON_WRITE", "SPARK", NONE_INSERT_DUP_POLICY),
-      Arguments.of("COPY_ON_WRITE", "AVRO", DROP_INSERT_DUP_POLICY),
-      Arguments.of("COPY_ON_WRITE", "SPARK", DROP_INSERT_DUP_POLICY),
-      Arguments.of("COPY_ON_WRITE", "AVRO", FAIL_INSERT_DUP_POLICY),
-      Arguments.of("COPY_ON_WRITE", "SPARK", FAIL_INSERT_DUP_POLICY)
+      Arguments.of("MERGE_ON_READ", NONE_INSERT_DUP_POLICY),
+      Arguments.of("MERGE_ON_READ", DROP_INSERT_DUP_POLICY),
+      Arguments.of("MERGE_ON_READ", FAIL_INSERT_DUP_POLICY),
+      Arguments.of("COPY_ON_WRITE", NONE_INSERT_DUP_POLICY),
+      Arguments.of("COPY_ON_WRITE", DROP_INSERT_DUP_POLICY),
+      Arguments.of("COPY_ON_WRITE", FAIL_INSERT_DUP_POLICY)
     )
   }
 

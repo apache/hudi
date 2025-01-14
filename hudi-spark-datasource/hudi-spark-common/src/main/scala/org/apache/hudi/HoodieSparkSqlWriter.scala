@@ -29,7 +29,7 @@ import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTable
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
-import org.apache.hudi.HoodieSparkSqlWriterInternal.{handleInsertDuplicates, shouldDropDuplicatesForInserts, shouldFailWhenDuplicatesFound}
+import org.apache.hudi.HoodieSparkSqlWriterInternal.handleInsertDuplicates
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
@@ -46,7 +46,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ConfigUtils.{getAllConfigKeys, getStringWithAltKeys}
+import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_TABLE_VERSION}
@@ -552,9 +552,7 @@ class HoodieSparkSqlWriterInternal {
     // or INSERT_DUP_POLICY is `drop` or `fail`.
     // Auto-correct the operation to "insert" if OPERATION is set to "upsert" wrongly
     // or not set (in which case it will be set as "upsert" by parametersWithWriteDefaults()) .
-    if ((hoodieConfig.getBoolean(INSERT_DROP_DUPS) ||
-      shouldFailWhenDuplicatesFound(hoodieConfig) ||
-      shouldDropDuplicatesForInserts(hoodieConfig)) &&
+    if ((hoodieConfig.getBoolean(INSERT_DROP_DUPS) || hoodieConfig.contains(INSERT_DUP_POLICY.key)) &&
       operation == WriteOperationType.UPSERT) {
 
       log.warn(s"$UPSERT_OPERATION_OPT_VAL is not applicable " +
@@ -1186,8 +1184,7 @@ object HoodieSparkSqlWriterInternal {
 
   // Check if deduplication is needed.
   def isDeduplicationNeeded(operation: WriteOperationType): Boolean = {
-    operation == WriteOperationType.INSERT ||
-      operation == WriteOperationType.INSERT_PREPPED
+    operation == WriteOperationType.INSERT
   }
 
   def handleInsertDuplicates(incomingRecords: JavaRDD[HoodieRecord[_]],
@@ -1200,7 +1197,7 @@ object HoodieSparkSqlWriterInternal {
       incomingRecords
     } else {
       // Perform deduplication
-      DataSourceUtils.dropDuplicates(
+      DataSourceUtils.resolveDuplicates(
         jsc, incomingRecords, parameters.asJava, shouldFailWhenDuplicatesFound(hoodieConfig))
     }
   }

@@ -3113,7 +3113,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              |  'primaryKey' = 'id',
              |  'type' = 'MOR',
              |  'preCombineField'= 'dt',
-             |  'hoodie.index.type' = 'BUCKET',
              |  'hoodie.bucket.index.hash.field' = 'id',
              |  'hoodie.bucket.index.num.buckets'= 512
              | )
@@ -3142,6 +3141,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                |""".stripMargin)
           if (policy.equals(NONE_INSERT_DUP_POLICY)) {
             checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
+              Seq("1", "aa", 123, "2024-02-19", 10),
               Seq("1", "aa", 1234, "2024-02-19", 10)
             )
           } else {

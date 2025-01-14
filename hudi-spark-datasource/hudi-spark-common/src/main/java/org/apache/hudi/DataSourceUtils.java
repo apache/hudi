@@ -278,14 +278,17 @@ public class DataSourceUtils {
   }
 
   /**
-   * Drop records already present in the dataset.
+   * Drop records already present in the dataset if {@code failOnDuplicates} is {@code false}.
+   * Otherwise, throw a {@link HoodieDuplicateKeyException} if duplicates are found.
    *
-   * @param engineContext the spark engine context
-   * @param incomingHoodieRecords HoodieRecords to deduplicate
-   * @param writeConfig HoodieWriteConfig
+   * @param engineContext the Spark engine context
+   * @param incomingHoodieRecords the HoodieRecords to deduplicate
+   * @param writeConfig the HoodieWriteConfig
+   * @param failOnDuplicates a flag indicating whether to fail when duplicates are found
+   * @return a JavaRDD of deduplicated HoodieRecords
    */
   @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> doDropDuplicates(HoodieSparkEngineContext engineContext,
+  public static JavaRDD<HoodieRecord> handleDuplicates(HoodieSparkEngineContext engineContext,
                                                        JavaRDD<HoodieRecord> incomingHoodieRecords,
                                                        HoodieWriteConfig writeConfig,
                                                        boolean failOnDuplicates) {
@@ -317,15 +320,27 @@ public class DataSourceUtils {
     return false;
   }
 
+  /**
+   * Resolves duplicate records in the provided {@code incomingHoodieRecords}.
+   *
+   * <p>If {@code failOnDuplicates} is {@code false}, duplicate records already present in the dataset
+   * are dropped. Otherwise, a {@link HoodieDuplicateKeyException} is thrown if duplicates are found.</p>
+   *
+   * @param jssc the Spark context used for executing the deduplication
+   * @param incomingHoodieRecords the input {@link JavaRDD} of {@link HoodieRecord} objects to process
+   * @param parameters a map of configuration parameters, including the dataset path under the key {@code "path"}
+   * @param failOnDuplicates a flag indicating whether to fail when duplicates are found
+   * @return a {@link JavaRDD} of deduplicated {@link HoodieRecord} objects
+   */
   @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
-                                                     JavaRDD<HoodieRecord> incomingHoodieRecords,
-                                                     Map<String, String> parameters,
-                                                     boolean failOnDuplicates) {
+  public static JavaRDD<HoodieRecord> resolveDuplicates(JavaSparkContext jssc,
+                                                        JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                                        Map<String, String> parameters,
+                                                        boolean failOnDuplicates) {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(parameters.get("path"))
         .withProps(parameters).build();
-    return doDropDuplicates(
+    return handleDuplicates(
         new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig, failOnDuplicates);
   }
 }
