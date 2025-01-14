@@ -34,7 +34,8 @@ import org.apache.hudi.util.JFunction
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -534,6 +535,15 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(RECORDKEY_FIELD.key, tableConfig.getRecordKeyFields.orElse(Array.empty).mkString(","))
       properties.setProperty(PRECOMBINE_FIELD.key, Option(tableConfig.getPreCombineField).getOrElse(""))
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
+
+      // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
+      val dataBase = Some(tableConfig.getDatabaseName)
+      val tableName = tableConfig.getTableName
+      if (spark.catalog.tableExists(dataBase.getOrElse("default"), tableName)) {
+        val tableIdentifier = TableIdentifier(tableName, dataBase)
+        val table = HoodieCatalogTable(spark, tableIdentifier)
+        table.catalogProperties.foreach(kv => properties.setProperty(kv._1, kv._2))
+      }
     }
 
     properties
