@@ -162,6 +162,23 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     return 0;
   }
 
+  /**
+   * Returns true is this payload represents an actual record to be written.
+   *
+   * Default implementation checks if the insert value is present. For better write performance, this should be
+   * overridden by implementations for which generating the insert value is expensive.
+   *
+   * @param schema Schema used for record
+   * @param properties Payload related properties. For example pass the ordering field(s) name to extract from value in storage.
+   * @return true if this payload has a record to be written.
+   *         false if this payload is empty and should be skipped from writing.
+   *         false if this payload represents a record to be deleted.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  default boolean hasInsertValue(Schema schema, Properties properties) throws IOException {
+    return getInsertValue(schema).isPresent();
+  }
+
   static String getAvroPayloadForMergeMode(RecordMergeMode mergeMode, String payloadClassName) {
     switch (mergeMode) {
       //TODO: After we have merge mode working for writing, we should have a dummy payload that will throw exception when used

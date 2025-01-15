@@ -32,6 +32,7 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Properties;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -107,5 +108,10 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
 
   public String getPartitionPath(String partitionPathField) throws IOException {
     return getFieldFromJsonOrFail(partitionPathField);
+  }
+
+  @Override
+  public boolean hasInsertValue(Schema schema, Properties properties) throws IOException {
+    return true;
   }
 }
