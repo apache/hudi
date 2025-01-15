@@ -20,6 +20,7 @@
 package org.apache.spark.sql.execution.datasources
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.hive.ql.exec.vector.{BytesColumnVector, DoubleColumnVector, LongColumnVector, VectorizedRowBatch}
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.orc.{OrcFile, Reader, TypeDescription}
@@ -30,7 +31,7 @@ import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
 import scala.jdk.CollectionConverters._
 
@@ -87,31 +88,67 @@ class Spark35OrcReader(enableVectorizedReader: Boolean,
     val options = reader.options()
     val rows = reader.rows(options)
     val batch = schema.createRowBatch()
-
-    // ColumnarBatch to hold rows
-    val sparkBatch = new ColumnarBatch(
-      schema.getChildren.asScala.map { field =>
-        new OnHeapColumnVector(batch.size, orcTypeToSparkType(field))
-      }.toArray
-    )
+    val columnVectors = OnHeapColumnVector
+      .allocateColumns(1, orcTypeToSparkSchema(schema))
+    columnVectors.foreach(v => v.reserve(2))
 
     new Iterator[InternalRow] {
-      private var hasMoreRows = rows.nextBatch(batch)
-
+      private var sparkBatch = new ColumnarBatch (
+        columnVectors.asInstanceOf[Array[ColumnVector]])
+      private var hasMoreRows = fetchBatch()
       override def hasNext: Boolean = hasMoreRows
-
       override def next(): InternalRow = {
         if (hasMoreRows) {
-          val row = sparkBatch.rowIterator.asScala.next()
-          if (!sparkBatch.rowIterator.asScala.hasNext) {
-            hasMoreRows = rows.nextBatch(batch)
+          val row = sparkBatch.rowIterator().next()
+          hasMoreRows = sparkBatch.rowIterator().hasNext
+          if (!hasMoreRows) {
+            hasMoreRows = fetchBatch()
           }
           row
         } else {
           throw new NoSuchElementException("No more rows available.")
         }
       }
+
+      def fetchBatch(): Boolean = {
+        val hasMoreRows = rows.nextBatch(batch)
+        if (hasMoreRows) {
+          sparkBatch.setNumRows(batch.size)
+          for (rowIndex <- 0 until batch.size) {
+            for (colIndex <- 0 until schema.getChildren.size()) {
+              val colVector = sparkBatch.column(colIndex).asInstanceOf[OnHeapColumnVector]
+              val orcColumnVector = batch.cols(colIndex)
+              orcColumnVector match {
+                case longVector: LongColumnVector =>
+                  if (longVector.isNull(rowIndex)) colVector.putNull(rowIndex)
+                  else colVector.putLong(rowIndex, longVector.vector(rowIndex))
+                case doubleVector: DoubleColumnVector =>
+                  if (doubleVector.isNull(rowIndex)) colVector.putNull(rowIndex)
+                  else colVector.putDouble(rowIndex, doubleVector.vector(rowIndex))
+                case stringVector: BytesColumnVector =>
+                  if (stringVector.isNull(rowIndex)) colVector.putNull(rowIndex)
+                  else {
+                    val bytes = stringVector.vector(rowIndex)
+                    val start = stringVector.start(rowIndex)
+                    val length = stringVector.length(rowIndex)
+                    colVector.putBytes(rowIndex, length, bytes, start)
+                  }
+                case _ =>
+                  throw new UnsupportedOperationException(s"Unsupported ORC column vector type: ${orcColumnVector.getClass}")
+              }
+            }
+          }
+        }
+        hasMoreRows
+      }
     }
+  }
+
+  def orcTypeToSparkSchema(schema: TypeDescription): StructType = {
+    StructType(schema.getChildren.asScala.zip(schema.getFieldNames.asScala).map {
+      case (childType, fieldName) =>
+        StructField(fieldName, orcTypeToSparkType(childType), nullable = true)
+    })
   }
 
   def orcTypeToSparkType(orcType: TypeDescription): DataType = {
@@ -141,7 +178,7 @@ class Spark35OrcReader(enableVectorizedReader: Boolean,
         StructType(
           orcType.getFieldNames.asScala.zip(orcType.getChildren.asScala).map {
             case (name, childType) => StructField(name, orcTypeToSparkType(childType))
-          }
+          }.toArray
         )
       case _ =>
         throw new IllegalArgumentException(s"Unsupported ORC type: ${orcType.getCategory}")
