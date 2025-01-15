@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
 import org.apache.hudi.HoodieSparkUtils.injectSQLConf
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.client.model.HoodieInternalRow
@@ -48,6 +49,7 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.util.stream.Collectors
 import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.mutable
 
@@ -149,7 +151,7 @@ object HoodieDatasetBulkInsertHelper
                  writeConfig: HoodieWriteConfig,
                  arePartitionRecordsSorted: Boolean,
                  shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
-    val schema = dataset.schema
+    val schema = alignNotNullFields(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
     HoodieJavaRDD.of(
       injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
         val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
@@ -197,6 +199,22 @@ object HoodieDatasetBulkInsertHelper
 
         writer.getWriteStatuses.asScala.iterator
       }), SQLConf.get).toJavaRDD())
+  }
+
+  private def alignNotNullFields(sourceSchema: StructType, avroSchema: Schema): StructType = {
+    val notNullFieldNames = avroSchema.getFields.stream().filter(f => !f.schema().isNullable).map(f => f.name()).collect(Collectors.toSet)
+    if (notNullFieldNames.isEmpty) {
+      return sourceSchema
+    }
+
+    val copiedFields = sourceSchema.fields.map(field => {
+      if (notNullFieldNames.contains(field.name) && field.nullable) {
+        field.copy(nullable = false)
+      } else {
+        field.copy()
+      }
+    }).toSeq
+    StructType(copiedFields)
   }
 
   private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean, targetParallelism: Int): RDD[InternalRow] = {
