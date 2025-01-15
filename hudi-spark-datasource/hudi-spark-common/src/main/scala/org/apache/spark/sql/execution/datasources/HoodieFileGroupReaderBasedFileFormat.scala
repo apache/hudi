@@ -37,6 +37,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjecti
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
+import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkFileReader}
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.internal.SQLConf
@@ -71,7 +72,7 @@ class HoodieFileGroupReaderBasedFileFormat(tableState: HoodieTableState,
                                            validCommits: String,
                                            shouldUseRecordPosition: Boolean,
                                            requiredFilters: Seq[Filter])
-  extends FileFormat with SparkAdapterSupport with HoodieFormatTrait {
+  extends FileFormat with SparkAdapterSupport with HoodieFormatTrait with Serializable {
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
    * while the other side can't
@@ -165,7 +166,6 @@ class HoodieFileGroupReaderBasedFileFormat(tableState: HoodieTableState,
           val filegroupName = FSUtils.getFileIdFromFilePath(sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(filegroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
-              val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
               val fileReaders = new java.util.HashMap[String, SparkFileReader]()
               fileReaders.put("orc", broadcastedOrcFileReader.value)
               fileReaders.put("parquet", broadcastedParquetFileReader.value)
@@ -335,9 +335,27 @@ class HoodieFileGroupReaderBasedFileFormat(tableState: HoodieTableState,
     InternalRow.fromSeq(allPartitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
   }
 
-  override def inferSchema(sparkSession: SparkSession, options: Map[String, String], files: Seq[FileStatus]): Option[StructType] = ???
+  override def inferSchema(sparkSession: SparkSession,
+                           options: Map[String, String],
+                           files: Seq[FileStatus]): Option[StructType] = {
+    // This is a simple heuristic assuming all files have the same extension.
+    val fileFormat = detectFileFormat(files.head.getPath.toString)
 
-  override def prepareWrite(sparkSession: SparkSession, job: Job, options: Map[String, String], dataSchema: StructType): OutputWriterFactory = ???
+    val parquetFormat = new ParquetFileFormat()
+    val orcFormat = new OrcFileFormat()
+    fileFormat match {
+      case "parquet" => parquetFormat.inferSchema(sparkSession, options, files)
+      case "orc" => orcFormat.inferSchema(sparkSession, options, files)
+      case _ => throw new UnsupportedOperationException(s"File format $fileFormat is not supported.")
+    }
+  }
+
+  override def prepareWrite(sparkSession: SparkSession,
+                            job: Job,
+                            options: Map[String, String],
+                            dataSchema: StructType): OutputWriterFactory = {
+    throw new UnsupportedOperationException("Write operations are not supported in this example.")
+  }
 
   private def detectFileFormat(filePath: String): String = {
     // Logic to detect file format based on the filePath or its content.
