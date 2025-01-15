@@ -95,7 +95,8 @@ public abstract class CompactionStrategy implements IncrementalPartitionAwareStr
    * @param writeConfig config for this compaction is passed in
    * @param operations list of compactions collected
    * @param pendingCompactionPlans Pending Compaction Plans for strategy to schedule next compaction plan
-   * @return list of compactions to perform in this run
+   * @return Pair of list of compactions to perform in this run and missing partitions.
+   *         Filtered out operations related partitions are missing partitions.
    */
   public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {

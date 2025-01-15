@@ -809,7 +809,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "Hudi write client and user is not expected to manually change the value.");
 
   public static final ConfigProperty<Boolean> INCREMENTAL_TABLE_SERVICE_ENABLE = ConfigProperty
-      .key("hoodie.incremental.tableservice.enabled")
+      .key("hoodie.table.services.incremental.enabled")
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")

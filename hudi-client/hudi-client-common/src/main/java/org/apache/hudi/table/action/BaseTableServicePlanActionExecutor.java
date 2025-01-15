@@ -25,7 +25,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -59,6 +58,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends BaseActionExecutor<T, I, K, O, R> {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseTableServicePlanActionExecutor.class);
+  private static final Set<String> MOR_COMMITS = CollectionUtils.createSet(DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
+  private static final Set<String> COW_COMMITS = CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION);
 
   public BaseTableServicePlanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config,
                                             HoodieTable<T, I, K, O> table, String instantTime) {
@@ -121,10 +122,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
             String completionTime = instant.getCompletionTime();
             if (completionTime.compareTo(leftBoundary) >= 0 && completionTime.compareTo(rightBoundary) < 0) {
               HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(instant, activeTimeline);
-              // ignore all the clustering operation for both mor and cow table
-              if (!metadata.getOperationType().equals(WriteOperationType.CLUSTER)) {
-                return metadata.getWriteStats().stream().map(HoodieWriteStat::getPartitionPath);
-              }
+              return metadata.getWriteStats().stream().map(HoodieWriteStat::getPartitionPath);
             }
             return Stream.empty();
           } catch (IOException e) {
@@ -137,17 +135,14 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
   }
 
   private boolean filterCommitByTableType(HoodieInstant instant) {
-    // for completed replace commit, need CommitMetadata to distinguish clustering or insert overwrite
     switch (table.getMetaClient().getTableType()) {
       case MERGE_ON_READ: {
-        // for mor only take cares of delta commit and replace commit
-        Set<String> operations = CollectionUtils.createSet(DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
-        return operations.contains(instant.getAction());
+        // for mor only take care of delta commit and replace commit
+        return MOR_COMMITS.contains(instant.getAction());
       }
       case COPY_ON_WRITE: {
-        // for mor only take cares of commit and replace commit
-        Set<String> operations = CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION);
-        return operations.contains(instant.getAction());
+        // for mor only take care of commit and replace commit
+        return COW_COMMITS.contains(instant.getAction());
       }
       default:
         throw new HoodieException("Un-supported table type " + table.getMetaClient().getTableType());
