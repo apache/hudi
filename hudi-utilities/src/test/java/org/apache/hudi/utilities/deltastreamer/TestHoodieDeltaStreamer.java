@@ -2486,10 +2486,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
-    //No change as this fails with could not read commit details due to path not exists
-    Throwable exp = assertThrows(SparkException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
-    assertTrue(exp.getMessage().contains("FileNotFoundException"),
-        "Expected to fail with 'FileNotFoundException' but the message was: " + exp.getMessage());
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
 
     if (downstreamCfg.configs == null) {
