@@ -36,7 +36,9 @@ public class LogFileNumBasedCompactionStrategy extends BoundedIOCompactionStrate
     implements Comparator<HoodieCompactionOperation> {
 
   @Override
-  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig,
+                                                                            List<HoodieCompactionOperation> operations,
+                                                                            List<HoodieCompactionPlan> pendingCompactionPlans) {
     Long numThreshold = writeConfig.getCompactionLogFileNumThreshold();
     ArrayList<String> missingPartitions = new ArrayList<>();
     boolean incrementalTableServiceEnable = writeConfig.isIncrementalTableServiceEnable();

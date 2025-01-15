@@ -25,7 +25,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 /**
  * UnBoundedCompactionStrategy will not change ordering or filter any compaction. It is a pass-through and will compact

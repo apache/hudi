@@ -42,7 +42,9 @@ public class CompositeCompactionStrategy extends CompactionStrategy {
   }
 
   @Override
-  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig, List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
+  public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig,
+                                                                            List<HoodieCompactionOperation> operations,
+                                                                            List<HoodieCompactionPlan> pendingCompactionPlans) {
     List<HoodieCompactionOperation> finalOperations = operations;
     List<String> missingPartitions = new ArrayList<>();
     for (CompactionStrategy strategy : strategies) {

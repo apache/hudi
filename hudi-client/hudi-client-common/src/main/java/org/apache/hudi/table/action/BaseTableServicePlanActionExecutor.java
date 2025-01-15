@@ -109,8 +109,8 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
     Option<HoodieInstant> lastCompleteTableServiceInstant = missingPair.getLeft();
     List<String> missingPartitions = missingPair.getRight();
 
-    String leftBoundary = lastCompleteTableServiceInstant.isPresent() ?
-        missingPair.getLeft().get().requestedTime() : HoodieTimeline.INIT_INSTANT_TS;
+    String leftBoundary = lastCompleteTableServiceInstant.isPresent()
+        ? missingPair.getLeft().get().requestedTime() : HoodieTimeline.INIT_INSTANT_TS;
     String rightBoundary = instantTime;
     // compute [leftBoundary, rightBoundary) as time window
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
