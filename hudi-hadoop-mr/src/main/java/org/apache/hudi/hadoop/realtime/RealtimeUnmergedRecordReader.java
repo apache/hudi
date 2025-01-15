@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
@@ -27,6 +28,9 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.RecordReaderValueIterator;
 import org.apache.hudi.hadoop.SafeParquetRecordReaderWrapper;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -69,7 +73,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
    * @param realReader Parquet Reader
    */
   public RealtimeUnmergedRecordReader(RealtimeSplit split, JobConf job,
-      RecordReader<NullWritable, ArrayWritable> realReader) {
+                                      RecordReader<NullWritable, ArrayWritable> realReader) {
     super(split, job);
     this.parquetReader = new SafeParquetRecordReaderWrapper(realReader);
     // Iterator for consuming records from parquet file
@@ -105,16 +109,20 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
   ) {
     return Arrays.asList(
         new FunctionBasedQueueProducer<>(queue -> {
-          HoodieUnMergedLogRecordScanner scanner =
-              scannerBuilder.withLogRecordScannerCallback(record -> {
-                    // convert Hoodie log record to Hadoop AvroWritable and buffer
-                    GenericRecord rec = (GenericRecord) record.toIndexedRecord(getReaderSchema(), payloadProps).get().getData();
-                    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(rec, getHiveSchema(), isSupportTimestamp());
-                    queue.insertRecord(aWritable);
-                  })
-                  .build();
-          // Scan all the delta-log files, filling in the queue
-          scanner.scan();
+          HoodieUnMergedLogRecordScanner scanner = scannerBuilder.build();
+          Iterator<HoodieRecord<?>> logRecordIterator = scanner.iterator();
+          try {
+            while (logRecordIterator.hasNext()) {
+              HoodieRecord<?> record = logRecordIterator.next();
+              // convert Hoodie log record to Hadoop AvroWritable and buffer
+              GenericRecord rec = null;
+              rec = (GenericRecord) record.toIndexedRecord(getReaderSchema(), payloadProps).get().getData();
+              ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(rec, getHiveSchema(), isSupportTimestamp());
+              queue.insertRecord(aWritable);
+            }
+          } catch (Exception e) {
+            throw new HoodieException("Error converting the record to avro", e);
+          }
           return null;
         }),
         new IteratorBasedQueueProducer<>(parquetRecordsIterator)
