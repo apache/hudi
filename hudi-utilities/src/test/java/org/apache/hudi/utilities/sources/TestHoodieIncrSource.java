@@ -18,10 +18,14 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.BaseHoodieTableFileIndex;
+import org.apache.hudi.MergeOnReadSnapshotRelation;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -38,12 +42,14 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -59,6 +65,9 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.execution.datasources.LogicalRelation;
+import org.apache.spark.storage.StorageLevel;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -67,6 +76,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -585,6 +595,61 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
+  @Test
+  void testFileIndexLogicalPlanSize() throws Exception {
+    this.tableType = MERGE_ON_READ;
+    metaClient = getHoodieMetaClient(hadoopConf(), basePath());
+    HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(9).build())
+        .withCompactionConfig(
+            HoodieCompactionConfig.newBuilder()
+                .withScheduleInlineCompaction(true)
+                .withMaxNumDeltaCommitsBeforeCompaction(1)
+                .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .build();
+    // Write a hudi table with 20 file slices.
+    int numFileSlices = 20;
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      for (int i = 0; i < numFileSlices; i++) {
+        writeRecordsForPartition(writeClient, BULK_INSERT, "100" + i, String.format("2016/03/%s", i));
+      }
+    }
+    // Arguments are in order -> fileSlicesCachedInMemory, spillableMemory
+    getArgsForLogicalPlanSizeValidation().forEach(argumentsStream -> {
+      Object[] arguments = argumentsStream.get();
+      int fileSlicesCachedInMemory = (int) arguments[0];
+      long spillableMemoryBytes = (long) arguments[1];
+      Dataset<Row> dataset = spark().read()
+          .option(HoodieCommonConfig.HOODIE_FILE_INDEX_USE_SPILLABLE_MAP.key(), true)
+          .option(HoodieCommonConfig.HOODIE_FILE_INDEX_SPILLABLE_MEMORY.key(), spillableMemoryBytes)
+          .format("hudi").load(basePath());
+      dataset.persist(StorageLevel.MEMORY_AND_DISK_SER());
+      dataset.count();
+      BaseHoodieTableFileIndex hoodieTableFileIndex = ((MergeOnReadSnapshotRelation) ((LogicalRelation) dataset.logicalPlan()).relation()).fileIndex();
+      ExternalSpillableMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> cachedAllInputFileSlices =
+          getSpillableMap(hoodieTableFileIndex);
+      Assertions.assertEquals(fileSlicesCachedInMemory, cachedAllInputFileSlices.getInMemoryMapNumEntries());
+      Assertions.assertEquals(numFileSlices - fileSlicesCachedInMemory, cachedAllInputFileSlices.getDiskBasedMapNumEntries());
+      Assertions.assertTrue(cachedAllInputFileSlices.getCurrentInMemoryMapSize() < spillableMemoryBytes,
+          "In-memory map size is greater than expected " + cachedAllInputFileSlices.getCurrentInMemoryMapSize());
+      dataset.unpersist();
+    });
+  }
+
+  private static ExternalSpillableMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> getSpillableMap(BaseHoodieTableFileIndex hoodieTableFileIndex) {
+    // cachedAllInputFileSlices is a private field, using reflection to assert the size.
+    try {
+      Field cachedAllInputFileSlicesField = null;
+      cachedAllInputFileSlicesField = BaseHoodieTableFileIndex.class.getDeclaredField("cachedAllInputFileSlices");
+      cachedAllInputFileSlicesField.setAccessible(true);
+      return (ExternalSpillableMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>>) cachedAllInputFileSlicesField.get(hoodieTableFileIndex);
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new HoodieException("field not found in BaseHoodieTableFileIndex", e);
+    }
+  }
+
   private void readAndAssertCheckpointTranslation(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
                                                   HoodieTableVersion targetTableVersion, Option<Checkpoint> checkpointToPull,
                                                   int expectedCount, Checkpoint expectedCheckpoint) {
@@ -711,6 +776,25 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     public Schema getSourceSchema() {
       return schema;
     }
+  }
+
+  private static Stream<Arguments> getArgsForPartitionPruningInHoodieIncrSource() {
+    // Arguments are in order -> checkpointToPullFromHoodieInstant, maxRowsPerSnapshotBatch, expectedCheckpointHoodieInstant, expectedCount, expectedFileParallelism.
+    return Stream.of(
+        Arguments.of(null, 1, "100", 100, 1),
+        Arguments.of(null, 101, "200", 200, 3),
+        Arguments.of(null, 10001, "300", 300, 3),
+        Arguments.of("100", 101, "300", 200, 2),
+        Arguments.of("200", 101, "300", 100, 1),
+        Arguments.of("300", 101, "300", 0, 0)
+    );
+  }
+
+  private static Stream<Arguments> getArgsForLogicalPlanSizeValidation() {
+    return Stream.of(
+        Arguments.of(1, 3072L),
+        Arguments.of(20, 20 * 1024L * 1024L)
+    );
   }
 
   static class TestSourceProfile implements SourceProfile<Integer> {
