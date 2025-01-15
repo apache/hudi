@@ -265,10 +265,10 @@ public class StreamWriteOperatorCoordinator
           scheduleTableServices(committed);
 
           if (committed) {
-            // start new instant.
-            startInstant();
             // sync Hive if is enabled
             syncHiveAsync();
+            // start new instant.
+            startInstant();
           }
         }, "commits the instant %s", this.instant
     );
