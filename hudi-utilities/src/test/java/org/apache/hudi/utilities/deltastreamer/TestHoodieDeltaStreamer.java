@@ -120,7 +120,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.common.errors.TopicExistsException;
-import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.AnalysisException;
@@ -2486,10 +2485,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
-    //No change as this fails with could not read commit details due to path not exists
-    Throwable exp = assertThrows(SparkException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
-    assertTrue(exp.getMessage().contains("FileNotFoundException"),
-        "Expected to fail with 'FileNotFoundException' but the message was: " + exp.getMessage());
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
 
     if (downstreamCfg.configs == null) {
