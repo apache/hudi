@@ -29,6 +29,7 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkTables;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -82,7 +83,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
     // when starting up, rolls back all the inflight compaction instants if there exists,
     // these instants are in priority for scheduling task because the compaction instants are
     // scheduled from earliest(FIFO sequence).
-    CompactionUtil.rollbackCompaction(table);
+    CompactionUtil.rollbackCompaction(table, FlinkWriteClients.createWriteClient(conf, getRuntimeContext()));
   }
 
   @Override
