@@ -252,7 +252,6 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void notifyCheckpointComplete(long checkpointId) {
-    String currentInstant = this.instant;
     executor.execute(
         () -> {
           // The executor thread inherits the classloader of the #notifyCheckpointComplete
@@ -266,10 +265,10 @@ public class StreamWriteOperatorCoordinator
           scheduleTableServices(committed);
 
           if (committed) {
+            // sync Hive if is enabled
+            syncHiveAsync();
             // start new instant.
             startInstant();
-            // sync Hive if is enabled
-            syncHiveAsync(currentInstant);
           }
         }, "commits the instant %s", this.instant
     );
@@ -327,9 +326,9 @@ public class StreamWriteOperatorCoordinator
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
   }
 
-  private void syncHiveAsync(String currentInstant) {
+  private void syncHiveAsync() {
     if (tableState.syncHive) {
-      this.hiveSyncExecutor.execute(this::doSyncHive, "sync hive metadata for instant %s", currentInstant);
+      this.hiveSyncExecutor.execute(this::doSyncHive, "sync hive metadata for instant %s", this.instant);
     }
   }
 
