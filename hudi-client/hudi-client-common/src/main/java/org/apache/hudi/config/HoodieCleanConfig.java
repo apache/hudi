@@ -52,6 +52,7 @@ public class HoodieCleanConfig extends HoodieConfig {
   private static final String CLEANER_HOURS_RETAINED_KEY = "hoodie.cleaner.hours.retained";
 
   private static final String CLEANER_ROLLBACK_ONLY_KEY = "hoodie.cleaner.rollback_only";
+  private static final String CLEANER_PARALLELIZE_PARTITION_CLEANING_KEY = "hoodie.cleaner.parallelize_partition_cleaning";
   private static final String CLEANER_FILE_VERSIONS_RETAINED_KEY = "hoodie.cleaner.fileversions.retained";
 
   public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
@@ -116,6 +117,11 @@ public class HoodieCleanConfig extends HoodieConfig {
           .defaultValue("false")
           .markAdvanced()
           .withDocumentation("TODO");
+
+  public static final ConfigProperty<String> CLEANER_PARALLELIZE_PARTITION_CLEANING = ConfigProperty.key(CLEANER_PARALLELIZE_PARTITION_CLEANING_KEY)
+        .defaultValue("false")
+        .markAdvanced()
+        .withDocumentation("If there are any partitions to be deleted in the clean plan, setting this to true will parallelize this deletion. Otherwise the deletes will be processed by the driver");
 
   public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
       .key(CLEANER_FILE_VERSIONS_RETAINED_KEY)

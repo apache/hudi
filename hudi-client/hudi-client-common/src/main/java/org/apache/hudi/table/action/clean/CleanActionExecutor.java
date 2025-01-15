@@ -53,7 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -74,7 +73,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     this.skipLocking = skipLocking;
   }
 
-  private static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr, Integer count) throws IOException {
+  private static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr) throws IOException {
     Path deletePath = new Path(deletePathStr);
     LOG.info("***--- Working on delete path :" + deletePath);
     try {
@@ -89,9 +88,6 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           LOG.info("***--- Already cleaned up file at path :" + deletePath);
         }
       }
-      if (count % 1000 == 0) {
-        LOG.info("***--- delete paths processed: " + count);
-      }
       return deleteResult;
     } catch (FileNotFoundException fio) {
       // With cleanPlan being used for retried cleaning operations, its possible to clean a file twice
@@ -103,16 +99,14 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     Map<String, PartitionCleanStat> partitionCleanStatMap = new HashMap<>();
     FileSystem fs = (FileSystem) table.getStorage().getFileSystem();
 
-    AtomicInteger count = new AtomicInteger(0);
     cleanFileInfo.forEachRemaining(partitionDelFileTuple -> {
-      count.incrementAndGet();
       String partitionPath = partitionDelFileTuple.getLeft();
       LOG.info("***--- Partition path: " + partitionPath);
       Path deletePath = new Path(partitionDelFileTuple.getRight().getFilePath());
       String deletePathStr = deletePath.toString();
       boolean deletedFileResult = false;
       try {
-        deletedFileResult = deleteFileAndGetResult(fs, deletePathStr, count.get());
+        deletedFileResult = deleteFileAndGetResult(fs, deletePathStr);
       } catch (IOException e) {
         LOG.error("Delete file failed: " + deletePathStr, e);
       }
@@ -162,19 +156,26 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     List<String> partitionsToBeDeleted = table.getMetaClient().getTableConfig().isTablePartitioned() && cleanerPlan.getPartitionsToBeDeleted() != null
         ? cleanerPlan.getPartitionsToBeDeleted()
         : new ArrayList<>();
-    AtomicInteger count = new AtomicInteger(0);
     LOG.info("***--- metaclient partitions to be deleted: " + partitionsToBeDeleted.size());
-    partitionsToBeDeleted.forEach(entry -> {
-      try {
-        if (!isNullOrEmpty(entry)) {
-          count.incrementAndGet();
-          deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
-              table.getMetaClient().getBasePath() + "/" + entry, count.get());
+    if (config.parallelizePartitionCleaning()) {
+      LOG.info("***--- Parallelizing partition deletes");
+      context.foreach(
+              partitionsToBeDeleted,
+              partitionPath -> deletePartitionsFunc(partitionPath, table),
+              cleanerParallelism);
+    } else {
+      LOG.info("***--- Processing partition deletes on driver");
+      partitionsToBeDeleted.forEach(entry -> {
+        try {
+          if (!isNullOrEmpty(entry)) {
+            deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
+                    table.getMetaClient().getBasePath() + "/" + entry);
+          }
+        } catch (IOException e) {
+          LOG.warn("Partition deletion failed " + entry);
         }
-      } catch (IOException e) {
-        LOG.warn("Partition deletion failed " + entry);
-      }
-    });
+      });
+    };
 
     // Return PartitionCleanStat for each partition passed.
     return cleanerPlan.getFilePathsToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
@@ -200,6 +201,16 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     }).collect(Collectors.toList());
   }
 
+  private void deletePartitionsFunc(String path, HoodieTable<T,I,K,O> table) {
+    try {
+        if (!isNullOrEmpty(path)) {
+          deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
+                  table.getMetaClient().getBasePath() + "/" + path);
+        }
+      } catch (IOException e) {
+        LOG.warn("Partition deletion failed " + path);
+      };
+  }
 
   /**
    * Executes the Cleaner plan stored in the instant metadata.
