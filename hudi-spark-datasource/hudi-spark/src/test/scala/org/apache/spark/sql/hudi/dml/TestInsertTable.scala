@@ -417,9 +417,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10.0, 1000)
       )
       // disable this config to avoid affect other test in this class.
-      spark.sql("set hoodie.datasource.insert.dup.policy=none")
       spark.sql(s"set hoodie.sql.insert.mode=upsert")
     })
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
   }
 
   test("Test Insert Into None Partitioned Table strict mode with no preCombineField") {
@@ -1528,6 +1528,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test enable hoodie.merge.allow.duplicate.on.inserts when write") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     spark.sql("set hoodie.datasource.write.operation = insert")
     Seq("mor", "cow").foreach { tableType =>
       withTempDir { tmp =>
@@ -1571,6 +1572,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Into Bucket Index Table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withTempDir { tmp =>
       val tableName = generateTableName
       // Create a partitioned table
@@ -1623,7 +1625,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Bulk Insert Into Bucket Index Table") {
-    withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert", "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
+    withSQLConf(
+      "hoodie.datasource.write.operation" -> "bulk_insert",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
       Seq("mor", "cow").foreach { tableType =>
         Seq("true", "false").foreach { bulkInsertAsRow =>
           withTempDir { tmp =>
@@ -1881,6 +1885,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Overwrite Into Consistent Bucket Index Table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -2052,6 +2057,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
       Seq("false", "true").foreach { bulkInsertAsRow =>
         withTempDir { tmp =>
@@ -2316,7 +2322,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         countDownLatch.countDown
       }
     }
-
   }
 
   test("Test multiple partition fields pruning") {
@@ -3155,6 +3160,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         }
       })
     }
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
   }
 }
 
