@@ -1328,6 +1328,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test insert pk-table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     Seq("cow", "mor").foreach { tableType =>
       withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
         withRecordType()(withTempDir { tmp =>
