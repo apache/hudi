@@ -232,7 +232,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         .withMetricsConfig(getMetricsConfig())
         .build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
-      String newCommitTime = writeClient.createNewInstantTime();
+      String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 1000);
@@ -242,11 +242,11 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // Update all the 1000 records across 5 commits to generate sufficient log files.
       int i = 1;
       for (; i < 5; i++) {
-        newCommitTime = writeClient.createNewInstantTime();
+        newCommitTime = String.format("10%s", i);
         updateRecords(config, newCommitTime, records);
         assertLogFilesNumEqualsTo(config, i);
       }
-      HoodieWriteMetadata result = compact(writeClient, writeClient.createNewInstantTime());
+      HoodieWriteMetadata result = compact(writeClient, String.format("10%s", i));
       verifyCompaction(result);
 
       // Verify compaction.requested, compaction.completed metrics counts.

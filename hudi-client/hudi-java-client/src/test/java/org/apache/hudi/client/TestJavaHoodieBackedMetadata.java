@@ -2554,14 +2554,14 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieJavaWriteClient client = getHoodieWriteClient(cfg);
 
     // Insert one batch 0000001
-    String commitTime = client.createNewInstantTime();
+    String commitTime = "0000001";
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, 100);
     client.startCommitWithTime(commitTime);
     List<WriteStatus> writeStatuses = client.insert(records, commitTime);
     assertNoWriteErrors(writeStatuses);
 
     // Insert second batch 0000002
-    commitTime = client.createNewInstantTime();
+    commitTime = "0000002";
     records = dataGen.generateInserts(commitTime, 100);
     client.startCommitWithTime(commitTime);
     writeStatuses = client.insert(records, commitTime);
@@ -2576,11 +2576,10 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
     HoodieJavaWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
-    String clusteringInstant = clusteringClient.createNewInstantTime();
-    clusteringClient.scheduleTableService(clusteringInstant, Option.empty(), TableServiceType.CLUSTER);
+    clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
 
     // Execute pending clustering operation
-    clusteringClient.cluster(clusteringInstant, true);
+    clusteringClient.cluster("0000003", true);
 
     // verify metadata table
     validateMetadata(client);
@@ -2615,14 +2614,14 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieJavaWriteClient client = getHoodieWriteClient(cfg);
 
     // Insert one batch 0000001
-    String commitTime = client.createNewInstantTime();
+    String commitTime = "0000001";
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, 100);
     client.startCommitWithTime(commitTime);
     List<WriteStatus> writeStatuses = client.insert(records, commitTime);
     assertNoWriteErrors(writeStatuses);
 
     // Insert second batch 0000002
-    commitTime = client.createNewInstantTime();
+    commitTime = "0000002";
     records = dataGen.generateInserts(commitTime, 100);
     client.startCommitWithTime(commitTime);
     writeStatuses = client.insert(records, commitTime);
@@ -2637,11 +2636,10 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
     HoodieJavaWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
-    String clusteringInstant = clusteringClient.createNewInstantTime();
-    clusteringClient.scheduleTableService(clusteringInstant, Option.empty(), TableServiceType.CLUSTER);
+    clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
 
     // Insert second batch 0000004
-    commitTime = client.createNewInstantTime();
+    commitTime = "0000004";
     records = dataGen.generateInserts(commitTime, 100);
     client = getHoodieWriteClient(cfg);
     client.startCommitWithTime(commitTime);
@@ -2668,7 +2666,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
         // Execute pending clustering operation
         clusteringClient = getHoodieWriteClient(clusterWriteCfg);
-        clusteringClient.cluster(clusteringInstant, true);
+        clusteringClient.cluster("0000003", true);
 
         // verify metadata table
         validateMetadata(client);

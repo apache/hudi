@@ -80,19 +80,20 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
         Option<HoodieInstant> lastCompleteTableServiceInstant = lastInstantAndIncrPartitions.getLeft();
         Set<String> incrementalPartitions = lastInstantAndIncrPartitions.getRight();
 
-        if (incrementalPartitions.isEmpty()) {
-          // handle the case the writer just commits the empty commits continuously
-          // the incremental partition list is empty we just skip the scheduling
-          LOG.info("Incremental partitions are empty. Skip current schedule " + instantTime);
-          return Collections.emptyList();
-        } else if (lastCompleteTableServiceInstant.isPresent()) {
-          LOG.info("Fetched incremental partitions for " + type + ". " + incrementalPartitions + ". Instant " + instantTime);
-          return new ArrayList<>(incrementalPartitions);
-        } else {
-          // Last complete table service commit maybe archived.
-          // fall back to get all partitions.
-          LOG.info("No previous completed table service instant, fall back to get all partitions");
+        if (lastCompleteTableServiceInstant.isPresent()) {
+          if (!incrementalPartitions.isEmpty()) {
+            LOG.info("Fetched incremental partitions for " + type + ". " + incrementalPartitions + ". Instant " + instantTime);
+            return new ArrayList<>(incrementalPartitions);
+          } else {
+            // handle the case the writer just commits the empty commits continuously
+            // the incremental partition list is empty we just skip the scheduling
+            LOG.info("Incremental partitions are empty. Skip current schedule " + instantTime);
+            return Collections.emptyList();
+          }
         }
+        // Last complete table service commit maybe archived.
+        // fall back to get all partitions.
+        LOG.info("No previous completed table service instant, fall back to get all partitions");
       } catch (Exception ex) {
         LOG.warn("Failed to get incremental partitions", ex);
       }
