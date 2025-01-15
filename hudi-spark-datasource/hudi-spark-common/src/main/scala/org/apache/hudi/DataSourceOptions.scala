@@ -151,6 +151,20 @@ object DataSourceReadOptions {
     .withDocumentation("For the use-cases like users only want to incremental pull from certain partitions "
       + "instead of the full table. This option allows using glob pattern to directly filter on path.")
 
+  val INCREMENTAL_READ_SKIP_COMPACT: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.read.incr.skip_compact")
+    .defaultValue(false)
+    .markAdvanced()
+    .withDocumentation("Whether to skip compaction instants and avoid reading compacted base files for streaming "
+      + "read to improve read performance.")
+
+  val INCREMENTAL_READ_SKIP_CLUSTER: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.read.incr.skip_cluster")
+    .defaultValue(false)
+    .markAdvanced()
+    .withDocumentation("Whether to skip clustering instants to avoid reading base files of clustering operations "
+      + "for streaming read to improve read performance.")
+
   val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = HoodieCommonConfig.TIMESTAMP_AS_OF
 
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
