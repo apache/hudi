@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -131,12 +130,12 @@ public class SparkBucketIndexPartitioner<T> extends
     if (fileIdOption.isPresent()) {
       return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
     } else {
-      String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketId, isNonBlockingConcurrencyControl);
       // Always write into log file instead of base file if using NB-CC
       if (isNonBlockingConcurrencyControl) {
-        String fileId = FSUtils.createNewFileId(fileIdPrefix, 0);
+        String fileId = BucketIdentifier.newBucketFileIdForNBCC(bucketNumber);
         return new BucketInfo(BucketType.UPDATE, fileId, partitionPath);
       }
+      String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketId);
       return new BucketInfo(BucketType.INSERT, fileIdPrefix, partitionPath);
     }
   }
