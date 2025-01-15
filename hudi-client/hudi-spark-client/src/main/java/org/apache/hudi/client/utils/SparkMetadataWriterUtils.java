@@ -190,16 +190,9 @@ public class SparkMetadataWriterUtils {
         .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
         .withReaderSchema(readerSchema)
         .withTableMetaClient(metaClient)
+        .withLogRecordScannerCallback(records::add)
         .build();
-    Iterator<HoodieRecord<?>> recordIterator = scanner.iterator();
-    while (recordIterator.hasNext()) {
-      try {
-        records.add(recordIterator.next
-            ());
-      } catch (Exception e) {
-        throw new HoodieException("Error while inserting record into queue", e);
-      }
-    }
+    scanner.scan(false);
     return records;
   }
 

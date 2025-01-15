@@ -127,7 +127,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -1054,21 +1053,14 @@ public class HoodieTableMetadataUtil {
           .withLatestInstantTime(latestCommitTimestamp)
           .withReaderSchema(writerSchemaOpt.get())
           .withTableMetaClient(datasetMetaClient);
-
-      Iterator<HoodieRecord<?>> recordIterator = builder.build().iterator();
-      while (recordIterator.hasNext()) {
-        try {
-          HoodieRecord<?> record = recordIterator.next();
-          if (includeValidKeys) {
-            allRecordKeys.add(record.getRecordKey());
-          }
-          if (includeDeletedKeys) {
-            allRecordKeys.add(record.getRecordKey());
-          }
-        } catch (Exception e) {
-          throw new HoodieException("Error while inserting record into queue", e);
-        }
+      if (includeValidKeys) {
+        builder.withLogRecordScannerCallback(record -> allRecordKeys.add(record.getRecordKey()));
       }
+      if (includeDeletedKeys) {
+        builder.withRecordDeletionCallback(deletedKey -> allRecordKeys.add(deletedKey.getRecordKey()));
+      }
+      HoodieUnMergedLogRecordScanner scanner = builder.build();
+      scanner.scan();
       return allRecordKeys;
     }
     return Collections.emptySet();
@@ -1664,17 +1656,9 @@ public class HoodieTableMetadataUtil {
           .withLatestInstantTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
           .withReaderSchema(writerSchemaOpt.get())
           .withTableMetaClient(datasetMetaClient)
+          .withLogRecordScannerCallback(records::add)
           .build();
-
-      Iterator<HoodieRecord<?>> recordIterator = scanner.iterator();
-      while (recordIterator.hasNext()) {
-        try {
-          records.add(recordIterator.next());
-        } catch (Exception e) {
-          throw new HoodieException("Error while inserting record into queue", e);
-        }
-      }
-
+      scanner.scan();
       if (records.isEmpty()) {
         return Collections.emptyList();
       }
