@@ -32,8 +32,10 @@ import org.apache.hudi.common.util.CompactionUtils
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.metadata.HoodieTableMetadata
+
 import org.apache.avro.Schema
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.util.{Collections, List, Optional}
@@ -181,6 +183,90 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test MERGE INTO with partial updates containing non-existent columns on COW table") {
+    testPartialUpdateWithNonExistentColumns("cow")
+  }
+
+  test("Test MERGE INTO with partial updates containing non-existent columns on MOR table") {
+    testPartialUpdateWithNonExistentColumns("mor")
+  }
+
+  def testPartialUpdateWithNonExistentColumns(tableType: String): Unit = {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = tmp.getCanonicalPath + "/" + tableName
+      spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+      spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
+
+      // Create a table with five data fields
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | _ts long,
+           | description string
+           |) using hudi
+           |tblproperties(
+           | type ='$tableType',
+           | primaryKey = 'id',
+           | preCombineField = '_ts'
+           |)
+           |location '$basePath'
+        """.stripMargin)
+      val structFields = scala.collection.immutable.List(
+        StructField("id", IntegerType, nullable = true),
+        StructField("name", StringType, nullable = true),
+        StructField("price", DoubleType, nullable = true),
+        StructField("_ts", LongType, nullable = true),
+        StructField("description", StringType, nullable = true))
+
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
+        "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30, 1250, 'a3: desc3')")
+      validateTableSchema(tableName, structFields)
+
+      // Partial updates using MERGE INTO statement with changed fields: "price", "_ts"
+      // This is OK since the "UPDATE SET" clause does not contain the new column
+      spark.sql(
+        s"""
+           |merge into $tableName t0
+           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as ts, 'x' as new_col
+           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as ts, 'y' as new_col) s0
+           |on t0.id = s0.id
+           |when matched then update set price = s0.price, _ts = s0.ts
+           |""".stripMargin)
+
+      validateTableSchema(tableName, structFields)
+      checkAnswer(s"select id, name, price, _ts, description from $tableName")(
+        Seq(1, "a1", 12.0, 1001, "a1: desc1"),
+        Seq(2, "a2", 20.0, 1200, "a2: desc2"),
+        Seq(3, "a3", 25.0, 1260, "a3: desc3")
+      )
+
+      // Partial updates using MERGE INTO statement with changed fields: "price", "_ts", "new_col"
+      // This throws an error since the "UPDATE SET" clause contains the new column
+      val fieldNames = spark.sql(s"select * from $tableName").schema.fields
+        .map(e => s"t0.${e.name}")
+        .sortBy(s => s)
+        .mkString("[", ", ", "]")
+      val expectedExceptionMessage = if (HoodieSparkUtils.gteqSpark3_5) {
+        "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
+          s"new_col cannot be resolved. Did you mean one of the following? $fieldNames."
+      } else {
+        s"cannot resolve new_col in MERGE command given columns $fieldNames."
+      }
+      checkExceptionContain(
+        s"""
+           |merge into $tableName t0
+           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as ts, 'x' as new_col
+           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as ts, 'y' as new_col) s0
+           |on t0.id = s0.id
+           |when matched then update set price = s0.price, _ts = s0.ts, new_col = s0.new_col
+           |""".stripMargin)(expectedExceptionMessage)
+    }
+  }
+
   def testPartialUpdate(tableType: String,
                         logDataBlockFormat: String): Unit = {
     withTempDir { tmp =>
@@ -208,19 +294,27 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            |)
            |location '$basePath'
         """.stripMargin)
+      val structFields = scala.collection.immutable.List(
+        StructField("id", IntegerType, nullable = true),
+        StructField("name", StringType, nullable = true),
+        StructField("price", DoubleType, nullable = true),
+        StructField("_ts", LongType, nullable = true),
+        StructField("description", StringType, nullable = true))
       spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
         "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30, 1250, 'a3: desc3')")
+      validateTableSchema(tableName, structFields)
 
       // Partial updates using MERGE INTO statement with changed fields: "price" and "_ts"
       spark.sql(
         s"""
            |merge into $tableName t0
-           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as _ts
-           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as _ts) s0
+           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as ts
+           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as ts) s0
            |on t0.id = s0.id
-           |when matched then update set price = s0.price, _ts = s0._ts
+           |when matched then update set price = s0.price, _ts = s0.ts
            |""".stripMargin)
 
+      validateTableSchema(tableName, structFields)
       checkAnswer(s"select id, name, price, _ts, description from $tableName")(
         Seq(1, "a1", 12.0, 1001, "a1: desc1"),
         Seq(2, "a2", 20.0, 1200, "a2: desc2"),
@@ -235,12 +329,13 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |merge into $tableName t0
-           |using ( select 1 as id, 'a1' as name, 'a1: updated desc1' as description, 1023 as _ts
-           |union select 2 as id, 'a2' as name, 'a2: updated desc2' as description, 1270 as _ts) s0
+           |using ( select 1 as id, 'a1' as name, 'a1: updated desc1' as new_description, 1023 as _ts
+           |union select 2 as id, 'a2' as name, 'a2: updated desc2' as new_description, 1270 as _ts) s0
            |on t0.id = s0.id
-           |when matched then update set description = s0.description, _ts = s0._ts
+           |when matched then update set description = s0.new_description, _ts = s0._ts
            |""".stripMargin)
 
+      validateTableSchema(tableName, structFields)
       checkAnswer(s"select id, name, price, _ts, description from $tableName")(
         Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
         Seq(2, "a2", 20.0, 1270, "a2: updated desc2"),
@@ -255,12 +350,13 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |merge into $tableName t0
-             |using ( select 2 as id, '_a2' as name, 18.0 as price, 1275 as _ts
-             |union select 3 as id, '_a3' as name, 28.0 as price, 1280 as _ts) s0
+             |using ( select 2 as id, '_a2' as name, 18.0 as _price, 1275 as _ts
+             |union select 3 as id, '_a3' as name, 28.0 as _price, 1280 as _ts) s0
              |on t0.id = s0.id
-             |when matched then update set price = s0.price, _ts = s0._ts
+             |when matched then update set price = s0._price, _ts = s0._ts
              |""".stripMargin)
         validateCompactionExecuted(basePath)
+        validateTableSchema(tableName, structFields)
         checkAnswer(s"select id, name, price, _ts, description from $tableName")(
           Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
           Seq(2, "a2", 18.0, 1275, "a2: updated desc2"),
@@ -273,13 +369,14 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |merge into $tableName t0
-             |using ( select 2 as id, '_a2' as name, 48.0 as price, 1275 as _ts
-             |union select 3 as id, '_a3' as name, 58.0 as price, 1280 as _ts) s0
+             |using ( select 2 as id, '_a2' as name, 48.0 as _price, 1275 as _ts
+             |union select 3 as id, '_a3' as name, 58.0 as _price, 1280 as _ts) s0
              |on t0.id = s0.id
-             |when matched then update set price = s0.price, _ts = s0._ts
+             |when matched then update set price = s0._price, _ts = s0._ts
              |""".stripMargin)
 
         validateClusteringExecuted(basePath)
+        validateTableSchema(tableName, structFields)
         checkAnswer(s"select id, name, price, _ts, description from $tableName")(
           Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
           Seq(2, "a2", 48.0, 1275, "a2: updated desc2"),

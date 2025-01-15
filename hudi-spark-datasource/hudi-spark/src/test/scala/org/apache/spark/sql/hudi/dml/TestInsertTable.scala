@@ -30,6 +30,7 @@ import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -3162,6 +3163,60 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       })
     }
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
+  }
+
+  test("Test throwing error on schema evolution in Insert Into") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
+             | """.stripMargin)
+
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt = '2024-01-14')
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+             | union
+             | select 2 as id, 'a2' as name, 20 as price, 1002 as ts
+             | """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2024-01-14"),
+          Seq(2, "a2", 20.0, 1002, "2024-01-14")
+        )
+
+        val sqlStatement =
+          s"""
+             | insert into $tableName partition(dt = '2024-01-14')
+             | select 3 as id, 'a3' as name, 30 as price, 1003 as ts, 'x' as new_col
+             | union
+             | select 2 as id, 'a2_updated' as name, 25 as price, 1005 as ts, 'y' as new_col
+             | """.stripMargin
+        val expectedExceptionMessage = if (HoodieSparkUtils.gteqSpark3_5) {
+          "[INSERT_COLUMN_ARITY_MISMATCH.TOO_MANY_DATA_COLUMNS] " +
+            s"Cannot write to `spark_catalog`.`default`.`$tableName`, " +
+            "the reason is too many data columns:\n" +
+            "Table columns: `id`, `name`, `price`, `ts`.\n" +
+            "Data columns: `id`, `name`, `price`, `ts`, `new_col`."
+        } else {
+          s"Cannot write to 'spark_catalog.default.$tableName', too many data columns:\n" +
+            "Table columns: 'id', 'name', 'price', 'ts'.\n" +
+            "Data columns: 'id', 'name', 'price', 'ts', 'new_col'."
+        }
+        checkExceptionContain(sqlStatement)(expectedExceptionMessage)
+      }
+    }
   }
 }
 
