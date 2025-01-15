@@ -25,15 +25,22 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -109,6 +116,32 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   @FunctionalInterface
   public interface RecordDeletionCallback {
     void apply(HoodieKey deletedKey);
+  }
+
+  /**
+   * Returns an iterator over the log records.
+   */
+  public Iterator<HoodieRecord<?>> iterator() {
+    List<HoodieRecord<?>> records = new ArrayList<>();
+    try {
+      scan();
+
+      while (!getCurrentInstantLogBlocks().isEmpty()) {
+        HoodieLogBlock lastBlock = getCurrentInstantLogBlocks().pollLast();
+        if (lastBlock instanceof HoodieDataBlock) {
+          HoodieDataBlock dataBlock = (HoodieDataBlock) lastBlock;
+          Pair<ClosableIterator<HoodieRecord>, Schema> recordsIteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
+          try (ClosableIterator<HoodieRecord> recordIterator = recordsIteratorSchemaPair.getLeft()) {
+            while (recordIterator.hasNext()) {
+              records.add(recordIterator.next());
+            }
+          }
+        }
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Error while iterating over log records", e);
+    }
+    return records.iterator();
   }
 
   /**

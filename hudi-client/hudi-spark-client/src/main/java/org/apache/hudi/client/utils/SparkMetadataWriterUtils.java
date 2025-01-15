@@ -180,22 +180,6 @@ public class SparkMetadataWriterUtils {
     return toRows(records, schema, dataWriteConfig, sqlContext, paths[0].toString());
   }
 
-  private static List<HoodieRecord> getUnmergedLogFileRecords(List<String> logFilePaths, HoodieTableMetaClient metaClient, Schema readerSchema) {
-    List<HoodieRecord> records = new ArrayList<>();
-    HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-        .withStorage(metaClient.getStorage())
-        .withBasePath(metaClient.getBasePath())
-        .withLogFilePaths(logFilePaths)
-        .withBufferSize(MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
-        .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
-        .withReaderSchema(readerSchema)
-        .withTableMetaClient(metaClient)
-        .withLogRecordScannerCallback(records::add)
-        .build();
-    scanner.scan(false);
-    return records;
-  }
-
   private static List<HoodieRecord> getBaseFileRecords(HoodieBaseFile baseFile, HoodieTableMetaClient metaClient, Schema readerSchema) {
     List<HoodieRecord> records = new ArrayList<>();
     HoodieRecordMerger recordMerger =
