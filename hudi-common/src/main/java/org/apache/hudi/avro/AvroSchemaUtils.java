@@ -598,15 +598,14 @@ public class AvroSchemaUtils {
   }
 
   /**
-   * Create a new schema by force changing the nullabilities of the given columns.
+   * Create a new schema by force changing all the fields as nullable.
    *
    * @param schema original schema
-   * @param columns columns that would be updated with given nullability
-   * @return a new schema with the nullabilities of the given columns updated
+   * @return a new schema with all the fields updated as nullable.
    */
-  public static Schema forceNullableColumns(Schema schema, List<String> columns) {
-    List<String> filterCols = columns.stream()
-            .filter(col -> !schema.getField(col).schema().isNullable()).collect(Collectors.toList());
+  public static Schema asNullable(Schema schema) {
+    List<String> filterCols = schema.getFields().stream()
+            .filter(f -> !f.schema().isNullable()).map(Schema.Field::name).collect(Collectors.toList());
     if (filterCols.isEmpty()) {
       return schema;
     }

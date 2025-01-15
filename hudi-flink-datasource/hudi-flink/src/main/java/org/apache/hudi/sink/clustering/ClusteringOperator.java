@@ -90,7 +90,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
@@ -169,7 +168,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.table = writeClient.getHoodieTable();
 
     this.schema = AvroSchemaConverter.convertToSchema(rowType);
-    this.readerSchema = reconcileSchemaWithRecordKeyNullability(schema);
+    // Since there exists discrepancies between flink and spark dealing with nullability of primary key field,
+    // and there may be some files written by spark, force update schema as nullable to make sure clustering
+    // scan successfully without schema validating exception.
+    this.readerSchema = AvroSchemaUtils.asNullable(schema);
     this.requiredPos = getRequiredPositions();
 
     this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType);
@@ -344,24 +346,6 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     }).collect(Collectors.toList());
 
     return new ConcatenatingIterator<>(iteratorsForPartition);
-  }
-
-  /**
-   * Since there exists discrepancies between flink and spark dealing with nullability of primary key field,
-   * and there may be some files written by spark, we force update the nullability of record key to nullable,
-   * so that schema validating would not fail.
-   *
-   * @param schema the original schema to be updated
-   * @return schema that has nullability constraints reconciled
-   */
-  private Schema reconcileSchemaWithRecordKeyNullability(Schema schema) {
-    Option<String[]> recordKeyOp = table.getMetaClient().getTableConfig().getRecordKeyFields();
-    List<String> fieldNames = rowType.getFieldNames();
-    // check if table has valid record keys.
-    if (recordKeyOp.isEmpty() || Arrays.stream(recordKeyOp.get()).anyMatch(s -> !fieldNames.contains(s))) {
-      return schema;
-    }
-    return AvroSchemaUtils.forceNullableColumns(schema, Arrays.asList(recordKeyOp.get()));
   }
 
   /**
