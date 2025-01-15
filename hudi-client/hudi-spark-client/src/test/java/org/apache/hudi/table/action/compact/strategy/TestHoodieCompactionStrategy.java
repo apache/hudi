@@ -377,7 +377,6 @@ public class TestHoodieCompactionStrategy {
       Map<Long, String> partition = operationAndPartition.getRight();
       assertTrue(missingPartitions.contains(partition.get(110 * MB)));
       assertTrue(missingPartitions.contains(partition.get(100 * MB)));
-
     }
 
     assertTrue(returned.size() < operations.size(),
