@@ -254,7 +254,6 @@ public class ConfigProperty<T> implements Serializable {
     }
 
     public <T> ConfigProperty<T> defaultValue(T value, String docOnDefaultValue) {
-      Objects.requireNonNull(value);
       Objects.requireNonNull(docOnDefaultValue);
       ConfigProperty<T> configProperty = new ConfigProperty<>(key, value, docOnDefaultValue, "", Option.empty(), Option.empty(), Option.empty(), Collections.emptySet(), false);
       return configProperty;

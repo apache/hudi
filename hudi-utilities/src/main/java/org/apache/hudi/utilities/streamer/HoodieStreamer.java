@@ -153,7 +153,8 @@ public class HoodieStreamer implements Serializable {
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
     Triple<RecordMergeMode, String, String> mergingConfigs =
-        HoodieTableConfig.inferCorrectMergingBehavior(cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId);
+        HoodieTableConfig.inferCorrectMergingBehavior(
+            cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField);
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.payloadClassName = mergingConfigs.getMiddle();
     cfg.recordMergeStrategyId = mergingConfigs.getRight();
@@ -267,8 +268,8 @@ public class HoodieStreamer implements Serializable {
     public String sourceClassName = JsonDFSSource.class.getName();
 
     @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
-        + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
-    public String sourceOrderingField = "ts";
+        + " to break ties between records with same key in input data.")
+    public String sourceOrderingField = null;
 
     @Parameter(names = {"--payload-class"}, description = "Deprecated. "
         + "Use --merge-mode for commit time or event time merging. "
