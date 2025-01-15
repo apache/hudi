@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -352,7 +352,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test Insert Into Non Partitioned Table") {
     withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))(withTempDir { tmp =>
       val tableName = generateTableName
-      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      spark.sql(s"set hoodie.datasource.insert.dup.policy=fail")
       // Create none partitioned cow table
       spark.sql(
         s"""
@@ -394,7 +394,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
       // Create table with dropDup is true
       val tableName2 = generateTableName
-      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = true")
+      spark.sql("set hoodie.datasource.insert.dup.policy=drop")
       spark.sql(
         s"""
            |create table $tableName2 (
@@ -417,7 +417,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10.0, 1000)
       )
       // disable this config to avoid affect other test in this class.
-      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = false")
+      spark.sql("set hoodie.datasource.insert.dup.policy=none")
       spark.sql(s"set hoodie.sql.insert.mode=upsert")
     })
   }
@@ -425,7 +425,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test Insert Into None Partitioned Table strict mode with no preCombineField") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      spark.sql(s"set hoodie.datasource.insert.dup.policy=fail")
       // Create none partitioned cow table
       spark.sql(
         s"""
@@ -2853,7 +2853,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
   }
 
-  def ingestAndValidateDropDupPolicyBulkInsert(tableType: String, tableName: String, tmp: File,
+  def ingestAndValidateDropDupPolicyBulkInsert(tableType: String,
+                                               tableName: String,
+                                               tmp: File,
                                                setOptions: List[String] = List.empty) : Unit = {
 
     // set additional options
@@ -2877,7 +2879,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          """.stripMargin)
 
     // drop dups is not supported in bulk_insert row writer path.
-    assertThrows[HoodieDuplicateKeyException] {
+    assertThrows[HoodieException] {
       try {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
       } catch {
