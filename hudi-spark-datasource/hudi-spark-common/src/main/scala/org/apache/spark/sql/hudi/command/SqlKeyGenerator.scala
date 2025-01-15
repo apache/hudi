@@ -154,31 +154,32 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
       if (partitionFragments.size != partitionSchema.get.size) {
         partitionPath
       }
-      else if (partitionPath == PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH) {
-        partitionPath
-      }
       else {
         partitionFragments.zip(partitionSchema.get.fields).map {
           case (partitionValue, partitionField) =>
             val hiveStylePrefix = s"${partitionField.name}="
             val isHiveStyle = partitionValue.startsWith(hiveStylePrefix)
             val _partitionValue = if (isHiveStyle) partitionValue.substring(hiveStylePrefix.length) else partitionValue
-
-            partitionField.dataType match {
-              case TimestampType =>
-                val timeMs = if (rowType) { // In RowType, the partitionPathValue is the time format string, convert to millis
-                  SqlKeyGenerator.sqlTimestampFormat.parseMillis(_partitionValue)
-                } else {
-                  if (isConsistentLogicalTimestampEnabled) {
-                    Timestamp.valueOf(_partitionValue).getTime
+            if (_partitionValue == PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH) {
+              partitionValue
+            }
+            else {
+              partitionField.dataType match {
+                case TimestampType =>
+                  val timeMs = if (rowType) { // In RowType, the partitionPathValue is the time format string, convert to millis
+                    SqlKeyGenerator.sqlTimestampFormat.parseMillis(_partitionValue)
                   } else {
-                    MILLISECONDS.convert(_partitionValue.toLong, MICROSECONDS)
+                    if (isConsistentLogicalTimestampEnabled) {
+                      Timestamp.valueOf(_partitionValue).getTime
+                    } else {
+                      MILLISECONDS.convert(_partitionValue.toLong, MICROSECONDS)
+                    }
                   }
-                }
-                val timestampFormat = PartitionPathEncodeUtils.escapePathName(
-                  SqlKeyGenerator.timestampTimeFormat.print(timeMs))
-                if (isHiveStyle) s"$hiveStylePrefix$timestampFormat" else timestampFormat
-              case _ => partitionValue
+                  val timestampFormat = PartitionPathEncodeUtils.escapePathName(
+                    SqlKeyGenerator.timestampTimeFormat.print(timeMs))
+                  if (isHiveStyle) s"$hiveStylePrefix$timestampFormat" else timestampFormat
+                case _ => partitionValue
+              }
             }
         }.mkString(KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR)
       }
