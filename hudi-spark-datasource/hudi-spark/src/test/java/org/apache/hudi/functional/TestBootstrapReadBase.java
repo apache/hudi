@@ -283,6 +283,6 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
     return df.withColumn("partpath" + n,
         functions.md5(functions.concat_ws("," + n + ",",
             df.col("partition_path"),
-            functions.hash(df.col("_row_key")).mod(n))));
+            functions.hash(df.col("partition_path")).mod(n))));
   }
 }
