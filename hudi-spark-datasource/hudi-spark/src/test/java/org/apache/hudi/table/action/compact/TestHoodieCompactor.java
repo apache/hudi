@@ -464,11 +464,9 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
    * Do a compaction.
    */
   private HoodieWriteMetadata compact(SparkRDDWriteClient writeClient, String compactionInstantTime) {
-    boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
-    if (scheduled) {
-      return writeClient.compact(compactionInstantTime);
-    }
-    return null;
+    writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+    HoodieWriteMetadata compactMetadata = writeClient.compact(compactionInstantTime);
+    return compactMetadata;
   }
 
   /**

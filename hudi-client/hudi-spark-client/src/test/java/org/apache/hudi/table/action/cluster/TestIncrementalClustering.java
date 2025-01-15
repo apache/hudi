@@ -56,6 +56,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_END
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestIncrementalClustering extends SparkClientFunctionalTestHarness {
@@ -108,7 +109,7 @@ public class TestIncrementalClustering extends SparkClientFunctionalTestHarness 
       // get 1 partitions from new commit as incremental partitions
       assertEquals(3, incrementalPartitions.size());
     } else {
-      assertEquals(0, clusteringPlan.getMissingSchedulePartitions().size());
+      assertNull(clusteringPlan.getMissingSchedulePartitions());
     }
   }
 

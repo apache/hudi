@@ -156,7 +156,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
 
   public Pair<Option<HoodieInstant>, List<String>> fetchMissingPartitions(TableServiceType tableServiceType) {
     if (!config.isIncrementalTableServiceEnable()) {
-      return Pair.of(Option.empty(), new ArrayList<>());
+      return Pair.of(Option.empty(), Collections.emptyList());
     }
 
     Option<HoodieInstant> instant = Option.empty();

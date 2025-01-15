@@ -75,7 +75,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
             - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
 
     long totalSizeSoFar = 0;
-    boolean partialScheduled = true;
+    boolean partialScheduled = false;
 
     for (FileSlice currentSlice : sortedFileSlices) {
       long currentSize = currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
@@ -91,7 +91,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
         // if fileSliceGroups's size reach the max group, stop loop
         if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
           LOG.info("Having generated the maximum number of groups : " + writeConfig.getClusteringMaxNumGroups());
-          partialScheduled = false;
+          partialScheduled = true;
           break;
         }
       }
@@ -169,12 +169,12 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
       Pair<Stream<HoodieClusteringGroup>, Boolean> groupPair = buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible);
       List<HoodieClusteringGroup> clusteringGroupsPartition = groupPair.getLeft().collect(Collectors.toList());
-      Boolean allProcessed = groupPair.getRight();
+      boolean partialScheduled = groupPair.getRight();
       // return missed partition path
       // because the candidate fileSlices in the current partition have not been completely processed.
       if (clusteringGroupsPartition.size() > clusteringMaxNumGroups) {
         return Pair.of(clusteringGroupsPartition.subList(0, clusteringMaxNumGroups), partitionPath);
-      } else if (!allProcessed) {
+      } else if (partialScheduled) {
         return Pair.of(clusteringGroupsPartition, partitionPath);
       } else {
         return Pair.of(clusteringGroupsPartition, "");
