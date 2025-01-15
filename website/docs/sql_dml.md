@@ -23,6 +23,10 @@ INSERT INTO <table>
 SELECT <columns> FROM <source>;
 ```
 
+:::info
+`INSERT INTO` statement does not support evolving table schema. Please use DDL (e.g., `ALTER TABLE`) or Datasource write (`df.write.format("hudi")....save(basePath)`) to evolve table schema.
+:::
+
 :::note Deprecations
 From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are deprecated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
 To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](configurations#hoodiedatasourceinsertduppolicy).
@@ -123,6 +127,8 @@ ON <merge_condition>
 ```
 
 :::info
+`MERGE INTO` statement does not support evolving table schema. Please use DDL (e.g., `ALTER TABLE`) or Datasource write (`df.write.format("hudi")....save(basePath)`) to evolve table schema.
+
 `WHEN NOT MATCHED` clauses specify the action to perform if the values do not match.
 There are two kinds of `INSERT` clauses:
 1. `INSERT *` clauses require that the source table has the same columns as those in the target table.
