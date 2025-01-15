@@ -217,7 +217,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     return Pair.of(partitionPathStatMap, globalStat);
   }
 
-  protected Partitioner getPartitioner(WorkloadProfile profile) {
+  protected org.apache.spark.Partitioner getPartitioner(WorkloadProfile profile) {
     Option<String> layoutPartitionerClass = table.getStorageLayout().layoutPartitionerClass();
     if (layoutPartitionerClass.isPresent()) {
       return getLayoutPartitioner(profile, layoutPartitionerClass.get());

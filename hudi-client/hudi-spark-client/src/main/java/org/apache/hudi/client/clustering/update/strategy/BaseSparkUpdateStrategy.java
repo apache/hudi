@@ -22,8 +22,13 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.data.HoodieJavaDataFrame;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
+import org.apache.spark.api.java.function.FilterFunction;
+import org.apache.spark.api.java.function.MapFunction;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 
 import java.util.List;
 import java.util.Set;
@@ -45,8 +50,17 @@ public abstract class BaseSparkUpdateStrategy<T> extends UpdateStrategy<T, Hoodi
    * @return the records matched file group ids
    */
   protected List<HoodieFileGroupId> getGroupIdsWithUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
-    return inputRecords
-            .filter(record -> record.getCurrentLocation() != null)
-            .map(record -> new HoodieFileGroupId(record.getPartitionPath(), record.getCurrentLocation().getFileId())).distinct().collectAsList();
+    if (inputRecords instanceof HoodieJavaDataFrame) {
+      Dataset<HoodieRecord<T>> dataFrame = HoodieJavaDataFrame.getDataFrame(inputRecords);
+      return dataFrame.filter((FilterFunction<HoodieRecord<T>>) record -> record.getCurrentLocation() != null)
+              .map((MapFunction<HoodieRecord<T>, HoodieFileGroupId>) (HoodieRecord<T> record) ->
+                      new HoodieFileGroupId(record.getPartitionPath(), record.getCurrentLocation().getFileId()),
+                      Encoders.kryo(HoodieFileGroupId.class))
+              .distinct().collectAsList();
+    } else {
+      return inputRecords
+              .filter(record -> record.getCurrentLocation() != null)
+              .map(record -> new HoodieFileGroupId(record.getPartitionPath(), record.getCurrentLocation().getFileId())).distinct().collectAsList();
+    }
   }
 }

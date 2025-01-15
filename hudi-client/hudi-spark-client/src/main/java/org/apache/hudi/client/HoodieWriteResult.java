@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Dataset;
 
 import java.io.Serializable;
 import java.util.Collections;
@@ -31,9 +32,14 @@ import java.util.Map;
 public class HoodieWriteResult implements Serializable {
 
   private JavaRDD<WriteStatus> writeStatuses;
+  private Dataset<WriteStatus> writeStatusesDF;
   private Map<String, List<String>> partitionToReplaceFileIds;
 
   public HoodieWriteResult(JavaRDD<WriteStatus> writeStatuses) {
+    this(writeStatuses, Collections.emptyMap());
+  }
+
+  public HoodieWriteResult(Dataset<WriteStatus> writeStatuses) {
     this(writeStatuses, Collections.emptyMap());
   }
 
@@ -42,8 +48,17 @@ public class HoodieWriteResult implements Serializable {
     this.partitionToReplaceFileIds = partitionToReplaceFileIds;
   }
 
+  public HoodieWriteResult(Dataset<WriteStatus> writeStatuses, Map<String, List<String>> partitionToReplaceFileIds) {
+    this.writeStatusesDF = writeStatuses;
+    this.partitionToReplaceFileIds = partitionToReplaceFileIds;
+  }
+
   public JavaRDD<WriteStatus> getWriteStatuses() {
     return this.writeStatuses;
+  }
+
+  public Dataset<WriteStatus> getWriteStatusesDataFrame() {
+    return this.writeStatusesDF;
   }
 
   public void setWriteStatuses(final JavaRDD<WriteStatus> writeStatuses) {

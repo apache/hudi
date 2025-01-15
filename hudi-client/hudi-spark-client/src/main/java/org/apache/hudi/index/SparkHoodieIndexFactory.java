@@ -38,6 +38,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 public final class SparkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
     boolean sqlMergeIntoPrepped = config.getProps().getBoolean(HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY, false);
+    boolean isDFEnabled = config.getProps().getBoolean(HoodieWriteConfig.PREFER_DATAFRAME_API.key(), false);
     if (sqlMergeIntoPrepped) {
       return new HoodieInternalProxyIndex(config);
     }
@@ -56,6 +57,9 @@ public final class SparkHoodieIndexFactory {
       case GLOBAL_BLOOM:
         return new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
+        if (isDFEnabled) {
+          return new org.apache.hudi.index.dataframe.HoodieSimpleIndex(config, HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config));
+        }
         return new HoodieSimpleIndex(config, HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config));
       case GLOBAL_SIMPLE:
         return new HoodieGlobalSimpleIndex(config, HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config));
