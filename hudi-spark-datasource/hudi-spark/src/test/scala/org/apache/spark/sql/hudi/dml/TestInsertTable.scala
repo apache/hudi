@@ -352,7 +352,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test Insert Into Non Partitioned Table") {
     withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK))(withTempDir { tmp =>
       val tableName = generateTableName
-      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      spark.sql(s"set hoodie.datasource.insert.dup.policy=fail")
       // Create none partitioned cow table
       spark.sql(
         s"""
@@ -394,7 +394,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
       // Create table with dropDup is true
       val tableName2 = generateTableName
-      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = true")
+      spark.sql("set hoodie.datasource.insert.dup.policy=drop")
       spark.sql(
         s"""
            |create table $tableName2 (
@@ -417,15 +417,15 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10.0, 1000)
       )
       // disable this config to avoid affect other test in this class.
-      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = false")
       spark.sql(s"set hoodie.sql.insert.mode=upsert")
     })
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
   }
 
   test("Test Insert Into None Partitioned Table strict mode with no preCombineField") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      spark.sql(s"set hoodie.sql.insert.mode=strict")
+      spark.sql(s"set hoodie.datasource.insert.dup.policy=fail")
       // Create none partitioned cow table
       spark.sql(
         s"""
@@ -449,7 +449,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", 10.0),
         Seq(2, "a2", 12.0)
       )
-
       spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
       assertThrows[HoodieDuplicateKeyException] {
         try {
@@ -1329,6 +1328,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test insert pk-table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     Seq("cow", "mor").foreach { tableType =>
       withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
         withRecordType()(withTempDir { tmp =>
@@ -1529,6 +1529,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test enable hoodie.merge.allow.duplicate.on.inserts when write") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     spark.sql("set hoodie.datasource.write.operation = insert")
     Seq("mor", "cow").foreach { tableType =>
       withTempDir { tmp =>
@@ -1572,6 +1573,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Into Bucket Index Table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withTempDir { tmp =>
       val tableName = generateTableName
       // Create a partitioned table
@@ -1624,7 +1626,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Bulk Insert Into Bucket Index Table") {
-    withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert", "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
+    withSQLConf(
+      "hoodie.datasource.write.operation" -> "bulk_insert",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
       Seq("mor", "cow").foreach { tableType =>
         Seq("true", "false").foreach { bulkInsertAsRow =>
           withTempDir { tmp =>
@@ -1882,6 +1886,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Overwrite Into Consistent Bucket Index Table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -2053,6 +2058,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
       Seq("false", "true").foreach { bulkInsertAsRow =>
         withTempDir { tmp =>
@@ -2317,7 +2323,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         countDownLatch.countDown
       }
     }
-
   }
 
   test("Test multiple partition fields pruning") {
@@ -2607,7 +2612,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test FAIL insert dup policy with INSERT_INTO explicit new configs") {
     withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val operation = WriteOperationType.UPSERT
+        val operation = WriteOperationType.INSERT
         val dupPolicy = FAIL_INSERT_DUP_POLICY
         withTable(generateTableName) { tableName =>
           ingestAndValidateDataDupPolicy(tableType, tableName, tmp, operation,
@@ -2639,6 +2644,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | PARTITIONED BY (boolean_field, float_field, byte_field, short_field, decimal_field, date_field, string_field, timestamp_field)
            |LOCATION '${tmp.getCanonicalPath}'
      """.stripMargin)
+      // Avoid operation type modification.
+      spark.sql(s"set ${INSERT_DROP_DUPS.key}=false")
+      spark.sql(s"set ${INSERT_DUP_POLICY.key}=$NONE_INSERT_DUP_POLICY")
 
       // Insert data into partitioned table
       spark.sql(
@@ -2851,7 +2859,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
   }
 
-  def ingestAndValidateDropDupPolicyBulkInsert(tableType: String, tableName: String, tmp: File,
+  def ingestAndValidateDropDupPolicyBulkInsert(tableType: String,
+                                               tableName: String,
+                                               tmp: File,
                                                setOptions: List[String] = List.empty) : Unit = {
 
     // set additional options
@@ -3087,4 +3097,71 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       })
     }
   }
+
+  test("Test table with insert dup policy") {
+    withTempDir { tmp =>
+      Seq(
+        NONE_INSERT_DUP_POLICY,
+        FAIL_INSERT_DUP_POLICY,
+        DROP_INSERT_DUP_POLICY).foreach(policy => {
+        val targetTable = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
+
+        spark.sql(s"set hoodie.datasource.insert.dup.policy=$policy")
+        spark.sql(
+          s"""
+             |create table ${targetTable} (
+             |  `id` string,
+             |  `name` string,
+             |  `dt` bigint,
+             |  `day` STRING,
+             |  `hour` INT
+             |) using hudi
+             |tblproperties (
+             |  'primaryKey' = 'id',
+             |  'type' = 'MOR',
+             |  'preCombineField'= 'dt',
+             |  'hoodie.bucket.index.hash.field' = 'id',
+             |  'hoodie.bucket.index.num.buckets'= 512
+             | )
+           partitioned by (`day`,`hour`)
+           location '${tablePath}'
+           """.stripMargin)
+
+        spark.sql("set spark.sql.shuffle.partitions = 11")
+        spark.sql(
+          s"""
+             |insert into ${targetTable}
+             |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
+             |""".stripMargin)
+        if (policy.equals(FAIL_INSERT_DUP_POLICY)) {
+          checkExceptionContain(
+            () => spark.sql(
+            s"""
+               |insert into ${targetTable}
+               |select '1' as id, 'aa' as name, 1234 as dt, '2024-02-19' as `day`, 10 as `hour`
+               |""".stripMargin))(s"Duplicate key found for insert statement, key is: 1")
+        } else {
+          spark.sql(s"set hoodie.datasource.write.operation=insert")
+          spark.sql(
+            s"""
+               |insert into ${targetTable}
+               |select '1' as id, 'aa' as name, 1234 as dt, '2024-02-19' as `day`, 10 as `hour`
+               |""".stripMargin)
+          if (policy.equals(NONE_INSERT_DUP_POLICY)) {
+            checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
+              Seq("1", "aa", 123, "2024-02-19", 10),
+              Seq("1", "aa", 1234, "2024-02-19", 10)
+            )
+          } else {
+            checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
+              Seq("1", "aa", 123, "2024-02-19", 10)
+            )
+          }
+        }
+      })
+    }
+    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
+  }
 }
+
