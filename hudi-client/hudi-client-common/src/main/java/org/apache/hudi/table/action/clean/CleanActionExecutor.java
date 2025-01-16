@@ -160,9 +160,9 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     if (config.parallelizePartitionCleaning()) {
       LOG.info("***--- Parallelizing partition deletes");
       context.foreach(
-              partitionsToBeDeleted,
-              partitionPath -> deletePartitionsFunc(partitionPath, table),
-              cleanerParallelism);
+          partitionsToBeDeleted,
+          partitionPath -> deletePartitionsFunc(partitionPath, table),
+          cleanerParallelism);
     } else {
       LOG.info("***--- Processing partition deletes on driver");
       partitionsToBeDeleted.forEach(entry -> {
@@ -176,9 +176,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         }
       });
     }
-    ;
 
-    // Return PartitionCleanStat for each partition passed.
+      // Return PartitionCleanStat for each partition passed.
     return cleanerPlan.getFilePathsToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
       PartitionCleanStat partitionCleanStat = partitionCleanStatsMap.containsKey(partitionPath)
           ? partitionCleanStatsMap.get(partitionPath)
@@ -211,7 +210,6 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     } catch (IOException e) {
       LOG.warn("Partition deletion failed " + path);
     }
-    ;
   }
 
   /**
