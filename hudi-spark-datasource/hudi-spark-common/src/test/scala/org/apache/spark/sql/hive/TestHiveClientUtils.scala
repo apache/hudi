@@ -18,12 +18,13 @@
 package org.apache.spark.sql.hive
 
 import org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}
 import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
-import org.junit.Assume
 import org.junit.jupiter.api.{BeforeAll, Test, TestInstance}
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.TestInstance.Lifecycle
 
 @TestInstance(Lifecycle.PER_CLASS)
@@ -37,7 +38,7 @@ class TestHiveClientUtils {
     // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
     // for Java 17 test coverage this test has been converted to scala script here:
     // packaging/bundle-validation/spark_hadoop_mr/TestHiveClientUtils.scala
-    Assume.assumeFalse(getJavaVersion == 11 || getJavaVersion == 17)
+    assertFalse(getJavaVersion == 11 || getJavaVersion == 17)
 
     spark = TestHive.sparkSession
     hiveContext = TestHive

@@ -355,6 +355,19 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- This is to support Flink tests in JUnit 4 -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.vintage</groupId>
+            <artifactId>junit-vintage-engine</artifactId>
+            <version>${junit.vintage.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Hoodie dependencies -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
