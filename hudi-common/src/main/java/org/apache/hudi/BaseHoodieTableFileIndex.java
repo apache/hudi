@@ -167,6 +167,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.fileStatusCache = fileStatusCache;
 
     doRefresh();
+
+    Object obj = "Hello, Java 17!";
+    if (obj instanceof String s) {
+      System.out.println(s);
+    }
   }
 
   protected abstract Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath);
