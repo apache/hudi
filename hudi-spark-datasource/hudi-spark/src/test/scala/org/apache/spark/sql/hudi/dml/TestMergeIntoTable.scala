@@ -1549,7 +1549,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test no schema evolution in Merge Into") {
+  test("Test no schema evolution in MERGE INTO") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -1586,6 +1586,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(2, "a2", 20.0, 1002, "2024-01-14")
         )
 
+        // MERGE INTO with an additional column that does not exist in the table schema
+        // throws an error if it tries to set the new column in the "UPDATE SET" clause
         val sqlStatement1 =
           s"""
              | merge into $tableName
@@ -1599,11 +1601,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | id = s0._id, dt = s0.dt, name = s0.name, price = s0._price + $tableName.price,
              | ts = s0._ts, new_col = s0.new_col
              | """.stripMargin
-
         checkExceptionContain(sqlStatement1)(
           getExpectedUnresolvedColumnExceptionMessage("new_col", tableName))
         validateTableSchema(tableName, structFields)
 
+        // MERGE INTO with an additional column that does not exist in the table schema
+        // works only if it tries to do inserts (the additional column is dropped before inserts)
         spark.sql(
           s"""
              | merge into $tableName

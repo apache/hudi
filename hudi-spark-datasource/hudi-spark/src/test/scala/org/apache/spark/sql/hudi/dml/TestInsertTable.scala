@@ -3165,7 +3165,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
   }
 
-  test("Test throwing error on schema evolution in Insert Into") {
+  test("Test throwing error on schema evolution in INSERT INTO") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -3184,6 +3184,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | location '${tmp.getCanonicalPath}'
              | """.stripMargin)
 
+        // INSERT INTO with same set of columns as that in the table schema works
         spark.sql(
           s"""
              | insert into $tableName partition(dt = '2024-01-14')
@@ -3196,6 +3197,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           Seq(2, "a2", 20.0, 1002, "2024-01-14")
         )
 
+        // INSERT INTO with an additional column that does not exist in the table schema
+        // throws an error, as INSERT INTO does not allow schema evolution
         val sqlStatement =
           s"""
              | insert into $tableName partition(dt = '2024-01-14')
@@ -3210,9 +3213,15 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             "Table columns: `id`, `name`, `price`, `ts`.\n" +
             "Data columns: `id`, `name`, `price`, `ts`, `new_col`."
         } else {
-          s"Cannot write to 'spark_catalog.default.$tableName', too many data columns:\n" +
-            "Table columns: 'id', 'name', 'price', 'ts'.\n" +
-            "Data columns: 'id', 'name', 'price', 'ts', 'new_col'."
+          val endingStr = if (HoodieSparkUtils.gteqSpark3_4) "." else ""
+          val tableId = if (HoodieSparkUtils.gteqSpark3_4) {
+            s"spark_catalog.default.$tableName"
+          } else {
+            s"default.$tableName"
+          }
+          s"Cannot write to '$tableId', too many data columns:\n" +
+            s"Table columns: 'id', 'name', 'price', 'ts'$endingStr\n" +
+            s"Data columns: 'id', 'name', 'price', 'ts', 'new_col'$endingStr"
         }
         checkExceptionContain(sqlStatement)(expectedExceptionMessage)
       }
