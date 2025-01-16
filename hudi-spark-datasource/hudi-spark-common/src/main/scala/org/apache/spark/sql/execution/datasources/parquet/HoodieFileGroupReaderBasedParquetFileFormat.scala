@@ -18,7 +18,6 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
-import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
@@ -27,28 +26,23 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.data.CloseableIteratorListener
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
-
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.execution.datasources.HoodieFileGroupReaderBasedFileFormat.{ORC_FILE_EXTENSION, PARQUET_FILE_EXTENSION}
+import org.apache.spark.sql.execution.datasources.{HoodieFileGroupReaderBasedFileFormat, PartitionedFile}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
-
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
 trait HoodieFormatTrait {
@@ -62,7 +56,8 @@ trait HoodieFormatTrait {
  * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
  * from Parquet formatted base files and their log files.
  */
-class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
+class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
+                                                  tablePath: String,
                                                   tableSchema: HoodieTableSchema,
                                                   tableName: String,
                                                   queryTimestamp: String,
@@ -73,64 +68,18 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                                                   isCDC: Boolean,
                                                   validCommits: String,
                                                   shouldUseRecordPosition: Boolean,
-                                                  requiredFilters: Seq[Filter]
-                                                 ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
-
-  def getRequiredFilters: Seq[Filter] = requiredFilters
-
-  private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
-
-  /**
-   * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
-   * while the other side can't
-   */
-  private var supportBatchCalled = false
-  private var supportBatchResult = false
-
-  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    if (!supportBatchCalled || supportBatchResult) {
-      supportBatchCalled = true
-      supportBatchResult = !isMOR && !isIncremental && !isBootstrap && super.supportBatch(sparkSession, schema)
-    }
-    supportBatchResult
-  }
-
-  //for partition columns that we read from the file, we don't want them to be constant column vectors so we
-  //modify the vector types in this scenario
-  override def vectorTypes(requiredSchema: StructType,
-                           partitionSchema: StructType,
-                           sqlConf: SQLConf): Option[Seq[String]] = {
-    val originalVectorTypes = super.vectorTypes(requiredSchema, partitionSchema, sqlConf)
-    if (mandatoryFields.isEmpty) {
-      originalVectorTypes
-    } else {
-      val regularVectorType = if (!sqlConf.offHeapColumnVectorEnabled) {
-        classOf[OnHeapColumnVector].getName
-      } else {
-        classOf[OffHeapColumnVector].getName
-      }
-      originalVectorTypes.map {
-        o: Seq[String] => o.zipWithIndex.map(a => {
-          if (a._2 >= requiredSchema.length && mandatoryFields.contains(partitionSchema.fields(a._2 - requiredSchema.length).name)) {
-            regularVectorType
-          } else {
-            a._1
-          }
-        })
-      }
-    }
-  }
-
-  private lazy val internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema] = if (tableSchema.internalSchema.isEmpty) {
-    org.apache.hudi.common.util.Option.empty()
-  } else {
-    org.apache.hudi.common.util.Option.of(tableSchema.internalSchema.get)
-  }
-
-  override def isSplitable(sparkSession: SparkSession,
-                           options: Map[String, String],
-                           path: Path): Boolean = false
-
+                                                  requiredFilters: Seq[Filter])
+  extends HoodieFileGroupReaderBasedFileFormat(
+    tableState,
+    tableSchema,
+    tableName,
+    mandatoryFields,
+    isMOR,
+    isBootstrap,
+    isIncremental,
+    validCommits,
+    shouldUseRecordPosition,
+    requiredFilters) with SparkAdapterSupport  {
   override def buildReaderWithPartitionValues(spark: SparkSession,
                                               dataSchema: StructType,
                                               partitionSchema: StructType,
@@ -157,7 +106,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(
       supportBatchResult, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val orcFileReader = spark.sparkContext.broadcast(sparkAdapter.createOrcFileReader(
-      supportBatchCalled, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
+      supportBatchResult, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
@@ -174,11 +123,12 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val fileReaders = new java.util.HashMap[String, SparkFileReader]()
-              fileReaders.put("orc", orcFileReader.value)
-              fileReaders.put("parquet", parquetFileReader.value)
+              fileReaders.put(PARQUET_FILE_EXTENSION, parquetFileReader.value)
+              fileReaders.put(ORC_FILE_EXTENSION, orcFileReader.value)
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
-              val readerContext = new SparkFileFormatInternalRowReaderContext(fileReaders, filters, requiredFilters, storageConf, metaClient.getTableConfig)
+              val readerContext = new SparkFileFormatInternalRowReaderContext(
+                fileReaders, filters, requiredFilters, storageConf, metaClient.getTableConfig)
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
