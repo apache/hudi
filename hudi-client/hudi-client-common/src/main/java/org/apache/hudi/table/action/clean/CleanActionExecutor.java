@@ -138,7 +138,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of table: " + config.getTableName());
+    context.setJobStatus(this.getClass().getSimpleName(), "Cleaning data files for table: " + config.getTableName());
 
     Stream<Pair<String, CleanFileInfo>> filesToBeDeletedPerPartition =
         cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
@@ -159,6 +159,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     LOG.info("***--- metaclient partitions to be deleted: " + partitionsToBeDeleted.size());
     if (config.parallelizePartitionCleaning()) {
       LOG.info("***--- Parallelizing partition deletes");
+      context.setJobStatus(this.getClass().getSimpleName(), "Cleaning partitions for table: " + config.getTableName());
       context.foreach(
           partitionsToBeDeleted,
           partitionPath -> deletePartitionsFunc(partitionPath, table),
