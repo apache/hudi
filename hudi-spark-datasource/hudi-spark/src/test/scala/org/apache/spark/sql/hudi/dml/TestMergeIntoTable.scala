@@ -1294,6 +1294,62 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     })
   }
 
+  test("Test partial insert with inline clustering") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      val tableType = "mor"
+      val logDataBlockFormat = "parquet"
+      withSparkSqlSessionConfig(
+          HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
+          DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true",
+          HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logDataBlockFormat,
+          HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true",
+          HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
+          HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "2",
+          HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key -> "id,price") {
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |   id int,
+             |   name string,
+             |   price long,
+             |   ts long,
+             |   description string
+             | ) using hudi
+             | tblproperties(
+             |   type ='$tableType',
+             |   primaryKey = 'id',
+             |   preCombineField = 'ts'
+             | )
+             | location '$basePath'
+            """.stripMargin)
+        spark.sql(s"insert into $tableName values " +
+          "(1, 'a1', 10, 1000, 'a1: desc1')," +
+          "(2, 'a2', 20, 1200, 'a2: desc2'), " +
+          "(3, 'a3', 30.0, 1250, 'a3: desc3')")
+
+        // Partial updates using MERGE INTO statement with changed fields: "price" and "ts"
+        spark.sql(
+          s"""
+             | merge into $tableName t0
+             | using (
+             |   select 1 as id, 'a1' as name1, 12 as price, 1001 as _ts
+             | union
+             |   select 3 as id, 'a3' as name1, 25 as price, 1260 as _ts
+             |   ) s0
+             | on t0.id = s0.id
+             | when matched then update set price = s0.price, ts = s0._ts
+          """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, description from $tableName order by id")(
+          Seq(1, "a1", 12, 1001, "a1: desc1"),
+          Seq(2, "a2", 20, 1200, "a2: desc2"),
+          Seq(3, "a3", 25, 1260, "a3: desc3")
+        )
+      }
+    })
+  }
+
   test("Test Merge Into with target matched columns cast-ed") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
@@ -1416,447 +1472,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test partial insert schema") {
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}/$tableName"
-      val tableType = "mor"
-      val logDataBlockFormat = "parquet"
-//      val logDataBlockFormat = "avro"
-
-      spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-      spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-      spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
-      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = false")
-
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |   id int,
-           |   name string,
-           |   price long,
-           |   ts long,
-           |   description string
-           | ) using hudi
-           | tblproperties(
-           |   type ='$tableType',
-           |   primaryKey = 'id',
-           |   preCombineField = 'ts'
-           | )
-           | location '$basePath'
-        """.stripMargin)
-      spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
-        "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30.0, 1250, 'a3: desc3')")
-
-      // Partial updates using MERGE INTO statement with changed fields: "price" and "ts"
-      spark.sql(
-        s"""
-           | merge into $tableName t0
-           | using (
-           |   select 1 as id, 'a1' as name1, 12 as price, 1001 as _ts
-           | union
-           |   select 3 as id, 'a3' as name1, 25 as price, 1260 as _ts
-           |   ) s0
-           | on t0.id = s0.id
-           | when matched then update set price = s0.price, ts = s0._ts
-      """.stripMargin)
-      val a = 1
-    })
-  }
-
-
-  // org.apache.spark.SparkException: Job aborted due to stage failure: Task 0 in stage 76.0 failed 1 times, most recent failure: Lost task 0.0 in stage 76.0 (TID 115) (daviss-mbp.attlocal.net executor driver): java.io.EOFException
-  //	at org.apache.avro.io.BinaryDecoder$ByteArrayByteSource.readRaw(BinaryDecoder.java:970)
-  //	at org.apache.avro.io.BinaryDecoder.doReadBytes(BinaryDecoder.java:372)
-  //	at org.apache.avro.io.BinaryDecoder.readString(BinaryDecoder.java:289)
-  //	at org.apache.avro.io.ResolvingDecoder.readString(ResolvingDecoder.java:208)
-  //	at org.apache.avro.generic.GenericDatumReader.readString(GenericDatumReader.java:470)
-  //	at org.apache.avro.generic.GenericDatumReader.readString(GenericDatumReader.java:460)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:192)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:188)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.readField(GenericDatumReader.java:260)
-  //	at org.apache.avro.generic.GenericDatumReader.readRecord(GenericDatumReader.java:248)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:180)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:154)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:264)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:252)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:244)
-  //	at org.apache.hudi.common.model.DefaultHoodieRecordPayload.combineAndGetUpdateValue(DefaultHoodieRecordPayload.java:82)
-  //	at org.apache.hudi.common.model.HoodieAvroRecordMerger.combineAndGetUpdateValue(HoodieAvroRecordMerger.java:62)
-  //	at org.apache.hudi.common.model.HoodieAvroRecordMerger.merge(HoodieAvroRecordMerger.java:47)
-  //	at org.apache.hudi.RecordMergingFileIterator.merge(Iterators.scala:322)
-  //	at org.apache.hudi.RecordMergingFileIterator.hasNextInternal(Iterators.scala:285)
-  //	at org.apache.hudi.RecordMergingFileIterator.doHasNext(Iterators.scala:270)
-  //	at org.apache.hudi.util.CachingIterator.hasNext(CachingIterator.scala:36)
-  //	at org.apache.hudi.util.CachingIterator.hasNext$(CachingIterator.scala:36)
-  //	at org.apache.hudi.LogFileIterator.hasNext(Iterators.scala:61)
-  //	at org.apache.spark.sql.catalyst.expressions.GeneratedClass$GeneratedIteratorForCodegenStage1.processNext(Unknown Source)
-  //	at org.apache.spark.sql.execution.BufferedRowIterator.hasNext(BufferedRowIterator.java:43)
-  //	at org.apache.spark.sql.execution.WholeStageCodegenEvaluatorFactory$WholeStageCodegenPartitionEvaluator$$anon$1.hasNext(WholeStageCodegenEvaluatorFactory.scala:43)
-  //	at scala.collection.Iterator$$anon$10.hasNext(Iterator.scala:460)
-  //	at scala.collection.Iterator$$anon$10.hasNext(Iterator.scala:460)
-  //	at org.apache.spark.util.random.SamplingUtils$.reservoirSampleAndCount(SamplingUtils.scala:41)
-  //	at org.apache.spark.RangePartitioner$.$anonfun$sketch$1(Partitioner.scala:322)
-  //	at org.apache.spark.RangePartitioner$.$anonfun$sketch$1$adapted(Partitioner.scala:320)
-  //	at org.apache.spark.rdd.RDD.$anonfun$mapPartitionsWithIndex$2(RDD.scala:910)
-  //	at org.apache.spark.rdd.RDD.$anonfun$mapPartitionsWithIndex$2$adapted(RDD.scala:910)
-  //	at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:52)
-  //	at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:367)
-  //	at org.apache.spark.rdd.RDD.iterator(RDD.scala:331)
-  //	at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:93)
-  //	at org.apache.spark.TaskContext.runTaskWithListeners(TaskContext.scala:166)
-  //	at org.apache.spark.scheduler.Task.run(Task.scala:141)
-  //	at org.apache.spark.executor.Executor$TaskRunner.$anonfun$run$4(Executor.scala:620)
-  //	at org.apache.spark.util.SparkErrorUtils.tryWithSafeFinally(SparkErrorUtils.scala:64)
-  //	at org.apache.spark.util.SparkErrorUtils.tryWithSafeFinally$(SparkErrorUtils.scala:61)
-  //	at org.apache.spark.util.Utils$.tryWithSafeFinally(Utils.scala:94)
-  //	at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:623)
-  //	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
-  //	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
-  //	at java.lang.Thread.run(Thread.java:750)
-  //
-  //Driver stacktrace:
-  //java.util.concurrent.CompletionException: org.apache.spark.SparkException: Job aborted due to stage failure: Task 0 in stage 76.0 failed 1 times, most recent failure: Lost task 0.0 in stage 76.0 (TID 115) (daviss-mbp.attlocal.net executor driver): java.io.EOFException
-  //	at org.apache.avro.io.BinaryDecoder$ByteArrayByteSource.readRaw(BinaryDecoder.java:970)
-  //	at org.apache.avro.io.BinaryDecoder.doReadBytes(BinaryDecoder.java:372)
-  //	at org.apache.avro.io.BinaryDecoder.readString(BinaryDecoder.java:289)
-  //	at org.apache.avro.io.ResolvingDecoder.readString(ResolvingDecoder.java:208)
-  //	at org.apache.avro.generic.GenericDatumReader.readString(GenericDatumReader.java:470)
-  //	at org.apache.avro.generic.GenericDatumReader.readString(GenericDatumReader.java:460)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:192)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:188)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.readField(GenericDatumReader.java:260)
-  //	at org.apache.avro.generic.GenericDatumReader.readRecord(GenericDatumReader.java:248)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:180)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:154)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:264)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:252)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:244)
-  //	at org.apache.hudi.common.model.DefaultHoodieRecordPayload.combineAndGetUpdateValue(DefaultHoodieRecordPayload.java:82)
-  //	at org.apache.hudi.common.model.HoodieAvroRecordMerger.combineAndGetUpdateValue(HoodieAvroRecordMerger.java:62)
-  //	at org.apache.hudi.common.model.HoodieAvroRecordMerger.merge(HoodieAvroRecordMerger.java:47)
-  //	at org.apache.hudi.RecordMergingFileIterator.merge(Iterators.scala:322)
-  //	at org.apache.hudi.RecordMergingFileIterator.hasNextInternal(Iterators.scala:285)
-  //	at org.apache.hudi.RecordMergingFileIterator.doHasNext(Iterators.scala:270)
-  //	at org.apache.hudi.util.CachingIterator.hasNext(CachingIterator.scala:36)
-  //	at org.apache.hudi.util.CachingIterator.hasNext$(CachingIterator.scala:36)
-  //	at org.apache.hudi.LogFileIterator.hasNext(Iterators.scala:61)
-  //	at org.apache.spark.sql.catalyst.expressions.GeneratedClass$GeneratedIteratorForCodegenStage1.processNext(Unknown Source)
-  //	at org.apache.spark.sql.execution.BufferedRowIterator.hasNext(BufferedRowIterator.java:43)
-  //	at org.apache.spark.sql.execution.WholeStageCodegenEvaluatorFactory$WholeStageCodegenPartitionEvaluator$$anon$1.hasNext(WholeStageCodegenEvaluatorFactory.scala:43)
-  //	at scala.collection.Iterator$$anon$10.hasNext(Iterator.scala:460)
-  //	at scala.collection.Iterator$$anon$10.hasNext(Iterator.scala:460)
-  //	at org.apache.spark.util.random.SamplingUtils$.reservoirSampleAndCount(SamplingUtils.scala:41)
-  //	at org.apache.spark.RangePartitioner$.$anonfun$sketch$1(Partitioner.scala:322)
-  //	at org.apache.spark.RangePartitioner$.$anonfun$sketch$1$adapted(Partitioner.scala:320)
-  //	at org.apache.spark.rdd.RDD.$anonfun$mapPartitionsWithIndex$2(RDD.scala:910)
-  //	at org.apache.spark.rdd.RDD.$anonfun$mapPartitionsWithIndex$2$adapted(RDD.scala:910)
-  //	at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:52)
-  //	at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:367)
-  //	at org.apache.spark.rdd.RDD.iterator(RDD.scala:331)
-  //	at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:93)
-  //	at org.apache.spark.TaskContext.runTaskWithListeners(TaskContext.scala:166)
-  //	at org.apache.spark.scheduler.Task.run(Task.scala:141)
-  //	at org.apache.spark.executor.Executor$TaskRunner.$anonfun$run$4(Executor.scala:620)
-  //	at org.apache.spark.util.SparkErrorUtils.tryWithSafeFinally(SparkErrorUtils.scala:64)
-  //	at org.apache.spark.util.SparkErrorUtils.tryWithSafeFinally$(SparkErrorUtils.scala:61)
-  //	at org.apache.spark.util.Utils$.tryWithSafeFinally(Utils.scala:94)
-  //	at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:623)
-  //	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
-  //	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
-  //	at java.lang.Thread.run(Thread.java:750)
-  //
-  //Driver stacktrace:
-  //	at java.util.concurrent.CompletableFuture.encodeThrowable(CompletableFuture.java:273)
-  //	at java.util.concurrent.CompletableFuture.completeThrowable(CompletableFuture.java:280)
-  //	at java.util.concurrent.CompletableFuture$AsyncSupply.run$$$capture(CompletableFuture.java:1606)
-  //	at java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java)
-  //	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
-  //	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
-  //	at java.lang.Thread.run(Thread.java:750)
-  //Caused by: org.apache.spark.SparkException: Job aborted due to stage failure: Task 0 in stage 76.0 failed 1 times, most recent failure: Lost task 0.0 in stage 76.0 (TID 115) (daviss-mbp.attlocal.net executor driver): java.io.EOFException
-  //	at org.apache.avro.io.BinaryDecoder$ByteArrayByteSource.readRaw(BinaryDecoder.java:970)
-  //	at org.apache.avro.io.BinaryDecoder.doReadBytes(BinaryDecoder.java:372)
-  //	at org.apache.avro.io.BinaryDecoder.readString(BinaryDecoder.java:289)
-  //	at org.apache.avro.io.ResolvingDecoder.readString(ResolvingDecoder.java:208)
-  //	at org.apache.avro.generic.GenericDatumReader.readString(GenericDatumReader.java:470)
-  //	at org.apache.avro.generic.GenericDatumReader.readString(GenericDatumReader.java:460)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:192)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:188)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.readField(GenericDatumReader.java:260)
-  //	at org.apache.avro.generic.GenericDatumReader.readRecord(GenericDatumReader.java:248)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:180)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:154)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:264)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:252)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:244)
-  //	at org.apache.hudi.common.model.DefaultHoodieRecordPayload.combineAndGetUpdateValue(DefaultHoodieRecordPayload.java:82)
-  //	at org.apache.hudi.common.model.HoodieAvroRecordMerger.combineAndGetUpdateValue(HoodieAvroRecordMerger.java:62)
-  //	at org.apache.hudi.common.model.HoodieAvroRecordMerger.merge(HoodieAvroRecordMerger.java:47)
-  //	at org.apache.hudi.RecordMergingFileIterator.merge(Iterators.scala:322)
-  //	at org.apache.hudi.RecordMergingFileIterator.hasNextInternal(Iterators.scala:285)
-  //	at org.apache.hudi.RecordMergingFileIterator.doHasNext(Iterators.scala:270)
-  //	at org.apache.hudi.util.CachingIterator.hasNext(CachingIterator.scala:36)
-  //	at org.apache.hudi.util.CachingIterator.hasNext$(CachingIterator.scala:36)
-  //	at org.apache.hudi.LogFileIterator.hasNext(Iterators.scala:61)
-  //	at org.apache.spark.sql.catalyst.expressions.GeneratedClass$GeneratedIteratorForCodegenStage1.processNext(Unknown Source)
-  //	at org.apache.spark.sql.execution.BufferedRowIterator.hasNext(BufferedRowIterator.java:43)
-  //	at org.apache.spark.sql.execution.WholeStageCodegenEvaluatorFactory$WholeStageCodegenPartitionEvaluator$$anon$1.hasNext(WholeStageCodegenEvaluatorFactory.scala:43)
-  //	at scala.collection.Iterator$$anon$10.hasNext(Iterator.scala:460)
-  //	at scala.collection.Iterator$$anon$10.hasNext(Iterator.scala:460)
-  //	at org.apache.spark.util.random.SamplingUtils$.reservoirSampleAndCount(SamplingUtils.scala:41)
-  //	at org.apache.spark.RangePartitioner$.$anonfun$sketch$1(Partitioner.scala:322)
-  //	at org.apache.spark.RangePartitioner$.$anonfun$sketch$1$adapted(Partitioner.scala:320)
-  //	at org.apache.spark.rdd.RDD.$anonfun$mapPartitionsWithIndex$2(RDD.scala:910)
-  //	at org.apache.spark.rdd.RDD.$anonfun$mapPartitionsWithIndex$2$adapted(RDD.scala:910)
-  //	at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:52)
-  //	at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:367)
-  //	at org.apache.spark.rdd.RDD.iterator(RDD.scala:331)
-  //	at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:93)
-  //	at org.apache.spark.TaskContext.runTaskWithListeners(TaskContext.scala:166)
-  //	at org.apache.spark.scheduler.Task.run(Task.scala:141)
-  //	at org.apache.spark.executor.Executor$TaskRunner.$anonfun$run$4(Executor.scala:620)
-  //	at org.apache.spark.util.SparkErrorUtils.tryWithSafeFinally(SparkErrorUtils.scala:64)
-  //	at org.apache.spark.util.SparkErrorUtils.tryWithSafeFinally$(SparkErrorUtils.scala:61)
-  //	at org.apache.spark.util.Utils$.tryWithSafeFinally(Utils.scala:94)
-  //	at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:623)
-  //	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
-  //	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
-  //	at java.lang.Thread.run(Thread.java:750)
-  //
-  //Driver stacktrace:
-  //	at org.apache.spark.scheduler.DAGScheduler.failJobAndIndependentStages(DAGScheduler.scala:2856)
-  //	at org.apache.spark.scheduler.DAGScheduler.$anonfun$abortStage$2(DAGScheduler.scala:2792)
-  //	at org.apache.spark.scheduler.DAGScheduler.$anonfun$abortStage$2$adapted(DAGScheduler.scala:2791)
-  //	at scala.collection.mutable.ResizableArray.foreach(ResizableArray.scala:62)
-  //	at scala.collection.mutable.ResizableArray.foreach$(ResizableArray.scala:55)
-  //	at scala.collection.mutable.ArrayBuffer.foreach(ArrayBuffer.scala:49)
-  //	at org.apache.spark.scheduler.DAGScheduler.abortStage(DAGScheduler.scala:2791)
-  //	at org.apache.spark.scheduler.DAGScheduler.$anonfun$handleTaskSetFailed$1(DAGScheduler.scala:1247)
-  //	at org.apache.spark.scheduler.DAGScheduler.$anonfun$handleTaskSetFailed$1$adapted(DAGScheduler.scala:1247)
-  //	at scala.Option.foreach(Option.scala:407)
-  //	at org.apache.spark.scheduler.DAGScheduler.handleTaskSetFailed(DAGScheduler.scala:1247)
-  //	at org.apache.spark.scheduler.DAGSchedulerEventProcessLoop.doOnReceive(DAGScheduler.scala:3060)
-  //	at org.apache.spark.scheduler.DAGSchedulerEventProcessLoop.onReceive(DAGScheduler.scala:2994)
-  //	at org.apache.spark.scheduler.DAGSchedulerEventProcessLoop.onReceive(DAGScheduler.scala:2983)
-  //	at org.apache.spark.util.EventLoop$$anon$1.run(EventLoop.scala:49)
-  //	at org.apache.spark.scheduler.DAGScheduler.runJob(DAGScheduler.scala:989)
-  //	at org.apache.spark.SparkContext.runJob(SparkContext.scala:2393)
-  //	at org.apache.spark.SparkContext.runJob(SparkContext.scala:2414)
-  //	at org.apache.spark.SparkContext.runJob(SparkContext.scala:2433)
-  //	at org.apache.spark.SparkContext.runJob(SparkContext.scala:2458)
-  //	at org.apache.spark.rdd.RDD.$anonfun$collect$1(RDD.scala:1049)
-  //	at org.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:151)
-  //	at org.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:112)
-  //	at org.apache.spark.rdd.RDD.withScope(RDD.scala:410)
-  //	at org.apache.spark.rdd.RDD.collect(RDD.scala:1048)
-  //	at org.apache.spark.RangePartitioner$.sketch(Partitioner.scala:320)
-  //	at org.apache.spark.RangePartitioner.<init>(Partitioner.scala:187)
-  //	at org.apache.spark.sql.execution.exchange.ShuffleExchangeExec$.prepareShuffleDependency(ShuffleExchangeExec.scala:296)
-  //	at org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.shuffleDependency$lzycompute(ShuffleExchangeExec.scala:179)
-  //	at org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.shuffleDependency(ShuffleExchangeExec.scala:173)
-  //	at org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.mapOutputStatisticsFuture$lzycompute(ShuffleExchangeExec.scala:149)
-  //	at org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.mapOutputStatisticsFuture(ShuffleExchangeExec.scala:145)
-  //	at org.apache.spark.sql.execution.exchange.ShuffleExchangeLike.$anonfun$submitShuffleJob$1(ShuffleExchangeExec.scala:73)
-  //	at org.apache.spark.sql.execution.SparkPlan.$anonfun$executeQuery$1(SparkPlan.scala:246)
-  //	at org.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:151)
-  //	at org.apache.spark.sql.execution.SparkPlan.executeQuery(SparkPlan.scala:243)
-  //	at org.apache.spark.sql.execution.exchange.ShuffleExchangeLike.submitShuffleJob(ShuffleExchangeExec.scala:73)
-  //	at org.apache.spark.sql.execution.exchange.ShuffleExchangeLike.submitShuffleJob$(ShuffleExchangeExec.scala:72)
-  //	at org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.submitShuffleJob(ShuffleExchangeExec.scala:120)
-  //	at org.apache.spark.sql.execution.adaptive.ShuffleQueryStageExec.shuffleFuture$lzycompute(QueryStageExec.scala:194)
-  //	at org.apache.spark.sql.execution.adaptive.ShuffleQueryStageExec.shuffleFuture(QueryStageExec.scala:194)
-  //	at org.apache.spark.sql.execution.adaptive.ShuffleQueryStageExec.doMaterialize(QueryStageExec.scala:196)
-  //	at org.apache.spark.sql.execution.adaptive.QueryStageExec.materialize(QueryStageExec.scala:61)
-  //	at org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec.$anonfun$getFinalPhysicalPlan$5(AdaptiveSparkPlanExec.scala:302)
-  //	at org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec.$anonfun$getFinalPhysicalPlan$5$adapted(AdaptiveSparkPlanExec.scala:300)
-  //	at scala.collection.Iterator.foreach(Iterator.scala:943)
-  //	at scala.collection.Iterator.foreach$(Iterator.scala:943)
-  //	at scala.collection.AbstractIterator.foreach(Iterator.scala:1431)
-  //	at scala.collection.IterableLike.foreach(IterableLike.scala:74)
-  //	at scala.collection.IterableLike.foreach$(IterableLike.scala:73)
-  //	at scala.collection.AbstractIterable.foreach(Iterable.scala:56)
-  //	at org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec.$anonfun$getFinalPhysicalPlan$1(AdaptiveSparkPlanExec.scala:300)
-  //	at org.apache.spark.sql.SparkSession.withActive(SparkSession.scala:900)
-  //	at org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec.getFinalPhysicalPlan(AdaptiveSparkPlanExec.scala:272)
-  //	at org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec.withFinalPlanUpdate(AdaptiveSparkPlanExec.scala:419)
-  //	at org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec.doExecute(AdaptiveSparkPlanExec.scala:404)
-  //	at org.apache.spark.sql.execution.SparkPlan.$anonfun$execute$1(SparkPlan.scala:195)
-  //	at org.apache.spark.sql.execution.SparkPlan.$anonfun$executeQuery$1(SparkPlan.scala:246)
-  //	at org.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:151)
-  //	at org.apache.spark.sql.execution.SparkPlan.executeQuery(SparkPlan.scala:243)
-  //	at org.apache.spark.sql.execution.SparkPlan.execute(SparkPlan.scala:191)
-  //	at org.apache.spark.sql.execution.QueryExecution.toRdd$lzycompute(QueryExecution.scala:207)
-  //	at org.apache.spark.sql.execution.QueryExecution.toRdd(QueryExecution.scala:206)
-  //	at org.apache.hudi.HoodieDatasetBulkInsertHelper$.bulkInsert(HoodieDatasetBulkInsertHelper.scala:154)
-  //	at org.apache.hudi.HoodieDatasetBulkInsertHelper.bulkInsert(HoodieDatasetBulkInsertHelper.scala)
-  //	at org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy.performClusteringWithRecordsAsRow(SparkSortAndSizeExecutionStrategy.java:76)
-  //	at org.apache.hudi.client.clustering.run.strategy.MultipleSparkJobExecutionStrategy.lambda$runClusteringForGroupAsyncAsRow$7(MultipleSparkJobExecutionStrategy.java:298)
-  //	at java.util.concurrent.CompletableFuture$AsyncSupply.run$$$capture(CompletableFuture.java:1604)
-  //	... 4 more
-  //Caused by: java.io.EOFException
-  //	at org.apache.avro.io.BinaryDecoder$ByteArrayByteSource.readRaw(BinaryDecoder.java:970)
-  //	at org.apache.avro.io.BinaryDecoder.doReadBytes(BinaryDecoder.java:372)
-  //	at org.apache.avro.io.BinaryDecoder.readString(BinaryDecoder.java:289)
-  //	at org.apache.avro.io.ResolvingDecoder.readString(ResolvingDecoder.java:208)
-  //	at org.apache.avro.generic.GenericDatumReader.readString(GenericDatumReader.java:470)
-  //	at org.apache.avro.generic.GenericDatumReader.readString(GenericDatumReader.java:460)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:192)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:188)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.readField(GenericDatumReader.java:260)
-  //	at org.apache.avro.generic.GenericDatumReader.readRecord(GenericDatumReader.java:248)
-  //	at org.apache.avro.generic.GenericDatumReader.readWithoutConversion(GenericDatumReader.java:180)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:161)
-  //	at org.apache.avro.generic.GenericDatumReader.read(GenericDatumReader.java:154)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:264)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:252)
-  //	at org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro(HoodieAvroUtils.java:244)
-  //	at org.apache.hudi.common.model.DefaultHoodieRecordPayload.combineAndGetUpdateValue(DefaultHoodieRecordPayload.java:82)
-  //	at org.apache.hudi.common.model.HoodieAvroRecordMerger.combineAndGetUpdateValue(HoodieAvroRecordMerger.java:62)
-  //	at org.apache.hudi.common.model.HoodieAvroRecordMerger.merge(HoodieAvroRecordMerger.java:47)
-  //	at org.apache.hudi.RecordMergingFileIterator.merge(Iterators.scala:322)
-  //	at org.apache.hudi.RecordMergingFileIterator.hasNextInternal(Iterators.scala:285)
-  //	at org.apache.hudi.RecordMergingFileIterator.doHasNext(Iterators.scala:270)
-  //	at org.apache.hudi.util.CachingIterator.hasNext(CachingIterator.scala:36)
-  //	at org.apache.hudi.util.CachingIterator.hasNext$(CachingIterator.scala:36)
-  //	at org.apache.hudi.LogFileIterator.hasNext(Iterators.scala:61)
-  //	at org.apache.spark.sql.catalyst.expressions.GeneratedClass$GeneratedIteratorForCodegenStage1.processNext(Unknown Source)
-  //	at org.apache.spark.sql.execution.BufferedRowIterator.hasNext(BufferedRowIterator.java:43)
-  //	at org.apache.spark.sql.execution.WholeStageCodegenEvaluatorFactory$WholeStageCodegenPartitionEvaluator$$anon$1.hasNext(WholeStageCodegenEvaluatorFactory.scala:43)
-  //	at scala.collection.Iterator$$anon$10.hasNext(Iterator.scala:460)
-  //	at scala.collection.Iterator$$anon$10.hasNext(Iterator.scala:460)
-  //	at org.apache.spark.util.random.SamplingUtils$.reservoirSampleAndCount(SamplingUtils.scala:41)
-  //	at org.apache.spark.RangePartitioner$.$anonfun$sketch$1(Partitioner.scala:322)
-  //	at org.apache.spark.RangePartitioner$.$anonfun$sketch$1$adapted(Partitioner.scala:320)
-  //	at org.apache.spark.rdd.RDD.$anonfun$mapPartitionsWithIndex$2(RDD.scala:910)
-  //	at org.apache.spark.rdd.RDD.$anonfun$mapPartitionsWithIndex$2$adapted(RDD.scala:910)
-  //	at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:52)
-  //	at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:367)
-  //	at org.apache.spark.rdd.RDD.iterator(RDD.scala:331)
-  //	at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:93)
-  //	at org.apache.spark.TaskContext.runTaskWithListeners(TaskContext.scala:166)
-  //	at org.apache.spark.scheduler.Task.run(Task.scala:141)
-  //	at org.apache.spark.executor.Executor$TaskRunner.$anonfun$run$4(Executor.scala:620)
-  //	at org.apache.spark.util.SparkErrorUtils.tryWithSafeFinally(SparkErrorUtils.scala:64)
-  //	at org.apache.spark.util.SparkErrorUtils.tryWithSafeFinally$(SparkErrorUtils.scala:61)
-  //	at org.apache.spark.util.Utils$.tryWithSafeFinally(Utils.scala:94)
-  //	at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:623)
-  //	... 3 more
-  test("Test partial insert with inline clustering") {
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}/$tableName"
-      val tableType = "mor"
-      val logDataBlockFormat = "parquet"
-//      val logDataBlockFormat = "avro"
-
-      spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-      spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-      spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
-      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = false")
-      spark.sql(s"Set ${HoodieClusteringConfig.INLINE_CLUSTERING.key()} = true")
-      spark.sql(s"Set ${HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key()} = 2")
-      spark.sql(s"Set ${HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()} = id,price")
-
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |   id int,
-           |   name string,
-           |   price long,
-           |   ts long,
-           |   description string
-           | ) using hudi
-           | tblproperties(
-           |   type ='$tableType',
-           |   primaryKey = 'id',
-           |   preCombineField = 'ts'
-           | )
-           | location '$basePath'
-        """.stripMargin)
-      spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
-        "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30.0, 1250, 'a3: desc3')")
-
-      // Partial updates using MERGE INTO statement with changed fields: "price" and "ts"
-      spark.sql(
-        s"""
-           | merge into $tableName t0
-           | using (
-           |   select 1 as id, 'a1' as name1, 12 as price, 1001 as _ts
-           | union
-           |   select 3 as id, 'a3' as name1, 25 as price, 1260 as _ts
-           |   ) s0
-           | on t0.id = s0.id
-           | when matched then update set price = s0.price, ts = s0._ts
-      """.stripMargin)
-      val a = 1
-    })
-  }
-
-  // Same exception stack trace as above
-  test("Test partial insert with inline clustering & multi files") {
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}/$tableName"
-      val tableType = "mor"
-      val logDataBlockFormat = "avro"
-
-      spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-      spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-      spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
-      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = false")
-      spark.sql(s"Set ${HoodieClusteringConfig.INLINE_CLUSTERING.key()} = true")
-      spark.sql(s"Set ${HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key()} = 3")
-      spark.sql(s"Set ${HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key()} = id,price")
-      spark.sql(s"set hoodie.parquet.small.file.limit = 0")
-
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |   id int,
-           |   name string,
-           |   price long,
-           |   ts long,
-           |   description string
-           | ) using hudi
-           | tblproperties(
-           |   type ='$tableType',
-           |   primaryKey = 'id',
-           |   preCombineField = 'ts'
-           | )
-           | location '$basePath'
-        """.stripMargin)
-      spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
-        "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30.0, 1250, 'a3: desc3')")
-      spark.sql(s"insert into $tableName values (4, 'a4', 10, 1000, 'a4: desc4')," +
-        "(5, 'a5', 20, 1200, 'a5: desc5'), (6, 'a6', 30, 1250, 'a6: desc6')")
-      // Partial updates using MERGE INTO statement with changed fields: "price" and "ts"
-      spark.sql(
-        s"""
-           | merge into $tableName t0
-           | using (
-           |   select 1 as id, 'a1' as name1, 12 as price, 1001 as _ts
-           | union
-           |   select 3 as id, 'a3' as name1, 25 as price, 1260 as _ts
-           |   ) s0
-           | on t0.id = s0.id
-           | when matched then update set price = s0.price, ts = s0._ts
-      """.stripMargin)
-      val a = 1
-    })
-  }
-
   test("Test MergeInto with partial update and insert") {
     spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
 
@@ -1872,48 +1487,47 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     testConfigs.foreach { case (tableType, sparkSqlOptimizedWrites) =>
       log.info(s"=== Testing MergeInto with partial insert: tableType=$tableType, sparkSqlOptimizedWrites=$sparkSqlOptimizedWrites ===")
       withRecordType()(withTempDir { tmp =>
-        spark.sql("set hoodie.payload.combined.schema.validate = true")
-        // Create a partitioned table
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             | create table $tableName (
-             |  id bigint,
-             |  name string,
-             |  price double,
-             |  ts bigint,
-             |  dt string
-             | ) using hudi
-             | tblproperties (
-             |  type = '$tableType',
-             |  primaryKey = 'id'
-             | )
-             | partitioned by(dt)
-             | location '${tmp.getCanonicalPath}'
-         """.stripMargin)
+        withSparkSqlSessionConfig("hoodie.payload.combined.schema.validate" -> "true",
+          SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+          // Create a partitioned table
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id bigint,
+               |  name string,
+               |  price double,
+               |  ts bigint,
+               |  dt string
+               | ) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id'
+               | )
+               | partitioned by(dt)
+               | location '${tmp.getCanonicalPath}'
+           """.stripMargin)
 
-        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1L, '2021-03-21'")
+          spark.sql(s"insert into $tableName select 1, 'a1', 10, 1L, '2021-03-21'")
 
-        // Set optimized sql merge setting
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
-
-        spark.sql(
-          s"""
-             | merge into $tableName as t0
-             | using (
-             |  select 2 as id, 'a2' as name, 10 as price, 2L as ts, '2021-03-20' as dt
-             |  union
-             |  select 1 as id, 'a1_updated' as name, 11 as price, 3L as ts, '2021-03-21' as dt
-             | ) s0
-             | on s0.id = t0.id
-             | when matched then update set t0.id = s0.id, t0.name = s0.name
-             | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
-             | values(s0.id, s0.name, s0.dt)
-         """.stripMargin)
-        checkAnswer(s"select id, name, price, dt from $tableName order by id")(
-          Seq(1, "a1_updated", 10, "2021-03-21"),
-          Seq(2, "a2", null, "2021-03-20")
-        )
+          spark.sql(
+            s"""
+               | merge into $tableName as t0
+               | using (
+               |  select 2 as id, 'a2' as name, 10 as price, 2L as ts, '2021-03-20' as dt
+               |  union
+               |  select 1 as id, 'a1_updated' as name, 11 as price, 3L as ts, '2021-03-21' as dt
+               | ) s0
+               | on s0.id = t0.id
+               | when matched then update set t0.id = s0.id, t0.name = s0.name
+               | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
+               | values(s0.id, s0.name, s0.dt)
+           """.stripMargin)
+          checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+            Seq(1, "a1_updated", 10, "2021-03-21"),
+            Seq(2, "a2", null, "2021-03-20")
+          )
+        }
       })
     }
   }
