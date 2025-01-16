@@ -69,6 +69,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -109,7 +110,8 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
@@ -121,6 +123,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.getEnabledPartitions;
+import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices;
 
@@ -444,6 +447,24 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             break;
           case SECONDARY_INDEX:
             Set<String> secondaryIndexPartitionsToInit = getIndexPartitionsToInit(partitionType);
+            // if no secondary index partition found, check if new secondary index definition need to be added based on metadata write configs
+            if (secondaryIndexPartitionsToInit.isEmpty() && isNewSecondaryIndexDefinitionRequired(dataWriteConfig.getMetadataConfig(), dataMetaClient)) {
+              String indexedColumn  = dataWriteConfig.getMetadataConfig().getSecondaryIndexColumn();
+              String indexName = dataWriteConfig.getMetadataConfig().getSecondaryIndexName();
+              // Use a default index name if the indexed column is not specified
+              if (StringUtils.isNullOrEmpty(indexName) && StringUtils.nonEmpty(indexedColumn)) {
+                indexName = PARTITION_NAME_SECONDARY_INDEX_PREFIX + indexedColumn;
+              }
+              // Build and register the new index definition
+              HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+                  .withIndexName(indexName)
+                  .withIndexType(PARTITION_NAME_SECONDARY_INDEX)
+                  .withSourceFields(Collections.singletonList(indexedColumn))
+                  .build();
+              dataMetaClient.buildIndexDefinition(indexDefinition);
+              // Re-fetch the partitions after adding the new definition
+              secondaryIndexPartitionsToInit = getIndexPartitionsToInit(partitionType);
+            }
             if (secondaryIndexPartitionsToInit.size() != 1) {
               if (secondaryIndexPartitionsToInit.size() > 1) {
                 LOG.warn("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
@@ -1173,7 +1194,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     dataMetaClient.getTableConfig().getMetadataPartitions()
         .stream()
-        .filter(partition -> partition.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
+        .filter(partition -> partition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
         .forEach(partition -> {
           HoodieData<HoodieRecord> secondaryIndexRecords;
           try {
