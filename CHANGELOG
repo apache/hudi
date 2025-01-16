@@ -549,3 +549,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-20198][INTERNAL] create custom concat handle config (#1128)
 [ENG-19830][INTERNAL] Add publish-adhoc-jar github workflow yaml for hudi-internal (#1130)
 [AUDIT-1071]: Changelog for release-v1.70.0 (#1131)
+
+--- [2025-01-16 16:03:43] [release-v1.76.0] ---
+[ENG-17105][HUDI-7949] insert into hudi table with columns specified (#1140)
+[AUDIT-1071]: Changelog for release-v1.75.0 (#1139)
