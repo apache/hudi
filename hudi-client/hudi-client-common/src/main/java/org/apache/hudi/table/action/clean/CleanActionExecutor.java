@@ -150,8 +150,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
             iterator -> deleteFilesFunc(iterator, table), PartitionCleanStat::merge, cleanerParallelism);
 
     LOG.info("Collecting cleaner stats");
-      Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     List<String> partitionsToBeDeleted = table.getMetaClient().getTableConfig().isTablePartitioned() && cleanerPlan.getPartitionsToBeDeleted() != null
         ? cleanerPlan.getPartitionsToBeDeleted()
@@ -175,7 +175,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           LOG.warn("Partition deletion failed " + entry);
         }
       });
-    };
+    }
+    ;
 
     // Return PartitionCleanStat for each partition passed.
     return cleanerPlan.getFilePathsToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
@@ -201,15 +202,16 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     }).collect(Collectors.toList());
   }
 
-  private void deletePartitionsFunc(String path, HoodieTable<T,I,K,O> table) {
+  private void deletePartitionsFunc(String path, HoodieTable<T, I, K, O> table) {
     try {
-        if (!isNullOrEmpty(path)) {
-          deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
-                  table.getMetaClient().getBasePath() + "/" + path);
-        }
-      } catch (IOException e) {
-        LOG.warn("Partition deletion failed " + path);
-      };
+      if (!isNullOrEmpty(path)) {
+        deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
+                table.getMetaClient().getBasePath() + "/" + path);
+      }
+    } catch (IOException e) {
+      LOG.warn("Partition deletion failed " + path);
+    }
+    ;
   }
 
   /**
@@ -273,6 +275,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     // If there are inflight(failed) or previously requested clean operation, first perform them
     List<HoodieInstant> pendingCleanInstants = table.getCleanTimeline()
         .filterInflightsAndRequested().getInstants();
+    LOG.info("***--- found {} pending clean instants.", pendingCleanInstants.size());
     if (pendingCleanInstants.size() > 0) {
       // try to clean old history schema.
       try {
