@@ -142,13 +142,13 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
                                        sqlConf: SQLConf,
                                        options: Map[String, String],
                                        hadoopConf: Configuration): SparkFileReader = {
-    Spark34ParquetFileReader.build(vectorized, sqlConf, options, hadoopConf)
+    Spark34ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 
   override def createOrcFileReader(vectorized: Boolean,
                                    sqlConf: SQLConf,
                                    options: Map[String, String],
                                    hadoopConf: Configuration): SparkFileReader = {
-    Spark34OrcFileReader.build(vectorized, sqlConf, options, hadoopConf)
+    Spark34OrcReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 }
