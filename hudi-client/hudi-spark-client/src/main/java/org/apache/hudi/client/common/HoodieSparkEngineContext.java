@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hudi.client.HoodieSparkClusteringClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
