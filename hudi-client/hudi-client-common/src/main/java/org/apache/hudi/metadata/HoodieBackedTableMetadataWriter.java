@@ -109,6 +109,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
@@ -122,6 +123,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.getEnabledPartitions;
+import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices;
@@ -428,7 +430,27 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           case EXPRESSION_INDEX:
             Set<String> expressionIndexPartitionsToInit = getIndexPartitionsToInit(partitionType);
             if (expressionIndexPartitionsToInit.isEmpty()) {
-              continue;
+              if (isNewExpressionIndexDefinitionRequired(dataWriteConfig.getMetadataConfig(), dataMetaClient)) {
+                String indexedColumn  = dataWriteConfig.getMetadataConfig().getExpressionIndexColumn();
+                String indexName = dataWriteConfig.getMetadataConfig().getExpressionIndexName();
+                String indexType = dataWriteConfig.getMetadataConfig().getExpressionIndexType();
+                // Use a default index name if the indexed column is not specified
+                if (StringUtils.isNullOrEmpty(indexName) && StringUtils.nonEmpty(indexedColumn)) {
+                  indexName = PARTITION_NAME_EXPRESSION_INDEX_PREFIX + indexedColumn;
+                }
+                // Build and register the new index definition
+                HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+                    .withIndexName(indexName)
+                    .withIndexType(indexType)
+                    .withSourceFields(Collections.singletonList(indexedColumn))
+                    .withIndexOptions(dataWriteConfig.getMetadataConfig().getExpressionIndexOptions())
+                    .build();
+                dataMetaClient.buildIndexDefinition(indexDefinition);
+                // Re-fetch the partitions after adding the new definition
+                expressionIndexPartitionsToInit = getIndexPartitionsToInit(partitionType);
+              } else {
+                continue;
+              }
             }
             ValidationUtils.checkState(expressionIndexPartitionsToInit.size() == 1, "Only one expression index at a time is supported for now");
             partitionName = expressionIndexPartitionsToInit.iterator().next();

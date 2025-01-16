@@ -69,6 +69,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
+import static org.apache.hudi.metadata.MetadataPartitionType.EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
@@ -243,6 +244,35 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // Step 4: validate RECORD_INDEX partition is not deleted
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(RECORD_INDEX.getPartitionPath()));
     assertTrue(metadataPartitionExists(basePath(), context(), RECORD_INDEX.getPartitionPath()));
+  }
+
+  /**
+   * Test indexer for Expression Index.
+   */
+  @Test
+  public void testIndexerForExpressionIndex() {
+    String tableName = "indexer_test_expr_si";
+    // enable files and bloom_filters only with the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withAsyncIndex(false).withMetadataIndexColumnStats(false);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
+
+    // validate table config
+    metaClient = reload(metaClient);
+    assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
+
+    // build RLI
+    indexMetadataPartitionsAndAssert(RECORD_INDEX, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName,
+        "streamer-config/indexer-record-index.properties");
+
+    // rebuild metadata config with expression index name and indexed column
+    String indexName = "idx_ts";
+    // build expression index
+    indexMetadataPartitionsAndAssert(EXPRESSION_INDEX, Arrays.asList(new MetadataPartitionType[] {FILES, RECORD_INDEX}),
+        Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName, "streamer-config/indexer-expression-index.properties");
+    // validate the expression index is built
+    assertTrue(metadataPartitionExists(basePath(), context(), EXPRESSION_INDEX.getPartitionPath(metaClient, indexName)));
   }
 
   @Test
