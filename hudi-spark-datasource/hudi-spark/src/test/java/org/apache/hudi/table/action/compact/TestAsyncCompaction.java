@@ -242,7 +242,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
               .readCompactionPlanAsBytes(INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime)).get());
       assertTrue(compactionPlan.getOperations().stream()
               .noneMatch(op -> op.getDeltaFilePaths().stream().anyMatch(deltaFile -> deltaFile.contains(pendingInstantTime))),
-          "compaction plan should not include pending log files");
+          "compaction plan should not include pending log files. Active timeline " + metaClient.getActiveTimeline().getInstants());
 
       // execute inflight compaction.
       executeCompaction(compactionInstantTime, client, hoodieTable, cfg, numRecs, true);
