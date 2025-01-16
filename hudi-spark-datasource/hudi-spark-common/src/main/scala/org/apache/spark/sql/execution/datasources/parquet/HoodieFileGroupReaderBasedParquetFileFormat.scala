@@ -150,8 +150,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
     val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(
       supportBatchResult, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
-    val orcFileReader = spark.sparkContext.broadcast(sparkAdapter.createOrcFileReader(
-      supportBatchCalled, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
@@ -165,7 +163,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
           fileSliceMapping.getSlice(filegroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val fileReaders = new java.util.HashMap[String, SparkFileReader]()
-              fileReaders.put("orc", orcFileReader.value)
               fileReaders.put("parquet", parquetFileReader.value)
               val readerContext = new SparkFileFormatInternalRowReaderContext(fileReaders, filters, requiredFilters)
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
