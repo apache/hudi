@@ -43,22 +43,22 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.collection.JavaConverters._
 
-class Spark34ParquetFileReader(enableVectorizedReader: Boolean,
-                               datetimeRebaseModeInRead: String,
-                               int96RebaseModeInRead: String,
-                               enableParquetFilterPushDown: Boolean,
-                               pushDownDate: Boolean,
-                               pushDownTimestamp: Boolean,
-                               pushDownDecimal: Boolean,
-                               pushDownInFilterThreshold: Int,
-                               pushDownStringPredicate: Boolean,
-                               isCaseSensitive: Boolean,
-                               timestampConversion: Boolean,
-                               enableOffHeapColumnVector: Boolean,
-                               capacity: Int,
-                               returningBatch: Boolean,
-                               enableRecordFilter: Boolean,
-                               timeZoneId: Option[String]) extends SparkFileReaderBase(
+class Spark34ParquetReader(enableVectorizedReader: Boolean,
+                           datetimeRebaseModeInRead: String,
+                           int96RebaseModeInRead: String,
+                           enableParquetFilterPushDown: Boolean,
+                           pushDownDate: Boolean,
+                           pushDownTimestamp: Boolean,
+                           pushDownDecimal: Boolean,
+                           pushDownInFilterThreshold: Int,
+                           pushDownStringPredicate: Boolean,
+                           isCaseSensitive: Boolean,
+                           timestampConversion: Boolean,
+                           enableOffHeapColumnVector: Boolean,
+                           capacity: Int,
+                           returningBatch: Boolean,
+                           enableRecordFilter: Boolean,
+                           timeZoneId: Option[String]) extends SparkFileReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
   pushDownDate = pushDownDate,
@@ -228,7 +228,7 @@ class Spark34ParquetFileReader(enableVectorizedReader: Boolean,
   }
 }
 
-object Spark34ParquetFileReader extends SparkParquetReaderBuilder {
+object Spark34ParquetReader extends SparkParquetReaderBuilder {
   /**
    * Get parquet file reader
    *
@@ -266,7 +266,7 @@ object Spark34ParquetFileReader extends SparkParquetReaderBuilder {
         .equals("true")
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
-    new Spark34ParquetFileReader(
+    new Spark34ParquetReader(
       enableVectorizedReader = vectorized,
       datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
       int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,

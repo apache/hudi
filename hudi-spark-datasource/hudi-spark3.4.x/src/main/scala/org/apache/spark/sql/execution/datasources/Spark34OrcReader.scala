@@ -42,24 +42,24 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util.Utils
 
-class Spark34OrcFileReader(enableVectorizedReader: Boolean,
-                           datetimeRebaseModeInRead: String,
-                           int96RebaseModeInRead: String,
-                           enableParquetFilterPushDown: Boolean,
-                           pushDownDate: Boolean,
-                           pushDownTimestamp: Boolean,
-                           pushDownDecimal: Boolean,
-                           pushDownInFilterThreshold: Int,
-                           isCaseSensitive: Boolean,
-                           timestampConversion: Boolean,
-                           enableOffHeapColumnVector: Boolean,
-                           capacity: Int,
-                           returningBatch: Boolean,
-                           enableRecordFilter: Boolean,
-                           timeZoneId: Option[String],
-                           ignoreCorruptFiles: Boolean,
-                           orcFilterPushDown: Boolean,
-                           memoryMode: MemoryMode) extends SparkFileReaderBase(
+class Spark34OrcReader(enableVectorizedReader: Boolean,
+                       datetimeRebaseModeInRead: String,
+                       int96RebaseModeInRead: String,
+                       enableParquetFilterPushDown: Boolean,
+                       pushDownDate: Boolean,
+                       pushDownTimestamp: Boolean,
+                       pushDownDecimal: Boolean,
+                       pushDownInFilterThreshold: Int,
+                       isCaseSensitive: Boolean,
+                       timestampConversion: Boolean,
+                       enableOffHeapColumnVector: Boolean,
+                       capacity: Int,
+                       returningBatch: Boolean,
+                       enableRecordFilter: Boolean,
+                       timeZoneId: Option[String],
+                       ignoreCorruptFiles: Boolean,
+                       orcFilterPushDown: Boolean,
+                       memoryMode: MemoryMode) extends SparkFileReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
   pushDownDate = pushDownDate,
@@ -162,7 +162,7 @@ class Spark34OrcFileReader(enableVectorizedReader: Boolean,
   }
 }
 
-object Spark34OrcFileReader extends SparkOrcReaderBuilder {
+object Spark34OrcReader extends SparkOrcReaderBuilder {
   /**
    * Get parquet file reader
    *
@@ -197,7 +197,7 @@ object Spark34OrcFileReader extends SparkOrcReaderBuilder {
     val orcFilterPushDown = sqlConf.orcFilterPushDown
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
-    new Spark34OrcFileReader(
+    new Spark34OrcReader(
       enableVectorizedReader = enableVectorizedReader,
       datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
       int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,
