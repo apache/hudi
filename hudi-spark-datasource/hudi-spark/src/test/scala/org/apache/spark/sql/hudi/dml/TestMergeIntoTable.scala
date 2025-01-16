@@ -1527,7 +1527,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
         s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
     } else {
-      s"cannot resolve $columnName in MERGE command given columns $fieldNames."
+      s"cannot resolve $columnName in MERGE command given columns $fieldNames" +
+        (if (HoodieSparkUtils.gteqSpark3_4) "." else "")
     }
   }
 }
