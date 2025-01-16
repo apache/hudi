@@ -31,7 +31,7 @@ import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceH
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
-import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{DataTypes, IntegerType, Metadata, StringType, StructField, StructType}
 import org.apache.spark.sql.{Dataset, Row}
 
 import java.util
@@ -771,6 +771,50 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       metaClient.reloadActiveTimeline()
       assert(3 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
       assert(1 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
+    }
+  }
+
+  test("Test Call show_clustering with limit") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      val hudiOptions = Map(
+        "hoodie.table.name" -> tableName,
+        "hoodie.datasource.write.table.type" -> "COPY_ON_WRITE",
+        "hoodie.datasource.write.recordkey.field" -> "a",
+        "hoodie.datasource.write.partitionpath.field" -> "a,b,c",
+        "hoodie.clean.automatic" -> "true",
+        "hoodie.metadata.enable" -> "true",
+        "hoodie.clustering.inline" -> "true",
+        "hoodie.clustering.inline.max.commits" -> "1",
+        "hoodie.cleaner.commits.retained" -> "2",
+        "hoodie.datasource.write.operation" -> "insert_overwrite"
+      )
+
+      val data = Seq(
+        (1, 2, 4),
+        (1, 2, 4),
+        (1, 2, 3)
+      )
+      val schema = StructType(Array(
+        StructField("a", IntegerType, true),
+        StructField("b", IntegerType, true),
+        StructField("c", IntegerType, true)
+      ))
+
+      val df = spark.createDataFrame(spark.sparkContext.parallelize(data).map {
+        case (a, b, c) => Row(a, b, c)
+      }, schema)
+
+      df.write
+        .options(hudiOptions)
+        .format("hudi")
+        .mode("append")
+        .save(s"$basePath")
+
+      assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath')").count())
+      assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath', limit => 1)").count())
+      assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath', limit => 2)").count())
     }
   }
 
