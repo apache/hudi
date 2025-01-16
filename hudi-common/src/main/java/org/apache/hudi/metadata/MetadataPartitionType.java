@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.index.expression.HoodieExpressionIndex;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -84,6 +85,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_REC
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_IS_DELETED;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsRecords;
@@ -181,7 +183,7 @@ public enum MetadataPartitionType {
           recordIndexPosition != null ? Long.parseLong(recordIndexPosition.toString()) : null);
     }
   },
-  EXPRESSION_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
+  EXPRESSION_INDEX(PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
       return getBooleanWithAltKeys(writeConfig, EXPRESSION_INDEX_ENABLE_PROP);
@@ -191,7 +193,7 @@ public enum MetadataPartitionType {
     public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
       if (metaClient.getIndexMetadata().isPresent()) {
         return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
-            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX));
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(PARTITION_NAME_EXPRESSION_INDEX_PREFIX));
       }
       return false;
     }
@@ -475,7 +477,7 @@ public enum MetadataPartitionType {
   }
 
   /**
-   * Given metadata config and table config, determine whether a new index definition is required.
+   * Given metadata config and table config, determine whether a new secondary index definition is required.
    */
   public static boolean isNewSecondaryIndexDefinitionRequired(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
     String secondaryIndexColumn = metadataConfig.getSecondaryIndexColumn();
@@ -484,6 +486,30 @@ public enum MetadataPartitionType {
     }
     // check the index definition already exists or not for this column
     return dataMetaClient.getIndexMetadata().isEmpty() || !isIndexDefinitionPresentForColumn(secondaryIndexColumn, PARTITION_NAME_SECONDARY_INDEX, dataMetaClient);
+  }
+
+  /**
+   * Given metadata config and table config, determine whether a new expression index definition is required.
+   */
+  public static boolean isNewExpressionIndexDefinitionRequired(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
+    String expressionIndexColumn = metadataConfig.getExpressionIndexColumn();
+    if (StringUtils.isNullOrEmpty(expressionIndexColumn)) {
+      return false;
+    }
+
+    // check that expr is present in index options
+    Map<String, String> expressionIndexOptions = metadataConfig.getExpressionIndexOptions();
+    if (expressionIndexOptions.isEmpty()) {
+      return false;
+    }
+
+    String expression = expressionIndexOptions.get(HoodieExpressionIndex.EXPRESSION_OPTION);
+    if (StringUtils.isNullOrEmpty(expression)) {
+      return false;
+    }
+
+    // check the index definition already exists or not for this expression
+    return dataMetaClient.getIndexMetadata().isEmpty() || !isIndexDefinitionPresentForColumn(expressionIndexColumn, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, dataMetaClient);
   }
 
   private static boolean isIndexDefinitionPresentForColumn(String indexedColumn, String indexType, HoodieTableMetaClient dataMetaClient) {
