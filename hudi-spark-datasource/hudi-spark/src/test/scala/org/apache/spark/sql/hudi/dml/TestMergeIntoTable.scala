@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceReadOptions, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -1542,23 +1542,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | """.stripMargin
 
         checkExceptionContain(sqlStatement1)(
-          getExpectedExceptionMessage("new_col", targetTableFields))
+          getExpectedUnresolvedColumnExceptionMessage("new_col", targetTableFields))
         checkExceptionContain(sqlStatement2)(
-          getExpectedExceptionMessage("s0.new_col", sourceTableFields ++ targetTableFields))
+          getExpectedUnresolvedColumnExceptionMessage("s0.new_col", sourceTableFields ++ targetTableFields))
       }
-    }
-  }
-
-  private def getExpectedExceptionMessage(columnName: String,
-                                          fieldNameTuples: Seq[(String, String, String)]): String = {
-    val fieldNames = fieldNameTuples.sortBy(e => (e._1, e._2))
-      .map(e => e._3).mkString("[", ", ", "]")
-    if (HoodieSparkUtils.gteqSpark3_5) {
-      "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
-        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
-    } else {
-      s"cannot resolve $columnName in MERGE command given columns $fieldNames" +
-        (if (HoodieSparkUtils.gteqSpark3_4) "." else "")
     }
   }
 
@@ -1599,10 +1586,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(2, "a2", 20.0, 1002, "2024-01-14")
         )
 
-        val fieldNames = spark.sql(s"select * from $tableName").schema.fields
-          .map(e => s"spark_catalog.default.$tableName.${e.name}")
-          .sortBy(s => s)
-          .mkString("[", ", ", "]")
         val sqlStatement1 =
           s"""
              | merge into $tableName
@@ -1616,13 +1599,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | id = s0._id, dt = s0.dt, name = s0.name, price = s0._price + $tableName.price,
              | ts = s0._ts, new_col = s0.new_col
              | """.stripMargin
-        val expectedExceptionMessage = if (HoodieSparkUtils.gteqSpark3_5) {
-          "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
-            s"new_col cannot be resolved. Did you mean one of the following? $fieldNames."
-        } else {
-          s"cannot resolve new_col in MERGE command given columns $fieldNames."
-        }
-        checkExceptionContain(sqlStatement1)(expectedExceptionMessage)
+
+        checkExceptionContain(sqlStatement1)(
+          getExpectedUnresolvedColumnExceptionMessage("new_col", tableName))
         validateTableSchema(tableName, structFields)
 
         spark.sql(

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
@@ -246,24 +246,14 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
       // Partial updates using MERGE INTO statement with changed fields: "price", "_ts", "new_col"
       // This throws an error since the "UPDATE SET" clause contains the new column
-      val fieldNames = spark.sql(s"select * from $tableName").schema.fields
-        .map(e => s"t0.${e.name}")
-        .sortBy(s => s)
-        .mkString("[", ", ", "]")
-      val expectedExceptionMessage = if (HoodieSparkUtils.gteqSpark3_5) {
-        "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
-          s"new_col cannot be resolved. Did you mean one of the following? $fieldNames."
-      } else {
-        s"cannot resolve new_col in MERGE command given columns $fieldNames."
-      }
       checkExceptionContain(
         s"""
-           |merge into $tableName t0
+           |merge into $tableName
            |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as ts, 'x' as new_col
            |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as ts, 'y' as new_col) s0
-           |on t0.id = s0.id
+           |on $tableName.id = s0.id
            |when matched then update set price = s0.price, _ts = s0.ts, new_col = s0.new_col
-           |""".stripMargin)(expectedExceptionMessage)
+           |""".stripMargin)(getExpectedUnresolvedColumnExceptionMessage("new_col", tableName))
     }
   }
 

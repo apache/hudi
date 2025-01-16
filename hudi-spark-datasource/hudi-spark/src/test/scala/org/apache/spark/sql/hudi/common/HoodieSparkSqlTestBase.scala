@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.DefaultSparkRecordMerger
+import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord}
@@ -244,6 +244,26 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + getRootCause(f).getMessage, f)
     }
     assertResult(true)(hasException)
+  }
+
+  protected def getExpectedUnresolvedColumnExceptionMessage(columnName: String,
+                                                            targetTableName: String): String = {
+    val targetTableFields = spark.sql(s"select * from $targetTableName").schema.fields
+      .map(e => (e.name, targetTableName, s"spark_catalog.default.$targetTableName.${e.name}"))
+    getExpectedUnresolvedColumnExceptionMessage(columnName, targetTableFields)
+  }
+
+  protected def getExpectedUnresolvedColumnExceptionMessage(columnName: String,
+                                                            fieldNameTuples: Seq[(String, String, String)]): String = {
+    val fieldNames = fieldNameTuples.sortBy(e => (e._1, e._2))
+      .map(e => e._3).mkString("[", ", ", "]")
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
+        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
+    } else {
+      s"cannot resolve $columnName in MERGE command given columns $fieldNames" +
+        (if (HoodieSparkUtils.gteqSpark3_4) "." else "")
+    }
   }
 
   protected def validateTableSchema(tableName: String,
