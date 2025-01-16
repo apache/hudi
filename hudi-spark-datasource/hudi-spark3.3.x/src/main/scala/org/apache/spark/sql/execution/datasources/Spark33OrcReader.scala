@@ -17,41 +17,50 @@
  * under the License.
  */
 
-package org.apache.spark.sql.execution.datasources.orc
+package org.apache.spark.sql.execution.datasources
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hadoop.mapreduce.lib.input.FileSplit
+import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
+import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.orc.{OrcFile, Reader, TypeDescription}
-import org.apache.parquet.hadoop.ParquetInputFormat
+import org.apache.orc.mapred.OrcStruct
+import org.apache.orc.mapreduce.OrcInputFormat
+import org.apache.orc.{OrcConf, OrcFile, TypeDescription}
+import org.apache.spark.TaskContext
+import org.apache.spark.memory.MemoryMode
+import org.apache.spark.sql.HoodieSpark33SchemaUtils.toAttributes
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.{FileFormat, PartitionedFile}
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetOptions, ParquetReadSupport, SparkFileReader, SparkFileReaderBase, SparkOrcReaderBuilder, SparkParquetReaderBuilder}
-import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector
+import org.apache.spark.sql.catalyst.expressions.JoinedRow
+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
+import org.apache.spark.sql.execution.datasources.orc._
+import org.apache.spark.sql.execution.datasources.parquet._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, ShortType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
-
-import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter}
+import org.apache.spark.util.Utils
 
 class Spark33OrcReader(enableVectorizedReader: Boolean,
-                         datetimeRebaseModeInRead: String,
-                         int96RebaseModeInRead: String,
-                         enableParquetFilterPushDown: Boolean,
-                         pushDownDate: Boolean,
-                         pushDownTimestamp: Boolean,
-                         pushDownDecimal: Boolean,
-                         pushDownInFilterThreshold: Int,
-                         isCaseSensitive: Boolean,
-                         timestampConversion: Boolean,
-                         enableOffHeapColumnVector: Boolean,
-                         capacity: Int,
-                         returningBatch: Boolean,
-                         enableRecordFilter: Boolean,
-                         timeZoneId: Option[String]) extends SparkFileReaderBase(
+                       datetimeRebaseModeInRead: String,
+                       int96RebaseModeInRead: String,
+                       enableParquetFilterPushDown: Boolean,
+                       pushDownDate: Boolean,
+                       pushDownTimestamp: Boolean,
+                       pushDownDecimal: Boolean,
+                       pushDownInFilterThreshold: Int,
+                       isCaseSensitive: Boolean,
+                       timestampConversion: Boolean,
+                       enableOffHeapColumnVector: Boolean,
+                       capacity: Int,
+                       returningBatch: Boolean,
+                       enableRecordFilter: Boolean,
+                       timeZoneId: Option[String],
+                       ignoreCorruptFiles: Boolean,
+                       orcFilterPushDown: Boolean,
+                       memoryMode: MemoryMode) extends SparkFileReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
   pushDownDate = pushDownDate,
@@ -65,6 +74,7 @@ class Spark33OrcReader(enableVectorizedReader: Boolean,
   returningBatch = returningBatch,
   enableRecordFilter = enableRecordFilter,
   timeZoneId = timeZoneId) {
+
   /**
    * Implemented for each spark version
    *
@@ -82,72 +92,74 @@ class Spark33OrcReader(enableVectorizedReader: Boolean,
                                 internalSchemaOpt: util.Option[InternalSchema],
                                 filters: Seq[Filter],
                                 sharedConf: Configuration): Iterator[InternalRow] = {
-    val path = new Path(file.filePath)
-    val reader: Reader = OrcFile.createReader(path, OrcFile.readerOptions(sharedConf))
+    val filePath = new Path(file.filePath)
+    val fs = filePath.getFileSystem(sharedConf)
+    val readerOptions = OrcFile.readerOptions(sharedConf).filesystem(fs)
+    val orcSchema =
+      Utils.tryWithResource(OrcFile.createReader(filePath, readerOptions))(_.getSchema)
+    val resultedColPruneInfo = OrcUtils.requestedColumnIds(
+      isCaseSensitive, requiredSchema, requiredSchema, orcSchema, sharedConf)
 
-    // Create the row batch
-    val schema = reader.getSchema
-    val options = reader.options()
-    val rows = reader.rows(options)
-    val batch = schema.createRowBatch()
-
-    // ColumnarBatch to hold rows
-    val sparkBatch = new ColumnarBatch(
-      schema.getChildren.asScala.map { field =>
-        new OnHeapColumnVector(batch.size, orcTypeToSparkType(field))
-      }.toArray
-    )
-
-    new Iterator[InternalRow] {
-      private var hasMoreRows = rows.nextBatch(batch)
-
-      override def hasNext: Boolean = hasMoreRows
-
-      override def next(): InternalRow = {
-        if (hasMoreRows) {
-          val row = sparkBatch.rowIterator.asScala.next()
-          if (!sparkBatch.rowIterator.asScala.hasNext) {
-            hasMoreRows = rows.nextBatch(batch)
-          }
-          row
-        } else {
-          throw new NoSuchElementException("No more rows available.")
+    if (resultedColPruneInfo.isEmpty) {
+      Iterator.empty
+    } else {
+      // ORC predicate pushdown
+      if (orcFilterPushDown && filters.nonEmpty) {
+        val fileSchema = OrcUtils.toCatalystSchema(orcSchema)
+        OrcFilters.createFilter(fileSchema, filters).foreach { f =>
+          OrcInputFormat.setSearchArgument(sharedConf, f, fileSchema.fieldNames)
         }
       }
-    }
-  }
 
-  def orcTypeToSparkType(orcType: TypeDescription): DataType = {
-    orcType.getCategory match {
-      case TypeDescription.Category.BOOLEAN => BooleanType
-      case TypeDescription.Category.BYTE => ByteType
-      case TypeDescription.Category.SHORT => ShortType
-      case TypeDescription.Category.INT => IntegerType
-      case TypeDescription.Category.LONG => LongType
-      case TypeDescription.Category.FLOAT => FloatType
-      case TypeDescription.Category.DOUBLE => DoubleType
-      case TypeDescription.Category.STRING => StringType
-      case TypeDescription.Category.CHAR => StringType
-      case TypeDescription.Category.VARCHAR => StringType
-      case TypeDescription.Category.DATE => DateType
-      case TypeDescription.Category.TIMESTAMP => TimestampType
-      case TypeDescription.Category.DECIMAL => DecimalType(orcType.getPrecision, orcType.getScale)
-      case TypeDescription.Category.BINARY => BinaryType
-      case TypeDescription.Category.LIST =>
-        ArrayType(orcTypeToSparkType(orcType.getChildren.get(0)))
-      case TypeDescription.Category.MAP =>
-        MapType(
-          orcTypeToSparkType(orcType.getChildren.get(0)),
-          orcTypeToSparkType(orcType.getChildren.get(1))
-        )
-      case TypeDescription.Category.STRUCT =>
-        StructType(
-          orcType.getFieldNames.asScala.zip(orcType.getChildren.asScala).map {
-            case (name, childType) => StructField(name, orcTypeToSparkType(childType))
-          }
-        )
-      case _ =>
-        throw new IllegalArgumentException(s"Unsupported ORC type: ${orcType.getCategory}")
+      val (requestedColIds, canPruneCols) = resultedColPruneInfo.get
+      val resultSchemaString = OrcUtils.orcResultSchemaString(canPruneCols,
+        requiredSchema, requiredSchema, partitionSchema, sharedConf)
+      assert(requestedColIds.length == requiredSchema.length,
+        "[BUG] requested column IDs do not match required schema")
+      val taskConf = new Configuration(sharedConf)
+
+      val includeColumns = requestedColIds.filter(_ != -1).sorted.mkString(",")
+      taskConf.set(OrcConf.INCLUDE_COLUMNS.getAttribute, includeColumns)
+      val fileSplit = new FileSplit(filePath, file.start, file.length, Array.empty)
+      val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
+      val taskAttemptContext = new TaskAttemptContextImpl(taskConf, attemptId)
+
+      if (enableVectorizedReader) {
+        val batchReader = new OrcColumnarBatchReader(capacity)
+        // SPARK-23399 Register a task completion listener first to call `close()` in all cases.
+        // There is a possibility that `initialize` and `initBatch` hit some errors (like OOM)
+        // after opening a file.
+        val iter = new RecordReaderIterator(batchReader)
+        Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
+        val requestedDataColIds = requestedColIds ++ Array.fill(partitionSchema.length)(-1)
+        val requestedPartitionColIds =
+          Array.fill(requiredSchema.length)(-1) ++ Range(0, partitionSchema.length)
+        batchReader.initialize(fileSplit, taskAttemptContext)
+        batchReader.initBatch(
+          TypeDescription.fromString(resultSchemaString),
+          requiredSchema.fields,
+          requestedDataColIds,
+          requestedPartitionColIds,
+          file.partitionValues)
+
+        iter.asInstanceOf[Iterator[InternalRow]]
+      } else {
+        val orcRecordReader = new OrcInputFormat[OrcStruct].createRecordReader(fileSplit, taskAttemptContext)
+        val iter = new RecordReaderIterator[OrcStruct](orcRecordReader)
+        Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
+
+        val fullSchema = toAttributes(requiredSchema) ++ toAttributes(partitionSchema)
+        val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+        val deserializer = new OrcDeserializer(requiredSchema, requestedColIds)
+
+        if (partitionSchema.length == 0) {
+          iter.map(value => unsafeProjection(deserializer.deserialize(value)))
+        } else {
+          val joinedRow = new JoinedRow()
+          iter.map(value =>
+            unsafeProjection(joinedRow(deserializer.deserialize(value), file.partitionValues)))
+        }
+      }
     }
   }
 }
@@ -166,31 +178,27 @@ object Spark33OrcReader extends SparkOrcReaderBuilder {
             sqlConf: SQLConf,
             options: Map[String, String],
             hadoopConf: Configuration): SparkFileReader = {
-    //set hadoopconf
-    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
+    // Set hadoopconf
     hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
     hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
     hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis)
-    hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, sqlConf.isParquetBinaryAsString)
-    hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, sqlConf.isParquetINT96AsTimestamp)
-    // Using string value of this conf to preserve compatibility across spark versions. See [HUDI-5868]
-    hadoopConf.setBoolean(
-      SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
-      sqlConf.getConfString(
-        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
-        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.defaultValueString).toBoolean
-    )
-
-    val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
+    val enableVectorizedReader = sqlConf.orcVectorizedReaderEnabled &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
           throw new IllegalArgumentException(
-            "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
-              "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false."))
+            "OPTION_RETURNING_BATCH should always be set for OrcFileFormat. " +
+              "To workaround this issue, set spark.sql.orc.enableVectorizedReader=false."))
         .equals("true")
+    val memoryMode = if (sqlConf.offHeapColumnVectorEnabled) {
+      MemoryMode.OFF_HEAP
+    } else {
+      MemoryMode.ON_HEAP
+    }
+    OrcConf.IS_SCHEMA_EVOLUTION_CASE_SENSITIVE.setBoolean(hadoopConf, sqlConf.caseSensitiveAnalysis)
+    val orcFilterPushDown = sqlConf.orcFilterPushDown
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
     new Spark33OrcReader(
-      enableVectorizedReader = vectorized,
+      enableVectorizedReader = enableVectorizedReader,
       datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
       int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,
       enableParquetFilterPushDown = sqlConf.parquetFilterPushDown,
@@ -202,9 +210,11 @@ object Spark33OrcReader extends SparkOrcReaderBuilder {
       timestampConversion = sqlConf.isParquetINT96TimestampConversion,
       enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled,
       capacity = sqlConf.parquetVectorizedReaderBatchSize,
-      returningBatch = returningBatch,
+      returningBatch = enableVectorizedReader,
       enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
-      timeZoneId = Some(sqlConf.sessionLocalTimeZone))
+      timeZoneId = Some(sqlConf.sessionLocalTimeZone),
+      ignoreCorruptFiles = true,
+      orcFilterPushDown = orcFilterPushDown,
+      memoryMode = memoryMode)
   }
 }
-
