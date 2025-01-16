@@ -71,6 +71,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.HoodieIndexer.DROP_INDEX;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
@@ -177,6 +178,41 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // build indexer config which has only files enabled
     indexMetadataPartitionsAndAssert(RECORD_INDEX, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName,
         "streamer-config/indexer-record-index.properties");
+  }
+
+  /**
+   * Test indexer for RLI and secondary index.
+   */
+  @Test
+  public void testIndexerForSecondaryIndex() {
+    String tableName = "indexer_test_rli_si";
+    // enable files and bloom_filters only with the regular write client
+    HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withAsyncIndex(false).withMetadataIndexColumnStats(false);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
+
+    // validate table config
+    metaClient = reload(metaClient);
+    assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
+
+    // build RLI
+    indexMetadataPartitionsAndAssert(RECORD_INDEX, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName,
+        "streamer-config/indexer-record-index.properties");
+    // rebuild metadata config with secondary index name and indexed column
+    String indexName = "idx_name";
+    /*metadataConfigBuilder = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withAsyncIndex(false).withMetadataIndexColumnStats(false)
+        .withSecondaryIndexName(indexName)
+        .withSecondaryIndexForColumn("name");
+    upsertToTable(metadataConfigBuilder.build(), tableName);*/
+
+    // build SI
+    indexMetadataPartitionsAndAssert(SECONDARY_INDEX, Arrays.asList(new MetadataPartitionType[] {FILES, RECORD_INDEX}),
+        Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName, "streamer-config/indexer-secondary-index.properties");
+    // validate the secondary index is built
+    assertTrue(metadataPartitionExists(basePath(), context(), SECONDARY_INDEX.getPartitionPath(metaClient, indexName)));
   }
 
   /**

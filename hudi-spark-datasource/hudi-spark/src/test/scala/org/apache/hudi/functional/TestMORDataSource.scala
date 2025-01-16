@@ -32,6 +32,8 @@ import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.index.HoodieIndex.IndexType
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists
+import org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
@@ -1524,5 +1526,60 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(3, timeTravelDF.count())
     // deleted record should still show in time travel view
     assertEquals(1, timeTravelDF.where(s"_row_key = '$recordKey'").count())
+  }
+
+  /**
+   * Test Secondary Index creation through datasource and metadata write configs.
+   *
+   * 1. Insert a batch of data with record_index enabled.
+   * 2. Upsert another batch of data with secondary index configs.
+   * 3. Validate that secondary index is created.
+   */
+  @Test
+  def testSecondaryIndexCreation(): Unit = {
+    var (writeOpts, readOpts) = getWriterReaderOpts()
+    writeOpts = writeOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key -> "0",
+      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true",
+      HoodieIndexConfig.INDEX_TYPE.key -> IndexType.RECORD_INDEX.name()
+    )
+    readOpts = readOpts ++ Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+    )
+    initMetaClient(HoodieTableType.MERGE_ON_READ)
+    // Create a MOR table and add 10 records to the table.
+    val records = recordsToStrings(dataGen.generateInserts("000", 3)).asScala.toSeq
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 10))
+    inputDF.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshotDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    assertEquals(10, snapshotDF.count())
+
+    // Upsert another batch with secondary index configs
+    val secondaryIndexName = "idx_name"
+    val secondaryIndexColumn = "name"
+    writeOpts = writeOpts ++ Map(
+      HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key -> "true",
+      HoodieMetadataConfig.SECONDARY_INDEX_NAME.key -> secondaryIndexName,
+      HoodieMetadataConfig.SECONDARY_INDEX_COLUMN.key -> secondaryIndexColumn
+    )
+    val records2 = recordsToStrings(dataGen.generateInserts("001", 3)).asScala.toSeq
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 10))
+    inputDF2.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // validate that secondary index is created
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    // validate the secondary index is built
+    assertTrue(metadataPartitionExists(basePath, context, SECONDARY_INDEX.getPartitionPath(metaClient, secondaryIndexName)))
+    assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(SECONDARY_INDEX.getPartitionPath(metaClient, secondaryIndexName)))
   }
 }
