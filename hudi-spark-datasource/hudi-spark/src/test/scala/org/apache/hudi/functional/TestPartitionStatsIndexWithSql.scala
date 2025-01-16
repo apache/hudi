@@ -30,7 +30,7 @@ import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartition
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GreaterThan, LessThan, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, LessThan, Literal, Or}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, StringType}
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
@@ -261,6 +261,32 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")),
           HoodieTableMetaClient.reload(metaClient),
           isDataSkippingExpected = true)
+        // if we predicate on a col which is not indexed, we expect full scan.
+        verifyFilePruning(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O")),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = false)
+
+        // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `AND` operator
+        verifyFilePruning(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          And(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = true) // pruning should happen
+
+        // if we predicate on two cols, one of which is indexed, while the other is not indexed. and using `OR` operator
+        verifyFilePruning(
+          Map(
+            DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+            HoodieMetadataConfig.ENABLE.key -> "true"),
+          Or(GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")), GreaterThan(AttributeReference("driver", StringType)(), Literal("driver-O"))),
+          HoodieTableMetaClient.reload(metaClient),
+          isDataSkippingExpected = false)
 
         // Test predicate that does not match any partition, should scan no files
         checkAnswer(s"select uuid, rider, city, state from $tableName where rider > 'rider-Z'")()

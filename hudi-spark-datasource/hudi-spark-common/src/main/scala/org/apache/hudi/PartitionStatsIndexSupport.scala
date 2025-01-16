@@ -31,6 +31,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_ST
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types.StructType
@@ -103,11 +104,16 @@ class PartitionStatsIndexSupport(spark: SparkSession,
               val indexedCols: Seq[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSeq
               // to be fixed. HUDI-8836.
               val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = indexedCols)).reduce(And)
-              Some(transposedPartitionStatsDF.where(new Column(indexFilter))
-                .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-                .collect()
-                .map(_.getString(0))
-                .toSet)
+              if (indexFilter.equals(TrueLiteral)) {
+                // if there are any non indexed cols or we can't translate source expr, we can prune partitions based on col stats lookup.
+                Some(allPartitions)
+              } else {
+                Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                  .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                  .collect()
+                  .map(_.getString(0))
+                  .toSet)
+              }
             } else {
               // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
               Option.empty
