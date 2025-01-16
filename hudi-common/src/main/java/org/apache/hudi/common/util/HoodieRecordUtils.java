@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OperationModeAwareness;
-import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -78,14 +77,14 @@ public class HoodieRecordUtils {
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
                                                       List<String> mergerClassList, String recordMergerStrategy) {
-    HoodieRecordMerger defaultMerger = (recordMergerStrategy == null || recordMergerStrategy.equals(HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID))
-        ? HoodieAvroRecordMerger.INSTANCE : OverwriteWithLatestMerger.INSTANCE;
-
+    // Currently we fall back to `HoodieAvroRecordMerger` (event time based) even the specified merger strategy
+    // is commit time based. This behavior has been treated as the norm in Hudi.
+    // TODO: evaluate the impact of this behavior and unify/simplify merge behavior in Hudi repo.
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
-      return defaultMerger;
+      return HoodieAvroRecordMerger.INSTANCE;
     } else {
       return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
-          .orElse(defaultMerger);
+          .orElse(HoodieAvroRecordMerger.INSTANCE);
     }
   }
 
