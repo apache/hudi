@@ -78,7 +78,7 @@ public class HoodieRecordUtils {
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
                                                       List<String> mergerClassList, String recordMergerStrategy) {
-    HoodieRecordMerger defaultMerger = recordMergerStrategy.equals(HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID)
+    HoodieRecordMerger defaultMerger = (recordMergerStrategy == null || recordMergerStrategy.equals(HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID))
         ? HoodieAvroRecordMerger.INSTANCE : OverwriteWithLatestMerger.INSTANCE;
 
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
