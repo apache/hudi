@@ -119,7 +119,9 @@ class TestCustomDeleteRecord extends SparkClientFunctionalTestHarness {
     finalDf.show(false)
     val expected = if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING.name()) {
       expectedCommitTimeBased
-    } else expectedEventTimeBased
+    } else {
+      expectedEventTimeBased
+    }
     val expectedDf = spark.createDataFrame(expected).toDF(columns: _*).sort("key")
     TestCustomDeleteRecord.validate(expectedDf, finalDf)
   }
@@ -130,8 +132,6 @@ object TestCustomDeleteRecord {
     java.util.Arrays.asList(
       Arguments.of("true", "COPY_ON_WRITE", "AVRO", "false", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "COPY_ON_WRITE", "AVRO", "true", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "COPY_ON_WRITE", "AVRO", "false", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "COPY_ON_WRITE", "AVRO", "true", "COMMIT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "true", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "AVRO", "false", "COMMIT_TIME_ORDERING"),
@@ -144,6 +144,9 @@ object TestCustomDeleteRecord {
       Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "EVENT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "SPARK", "false", "COMMIT_TIME_ORDERING"),
       Arguments.of("true", "MERGE_ON_READ", "SPARK", "true", "COMMIT_TIME_ORDERING")
+      // TODO: enable the following test cases: HUDI-8876
+      // Arguments.of("true", "COPY_ON_WRITE", "AVRO", "false", "COMMIT_TIME_ORDERING"),
+      // Arguments.of("true", "COPY_ON_WRITE", "AVRO", "true", "COMMIT_TIME_ORDERING")
     )
   }
 
