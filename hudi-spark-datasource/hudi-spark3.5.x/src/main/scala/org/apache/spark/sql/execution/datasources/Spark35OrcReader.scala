@@ -218,4 +218,3 @@ object Spark35OrcReader extends SparkOrcReaderBuilder {
       memoryMode = memoryMode)
   }
 }
-
