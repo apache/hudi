@@ -1503,6 +1503,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCleanConfig.CLEANER_ROLLBACK_ONLY);
   }
 
+  public boolean parallelizePartitionCleaning() {
+    return getBoolean(HoodieCleanConfig.CLEANER_PARALLELIZE_PARTITION_CLEANING);
+  }
+
   public int getMaxCommitsToKeep() {
     return getInt(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP);
   }

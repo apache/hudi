@@ -56,6 +56,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 /**
@@ -63,7 +65,7 @@ import scala.Tuple2;
  */
 @ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
-
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkEngineContext.class);
   private final JavaSparkContext javaSparkContext;
   private final SQLContext sqlContext;
   private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
@@ -128,7 +130,9 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   public <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(
       Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
       SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
-    return javaSparkContext.parallelize(data.collect(Collectors.toList()), parallelism)
+    List<I> pathsToProcess = data.collect(Collectors.toList());
+    LOG.info("***--- There are " + pathsToProcess.size() + " partition paths to process");
+    return javaSparkContext.parallelize(pathsToProcess, parallelism)
         .mapPartitionsToPair((PairFlatMapFunction<Iterator<I>, K, V>) iterator ->
             flatMapToPairFunc.call(iterator).collect(Collectors.toList()).stream()
                 .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator()

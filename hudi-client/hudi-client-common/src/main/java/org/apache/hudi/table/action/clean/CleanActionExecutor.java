@@ -75,17 +75,17 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   private static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr) throws IOException {
     Path deletePath = new Path(deletePathStr);
-    LOG.debug("Working on delete path :" + deletePath);
+    LOG.info("***--- Working on delete path :" + deletePath);
     try {
       boolean isDirectory = fs.isDirectory(deletePath);
       boolean deleteResult = fs.delete(deletePath, isDirectory);
       if (deleteResult) {
-        LOG.debug("Cleaned file at path :" + deletePath);
+        LOG.info("***--- Cleaned file at path :" + deletePath);
       } else {
         if (fs.exists(deletePath)) {
           throw new HoodieIOException("Failed to delete path during clean execution " + deletePath);
         } else {
-          LOG.debug("Already cleaned up file at path :" + deletePath);
+          LOG.info("***--- Already cleaned up file at path :" + deletePath);
         }
       }
       return deleteResult;
@@ -101,12 +101,12 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
     cleanFileInfo.forEachRemaining(partitionDelFileTuple -> {
       String partitionPath = partitionDelFileTuple.getLeft();
+      LOG.info("***--- Partition path: " + partitionPath);
       Path deletePath = new Path(partitionDelFileTuple.getRight().getFilePath());
       String deletePathStr = deletePath.toString();
       boolean deletedFileResult = false;
       try {
         deletedFileResult = deleteFileAndGetResult(fs, deletePathStr);
-
       } catch (IOException e) {
         LOG.error("Delete file failed: " + deletePathStr, e);
       }
@@ -138,7 +138,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of table: " + config.getTableName());
+    context.setJobStatus(this.getClass().getSimpleName(), "Cleaning data files for table: " + config.getTableName());
 
     Stream<Pair<String, CleanFileInfo>> filesToBeDeletedPerPartition =
         cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
@@ -149,22 +149,34 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         context.mapPartitionsToPairAndReduceByKey(filesToBeDeletedPerPartition,
             iterator -> deleteFilesFunc(iterator, table), PartitionCleanStat::merge, cleanerParallelism);
 
+    LOG.info("Collecting cleaner stats");
     Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     List<String> partitionsToBeDeleted = table.getMetaClient().getTableConfig().isTablePartitioned() && cleanerPlan.getPartitionsToBeDeleted() != null
         ? cleanerPlan.getPartitionsToBeDeleted()
         : new ArrayList<>();
-    partitionsToBeDeleted.forEach(entry -> {
-      try {
-        if (!isNullOrEmpty(entry)) {
-          deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
-              table.getMetaClient().getBasePath() + "/" + entry);
+    LOG.info("***--- metaclient partitions to be deleted: " + partitionsToBeDeleted.size());
+    if (config.parallelizePartitionCleaning()) {
+      LOG.info("***--- Parallelizing partition deletes");
+      context.setJobStatus(this.getClass().getSimpleName(), "Cleaning partitions for table: " + config.getTableName());
+      context.foreach(
+          partitionsToBeDeleted,
+          partitionPath -> deletePartitionsFunc(partitionPath, table),
+          cleanerParallelism);
+    } else {
+      LOG.info("***--- Processing partition deletes on driver");
+      partitionsToBeDeleted.forEach(entry -> {
+        try {
+          if (!isNullOrEmpty(entry)) {
+            deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
+                    table.getMetaClient().getBasePath() + "/" + entry);
+          }
+        } catch (IOException e) {
+          LOG.warn("Partition deletion failed " + entry);
         }
-      } catch (IOException e) {
-        LOG.warn("Partition deletion failed " + entry);
-      }
-    });
+      });
+    }
 
     // Return PartitionCleanStat for each partition passed.
     return cleanerPlan.getFilePathsToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
@@ -190,6 +202,16 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     }).collect(Collectors.toList());
   }
 
+  private void deletePartitionsFunc(String path, HoodieTable<T, I, K, O> table) {
+    try {
+      if (!isNullOrEmpty(path)) {
+        deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
+                table.getMetaClient().getBasePath() + "/" + path);
+      }
+    } catch (IOException e) {
+      LOG.warn("Partition deletion failed " + path);
+    }
+  }
 
   /**
    * Executes the Cleaner plan stored in the instant metadata.
@@ -252,6 +274,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     // If there are inflight(failed) or previously requested clean operation, first perform them
     List<HoodieInstant> pendingCleanInstants = table.getCleanTimeline()
         .filterInflightsAndRequested().getInstants();
+    LOG.info("***--- found {} pending clean instants.", pendingCleanInstants.size());
     if (pendingCleanInstants.size() > 0) {
       // try to clean old history schema.
       try {
