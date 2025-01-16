@@ -690,7 +690,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   class UpdateThread(dataGen: HoodieTestDataGenerator, spark: SparkSession, commonOpts: Map[String, String], basePath: String,
                      instantTime: String, countDownLatch: CountDownLatch, numRetries: Integer = 0) extends Runnable {
     override def run() {
-      val updateRecs = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 500)).asScala.toList
+      val updateRecs = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 550)).asScala.toList
       val insertRecs = recordsToStrings(dataGen.generateInserts(instantTime, 1000)).asScala.toList
       val updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecs, 2))
       val insertDf = spark.read.json(spark.sparkContext.parallelize(insertRecs, 2))
