@@ -85,6 +85,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -242,17 +243,18 @@ public class HoodieTableMetadataUtil {
       // For each column (field) we have to index update corresponding column stats
       // with the values from this record
       targetFields.forEach(fieldNameFieldPair -> {
-        ColumnStats colStats = allColumnStats.computeIfAbsent(fieldNameFieldPair.getKey(), ignored -> new ColumnStats());
+        String fieldName = fieldNameFieldPair.getKey();
         Schema fieldSchema = fieldNameFieldPair.getValue().schema();
+        ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats());
         Object fieldValue;
         if (record.getRecordType() == HoodieRecordType.AVRO) {
-          fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldNameFieldPair.getKey()}, recordSchema, false)[0];
+          fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
           if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
             fieldValue = java.sql.Date.valueOf(fieldValue.toString());
           }
 
         } else if (record.getRecordType() == HoodieRecordType.SPARK) {
-          fieldValue = record.getColumnValues(recordSchema, new String[]{fieldNameFieldPair.getKey()}, false)[0];
+          fieldValue = record.getColumnValues(recordSchema, new String[]{fieldName}, false)[0];
           if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
             fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
           }
@@ -279,10 +281,11 @@ public class HoodieTableMetadataUtil {
 
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
         targetFields.stream().map(fieldNameFieldPair -> {
-          ColumnStats colStats = allColumnStats.get(fieldNameFieldPair.getKey());
+          String fieldName = fieldNameFieldPair.getKey();
+          ColumnStats colStats = allColumnStats.get(fieldName);
           HoodieColumnRangeMetadata<Comparable> hcrm = HoodieColumnRangeMetadata.<Comparable>create(
               filePath,
-              fieldNameFieldPair.getKey(),
+              fieldName,
               colStats == null ? null : coerceToComparable(fieldNameFieldPair.getValue().schema(), colStats.minValue),
               colStats == null ? null : coerceToComparable(fieldNameFieldPair.getValue().schema(), colStats.maxValue),
               colStats == null ? 0L : colStats.nullCount,
@@ -1547,14 +1550,19 @@ public class HoodieTableMetadataUtil {
       if (isTableInitializing) {
         return columnsToIndex.stream();
       }
+      ValidationUtils.checkArgument(isTableInitializing || tableSchemaLazyOpt.get().isPresent());
       // filter for eligible fields
       Option<Schema> tableSchema = tableSchemaLazyOpt.get();
       return columnsToIndex.stream().filter(fieldName -> !META_COL_SET_TO_INDEX.contains(fieldName))
           .filter(fieldName -> {
             if (tableSchema.isPresent()) {
-              return isColumnTypeSupported(getSchemaForField(tableSchema.get(), fieldName).getValue().schema(), recordType);
+              return isColumnTypeSupported(HoodieAvroUtils.getSchemaForField(tableSchema.get(), fieldName).getValue().schema(), recordType);
             } else {
-              return true;
+              if (isTableInitializing) {
+                return true;
+              } else {
+                throw new HoodieIOException("Table schema not found to find eligible cols to index");
+              }
             }
           });
     }
@@ -1575,25 +1583,6 @@ public class HoodieTableMetadataUtil {
 
   private static Stream<String> getFirstNFieldNames(Stream<String> fieldNames, int n) {
     return fieldNames.filter(fieldName -> !HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName)).limit(n);
-  }
-
-  @VisibleForTesting
-  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName) {
-    return getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING);
-  }
-
-  @VisibleForTesting
-  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName, String prefix) {
-    if (!fieldName.contains(".")) {
-      return Pair.of(prefix + fieldName, schema.getField(fieldName));
-    } else {
-      int rootFieldIndex = fieldName.indexOf(".");
-      Schema.Field rootField = schema.getField(fieldName.substring(0, rootFieldIndex));
-      if (rootField == null) {
-        throw new HoodieException("Failed to find " + fieldName + " in the table schema ");
-      }
-      return getSchemaForField(rootField.schema(), fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1));
-    }
   }
 
   private static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
@@ -1673,7 +1662,7 @@ public class HoodieTableMetadataUtil {
                                                                                           List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
                                                                                           int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
-      List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndex.stream().map(fieldName -> getSchemaForField(writerSchemaOpt.get(), fieldName))
+      List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndex.stream().map(fieldName -> HoodieAvroUtils.getSchemaForField(writerSchemaOpt.get(), fieldName))
           .collect(Collectors.toList());
       // read log file records without merging
       List<HoodieRecord> records = new ArrayList<>();

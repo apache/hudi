@@ -34,9 +34,9 @@ import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
-
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.generic.GenericData
+import org.apache.hudi.schema.HoodieSparkSchemaUtils
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -47,7 +47,6 @@ import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.nio.ByteBuffer
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
@@ -220,7 +219,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     //       of the transposed table
     val sortedTargetColumnsSet = TreeSet(queryColumns:_*)
 
-    val sortedTargetColDataTypeMap = sortedTargetColumnsSet.toSeq.map(fieldName => (fieldName, DataSourceUtils.getSchemaForField(tableSchema, fieldName).getValue)).toMap
+    val sortedTargetColDataTypeMap = sortedTargetColumnsSet.toSeq.map(fieldName => (fieldName, HoodieSparkSchemaUtils.getSchemaForField(tableSchema, fieldName).getValue)).toMap
 
     // NOTE: This is a trick to avoid pulling all of [[ColumnStatsIndexSupport]] object into the lambdas'
     //       closures below
@@ -406,7 +405,7 @@ object ColumnStatsIndexSupport {
     val valueCountField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT, LongType, nullable = true, Metadata.empty)
 
     val targetIndexedColumns = targetColumnNames.filter(indexedColumns.contains(_))
-    val targetIndexedFields = targetIndexedColumns.map(colName => DataSourceUtils.getSchemaForField(tableSchema, colName))
+    val targetIndexedFields = targetIndexedColumns.map(colName => HoodieSparkSchemaUtils.getSchemaForField(tableSchema, colName))
 
     (StructType(
       targetIndexedFields.foldLeft(Seq(fileNameField, valueCountField)) {

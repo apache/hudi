@@ -18,6 +18,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -26,7 +27,6 @@ import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.Row;
@@ -51,7 +51,7 @@ public class LogFileColStatsTestUtil {
                                                   int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndex.stream()
-          .map(fieldName -> HoodieTableMetadataUtil.getSchemaForField(writerSchemaOpt.get(), fieldName, ""))
+          .map(fieldName -> HoodieAvroUtils.getSchemaForField(writerSchemaOpt.get(), fieldName, ""))
           .collect(Collectors.toList());
       List<HoodieRecord> records = new ArrayList<>();
       HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
