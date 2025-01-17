@@ -41,12 +41,18 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.generic.IndexedRecord;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -62,6 +68,69 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrap
  * A java based engine context, use this implementation on the query engine integrations if needed.
  */
 public final class HoodieLocalEngineContext extends HoodieEngineContext {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLocalEngineContext.class);
+
+  // When running in Java 11+, the common ForkJoinPool's workers don't inherit the application
+  // classloader, causing ClassNotFoundExceptions. We use a custom pool whose thread factory
+  // explicitly sets the correct classloader.
+  // See: https://stackoverflow.com/questions/66240365/java-11-upgrade-from-8-parallel-streams-throws-classnotfoundexception
+  private static final ForkJoinPool FORK_JOIN_POOL = initForkJoinPool();
+
+  private static ForkJoinPool initForkJoinPool() {
+    int javaVersion = 0;
+    try {
+      String specVersion = System.getProperty("java.specification.version");
+      // Pre-Java 9: "1.X" format; Java 9+: "11", "17", "21", etc.
+      javaVersion = specVersion.startsWith("1.")
+          ? Integer.parseInt(specVersion.split("\\.")[1])
+          : Integer.parseInt(specVersion.split("\\.")[0]);
+    } catch (NumberFormatException e) {
+      // Ignore, treat as pre-11
+    }
+    ForkJoinPool commonPool = ForkJoinPool.commonPool();
+    if (javaVersion >= 11) {
+      ForkJoinPool pool = new ForkJoinPool(commonPool.getParallelism(), makeWorkerThreadFactory(), null, commonPool.getAsyncMode());
+      LOG.info("Using custom fork-join pool: java version={}, #threads={}, asyncMode={}",
+          javaVersion, pool.getParallelism(), pool.getAsyncMode());
+      return pool;
+    }
+    LOG.info("Using common fork-join pool: java version={}, #threads={}, asyncMode={}",
+        javaVersion, commonPool.getParallelism(), commonPool.getAsyncMode());
+    return commonPool;
+  }
+
+  private static ForkJoinPool.ForkJoinWorkerThreadFactory makeWorkerThreadFactory() {
+    final String prefix = "hoodie-local-engine-context-pool-worker-";
+    return pool -> {
+      final ForkJoinWorkerThread worker = ForkJoinPool.defaultForkJoinWorkerThreadFactory.newThread(pool);
+      worker.setName(prefix + worker.getPoolIndex());
+      worker.setContextClassLoader(HoodieLocalEngineContext.class.getClassLoader());
+      LOG.info("Creating worker thread {} with class loader {}", worker.getName(), worker.getContextClassLoader());
+      return worker;
+    };
+  }
+
+  /**
+   * Runs {@code func} over {@code data} in parallel using a classloader-aware ForkJoinPool.
+   * Unchecked exceptions thrown by {@code func} propagate as-is; checked exceptions are wrapped
+   * in {@link RuntimeException}.
+   */
+  public static <I, O> List<O> mapParallel(List<I> data, SerializableFunction<I, O> func) {
+    try {
+      return FORK_JOIN_POOL.submit(
+          () -> data.stream().parallel().map(throwingMapWrapper(func)).collect(toList())).get();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("map operation interrupted", e);
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof RuntimeException) {
+        throw (RuntimeException) cause;
+      }
+      throw new RuntimeException("map operation failed", cause);
+    }
+  }
 
   public HoodieLocalEngineContext(StorageConfiguration<?> conf) {
     this(conf, new LocalTaskContextSupplier());
@@ -93,7 +162,8 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
-    return data.stream().parallel().map(throwingMapWrapper(func)).collect(toList());
+    // parallelism is advisory; actual pool size is fixed at class-load time via FORK_JOIN_POOL
+    return mapParallel(data, func);
   }
 
   @Override
