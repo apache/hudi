@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.append;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
@@ -38,6 +39,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.apache.hudi.configuration.FlinkOptions.WRITE_FAIL_FAST;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -141,6 +146,9 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       this.currentInstant = instantToWrite(false);
       LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
     }
+
+    validateWriteStatus(config, currentInstant, writeStatus);
+
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .checkpointId(this.checkpointId)
@@ -161,5 +169,23 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
     writeMetrics = new FlinkStreamWriteMetrics(metrics);
     writeMetrics.registerMetrics();
+  }
+
+  static void validateWriteStatus(
+          Configuration config,
+          String currentInstant,
+          List<WriteStatus> writeStatusList) throws HoodieException {
+    if (config.get(WRITE_FAIL_FAST)) {
+      // It will early detect any write failures in each of task to prevent data loss caused by commit failure
+      // after a checkpoint is finished successfully.
+      Optional<WriteStatus> optionalWriteStatus = writeStatusList.stream().filter(ws -> !ws.getErrors().isEmpty()).findFirst();
+
+      if (optionalWriteStatus.isPresent()) {
+        WriteStatus writeStatus = optionalWriteStatus.get();
+        Map.Entry<HoodieKey, Throwable> entry = writeStatus.getErrors().entrySet().stream().findFirst().get();
+        LOG.error("The first record key {} with written failure {}", entry.getKey(), entry.getValue());
+        throw new HoodieException(String.format("Write failure happened for Instant [%s] in append write function!", currentInstant), entry.getValue());
+      }
+    }
   }
 }
