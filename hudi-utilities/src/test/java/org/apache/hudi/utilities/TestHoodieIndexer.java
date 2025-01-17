@@ -179,6 +179,36 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         "streamer-config/indexer-record-index.properties");
   }
 
+  /**
+   * Test partitions created by async indexer is not deleted by regular writers if the partition is not enabled in the regular writer config.
+   * <p>
+   * 1. Upsert with metadata enabled with default configs (RECORD_INDEX is disabled by default).
+   * 2. Run async indexer for RECORD_INDEX.
+   * 3. Upsert with metadata enabled with default configs (RECORD_INDEX is disabled by default).
+   * 4. Validate RECORD_INDEX partition is not deleted.
+   */
+  @Test
+  public void testIndexerWithDifferentIngestionWriterConfig() {
+    String tableName = "indexer_test";
+    // Step 1: upsert with metadata enabled with default configs (RECORD_INDEX is disabled by default)
+    HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder().enable(true);
+    upsertToTable(metadataConfigBuilder.build(), tableName);
+
+    // Step 2: build indexer config which has only RECORD_INDEX enabled
+    indexMetadataPartitionsAndAssert(RECORD_INDEX, Arrays.asList(new MetadataPartitionType[] {FILES, RECORD_INDEX}), Arrays.asList(new MetadataPartitionType[] {BLOOM_FILTERS}),
+        tableName, "streamer-config/indexer-record-index.properties");
+    // validate table config and metadata partitions actually exist
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(RECORD_INDEX.getPartitionPath()));
+    assertTrue(metadataPartitionExists(basePath(), context(), RECORD_INDEX.getPartitionPath()));
+
+    // Step 3: upsert with metadata enabled with default configs (RECORD_INDEX is disabled by default)
+    upsertToTable(metadataConfigBuilder.build(), tableName);
+
+    // Step 4: validate RECORD_INDEX partition is not deleted
+    assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(RECORD_INDEX.getPartitionPath()));
+    assertTrue(metadataPartitionExists(basePath(), context(), RECORD_INDEX.getPartitionPath()));
+  }
+
   @Test
   public void testIndexerWithWriterFinishingFirst() throws IOException {
     // Test the case where the indexer is running, i.e., the delta commit in the metadata table
