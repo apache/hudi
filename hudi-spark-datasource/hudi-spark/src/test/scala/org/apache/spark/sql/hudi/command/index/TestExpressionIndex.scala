@@ -1863,7 +1863,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  preCombineField = 'ts',
+             |  hoodie.metadata.index.partition.stats.enable = false
              | )
              | $partitionByClause
              | location '$basePath'
@@ -1947,6 +1948,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       val lastCompletedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant()
       val writeConfig = getWriteConfig(Map.empty, metaClient.getBasePath.toString)
       writeConfig.setValue("hoodie.metadata.index.column.stats.enable", "false")
+      writeConfig.setValue("hoodie.metadata.index.partition.stats.enable", "false")
       val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), writeConfig)
       writeClient.rollback(lastCompletedInstant.get().requestedTime)
       // validate the expression index

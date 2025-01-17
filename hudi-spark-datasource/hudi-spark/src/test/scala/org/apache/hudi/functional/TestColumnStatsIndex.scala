@@ -40,7 +40,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS
@@ -164,8 +163,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val metadataOpts3 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
-      HoodieMetadataConfig.DROP_METADATA_INDEX.key -> COLUMN_STATS.getPartitionPath,
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7" // ignore c4,c5,c8.
+      HoodieMetadataConfig.DROP_METADATA_INDEX.key -> COLUMN_STATS.getPartitionPath
     )
     // disable col stats
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts3, commonOpts,
@@ -173,7 +171,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       shouldValidateManually = false))
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -385,7 +383,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -396,7 +394,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -519,7 +517,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -564,7 +562,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -580,7 +578,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -630,7 +628,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -646,7 +644,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -876,7 +874,44 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     }
 
     ////////////////////////////////////////////////////////////////////////
+<<<<<<< HEAD
     // Case #2: Aligned CSI projection
+=======
+    // Case #2: Partial CSI projection
+    //          Projection is requested for set of columns some of which are
+    //          NOT indexed by the CSI
+    ////////////////////////////////////////////////////////////////////////
+
+    {
+      // We have to include "c1", since we sort the expected outputs by this column
+      val requestedColumns = Seq("c4", "c1")
+
+      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex, sourceTableSchema)
+      // Match against expected column stats table
+      val expectedColStatsIndexTableDf =
+        spark.read
+          .schema(expectedColStatsSchema)
+          .json(getClass.getClassLoader.getResource("index/colstats/partial-column-stats-index-table.json").toString)
+
+      // Collect Column Stats manually (reading individual Parquet files)
+      val manualColStatsTableDF =
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
+
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
+        assertEquals(expectedColStatsIndexTableDf.schema, partialTransposedColStatsDF.schema)
+        // NOTE: We have to drop the `fileName` column as it contains semi-random components
+        //       that we can't control in this test. Nevertheless, since we manually verify composition of the
+        //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
+        assertEquals(asJson(sort(expectedColStatsIndexTableDf)), asJson(sort(partialTransposedColStatsDF.drop("fileName"))))
+        assertEquals(asJson(sort(manualColStatsTableDF)), asJson(sort(partialTransposedColStatsDF)))
+      }
+    }
+
+    ////////////////////////////////////////////////////////////////////////
+    // Case #3: Aligned CSI projection
+>>>>>>> 78c89f57cdf (Enabling partition stats by default)
     //          Projection is requested for set of columns some of which are
     //          indexed only for subset of files
     //   In commit1, we indexed c1,c2 and c3. in 2nd commit, we are indexing c5 in addition, but we update only a subset of records.
@@ -909,7 +944,11 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       val requestedColumns = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
         .getSourceFields.toSeq.filterNot(colName => colName.startsWith("_hoodie"))
 
-      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted.toSeq, targetColumnsToIndex.toSet, sourceTableSchema)
+//<<<<<<< HEAD
+      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted.toSeq, targetColumnsToIndex.toSeq, sourceTableSchema)
+//=======
+  //    val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex, sourceTableSchema)
+//>>>>>>> 78c89f57cdf (Enabling partition stats by default)
       val expectedColStatsIndexUpdatedDF =
         spark.read
           .schema(expectedColStatsSchema)
