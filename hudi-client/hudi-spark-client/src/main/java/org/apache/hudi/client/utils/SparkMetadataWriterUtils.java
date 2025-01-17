@@ -193,7 +193,6 @@ public class SparkMetadataWriterUtils {
     scanner.scan(false);
     return scanner.iterator();
   }
-
   
   private static Iterator<HoodieRecord> getBaseFileRecords(HoodieBaseFile baseFile, HoodieTableMetaClient metaClient, Schema readerSchema) {
     HoodieRecordMerger recordMerger =
