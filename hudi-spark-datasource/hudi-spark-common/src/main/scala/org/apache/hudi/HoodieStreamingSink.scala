@@ -93,7 +93,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
   private var asyncCompactorService: AsyncCompactService = _
   private var asyncClusteringService: AsyncClusteringService = _
-  private var writeClient: Option[SparkRDDWriteClient[_]] = Option.empty
   private var hoodieTableConfig: Option[HoodieTableConfig] = Option.empty
 
   override def addBatch(batchId: Long, data: DataFrame): Unit = this.synchronized {
@@ -138,7 +137,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
                 val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
                 newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, CommitUtils.getCheckpointValueAsString(identifier, String.valueOf(batchId)))
               }
-            }))), writeClient)
+            }))), Option.empty[SparkRDDWriteClient[_]])
       )
       match {
         case Success((true, commitOps, compactionInstantOps, clusteringInstant, client, tableConfig)) =>
@@ -149,7 +148,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
           }))
           log.info(s"Current value of latestCommittedBatchId: $latestCommittedBatchId. Setting latestCommittedBatchId to batchId $batchId.")
           latestCommittedBatchId = batchId
-          writeClient = Some(client)
           hoodieTableConfig = Some(tableConfig)
           if (client != null) {
             metaClient = Some(HoodieTableMetaClient.builder()
@@ -313,11 +311,6 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     if (asyncClusteringService != null) {
       asyncClusteringService.shutdown(force)
       asyncClusteringService = null
-    }
-
-    if (writeClient.isDefined) {
-      writeClient.get.close()
-      writeClient = Option.empty
     }
   }
 
