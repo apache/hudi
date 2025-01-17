@@ -89,7 +89,7 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
       synchronized (this) {
         if (lockProvider == null) {
           String lockProviderClass = lockConfiguration.getConfig().getString("hoodie.write.lock.provider");
-          LOG.info("LockProvider for TimeGenerator: " + lockProviderClass);
+          LOG.info("LockProvider for TimeGenerator: {}", lockProviderClass);
           lockProvider = (LockProvider<?>) ReflectionUtils.loadClass(lockProviderClass,
               new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
               lockConfiguration, storageConf);

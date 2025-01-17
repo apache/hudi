@@ -214,7 +214,7 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
 
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 599);
     // commit to kafka after first batch
-    kafkaSource.getSource().onCommit(fetch1.getCheckpointForNextBatch());
+    kafkaSource.getSource().onCommit(fetch1.getCheckpointForNextBatch().getCheckpointKey());
     try (KafkaConsumer consumer = new HoodieRetryingKafkaConsumer(props, KafkaOffsetGen.excludeHoodieConfigs(props))) {
       consumer.assign(topicPartitions);
 
@@ -234,7 +234,7 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
           kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
 
       // commit to Kafka after second batch is processed completely
-      kafkaSource.getSource().onCommit(fetch2.getCheckpointForNextBatch());
+      kafkaSource.getSource().onCommit(fetch2.getCheckpointForNextBatch().getCheckpointKey());
 
       offsetAndMetadata = consumer.committed(topicPartition0);
       assertNotNull(offsetAndMetadata);

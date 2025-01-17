@@ -118,7 +118,7 @@ public class TestHoodieLogFormatAppendFailure {
 
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
-        .withDeltaCommit("").withStorage(storage).build();
+        .withInstantTime("").withStorage(storage).build();
 
     writer.appendBlock(dataBlock);
     // get the current log file version to compare later
@@ -150,7 +150,7 @@ public class TestHoodieLogFormatAppendFailure {
     // return a new writer with a bumped up logVersion
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
-        .withDeltaCommit("").withStorage(storage).build();
+        .withInstantTime("").withStorage(storage).build();
     header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));

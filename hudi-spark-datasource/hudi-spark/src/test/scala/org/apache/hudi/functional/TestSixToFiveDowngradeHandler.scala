@@ -28,7 +28,6 @@ import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
-
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -63,7 +62,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
 
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
       .run(HoodieTableVersion.FIVE, null)
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = getHoodieMetaClient(metaClient.getStorageConf, basePath)
     // Ensure file slices have been compacted and the MDT table has been deleted
     assertFalse(metaClient.getTableConfig.isMetadataTableAvailable)
     assertEquals(HoodieTableVersion.FIVE, metaClient.getTableConfig.getTableVersion)
@@ -116,8 +115,13 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     val fsView = getTableFileSystemView(opts)
     getAllPartititonPaths(fsView).asScala.flatMap { partitionPath =>
       val relativePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, partitionPath)
-      fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, getLatestMetaClient(false)
-        .getActiveTimeline.lastInstant().get().getTimestamp).iterator().asScala.toSeq
+      val lastInstantOption = getLatestMetaClient(false).getActiveTimeline.lastInstant()
+      if (lastInstantOption.isPresent) {
+        fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, getLatestMetaClient(false)
+          .getActiveTimeline.lastInstant().get().requestedTime).iterator().asScala.toSeq
+      } else {
+        Seq.empty
+      }
     }.foreach(
       slice => if (slice.getLogFiles.count() > 0) {
         numFileSlicesWithLogFiles += 1

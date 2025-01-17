@@ -69,9 +69,9 @@ public class TimelineMetadataUtils {
                                                              List<HoodieInstant> instants,
                                                              Map<String, List<HoodieRollbackMetadata>> instantToRollbackMetadata) {
     return new HoodieRestoreMetadata(startRestoreTime, durationInMs,
-        instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+        instants.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList()),
         Collections.unmodifiableMap(instantToRollbackMetadata), DEFAULT_VERSION,
-        instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
+        instants.stream().map(instant -> new HoodieInstantInfo(instant.requestedTime(), instant.getAction())).collect(Collectors.toList()));
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
@@ -88,9 +88,9 @@ public class TimelineMetadataUtils {
     }
 
     return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
-        instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+        instants.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList()),
         Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
-        instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
+        instants.stream().map(instant -> new HoodieInstantInfo(instant.requestedTime(), instant.getAction())).collect(Collectors.toList()));
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
@@ -148,19 +148,9 @@ public class TimelineMetadataUtils {
     return serializeAvroMetadata(indexCommitMetadata, HoodieIndexCommitMetadata.class);
   }
 
-  public static Option<byte[]> serializeCommitMetadata(org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata) throws IOException {
-    if (commitMetadata instanceof org.apache.hudi.common.model.HoodieReplaceCommitMetadata) {
-      return serializeReplaceCommitMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata));
-    }
-    return serializeCommitMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata));
-  }
-
-  private static Option<byte[]> serializeCommitMetadata(HoodieCommitMetadata commitMetadata) throws IOException {
-    return serializeAvroMetadata(commitMetadata, HoodieCommitMetadata.class);
-  }
-
-  private static Option<byte[]> serializeReplaceCommitMetadata(HoodieReplaceCommitMetadata commitMetadata) throws IOException {
-    return serializeAvroMetadata(commitMetadata, HoodieReplaceCommitMetadata.class);
+  public static Option<byte[]> serializeCommitMetadata(CommitMetadataSerDe commitMetadataSerDe,
+                                                       org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata) throws IOException {
+    return commitMetadataSerDe.serialize(commitMetadata);
   }
 
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)

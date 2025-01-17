@@ -180,7 +180,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
         displayName: UT flink & FT common & flink & spark-client & hudi-spark
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -214,7 +214,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
         displayName: UT spark-datasource Java Tests & DDL
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -248,7 +248,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
         displayName: UT spark-datasource DML & others
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '120'
         steps:
           - task: Maven@4
             displayName: maven install

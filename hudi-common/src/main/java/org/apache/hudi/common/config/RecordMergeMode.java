@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 public enum RecordMergeMode {
   @EnumFieldDescription("Using transaction time to merge records, i.e., the record from later "
       + "transaction overwrites the earlier record with the same key.")
-  OVERWRITE_WITH_LATEST,
+  COMMIT_TIME_ORDERING,
 
   @EnumFieldDescription("Using event time as the ordering to merge records, i.e., the record "
       + "with the larger event time overwrites the record with the smaller event time on the "

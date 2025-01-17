@@ -53,7 +53,7 @@ class HoodieCDCFileIndex (override val spark: SparkSession,
         val partitionPath = if (fileGroupId.getPartitionPath.isEmpty) emptyPartitionPath else fileGroupId.getPartitionPath
         val partitionFields = metaClient.getTableConfig.getPartitionFields
         val partitionValues: InternalRow = if (partitionFields.isPresent) {
-          new GenericInternalRow(doParsePartitionColumnValues(partitionFields.get(), partitionPath).asInstanceOf[Array[Any]])
+          new GenericInternalRow(parsePartitionColumnValues(partitionFields.get(), partitionPath).asInstanceOf[Array[Any]])
         } else {
           InternalRow.empty
         }

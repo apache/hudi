@@ -55,6 +55,20 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   }
 
   @Override
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
+    if (oldValue.getRecordBytes().length == 0) {
+      // use natural order for delete record
+      return this;
+    }
+    if (((Comparable) oldValue.getOrderingValue()).compareTo(orderingVal) > 0) {
+      // pick the payload with greatest ordering value
+      return oldValue;
+    } else {
+      return this;
+    }
+  }
+
+  @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     Option<IndexedRecord> insertValue = getInsertRecord(schema);
     return insertValue.isPresent() ? handleDeleteOperation(insertValue.get()) : Option.empty();

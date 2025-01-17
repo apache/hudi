@@ -45,7 +45,7 @@ class BucketIndexSupport(spark: SparkSession,
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  private val keyGenerator = {
+  private lazy val keyGenerator = {
     val props = new TypedProperties(metadataConfig.getProps())
     TypedProperties.putAll(props, metaClient.getTableConfig.getProps)
     HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
@@ -81,7 +81,7 @@ class BucketIndexSupport(spark: SparkSession,
     val bucketIdsBitMapByFilter = filterQueriesWithBucketHashField(queryFilters)
 
     if (bucketIdsBitMapByFilter.isDefined && bucketIdsBitMapByFilter.get.cardinality() > 0) {
-      val allFilesName = getPrunedPartitionsAndFileNames(prunedPartitionsAndFileSlices)._2
+      val allFilesName = getPrunedPartitionsAndFileNames(fileIndex, prunedPartitionsAndFileSlices)._2
       Option.apply(getCandidateFiles(allFilesName, bucketIdsBitMapByFilter.get))
     } else {
       Option.empty

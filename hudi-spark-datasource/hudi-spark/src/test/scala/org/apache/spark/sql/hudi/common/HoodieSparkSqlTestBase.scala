@@ -17,9 +17,10 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.DefaultSparkRecordMerger
+import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.model.HoodieAvroRecordMerger
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -27,13 +28,13 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
-import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
+import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
 import org.scalactic.source
@@ -130,6 +131,26 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     assertResult(expects.map(row => Row(row: _*)).toArray)(array)
   }
 
+  protected def checkNestedExceptionContains(sql: String)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        var t = e
+        while (t != null) {
+          if (t.getMessage.trim.contains(errorMsg.trim)) {
+            hasException = true
+          }
+          t = t.getCause
+        }
+        if (!hasException) {
+          e.printStackTrace(System.err)
+        }
+    }
+    assertResult(true)(hasException)
+  }
+
   protected def checkExceptions(sql: String)(errorMsgs: Seq[String]): Unit = {
     var hasException = false
     try {
@@ -154,6 +175,49 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     assertResult(true)(hasException)
   }
 
+  protected def checkException(runnable: Runnable)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      runnable.run()
+    } catch {
+      case e: Throwable =>
+        assertResult(errorMsg.trim)(e.getMessage.trim)
+        hasException = true
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def checkNestedException(sql: String)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        var t = e
+        while (t != null) {
+          if (errorMsg.trim.equals(t.getMessage.trim)) {
+            hasException = true
+          }
+          t = t.getCause
+        }
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def checkExceptionContain(runnable: Runnable)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      runnable.run()
+    } catch {
+      case e: Throwable if checkMessageContains(e, errorMsg) || checkMessageContains(getRootCause(e), errorMsg) =>
+        hasException = true
+
+      case f: Throwable =>
+        fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
+    }
+    assertResult(true)(hasException)
+  }
+
   protected def checkExceptionContain(sql: String)(errorMsg: String): Unit = {
     var hasException = false
     try {
@@ -166,6 +230,47 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
     }
     assertResult(true)(hasException)
+  }
+
+  protected def checkExceptionMatch(sql: String)(errorMsgRegex: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable if getRootCause(e).getMessage.matches(errorMsgRegex) =>
+        hasException = true
+
+      case f: Throwable =>
+        fail("Exception should match pattern: " + errorMsgRegex + ", error message: " + getRootCause(f).getMessage, f)
+    }
+    assertResult(true)(hasException)
+  }
+
+  protected def getExpectedUnresolvedColumnExceptionMessage(columnName: String,
+                                                            targetTableName: String): String = {
+    val targetTableFields = spark.sql(s"select * from $targetTableName").schema.fields
+      .map(e => (e.name, targetTableName, s"spark_catalog.default.$targetTableName.${e.name}"))
+    getExpectedUnresolvedColumnExceptionMessage(columnName, targetTableFields)
+  }
+
+  protected def getExpectedUnresolvedColumnExceptionMessage(columnName: String,
+                                                            fieldNameTuples: Seq[(String, String, String)]): String = {
+    val fieldNames = fieldNameTuples.sortBy(e => (e._1, e._2))
+      .map(e => e._3).mkString("[", ", ", "]")
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
+        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
+    } else {
+      s"cannot resolve $columnName in MERGE command given columns $fieldNames" +
+        (if (HoodieSparkUtils.gteqSpark3_4) "." else "")
+    }
+  }
+
+  protected def validateTableSchema(tableName: String,
+                                    expectedStructFields: List[StructField]): Unit = {
+    assertResult(expectedStructFields)(
+      spark.sql(s"select * from $tableName").schema.fields
+        .filter(e => !HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(e.name)))
   }
 
   def dropTypeLiteralPrefix(value: Any): Any = {
@@ -215,6 +320,19 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       f(tableName)
     } finally {
       spark.sql(s"drop table if exists $tableName purge")
+    }
+  }
+
+  protected def withSparkSqlSessionConfig(configNameValues: (String, String)*)(f: => Unit): Unit = {
+    try {
+      configNameValues.foreach { case (configName, configValue) =>
+        spark.sql(s"set $configName=$configValue")
+      }
+      f
+    } finally {
+      configNameValues.foreach { case (configName, _) =>
+        spark.sql(s"reset $configName")
+      }
     }
   }
 

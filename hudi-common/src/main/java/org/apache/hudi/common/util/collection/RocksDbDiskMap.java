@@ -33,6 +33,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.Spliterators;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -138,7 +139,15 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
    */
   @Override
   public Iterator<R> iterator() {
-    return getRocksDb().iterator(ROCKSDB_COL_FAMILY);
+    return new MappingIterator<Pair<T, R>, R>(getRocksDb().iterator(ROCKSDB_COL_FAMILY), Pair::getValue);
+  }
+
+  /**
+   * Custom iterator to iterate over values written to disk with a key filter.
+   */
+  @Override
+  public Iterator<R> iterator(Predicate<T> filter) {
+    return new MappingIterator<Pair<T, R>, R>(new FilterIterator<>(getRocksDb().iterator(ROCKSDB_COL_FAMILY), pair -> filter.test(pair.getKey())), Pair::getValue);
   }
 
   @Override

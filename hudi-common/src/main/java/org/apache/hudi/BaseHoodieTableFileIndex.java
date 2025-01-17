@@ -169,7 +169,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     doRefresh();
   }
 
-  protected abstract Object[] doParsePartitionColumnValues(String[] partitionColumns, String partitionPath);
+  protected abstract Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath);
 
   /**
    * Returns latest completed instant as seen by this instance of the file-index
@@ -268,7 +268,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 
     try (HoodieTableFileSystemView fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles)) {
-      Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
+      Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::requestedTime));
       validate(activeTimeline, queryInstant);
 
       // NOTE: For MOR table, when the compaction is inflight, we need to not only fetch the
@@ -359,8 +359,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
   }
 
-  private Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath) {
-    Object[] partitionColumnValues = doParsePartitionColumnValues(partitionColumns, partitionPath);
+  private Object[] getPartitionColumnValues(String[] partitionColumns, String partitionPath) {
+    Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
     if (shouldListLazily && partitionColumnValues.length != partitionColumns.length) {
       throw new HoodieException("Failed to parse partition column values from the partition-path:"
           + " likely non-encoded slashes being used in partition column's values. You can try to"
@@ -484,7 +484,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected PartitionPath convertToPartitionPath(String partitionPath) {
-    Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
+    Object[] partitionColumnValues = getPartitionColumnValues(partitionColumns, partitionPath);
     return new PartitionPath(partitionPath, partitionColumnValues);
   }
 

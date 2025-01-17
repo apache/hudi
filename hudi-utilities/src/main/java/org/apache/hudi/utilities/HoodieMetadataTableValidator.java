@@ -55,6 +55,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -90,6 +91,7 @@ import com.beust.jcommander.Parameter;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -118,6 +120,7 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -126,10 +129,14 @@ import scala.collection.JavaConverters;
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.META_COL_SET_TO_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLocationFromRecordIndexInfo;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnRangeMetadata;
 
@@ -504,6 +511,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         LOG.info(" ****** do hoodie metadata table validation once - {} ******", taskLabels);
         result = doHoodieMetadataTableValidationOnce();
       }
+      return result;
+    } catch (HoodieValidationException ve) {
+      if (!cfg.ignoreFailed) {
+        throw ve;
+      }
     } catch (Exception e) {
       throw new HoodieException("Unable to do hoodie metadata table validation in " + cfg.basePath, e);
     } finally {
@@ -511,8 +523,8 @@ public class HoodieMetadataTableValidator implements Serializable {
       if (asyncMetadataTableValidateService.isPresent()) {
         asyncMetadataTableValidateService.get().shutdown(true);
       }
-      return result;
     }
+    return result;
   }
 
   private boolean doHoodieMetadataTableValidationOnce() {
@@ -556,7 +568,8 @@ public class HoodieMetadataTableValidator implements Serializable {
       baseFilesForCleaning = inflightCleaningTimeline.getInstantsAsStream().flatMap(instant -> {
         try {
           // convert inflight instant to requested and get clean plan
-          instant = new HoodieInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.getTimestamp());
+          instant = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction(),
+              instant.requestedTime());
           HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, instant);
 
           return cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().flatMap(cleanerFileInfoList ->
@@ -577,7 +590,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     // compare partitions
 
     List<String> allPartitions = validatePartitions(engineContext, basePath, metaClient);
-
     if (allPartitions.isEmpty()) {
       LOG.warn("The result of getting all partitions is null or empty, skip current validation. {}", taskLabels);
       return true;
@@ -647,8 +659,14 @@ public class HoodieMetadataTableValidator implements Serializable {
         LOG.warn("Metadata table validation failed ({}).", taskLabels);
         return false;
       }
-    } catch (HoodieValidationException e) {
-      throw e;
+    } catch (HoodieValidationException validationException) {
+      throw validationException;
+    } catch (SparkException sparkException) {
+      if (sparkException.getCause() instanceof HoodieValidationException) {
+        throw (HoodieValidationException) sparkException.getCause();
+      } else {
+        throw new HoodieValidationException("Unexpected spark failure", sparkException);
+      }
     } catch (Exception e) {
       LOG.warn("Error closing HoodieMetadataValidationContext, "
           + "ignoring the error as the validation is successful.", e);
@@ -716,30 +734,36 @@ public class HoodieMetadataTableValidator implements Serializable {
       additionalFromFS.removeAll(allPartitionPathsMeta);
       List<String> additionalFromMDT = new ArrayList<>(allPartitionPathsMeta);
       additionalFromMDT.removeAll(allPartitionPathsFromFS);
-      boolean misMatch = true;
+      AtomicBoolean misMatch = new AtomicBoolean(true);
       List<String> actualAdditionalPartitionsInMDT = new ArrayList<>(additionalFromMDT);
       if (additionalFromFS.isEmpty() && !additionalFromMDT.isEmpty()) {
         // there is a chance that when we polled MDT there could have been a new completed commit which was not complete when we polled FS based
         // listing. let's rule that out.
-        additionalFromMDT.forEach(partitionFromDMT -> {
-          Option<String> partitionCreationTimeOpt = getPartitionCreationInstant(metaClient.getStorage(), basePath, partitionFromDMT);
-          // if creation time is greater than last completed instant in active timeline, we can ignore the additional partition from MDT.
-          if (partitionCreationTimeOpt.isPresent() && !completedTimeline.containsInstant(partitionCreationTimeOpt.get())) {
-            Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
-            if (lastInstant.isPresent()
-                && HoodieTimeline.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().getTimestamp())) {
-              LOG.warn("Ignoring additional partition {}, as it was deduced to be part of a "
-                  + "latest completed commit which was inflight when FS based listing was polled.", partitionFromDMT);
-              actualAdditionalPartitionsInMDT.remove(partitionFromDMT);
+        additionalFromMDT.forEach(partitionFromMDT -> {
+          try {
+            if (metaClient.getStorage().exists(new StoragePath(basePath + "/" + partitionFromMDT))) {
+              Option<String> partitionCreationTimeOpt = getPartitionCreationInstant(metaClient.getStorage(), basePath, partitionFromMDT);
+              // if creation time is greater than last completed instant in active timeline, we can ignore the additional partition from MDT.
+              if (partitionCreationTimeOpt.isPresent() && !completedTimeline.containsInstant(partitionCreationTimeOpt.get())) {
+                Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
+                if (lastInstant.isPresent()
+                    && InstantComparison.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().requestedTime())) {
+                  LOG.warn("Ignoring additional partition " + partitionFromMDT + ", as it was deduced to be part of a "
+                      + "latest completed commit which was inflight when FS based listing was polled.");
+                  actualAdditionalPartitionsInMDT.remove(partitionFromMDT);
+                }
+              }
             }
+          } catch (IOException e) {
+            throw new HoodieValidationException("IOException thrown while trying to validate partition match b/w FS based listing and MDT based listing", e);
           }
         });
         // if there is no additional partitions from FS listing and only additional partitions from MDT based listing is due to a new commit, we are good
         if (actualAdditionalPartitionsInMDT.isEmpty()) {
-          misMatch = false;
+          misMatch.set(false);
         }
       }
-      if (misMatch) {
+      if (misMatch.get()) {
         String message = "Compare Partitions Failed! " + " Additional partitions from FS, but missing from MDT : \"" + additionalFromFS
             + "\" and additional partitions from MDT, but missing from FS listing : \"" + actualAdditionalPartitionsInMDT
             + "\".\n All partitions from FS listing " + allPartitionPathsFromFS;
@@ -785,8 +809,8 @@ public class HoodieMetadataTableValidator implements Serializable {
         if (!completedTimeline.containsOrBeforeTimelineStarts(instantTime)) {
           Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
           return lastInstant.isPresent()
-              && HoodieTimeline.compareTimestamps(
-              instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, lastInstant.get().getTimestamp());
+              && compareTimestamps(
+              instantTime, LESSER_THAN_OR_EQUALS, lastInstant.get().requestedTime());
         }
         return true;
       } else {
@@ -976,7 +1000,8 @@ public class HoodieMetadataTableValidator implements Serializable {
         AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()), metadataTableBasedContext.getMetadataConfig(),
         metaClient, false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
-        partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
+        partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(
+            metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
             // set isTightBound to false since partition stats generated using column stats does not contain the field
             .map(colStat -> HoodieMetadataColumnStats.newBuilder(colStat).setIsTightBound(false).build());
     JavaRDD<HoodieMetadataColumnStats> diffRDD = HoodieJavaRDD.getJavaRDD(partitionStats).subtract(HoodieJavaRDD.getJavaRDD(partitionStatsUsingColStats));
@@ -1004,7 +1029,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
       TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedColumnStats = aggregateColumnStats(partitionPath, colStats);
       // TODO: fix `isTightBound` flag when stats based on log files are available
-      List<HoodieRecord> partitionStatRecords = HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, new ArrayList<>(aggregatedColumnStats), false, false)
+      List<HoodieRecord> partitionStatRecords = HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, new ArrayList<>(aggregatedColumnStats), false, false, Option.empty())
           .collect(Collectors.toList());
       return partitionStatRecords.stream()
           .map(record -> {
@@ -1065,7 +1090,8 @@ public class HoodieMetadataTableValidator implements Serializable {
     validate(metadataBasedBloomFilters, fsBasedBloomFilters, partitionPath, "bloom filters");
   }
 
-  private void validateRecordIndex(HoodieSparkEngineContext sparkEngineContext,
+  @VisibleForTesting
+  void validateRecordIndex(HoodieSparkEngineContext sparkEngineContext,
                                    HoodieTableMetaClient metaClient) {
     if (!metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
       return;
@@ -1081,7 +1107,9 @@ public class HoodieMetadataTableValidator implements Serializable {
                                       HoodieTableMetaClient metaClient) {
     Collection<HoodieIndexDefinition> indexDefinitions = metaClient.getIndexMetadata().get().getIndexDefinitions().values();
     for (HoodieIndexDefinition indexDefinition : indexDefinitions) {
-      validateSecondaryIndex(engineContext, metadataContext, metaClient, indexDefinition);
+      if (indexDefinition.getIndexType().equals(PARTITION_NAME_SECONDARY_INDEX)) {
+        validateSecondaryIndex(engineContext, metadataContext, metaClient, indexDefinition);
+      }
     }
   }
 
@@ -1089,7 +1117,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                                       HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
     String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+        .filterCompletedInstants().lastInstant().get().requestedTime();
 
     JavaRDD<String> secondaryKeys = readSecondaryKeys(engineContext, indexDefinition.getSourceFields(), basePath, latestCompletedCommit);
     secondaryKeys.persist(StorageLevel.MEMORY_AND_DISK());
@@ -1098,16 +1126,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     secondaryKeys = secondaryKeys.sortBy(x -> x, true, numPartitions);
     for (int i = 0; i < numPartitions; i++) {
       List<String> secKeys = secondaryKeys.collectPartitions(new int[] {i})[0];
-      Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = ((HoodieBackedTableMetadata) metadataContext.tableMetadata)
-          .getSecondaryIndexRecords(secKeys, indexDefinition.getIndexName())
-          .entrySet().stream()
-          .collect(Collectors.toMap(
-              Map.Entry::getKey,
-              e -> e.getValue().stream()
-                  .map(rec -> rec.getData().isSecondaryIndexDeleted() ? null : rec.getData().getRecordKeyFromSecondaryIndex())
-                  .filter(Objects::nonNull)
-                  .collect(Collectors.toSet()))
-          );
+      Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = ((HoodieBackedTableMetadata) metadataContext.tableMetadata).getSecondaryIndexRecords(secKeys, indexDefinition.getIndexName());
       Map<String, Set<String>> fsSecondaryKeyToRecordKeys = getFSSecondaryKeyToRecordKeys(engineContext, basePath, latestCompletedCommit, indexDefinition.getSourceFields().get(0), secKeys);
       if (!fsSecondaryKeyToRecordKeys.equals(mdtSecondaryKeyToRecordKeys)) {
         throw new HoodieValidationException(String.format("Secondary Index does not match : \nMDT secondary index: %s \nFS secondary index: %s",
@@ -1163,7 +1182,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                                         HoodieTableMetaClient metaClient) {
     String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+        .filterCompletedInstants().lastInstant().get().requestedTime();
     long countKeyFromTable = sparkEngineContext.getSqlContext().read().format("hudi")
         .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(),latestCompletedCommit)
         .load(basePath)
@@ -1190,7 +1209,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                                           HoodieTableMetaClient metaClient) {
     String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+        .filterCompletedInstants().lastInstant().get().requestedTime();
     JavaPairRDD<String, Pair<String, String>> keyToLocationOnFsRdd =
         getRecordLocationsFromFSBasedListing(sparkEngineContext, basePath, latestCompletedCommit);
 
@@ -1391,8 +1410,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         FileSlice fileSlice1 = fileSliceListFromMetadataTable.get(i);
         FileSlice fileSlice2 = fileSliceListFromFS.get(i);
         if (!Objects.equals(fileSlice1.getFileGroupId(), fileSlice2.getFileGroupId())
-            || !Objects.equals(fileSlice1.getBaseInstantTime(), fileSlice2.getBaseInstantTime())
-            || !Objects.equals(fileSlice1.getBaseFile(), fileSlice2.getBaseFile())) {
+            || !Objects.equals(fileSlice1.getBaseInstantTime(), fileSlice2.getBaseInstantTime())) {
+          mismatch = true;
+          break;
+        }
+        if (!assertBaseFilesEquality(fileSlice1, fileSlice2)) {
           mismatch = true;
           break;
         }
@@ -1416,6 +1438,20 @@ public class HoodieMetadataTableValidator implements Serializable {
     } else {
       LOG.info("Validation of {} succeeded for partition {} for table: {}", label, partitionPath, cfg.basePath);
     }
+  }
+
+  private boolean assertBaseFilesEquality(FileSlice fileSlice1, FileSlice fileSlice2) {
+    if (fileSlice1.getBaseFile().isPresent() && fileSlice2.getBaseFile().isPresent()) {
+      HoodieBaseFile baseFile1 = fileSlice1.getBaseFile().get();
+      HoodieBaseFile baseFile2 = fileSlice2.getBaseFile().get();
+      return baseFile1.getFileName().equals(baseFile2.getFileName()) && baseFile1.getFileId().equals(baseFile2.getFileId())
+          && baseFile1.getFileSize() == baseFile2.getFileSize();
+    } else {
+      if (!fileSlice1.getBaseFile().isPresent() == fileSlice2.getBaseFile().isPresent()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -1489,11 +1525,10 @@ public class HoodieMetadataTableValidator implements Serializable {
             // The instant is completed, in active timeline
             // Checking commit metadata only as log files can only be written by COMMIT or DELTA_COMMIT
             if (!committedFilesMap.containsKey(instantTime)) {
-              HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                  completedInstantsTimeline.getInstantDetails(
-                      completedInstantsTimeline.filter(i -> i.getTimestamp().equals(instantTime))
-                          .firstInstant().get()
-                  ).get(),
+              HoodieInstant instant =  completedInstantsTimeline.filter(i -> i.requestedTime().equals(instantTime))
+                  .firstInstant().get();
+              HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
+                  instant, completedInstantsTimeline.getInstantDetails(instant).get(),
                   HoodieCommitMetadata.class
               );
               committedFilesMap.put(
@@ -1792,7 +1827,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     private List<String> getAllColumnNames() {
       try {
-        return schema.getFields().stream()
+        return schema.getFields().stream().filter(field -> META_COL_SET_TO_INDEX.contains(field.name()))
             .map(Schema.Field::name).collect(Collectors.toList());
       } catch (Exception e) {
         throw new HoodieException("Failed to get all column names for " + metaClient.getBasePath());

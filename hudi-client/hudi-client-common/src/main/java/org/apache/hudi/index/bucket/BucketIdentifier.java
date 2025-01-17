@@ -115,6 +115,13 @@ public class BucketIdentifier implements Serializable {
     return newBucketFileIdFixedSuffix(bucketIdStr(bucketId));
   }
 
+  /**
+   * Generate a new file id for NBCC mode, file id is fixed for each bucket with format: "{bucket_id}-0000-0000-0000-000000000000-0"
+   */
+  public static String newBucketFileIdForNBCC(int bucketId) {
+    return FSUtils.createNewFileId(newBucketFileIdFixedSuffix(bucketId), 0);
+  }
+
   public static boolean isBucketFileName(String name) {
     return BUCKET_NAME.matcher(name).matches();
   }

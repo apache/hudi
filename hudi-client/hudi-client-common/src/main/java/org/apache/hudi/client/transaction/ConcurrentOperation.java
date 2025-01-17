@@ -63,13 +63,13 @@ public class ConcurrentOperation {
   public ConcurrentOperation(HoodieInstant instant, HoodieTableMetaClient metaClient) throws IOException {
     // Replace compaction.inflight to compaction.request since inflight does not contain compaction plan.
     if (instant.getAction().equals(COMPACTION_ACTION) && instant.getState().equals(HoodieInstant.State.INFLIGHT)) {
-      instant = new HoodieInstant(HoodieInstant.State.REQUESTED, COMPACTION_ACTION, instant.getTimestamp());
+      instant = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, COMPACTION_ACTION, instant.requestedTime());
     }
     this.metadataWrapper = new HoodieMetadataWrapper(MetadataConversionUtils.createMetaWrapper(instant, metaClient));
     this.commitMetadataOption = Option.empty();
     this.actionState = instant.getState().name();
     this.actionType = instant.getAction();
-    this.instantTime = instant.getTimestamp();
+    this.instantTime = instant.requestedTime();
     init(instant);
   }
 
@@ -78,7 +78,7 @@ public class ConcurrentOperation {
     this.metadataWrapper = new HoodieMetadataWrapper(commitMetadata);
     this.actionState = instant.getState().name();
     this.actionType = instant.getAction();
-    this.instantTime = instant.getTimestamp();
+    this.instantTime = instant.requestedTime();
     init(instant);
   }
 

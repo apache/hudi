@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -57,16 +56,15 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
 
   /**
    * Update the metadata table due to a COMMIT operation.
-   *
    * @param commitMetadata commit metadata of the operation of interest.
    * @param instantTime    instant time of the commit.
    */
-  void updateFromWriteStatuses(HoodieCommitMetadata commitMetadata, HoodieData<WriteStatus> writeStatuses, String instantTime);
+  void update(HoodieCommitMetadata commitMetadata, String instantTime);
 
   /**
    * Update the metadata table due to a COMMIT or REPLACECOMMIT operation.
-   * As compared to {@link #updateFromWriteStatuses(HoodieCommitMetadata, HoodieData, String)}, this method
-   * directly updates metadata with the given records, instead of first converting {@link WriteStatus} to {@link HoodieRecord}.
+   * As compared to {@link #update(HoodieCommitMetadata, String)}, this method
+   * directly updates metadata with the given records, instead of generating HoodieRecords based on HoodieCommitMetadata.
    *
    * @param commitMetadata commit metadata of the operation of interest.
    * @param records        records to update metadata with.

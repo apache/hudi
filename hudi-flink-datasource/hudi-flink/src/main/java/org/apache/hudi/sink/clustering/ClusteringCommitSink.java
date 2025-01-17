@@ -21,7 +21,6 @@ package org.apache.hudi.sink.clustering;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.TableServiceType;
@@ -143,7 +142,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     HoodieClusteringPlan clusteringPlan = clusteringPlanCache.computeIfAbsent(instant, k -> {
       try {
         HoodieTableMetaClient metaClient = this.writeClient.getHoodieTable().getMetaClient();
-        return ClusteringUtils.getInflightClusteringInstant(instant, metaClient.getActiveTimeline())
+        return ClusteringUtils.getInflightClusteringInstant(instant, metaClient.getActiveTimeline(), table.getInstantGenerator())
             .flatMap(pendingInstant -> ClusteringUtils.getClusteringPlan(
             metaClient, pendingInstant))
             .map(Pair::getRight)
@@ -218,8 +217,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     }
     // commit the clustering
     this.table.getMetaClient().reloadActiveTimeline();
-    this.writeClient.completeTableService(
-        TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant, Option.of(HoodieListData.lazy(writeMetadata.getWriteStatuses())));
+    this.writeClient.completeTableService(TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant);
 
     clusteringMetrics.updateCommitMetrics(instant, writeMetadata.getCommitMetadata().get());
     // whether to clean up the input base parquet files used for clustering

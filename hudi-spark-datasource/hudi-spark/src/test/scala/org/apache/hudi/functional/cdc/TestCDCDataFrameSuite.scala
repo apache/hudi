@@ -29,11 +29,12 @@ import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
-
 import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.exception.{HoodieException, HoodieIOException}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SaveMode}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
@@ -81,7 +82,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val instant1 = metaClient.reloadActiveTimeline.lastInstant().get()
     // all the data is new-coming, it will write out cdc log files.
     assertFalse(hasCDCLogFile(instant1))
-    val commitTime1 = instant1.getTimestamp
+    val commitTime1 = instant1.requestedTime
     val cdcDataOnly1 = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
@@ -105,7 +106,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     checkCDCDataForInsertOrUpdate(loggingMode, cdcSchema, dataSchema,
       cdcDataFromCDCLogFile2, hoodieRecords2, HoodieCDCOperation.UPDATE)
 
-    val commitTime2 = instant2.getTimestamp
+    val commitTime2 = instant2.requestedTime
     var currentSnapshotData = spark.read.format("hudi").load(basePath)
     // at the last commit, 100 records are inserted.
     val insertedCnt2 = currentSnapshotData.count() - 100
@@ -128,7 +129,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val instant3 = metaClient.reloadActiveTimeline.lastInstant().get()
     // only part of data are deleted and some data will write back to the file.
     // it will write out cdc log files. But instant3 is the clustering instant, not the delete one. so we omit to test.
-    val commitTime3 = instant3.getTimestamp
+    val commitTime3 = instant3.requestedTime
     currentSnapshotData = spark.read.format("hudi").load(basePath)
     // here we use `commitTime2` to query the change data in commit 3.
     // because `commitTime3` is the ts of the clustering operation, not the delete operation.
@@ -157,7 +158,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // and all the new data will write out some new file groups.
     // it will NOT write out cdc log files
     assertFalse(hasCDCLogFile(instant4))
-    val commitTime4 = instant4.getTimestamp
+    val commitTime4 = instant4.requestedTime
     val cdcDataOnly4 = cdcDataFrame((commitTime4.toLong - 1).toString)
     val insertedCnt4 = 50
     val deletedCnt4 = currentSnapshotData.count()
@@ -194,7 +195,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .save(basePath)
     val instant7 = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant().get()
     // part of data are updated, it will write out cdc log files.
-    val cdcDataOnly7 = cdcDataFrame((instant7.getTimestamp.toLong - 1).toString)
+    val cdcDataOnly7 = cdcDataFrame((instant7.requestedTime.toLong - 1).toString)
     val currentData = spark.read.format("hudi").load(basePath)
     val insertedCnt7 = currentData.count() - 60
     val updatedCnt7 = 30 - insertedCnt7
@@ -205,7 +206,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalInsertedCnt = 60 + insertedCnt7
     totalUpdatedCnt = updatedCnt7
     totalDeletedCnt = 0
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame((commitTime4.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Bulk_Insert Operation With Clean Operation
@@ -221,14 +222,18 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // and all the new data will write out some new file groups.
     // it will NOT write out cdc log files
     assertFalse(hasCDCLogFile(instant8))
-    val commitTime8 = instant8.getTimestamp
+    val commitTime8 = instant8.requestedTime
     val cdcDataOnly8 = cdcDataFrame((commitTime8.toLong - 1).toString)
     assertCDCOpCnt(cdcDataOnly8, 20, 0, 0)
     totalInsertedCnt += 20
-    allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
+    allVisibleCDCData = cdcDataFrame((commitTime4.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
-  }
 
+    // test start commit time in archived timeline. cdc query should fail
+    assertThrows(classOf[HoodieException], () => {
+      cdcDataFrame((commitTime1.toLong - 1).toString)
+    })
+  }
 
   /**
    * Step1: Insert 100
@@ -271,7 +276,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val instant1 = metaClient.reloadActiveTimeline.lastInstant().get()
     // all the data is new-coming, it will write out cdc log files.
     assertFalse(hasCDCLogFile(instant1))
-    val commitTime1 = instant1.getTimestamp
+    val commitTime1 = instant1.requestedTime
     val cdcDataOnly1 = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
@@ -294,7 +299,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertEquals(cdcDataFromCDCLogFile2.count(r => r.getData.asInstanceOf[GenericRecord].get(0).toString == "u"), 30)
     assertEquals(cdcDataFromCDCLogFile2.count(r => r.getData.asInstanceOf[GenericRecord].get(0).toString == "i"), 20)
 
-    val commitTime2 = instant2.getTimestamp
+    val commitTime2 = instant2.requestedTime
     var currentSnapshotData = spark.read.format("hudi").load(basePath)
     // at the last commit, 100 records are inserted.
     val insertedCnt2 = currentSnapshotData.count() - 100
@@ -317,7 +322,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val instant3 = metaClient.reloadActiveTimeline.lastInstant().get()
     // in cases that there is log files, it will NOT write out cdc log files.
     // But instant3 is the compaction instant, not the delete one. so we omit to test.
-    val commitTime3 = instant3.getTimestamp
+    val commitTime3 = instant3.requestedTime
     currentSnapshotData = spark.read.format("hudi").load(basePath)
     // here we use `commitTime2` to query the change data in commit 3.
     // because `commitTime3` is the ts of the clustering operation, not the delete operation.
@@ -342,7 +347,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // all the new data will write out some new file groups.
     // it will NOT write out cdc log files
     assertFalse(hasCDCLogFile(instant4))
-    val commitTime4 = instant4.getTimestamp
+    val commitTime4 = instant4.requestedTime
     val cntForInstant4 = spark.read.format("hudi").load(basePath).count()
     val cdcDataOnly4 = cdcDataFrame((commitTime4.toLong - 1).toString)
     val insertedCnt4 = 100
@@ -365,7 +370,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val instant5 = metaClient.reloadActiveTimeline.lastInstant().get()
     // in cases that there is log files, it will NOT write out cdc log files.
     // But instant9 is the clustering instant, not the upsert one. so we omit to test.
-    val commitTime5 = instant5.getTimestamp
+    val commitTime5 = instant5.requestedTime
     // here we use `commitTime4` to query the change data in commit 5.
     // because `commitTime5` is the ts of the clean operation, not the upsert operation.
     val cdcDataOnly5 = cdcDataFrame(commitTime4)
@@ -397,7 +402,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // and all the new data will write out some new file groups.
     // it will NOT write out cdc log files
     assertFalse(hasCDCLogFile(instant6))
-    val commitTime6 = instant6.getTimestamp
+    val commitTime6 = instant6.requestedTime
     val cntForInstant6 = spark.read.format("hudi").load(basePath).count()
     val cdcDataOnly6 = cdcDataFrame((commitTime6.toLong - 1).toString)
     assertCDCOpCnt(cdcDataOnly6, 70, 0, cntForInstant5)
@@ -424,7 +429,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .mode(SaveMode.Append)
       .save(basePath)
     val instant8 = metaClient.reloadActiveTimeline.lastInstant().get()
-    val commitTime8 = instant8.getTimestamp
+    val commitTime8 = instant8.requestedTime
     totalInsertedCnt += 3
 
     // 8. Upsert Operation With Clean Operation
@@ -442,7 +447,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val instant9 = metaClient.reloadActiveTimeline.lastInstant().get()
     // in cases that there is log files, it will NOT write out cdc log files.
     // But instant9 is the clean instant, not the upsert one. so we omit to test.
-    val commitTime9 = instant9.getTimestamp
+    val commitTime9 = instant9.requestedTime
     val cntForInstant9 = spark.read.format("hudi").load(basePath).count()
     val cdcDataOnly9 = cdcDataFrame(commitTime8)
     val insertedCnt9 = cntForInstant9 - cntForInstant6 - 10
@@ -496,7 +501,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val instant1 = metaClient.reloadActiveTimeline.lastInstant().get()
     // all the data is new-coming, it will write out cdc log files.
     assertFalse(hasCDCLogFile(instant1))
-    val commitTime1 = instant1.getTimestamp
+    val commitTime1 = instant1.requestedTime
     val cdcDataOnly1 = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(cdcDataOnly1, 100, 0, 0)
 
@@ -513,7 +518,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // and all the new data will write out some new file groups.
     // it will NOT write out cdc log files
     assertFalse(hasCDCLogFile(instant2))
-    val commitTime2 = instant2.getTimestamp
+    val commitTime2 = instant2.requestedTime
     val insertedCnt2 = 30
     val deletedCnt2 = partitionToCnt(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
     val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
@@ -535,7 +540,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     // the files belongs to this partition will be replaced directly.
     // it will NOT write out cdc log files.
     assertFalse(hasCDCLogFile(instant3))
-    val commitTime3 = instant3.getTimestamp
+    val commitTime3 = instant3.requestedTime
     val cntForInstant3 = spark.read.format("hudi").load(basePath).count()
     // here we use `commitTime2` to query the change data in commit 3.
     // because `commitTime3` is the ts of the clustering operation, not the delete operation.
@@ -556,7 +561,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .mode(SaveMode.Append)
       .save(basePath)
     val instant4 = metaClient.reloadActiveTimeline.lastInstant().get()
-    val commitTime4 = instant4.getTimestamp
+    val commitTime4 = instant4.requestedTime
     val cntForInstant4 = spark.read.format("hudi").load(basePath).count()
     val cdcDataOnly4 = cdcDataFrame((commitTime4.toLong - 1).toString)
     val insertedCnt4 = cntForInstant4 - cntForInstant3
@@ -623,7 +628,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     checkCDCDataForInsertOrUpdate(loggingMode, cdcSchema, dataSchema,
       cdcDataFromCDCLogFile2, hoodieRecords2, HoodieCDCOperation.UPDATE)
 
-    val commitTime2 = instant2.getTimestamp
+    val commitTime2 = instant2.requestedTime
     var currentSnapshotData = spark.read.format("hudi").load(basePath)
     // at the last commit, 100 records are inserted.
     val insertedCnt2 = currentSnapshotData.count() - 100
@@ -632,9 +637,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
   }
 
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
-  def testCDCWithAWSDMSPayload(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+  @Test
+  def testCDCWithAWSDMSPayload(): Unit = {
     val options = Map(
       "hoodie.table.name" -> "test",
       "hoodie.datasource.write.recordkey.field" -> "id",
@@ -803,8 +807,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .mode(SaveMode.Append).save(basePath)
 
     val metaClient = createMetaClient(spark, basePath)
-      val startTimeStamp = metaClient.reloadActiveTimeline().firstInstant().get.getTimestamp
-      val latestTimeStamp = metaClient.reloadActiveTimeline().lastInstant().get.getTimestamp
+      val startTimeStamp = metaClient.reloadActiveTimeline().firstInstant().get.requestedTime
+      val latestTimeStamp = metaClient.reloadActiveTimeline().lastInstant().get.requestedTime
 
       val result1 = spark.read.format("hudi")
         .option("hoodie.datasource.query.type", "incremental")

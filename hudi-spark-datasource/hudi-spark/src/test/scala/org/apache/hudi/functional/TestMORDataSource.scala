@@ -893,7 +893,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   def testReadPathsForOnlyLogFiles(recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
     // enable column stats
-    val hudiOpts = writeOpts ++ Map(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true")
+    val hudiOpts = writeOpts ++ Map(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "fare,city_to_state,rider")
 
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
@@ -1184,7 +1185,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)
-    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
+    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().requestedTime
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
     val records2 = recordsToStrings(dataGen2.generateInserts("002", 60)).asScala.toSeq
@@ -1193,7 +1194,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
 
     val records3 = recordsToStrings(dataGen2.generateUniqueUpdates("003", 20)).asScala.toSeq
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
@@ -1201,7 +1202,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
     val commit3CompletionTime = metaClient.reloadActiveTimeline.lastInstant().get().getCompletionTime
 
     val pathForROQuery = getPathForROQuery(basePath, !enableFileIndex, 3)
@@ -1516,7 +1517,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // do a time travel query with data skipping enabled
     val timeTravelDF = spark.read.format("hudi")
       .options(readOpts)
-      .option("as.of.instant", firstInstant.getTimestamp)
+      .option("as.of.instant", firstInstant.requestedTime)
       .load(basePath)
     // there should still be 3 records in time travel view
     assertEquals(3, timeTravelDF.count())

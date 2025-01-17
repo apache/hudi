@@ -53,8 +53,9 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
                                              RecordMergeMode recordMergeMode,
                                              Option<String> partitionNameOverrideOpt,
                                              Option<String[]> partitionPathFieldOpt,
-                                             TypedProperties props) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props);
+                                             TypedProperties props,
+                                             HoodieReadStats readStats) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
   }
 
   @Override
@@ -86,11 +87,14 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordKey) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
-    Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
+    Option<Pair<Option<T>, Map<String, Object>>> mergedRecordAndMetadata =
         doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
+
     if (mergedRecordAndMetadata.isPresent()) {
       records.put(recordKey, Pair.of(
-          Option.ofNullable(readerContext.seal(mergedRecordAndMetadata.get().getLeft())),
+          mergedRecordAndMetadata.get().getLeft().isPresent()
+              ? Option.ofNullable(readerContext.seal(mergedRecordAndMetadata.get().getLeft().get()))
+              : Option.empty(),
           mergedRecordAndMetadata.get().getRight()));
     }
   }

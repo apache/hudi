@@ -35,12 +35,17 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.metadata.HoodieTableMetadataUtil
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
+import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql.functions.typedLit
+import org.apache.spark.sql.functions.{lit, struct, typedLit}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.DataFrame
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.spark.sql.catalyst.dsl.expressions.StringToAttributeConversionHelper
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.provider.Arguments
 
@@ -87,12 +92,19 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     cleanupSparkContexts()
   }
 
-  protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams): Unit = {
+  protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams, addNestedFiled : Boolean = false): Unit = {
 
     val sourceJSONTablePath = getClass.getClassLoader.getResource(params.dataSourcePath).toString
 
     // NOTE: Schema here is provided for validation that the input date is in the appropriate format
-    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+    val preInputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    val inputDF = if (addNestedFiled) {
+      preInputDF.withColumn("c9",
+        functions.struct("c2").withField("car_brand", lit("abc_brand")))
+    } else {
+      preInputDF
+    }
 
     val writeOptions: Map[String, String] = params.hudiOpts ++ params.metadataOpts
 
@@ -115,11 +127,11 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       // Currently, routine manually validating the column stats (by actually reading every column of every file)
       // only supports parquet files. Therefore we skip such validation when delta-log files are present, and only
       // validate in following cases: (1) COW: all operations; (2) MOR: insert only.
-      val shouldValidateColumnStatsManually = params.testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
-        params.operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      val shouldValidateColumnStatsManually = (params.testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
+        params.operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)) && params.shouldValidateManually
 
       validateColumnStatsIndex(
-        params.testCase, params.metadataOpts, params.expectedColStatsSourcePath, shouldValidateColumnStatsManually, params.latestCompletedCommit)
+        params.testCase, params.metadataOpts, params.expectedColStatsSourcePath, shouldValidateColumnStatsManually, params.validationSortColumns)
     }
   }
 
@@ -179,7 +191,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       } else {
         val colsToGenerateStats = indexedCols // check for included cols
         val writerSchemaOpt = LogFileColStatsTestUtil.getSchemaForTable(metaClient)
-        val latestCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+        val latestCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().requestedTime
         baseFilesDf.union(getColStatsFromLogFiles(allLogFiles, latestCompletedCommit,
           scala.collection.JavaConverters.seqAsJavaList(colsToGenerateStats),
           metaClient,
@@ -217,30 +229,32 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       columnsToIndex, writerSchemaOpt, maxBufferSize)
   }
 
+  protected def validateColumnsToIndex(metaClient: HoodieTableMetaClient, expectedColsToIndex: Seq[String]): Unit = {
+    val indexDefn = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
+    assertEquals(expectedColsToIndex, indexDefn.getSourceFields.asScala.toSeq)
+  }
+
+  protected def validateNonExistantColumnsToIndexDefn(metaClient: HoodieTableMetaClient): Unit = {
+    assertTrue(!metaClient.getIndexMetadata.get().getIndexDefinitions.containsKey(PARTITION_NAME_COLUMN_STATS))
+  }
+
   protected def validateColumnStatsIndex(testCase: ColumnStatsTestCase,
                                          metadataOpts: Map[String, String],
                                          expectedColStatsSourcePath: String,
                                          validateColumnStatsManually: Boolean,
-                                         latestCompletedCommit: String): Unit = {
+                                         validationSortColumns: Seq[String]): Unit = {
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
       .build()
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-    val indexedColumns: Set[String] = {
-      val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
-      if (customIndexedColumns.isEmpty) {
-        sourceTableSchema.fieldNames.toSet
-      } else {
-        customIndexedColumns.asScala.toSet
-      }
-    }
-    val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
-    val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue",
-      "c3_minValue", "c5_maxValue", "c5_minValue")
+    val indexedColumnswithMeta: Set[String] = HoodieTableMetadataUtil
+      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, convertScalaListToJavaList(sourceTableSchema.fieldNames)).asScala.toSet
+    val indexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
 
-    columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>
+    val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
+    columnStatsIndex.loadTransposed(indexedColumns.toSeq, testCase.shouldReadInMemory) { transposedColStatsDF =>
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
         spark.read
@@ -258,7 +272,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
         // TODO(HUDI-4557): support validation of column stats of avro log files
         // Collect Column Stats manually (reading individual Parquet files)
         val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, sourceTableSchema.fieldNames, sourceTableSchema.fieldNames, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, indexedColumns.toSeq, sourceTableSchema.fieldNames, expectedColStatsSchema)
 
         assertEquals(asJson(sort(manualColStatsTableDF, validationSortColumns)),
           asJson(sort(transposedColStatsDF, validationSortColumns)))
@@ -363,8 +377,11 @@ object ColumnStatIndexTestBase {
                                    operation: String,
                                    saveMode: SaveMode,
                                    shouldValidate: Boolean = true,
+                                   shouldValidateManually: Boolean = true,
                                    latestCompletedCommit: String = null,
                                    numPartitions: Integer = 4,
                                    parquetMaxFileSize: Integer = 10 * 1024,
-                                   smallFileLimit: Integer = 100 * 1024 * 1024)
+                                   smallFileLimit: Integer = 100 * 1024 * 1024,
+                                   validationSortColumns : Seq[String] = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
+                                     "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue"))
 }

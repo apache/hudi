@@ -52,7 +52,8 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
                                    mandatoryFields: Seq[String],
                                    isMOR: Boolean,
                                    isIncremental: Boolean,
-                                   requiredFilters: Seq[Filter]) extends FileFormat with SparkAdapterSupport {
+                                   requiredFilters: Seq[Filter]
+                                  ) extends FileFormat with SparkAdapterSupport with Serializable {
   private val parquetFormat = new ParquetFileFormat()
   private val orcFormat = new OrcFileFormat()
 

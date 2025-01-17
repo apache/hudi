@@ -20,7 +20,6 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -116,11 +115,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   public static Map<String, String> getSparkSqlConf() {
     Map<String, String> sqlConf = new HashMap<>();
     sqlConf.put("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
-
-    if (HoodieSparkUtils.gteqSpark3_3()) {
-      sqlConf.put("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
-    }
-
+    sqlConf.put("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
     return sqlConf;
   }
 
@@ -282,7 +277,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Option<HoodieInstant> deltaCommit =
         reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getTimestamp(),
+    assertEquals(commitTime, deltaCommit.get().requestedTime(),
         "Delta commit should be specified value");
 
     Option<HoodieInstant> commit =
@@ -330,7 +325,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Option<HoodieInstant> deltaCommit =
         reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getTimestamp(),
+    assertEquals(commitTime, deltaCommit.get().requestedTime(),
         "Latest Delta commit should match specified time");
 
     Option<HoodieInstant> commit =

@@ -71,8 +71,9 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
                                                   RecordMergeMode recordMergeMode,
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
-                                                  TypedProperties props) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props);
+                                                  TypedProperties props,
+                                                  HoodieReadStats readStats) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
   }
 
   @Override
@@ -173,7 +174,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     }
 
     switch (recordMergeMode) {
-      case OVERWRITE_WITH_LATEST:
+      case COMMIT_TIME_ORDERING:
         for (Long recordPosition : recordPositions) {
           records.putIfAbsent(recordPosition,
               Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", orderingFieldDefault, orderingFieldTypeOpt)));

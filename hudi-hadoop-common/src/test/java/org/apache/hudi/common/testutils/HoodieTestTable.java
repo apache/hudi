@@ -53,10 +53,12 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.TestLogReaderUtils;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -133,6 +135,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createSavepointCo
 import static org.apache.hudi.common.testutils.FileCreateUtils.deleteSavepointCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.BASE_FILE_EXTENSION;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
@@ -159,6 +162,7 @@ public class HoodieTestTable implements AutoCloseable {
   protected String currentInstantTime;
   private boolean isNonPartitioned = false;
   protected Option<HoodieEngineContext> context;
+  protected final InstantGenerator instantGenerator = new DefaultInstantGenerator();
 
   protected HoodieTestTable(String basePath, HoodieStorage storage,
                             HoodieTableMetaClient metaClient) {
@@ -200,7 +204,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public static String makeNewCommitTime(Instant dateTime) {
-    return HoodieActiveTimeline.formatDate(Date.from(dateTime));
+    return TimelineUtils.formatDate(Date.from(dateTime));
   }
 
   public static List<String> makeIncrementalCommitTimes(int num, int firstOffsetSeconds, int deltaSecs) {
@@ -243,7 +247,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addCommit(String instantTime, Option<String> completionTime, Option<HoodieCommitMetadata> metadata) throws Exception {
     createRequestedCommit(basePath, instantTime);
     createInflightCommit(basePath, instantTime);
-    createCommit(basePath, instantTime, completionTime, metadata);
+    createCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, completionTime, metadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -289,9 +293,9 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-      createCommit(basePath, instantTime, Option.of(metadata));
+      createCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, Option.of(metadata));
     } else {
-      createDeltaCommit(basePath, instantTime, metadata);
+      createDeltaCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, metadata);
     }
     inflightCommits.remove(instantTime);
     currentInstantTime = instantTime;
@@ -317,7 +321,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addDeltaCommit(String instantTime, HoodieCommitMetadata metadata) throws Exception {
     createRequestedDeltaCommit(basePath, instantTime);
     createInflightDeltaCommit(basePath, instantTime);
-    createDeltaCommit(basePath, instantTime, metadata);
+    createDeltaCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, metadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -328,22 +332,22 @@ public class HoodieTestTable implements AutoCloseable {
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
-    createReplaceCommit(basePath, instantTime, completeReplaceMetadata);
+    createInflightReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addPendingReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
+    createInflightReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addPendingCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
+    createInflightClusterCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -355,7 +359,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
-    createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
+    createInflightClusterCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -366,8 +370,8 @@ public class HoodieTestTable implements AutoCloseable {
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
-    createReplaceCommit(basePath, instantTime, completeReplaceMetadata);
+    createInflightClusterCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -379,7 +383,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addInflightReplace(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
-    createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
+    createInflightReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -537,7 +541,7 @@ public class HoodieTestTable implements AutoCloseable {
     HoodieCompactionPlan compactionPlan = CompactionUtils
         .buildFromFileSlices(fileSlices.stream().map(fs -> Pair.of(fs.getPartitionPath(), fs))
             .collect(Collectors.toList()), Option.empty(), Option.empty());
-    HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
+    HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
         TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
     currentInstantTime = instantTime;
@@ -545,7 +549,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addRequestedCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
-    HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
+    HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
         TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
     currentInstantTime = instantTime;
@@ -576,7 +580,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
     addInflightCompaction(instantTime, commitMetadata);
     this.inflightCommits.remove(instantTime);
-    createCommit(basePath, instantTime, Option.of(commitMetadata));
+    createCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, Option.of(commitMetadata));
     return this;
   }
 
@@ -622,7 +626,7 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
-    createCommit(basePath, instantTime, Option.of(metadata));
+    createCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, Option.of(metadata));
     inflightCommits.remove(instantTime);
     currentInstantTime = instantTime;
     return this;
@@ -810,13 +814,13 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public Path getInflightCommitFilePath(String instantTime) {
-    return new Path(Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME,
+    return new Path(Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableMetaClient.TIMELINEFOLDER_NAME,
         instantTime + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION).toUri());
   }
 
   public StoragePath getCommitFilePath(String instantTime) {
-    return HoodieTestUtils.getCompleteInstantPath(storage, new StoragePath(basePath,
-        HoodieTableMetaClient.METAFOLDER_NAME), instantTime, HoodieTimeline.COMMIT_ACTION);
+    return HoodieTestUtils.getCompleteInstantPath(storage, new StoragePath(new StoragePath(basePath,
+        HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableMetaClient.TIMELINEFOLDER_NAME), instantTime, HoodieTimeline.COMMIT_ACTION);
   }
 
   public Path getRequestedCompactionFilePath(String instantTime) {
@@ -1012,11 +1016,11 @@ public class HoodieTestTable implements AutoCloseable {
     for (HoodieInstant commitInstantToRollback : commitsToRollback) {
       Option<HoodieCommitMetadata> commitMetadata = getCommitMeta(commitInstantToRollback);
       if (!commitMetadata.isPresent()) {
-        throw new IllegalArgumentException("Instant to rollback not present in timeline: " + commitInstantToRollback.getTimestamp());
+        throw new IllegalArgumentException("Instant to rollback not present in timeline: " + commitInstantToRollback.requestedTime());
       }
       Map<String, List<String>> partitionFiles = getPartitionFiles(commitMetadata.get());
-      rollbackMetadataMap.put(commitInstantToRollback.getTimestamp(),
-          Collections.singletonList(getRollbackMetadata(commitInstantToRollback.getTimestamp(), partitionFiles, false)));
+      rollbackMetadataMap.put(commitInstantToRollback.requestedTime(),
+          Collections.singletonList(getRollbackMetadata(commitInstantToRollback.requestedTime(), partitionFiles, false)));
       for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
         deleteFilesInPartition(entry.getKey(), entry.getValue());
       }
@@ -1228,7 +1232,7 @@ public class HoodieTestTable implements AutoCloseable {
   private Option<HoodieCommitMetadata> getMetadataForInstant(String instantTime) {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
+        .filterCompletedInstants().filter(i -> i.requestedTime().equals(instantTime)).firstInstant();
     try {
       if (hoodieInstant.isPresent()) {
         return getCommitMeta(hoodieInstant.get());
@@ -1249,8 +1253,9 @@ public class HoodieTestTable implements AutoCloseable {
         return Option.of(replaceCommitMetadata);
       case HoodieTimeline.DELTA_COMMIT_ACTION:
       case HoodieTimeline.COMMIT_ACTION:
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(
+            hoodieInstant,
+            metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         return Option.of(commitMetadata);
       default:
         throw new IllegalArgumentException("Unknown instant action" + hoodieInstant.getAction());

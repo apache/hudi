@@ -29,6 +29,7 @@ import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTable
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
+import org.apache.hudi.HoodieSparkSqlWriterInternal.{handleInsertDuplicates, shouldDropDuplicatesForInserts, shouldFailWhenDuplicatesFound}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
@@ -66,8 +67,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
 import org.apache.hudi.util.SparkKeyGenUtils
-
-import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.sql.HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -79,7 +79,6 @@ import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.slf4j.LoggerFactory
 
 import java.util.function.BiConsumer
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
@@ -292,7 +291,7 @@ class HoodieSparkSqlWriterInternal {
           .build()
       } else {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.BASE_FILE_FORMAT)
-        val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
+        val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_HISTORY_PATH)
         val populateMetaFields = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
         val useBaseFormatMetaFile = hoodieConfig.getBooleanOrDefault(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT);
         val payloadClass = hoodieConfig.getString(DataSourceWriteOptions.PAYLOAD_CLASS_NAME)
@@ -326,6 +325,7 @@ class HoodieSparkSqlWriterInternal {
           .setPayloadClassName(payloadClass)
           .setRecordMergeStrategyId(recordMergeStrategyId)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
+          .setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 
@@ -505,12 +505,8 @@ class HoodieSparkSqlWriterInternal {
               case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
             }
 
-            val dedupedHoodieRecords =
-              if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) && operation != WriteOperationType.INSERT_OVERWRITE_TABLE && operation != WriteOperationType.INSERT_OVERWRITE) {
-                DataSourceUtils.dropDuplicates(jsc, hoodieRecords, parameters.asJava)
-              } else {
-                hoodieRecords
-              }
+            // Remove duplicates from incoming records based on existing keys from storage.
+            val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, jsc, parameters)
             client.startCommitWithTime(instantTime, commitActionType)
             try {
               val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
@@ -553,13 +549,16 @@ class HoodieSparkSqlWriterInternal {
     var operation = WriteOperationType.fromValue(hoodieConfig.getString(OPERATION))
     // TODO clean up
     // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS is true
+    // or INSERT_DUP_POLICY is `drop` or `fail`.
     // Auto-correct the operation to "insert" if OPERATION is set to "upsert" wrongly
     // or not set (in which case it will be set as "upsert" by parametersWithWriteDefaults()) .
-    if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) &&
-      operation == WriteOperationType.UPSERT) {
+    if ((hoodieConfig.getBoolean(INSERT_DROP_DUPS) ||
+      shouldDropDuplicatesForInserts(hoodieConfig) ||
+      shouldFailWhenDuplicatesFound(hoodieConfig))
+      && operation == WriteOperationType.UPSERT) {
 
       log.warn(s"$UPSERT_OPERATION_OPT_VAL is not applicable " +
-        s"when $INSERT_DROP_DUPS is set to be true, " +
+        s"when $INSERT_DROP_DUPS is set to be true, or $INSERT_DUP_POLICY is set to fail or drop, " +
         s"overriding the $OPERATION to be $INSERT_OPERATION_OPT_VAL")
 
       operation = WriteOperationType.INSERT
@@ -637,7 +636,7 @@ class HoodieSparkSqlWriterInternal {
       // force disable schema validate, now we support schema evolution, no need to do validate
       "false"
     } else {
-      parameters.getOrElse(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key(), "true")
+      parameters.getOrElse(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key(), HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue())
     }
     // correct internalSchema, internalSchema should contain hoodie metadata columns.
     val correctInternalSchema = internalSchemaOpt.map { internalSchema =>
@@ -725,7 +724,7 @@ class HoodieSparkSqlWriterInternal {
       handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tableName, WriteOperationType.BOOTSTRAP, fs)
 
       if (!tableExists) {
-        val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
+        val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_HISTORY_PATH)
         val partitionColumnsWithType = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(toProperties(parameters))
         val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD)
         val payloadClass = hoodieConfig.getString(DataSourceWriteOptions.PAYLOAD_CLASS_NAME)
@@ -1162,5 +1161,46 @@ class HoodieSparkSqlWriterInternal {
     // belongs to another plan job, so we couldn't update UI in this plan job.
     Option(context.getLocalProperty(SQLExecution.EXECUTION_ID_KEY))
       .map(_.toLong).filter(SQLExecution.getQueryExecution(_) eq newQueryExecution)
+  }
+}
+
+object HoodieSparkSqlWriterInternal {
+  // Check if duplicates should be dropped.
+  def shouldDropDuplicatesForInserts(hoodieConfig: HoodieConfig): Boolean = {
+    hoodieConfig.contains(INSERT_DUP_POLICY) &&
+      hoodieConfig.getString(INSERT_DUP_POLICY).equalsIgnoreCase(DROP_INSERT_DUP_POLICY)
+  }
+
+  // Check if we should fail if duplicates are found.
+  def shouldFailWhenDuplicatesFound(hoodieConfig: HoodieConfig): Boolean = {
+    hoodieConfig.contains(INSERT_DUP_POLICY) &&
+      hoodieConfig.getString(INSERT_DUP_POLICY).equalsIgnoreCase(FAIL_INSERT_DUP_POLICY)
+  }
+
+  // Check if deduplication is required.
+  def isDeduplicationRequired(hoodieConfig: HoodieConfig): Boolean = {
+    hoodieConfig.getBoolean(INSERT_DROP_DUPS) ||
+      shouldFailWhenDuplicatesFound(hoodieConfig) ||
+      shouldDropDuplicatesForInserts(hoodieConfig)
+  }
+
+  // Check if deduplication is needed.
+  def isDeduplicationNeeded(operation: WriteOperationType): Boolean = {
+    operation == WriteOperationType.INSERT
+  }
+
+  def handleInsertDuplicates(incomingRecords: JavaRDD[HoodieRecord[_]],
+                             hoodieConfig: HoodieConfig,
+                             operation: WriteOperationType,
+                             jsc: JavaSparkContext,
+                             parameters: Map[String, String]): JavaRDD[HoodieRecord[_]] = {
+    // If no deduplication is needed, return the incoming records as is
+    if (!isDeduplicationRequired(hoodieConfig) || !isDeduplicationNeeded(operation)) {
+      incomingRecords
+    } else {
+      // Perform deduplication
+      DataSourceUtils.resolveDuplicates(
+        jsc, incomingRecords, parameters.asJava, shouldFailWhenDuplicatesFound(hoodieConfig))
+    }
   }
 }

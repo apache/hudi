@@ -177,6 +177,7 @@ public class TestHoodieTableSource {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
     conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     HoodieTableSource hoodieTableSource = createHoodieTableSource(conf);

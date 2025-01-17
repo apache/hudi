@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, MetadataConversionUtils}
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
@@ -58,7 +59,8 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     RECORDKEY_FIELD.key -> "_row_key",
     PARTITIONPATH_FIELD.key -> "partition",
     PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15"
   ) ++ metadataOpts
 
   val secondaryIndexOpts = Map(
@@ -107,7 +109,8 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
 
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
     val lastInsant = HoodieInstantTimeGenerator.getLastInstantTime
-    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInsant) < 0) {
+    if (enforce || metaClient.getActiveTimeline.lastInstant().isEmpty
+      || metaClient.getActiveTimeline.lastInstant().get().requestedTime.compareTo(lastInsant) < 0) {
       println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
       metaClient
@@ -126,7 +129,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     }
     val writeConfig = getWriteConfig(hudiOpts)
     new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
-      .rollback(lastInstant.getTimestamp)
+      .rollback(lastInstant.requestedTime)
 
     if (lastInstant.getAction != ActionType.clean.name()) {
       assertEquals(ActionType.rollback.name(), getLatestMetaClient(true).getActiveTimeline.lastInstant().get().getAction)
@@ -145,16 +148,16 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getHoodieTable(getLatestMetaClient(false), writeConfig).getCompletedCommitsTimeline.lastInstant().get()
     val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
     assertTrue(storage.deleteFile(new StoragePath(
-      metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName)))
+      metadataTableMetaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(metadataTableLastInstant))))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
   protected def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val lastInstant = getHoodieTable(getLatestMetaClient(false), writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
@@ -320,9 +323,9 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
       writeConfig.getRecordIndexMinFileGroupCount, writeConfig.getRecordIndexMaxFileGroupCount,
       writeConfig.getRecordIndexGrowthFactor, writeConfig.getRecordIndexMaxFileGroupSizeBytes)
     assertEquals(estimatedFileGroupCount, getFileGroupCountForRecordIndex(writeConfig))
-    val prevDf = mergedDfList.last.drop("tip_history")
+    val prevDf = mergedDfList.last.drop("tip_history", "_hoodie_is_deleted")
     val nonMatchingRecords = readDf.drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
-      "_hoodie_partition_path", "_hoodie_file_name", "tip_history")
+      "_hoodie_partition_path", "_hoodie_file_name", "tip_history", "_hoodie_is_deleted")
       .join(prevDf, prevDf.columns, "leftanti")
     assertEquals(0, nonMatchingRecords.count())
     assertEquals(readDf.count(), prevDf.count())

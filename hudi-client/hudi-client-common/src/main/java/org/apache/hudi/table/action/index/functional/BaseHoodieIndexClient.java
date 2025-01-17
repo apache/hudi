@@ -19,6 +19,8 @@
 
 package org.apache.hudi.table.action.index.functional;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.StoragePath;
@@ -26,6 +28,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 
 public abstract class BaseHoodieIndexClient {
@@ -36,31 +39,39 @@ public abstract class BaseHoodieIndexClient {
   }
 
   /**
-   * Register a functional index.
+   * Register a expression index.
    * Index definitions are stored in user-specified path or, by default, in .hoodie/.index_defs/index.json.
    * For the first time, the index definition file will be created if not exists.
    * For the second time, the index definition file will be updated if exists.
    * Table Config is updated if necessary.
    */
-  public void register(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) {
-    LOG.info("Registering index {} of using {}", indexName, indexType);
-    String indexMetaPath = metaClient.getTableConfig().getIndexDefinitionPath()
-        .orElseGet(() -> metaClient.getMetaPath()
-            + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FOLDER_NAME
-            + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FILE_NAME);
-    // build HoodieFunctionalIndexMetadata and then add to index definition file
-    metaClient.buildIndexDefinition(indexMetaPath, indexName, indexType, columns, options);
-    // update table config if necessary
-    if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.INDEX_DEFINITION_PATH) || !metaClient.getTableConfig().getIndexDefinitionPath().isPresent()) {
-      metaClient.getTableConfig().setValue(HoodieTableConfig.INDEX_DEFINITION_PATH, indexMetaPath);
-      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+  public void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
+    LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
+    // build HoodieIndexMetadata and then add to index definition file
+    boolean indexDefnUpdated = metaClient.buildIndexDefinition(indexDefinition);
+    if (indexDefnUpdated) {
+      String indexMetaPath = metaClient.getIndexDefinitionPath();
+      // update table config if necessary
+      if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
+          || !metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()) {
+        metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(indexMetaPath)));
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+      }
     }
   }
 
   /**
-   * Create a functional index.
+   * Create a expression index.
    */
-  public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options);
+  public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
+                              Map<String, String> tableProperties) throws Exception;
+
+  /**
+   * Creates or updated the col stats index definition.
+   * @param metaClient data table's {@link HoodieTableMetaClient} instance.
+   * @param columnsToIndex list of columns to index.
+   */
+  public abstract void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
 
   /**
    * Drop an index. By default, ignore drop if index does not exist.
