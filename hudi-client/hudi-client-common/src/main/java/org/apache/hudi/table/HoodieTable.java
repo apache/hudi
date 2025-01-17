@@ -1051,7 +1051,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     if (isMetadataTable() || !config.isMetadataTableEnabled()) {
       return false;
     }
-    return !MetadataPartitionType.getEnabledPartitions(config.getProps(), metaClient).contains(partitionType);
+    boolean metadataIndexDisabled = !partitionType.isMetadataPartitionAvailable(metaClient);
+    return metadataIndexDisabled && metaClient.getTableConfig().getMetadataPartitions().contains(partitionType.getPartitionPath());
   }
 
   private boolean shouldExecuteMetadataTableDeletion() {
