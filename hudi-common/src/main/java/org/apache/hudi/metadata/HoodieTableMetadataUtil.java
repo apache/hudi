@@ -378,7 +378,7 @@ public class HoodieTableMetadataUtil {
   public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext context, HoodieConfig hoodieConfig, HoodieCommitMetadata commitMetadata,
                                                                                String instantTime, HoodieTableMetaClient dataMetaClient, HoodieTableMetadata tableMetadata,
                                                                                HoodieMetadataConfig metadataConfig, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType,
-                                                                               int bloomIndexParallelism, Integer writesFileIdEncoding, EngineType engineType,
+                                                                               int bloomIndexParallelism, int writesFileIdEncoding, EngineType engineType,
                                                                                Option<HoodieRecordType> recordTypeOpt) {
     final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
