@@ -39,9 +39,9 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 /**
@@ -121,27 +121,43 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   /**
    * Returns an iterator over the log records.
    */
-  public Iterator<HoodieRecord<?>> iterator() {
-    List<HoodieRecord<?>> records = new ArrayList<>();
-    try {
-      scan();
+  public ClosableIterator<HoodieRecord<?>> iterator() {
+    return new ClosableIterator<HoodieRecord<?>>() {
+      private final Iterator<HoodieLogBlock> logBlockIterator = getCurrentInstantLogBlocks().iterator();
+      private ClosableIterator<HoodieRecord> recordIterator = null;
 
-      while (!getCurrentInstantLogBlocks().isEmpty()) {
-        HoodieLogBlock lastBlock = getCurrentInstantLogBlocks().pollLast();
-        if (lastBlock instanceof HoodieDataBlock) {
-          HoodieDataBlock dataBlock = (HoodieDataBlock) lastBlock;
-          Pair<ClosableIterator<HoodieRecord>, Schema> recordsIteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
-          try (ClosableIterator<HoodieRecord> recordIterator = recordsIteratorSchemaPair.getLeft()) {
-            while (recordIterator.hasNext()) {
-              records.add(recordIterator.next());
+      @Override
+      public boolean hasNext() {
+        try {
+          while ((recordIterator == null || !recordIterator.hasNext()) && logBlockIterator.hasNext()) {
+            HoodieLogBlock logBlock = logBlockIterator.next();
+            if (logBlock instanceof HoodieDataBlock) {
+              HoodieDataBlock dataBlock = (HoodieDataBlock) logBlock;
+              Pair<ClosableIterator<HoodieRecord>, Schema> recordsIteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
+              recordIterator = recordsIteratorSchemaPair.getLeft();
             }
           }
+          return recordIterator != null && recordIterator.hasNext();
+        } catch (Exception e) {
+          throw new HoodieException("Error while iterating over log records", e);
         }
       }
-    } catch (Exception e) {
-      throw new HoodieException("Error while iterating over log records", e);
-    }
-    return records.iterator();
+
+      @Override
+      public HoodieRecord<?> next() {
+        if (!hasNext()) {
+          throw new NoSuchElementException();
+        }
+        return recordIterator.next();
+      }
+
+      @Override
+      public void close() {
+        if (recordIterator != null) {
+          recordIterator.close();
+        }
+      }
+    };
   }
 
   /**

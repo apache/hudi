@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.HoodieProducer;
@@ -108,13 +109,11 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
     return Arrays.asList(
         new FunctionBasedQueueProducer<>(queue -> {
           HoodieUnMergedLogRecordScanner scanner = scannerBuilder.build();
-          Iterator<HoodieRecord<?>> logRecordIterator = scanner.iterator();
-          try {
+          try (ClosableIterator<HoodieRecord<?>> logRecordIterator = scanner.iterator()) {
             while (logRecordIterator.hasNext()) {
               HoodieRecord<?> record = logRecordIterator.next();
               // convert Hoodie log record to Hadoop AvroWritable and buffer
-              GenericRecord rec = null;
-              rec = (GenericRecord) record.toIndexedRecord(getReaderSchema(), payloadProps).get().getData();
+              GenericRecord rec = (GenericRecord) record.toIndexedRecord(getReaderSchema(), payloadProps).get().getData();
               ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(rec, getHiveSchema(), isSupportTimestamp());
               queue.insertRecord(aWritable);
             }

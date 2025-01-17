@@ -30,12 +30,14 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -51,6 +53,7 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.RowKind;
+import org.apache.flink.util.CloseableIterator;
 import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
@@ -237,10 +240,14 @@ public class FormatUtils {
     ) {
       List<HoodieProducer<HoodieRecord<?>>> producers = new ArrayList<>();
       producers.add(new FunctionBasedQueueProducer<>(queue -> {
-        HoodieUnMergedLogRecordScanner scanner =
-            scannerBuilder.withLogRecordScannerCallback(queue::insertRecord).build();
-        // Scan all the delta-log files, filling in the queue
-        scanner.scan();
+        HoodieUnMergedLogRecordScanner scanner = scannerBuilder.build();
+        try (ClosableIterator<HoodieRecord<?>> logRecordIterator = scanner.iterator()) {
+          while (logRecordIterator.hasNext()) {
+            queue.insertRecord(logRecordIterator.next());
+          }
+        } catch (Exception e) {
+          throw new HoodieException("Error converting the record to avro", e);
+        }
         return null;
       }));
 
