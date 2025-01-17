@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -122,11 +121,6 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
 
     @Override
     protected HoodieWriteMetadata<String> convertToOutputMetadata(HoodieWriteMetadata<String> writeMetadata) {
-      return null;
-    }
-
-    @Override
-    protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<String> clusteringMetadata) {
       return null;
     }
 

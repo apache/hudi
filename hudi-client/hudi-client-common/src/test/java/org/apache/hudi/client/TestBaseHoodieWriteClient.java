@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -118,10 +117,10 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     writeClient.startCommitWithTime("001", "commit");
 
-    HoodieDefaultTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
+    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
     assertTrue(writeTimeline.lastInstant().isPresent());
     assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-    assertEquals("001", writeTimeline.lastInstant().get().getTimestamp());
+    assertEquals("001", writeTimeline.lastInstant().get().requestedTime());
   }
 
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {
@@ -209,6 +208,11 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     @Override
     public String deletePrepped(String preppedRecords, String instantTime) {
       return "";
+    }
+
+    @Override
+    protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+
     }
   }
 }
