@@ -78,6 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -272,6 +273,22 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(0, event1);
     coordinator.handleEventFromOperator(1, event2);
     assertThat("Recommits the instant with lazy failed writes clean policy", TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()), is(instant));
+  }
+
+  @Test
+  public void testWriteFailureDetection() throws Exception {
+    // reset
+    reset();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
+    coordinator.start();
+    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+    assertThrows(HoodieException.class, () -> {
+      WriteMetadataEvent event = createOperatorEvent(0, coordinator.getInstant(), "par1", true, 0.1);
+      event.getWriteStatuses().get(0).markFailure("", "par1", new IOException("Write failure"));
+      coordinator.handleEventFromOperator(0, event);
+    });
   }
 
   @Test
