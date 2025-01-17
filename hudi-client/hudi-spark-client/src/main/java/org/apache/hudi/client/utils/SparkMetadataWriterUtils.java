@@ -156,7 +156,7 @@ public class SparkMetadataWriterUtils {
     Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
         // row.get(1) refers to partition path value and row.get(2) refers to file name.
         .groupByKey((MapFunction<Row, Pair>) row -> Pair.of(row.getString(1), row.getString(2)), Encoders.kryo(Pair.class))
-        .flatMapGroups((FlatMapGroupsFunction<Pair, Row, HoodieRecord>)  ((pair, iterator) -> {
+        .flatMapGroups((FlatMapGroupsFunction<Pair, Row, HoodieRecord>) ((pair, iterator) -> {
           String partition = pair.getLeft().toString();
           String relativeFilePath = pair.getRight().toString();
           String fileName = FSUtils.getFileName(relativeFilePath, partition);
@@ -194,18 +194,20 @@ public class SparkMetadataWriterUtils {
     return scanner.iterator();
   }
 
-private static Iterator<HoodieRecord> getBaseFileRecords(HoodieBaseFile baseFile, HoodieTableMetaClient metaClient, Schema readerSchema) {
-  HoodieRecordMerger recordMerger =
-      HoodieRecordUtils.createRecordMerger(metaClient.getBasePath().toString(), EngineType.SPARK, Collections.emptyList(),
-          metaClient.getTableConfig().getRecordMergeStrategyId());
-  try {
-    HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType())
-        .getFileReader(getReaderConfigs(metaClient.getStorageConf()), baseFile.getStoragePath());
-    return baseFileReader.getRecordIterator(readerSchema);
-  } catch (IOException e) {
-    throw new HoodieIOException("Error reading base file " + baseFile.getFileName(), e);
+  
+  private static Iterator<HoodieRecord> getBaseFileRecords(HoodieBaseFile baseFile, HoodieTableMetaClient metaClient, Schema readerSchema) {
+    HoodieRecordMerger recordMerger =
+        HoodieRecordUtils.createRecordMerger(metaClient.getBasePath().toString(), EngineType.SPARK, Collections.emptyList(),
+            metaClient.getTableConfig().getRecordMergeStrategyId());
+    try {
+      HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType())
+          .getFileReader(getReaderConfigs(metaClient.getStorageConf()), baseFile.getStoragePath());
+      return baseFileReader.getRecordIterator(readerSchema);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error reading base file " + baseFile.getFileName(), e);
+    }
   }
-}
+
   private static List<Row> toRows(Iterator<? extends HoodieRecord> records, Schema schema, HoodieWriteConfig dataWriteConfig, SQLContext sqlContext, String path) {
     StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
     Function1<GenericRecord, Row> converterToRow = AvroConversionUtils.createConverterToRow(schema, structType);
