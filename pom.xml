@@ -88,7 +88,7 @@
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
-    <genjavadoc-plugin.version>0.15</genjavadoc-plugin.version>
+    <genjavadoc-plugin.version>0.18_2.13.10</genjavadoc-plugin.version>
     <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
     <maven-docker-plugin.version>0.45.0</maven-docker-plugin.version>
@@ -2122,27 +2122,22 @@
                 </goals>
                 <configuration>
                   <excludes>
-                    <exclude>${project.basedir}/src/main/scala</exclude>
+                    <exclude>**/*.scala</exclude>
                   </excludes>
                   <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+                  <args>
+                    <arg>-P:genjavadoc:out=${project.build.directory}/genjavadoc</arg>
+                  </args>
+                  <compilerPlugins>
+                    <compilerPlugin>
+                      <groupId>com.typesafe.genjavadoc</groupId>
+                      <artifactId>genjavadoc-plugin_${scala.version}</artifactId>
+                      <version>${genjavadoc-plugin.version}</version>
+                    </compilerPlugin>
+                  </compilerPlugins>
                 </configuration>
               </execution>
             </executions>
-            <configuration>
-              <args>
-                <arg>-P:genjavadoc:out=${project.build.directory}/genjavadoc</arg>
-              </args>
-              <compilerPlugins>
-                <compilerPlugin>
-                  <groupId>com.typesafe.genjavadoc</groupId>
-                  <artifactId>genjavadoc-plugin_${scala.version}</artifactId>
-                  <version>${genjavadoc-plugin.version}</version>
-                </compilerPlugin>
-              </compilerPlugins>
-              <excludes>
-                <exclude>**/*.scala</exclude>
-              </excludes>
-            </configuration>
           </plugin>
           <plugin>
             <groupId>org.codehaus.mojo</groupId>
@@ -2320,6 +2315,7 @@
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <log4j2.version>2.20.0</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
+        <genjavadoc-plugin.version>0.19</genjavadoc-plugin.version>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2467,6 +2463,7 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <log4j2.version>2.20.0</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
+        <genjavadoc-plugin.version>0.19</genjavadoc-plugin.version>
         <skipITs>false</skipITs>
       </properties>
       <modules>
