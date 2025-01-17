@@ -34,7 +34,6 @@ import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.streamer.TableExecutionContext;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
