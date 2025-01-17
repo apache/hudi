@@ -161,7 +161,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withPartitionStatsIndexParallelism(1)
             .build(),
         metaClient,
-        Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS));
+        Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
+        Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2);
   }
@@ -275,7 +276,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withPartitionStatsIndexParallelism(1)
             .build(),
         metaClient,
-        Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS));
+        Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
+        Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2, 6);
   }
