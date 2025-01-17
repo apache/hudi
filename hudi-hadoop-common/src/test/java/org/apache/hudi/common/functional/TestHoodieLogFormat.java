@@ -1918,12 +1918,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         0, 0, Option.empty());
   }
 
-  @Disabled("HUDI-7375")
   @ParameterizedTest
   @MethodSource("testArguments")
-  public void testLogReaderWithDifferentVersionsOfDeleteBlocks(ExternalSpillableMap.DiskMapType diskMapType,
-                                                               boolean isCompressionEnabled,
-                                                               boolean enableOptimizedLogBlocksScan)
+  void testLogReaderWithDifferentVersionsOfDeleteBlocks(ExternalSpillableMap.DiskMapType diskMapType,
+                                                        boolean isCompressionEnabled,
+                                                        boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
