@@ -72,11 +72,10 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
   private transient FlinkCompactionMetrics compactionMetrics;
 
-  private final transient HoodieFlinkWriteClient writeClient;
+  private transient HoodieFlinkWriteClient writeClient;
 
   public CompactionPlanOperator(Configuration conf) {
     this.conf = conf;
-    this.writeClient = FlinkWriteClients.createWriteClient(this.conf, getRuntimeContext());
   }
 
   @Override
@@ -84,6 +83,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
     super.open();
     registerMetrics();
     this.table = FlinkTables.createTable(conf, getRuntimeContext());
+    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     // when starting up, rolls back all the inflight compaction instants if there exists,
     // these instants are in priority for scheduling task because the compaction instants are
     // scheduled from earliest(FIFO sequence).
