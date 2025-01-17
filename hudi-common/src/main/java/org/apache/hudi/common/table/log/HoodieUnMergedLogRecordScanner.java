@@ -122,6 +122,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
    * Returns an iterator over the log records.
    */
   public ClosableIterator<HoodieRecord<?>> iterator() {
+    scan();
     return new ClosableIterator<HoodieRecord<?>>() {
       private final Iterator<HoodieLogBlock> logBlockIterator = getCurrentInstantLogBlocks().iterator();
       private ClosableIterator<HoodieRecord> recordIterator = null;
