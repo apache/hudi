@@ -178,16 +178,15 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   /**
-   * We don't have support for nested fields. So, even if explicitly set using cols to index config, hudi is expected to ignore indexing
-   * nested fields.
+   * Tests nested field support with col stats // testMetadataColumnStatsIndexParamsInMemory
    */
-    @Test
-  def testMetadataColumnStatsIndexNestedFields(): Unit = {
-    val testCase = ColumnStatsTestCase(HoodieTableType.COPY_ON_WRITE, true)
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  def testMetadataColumnStatsIndexNestedFields(testCase : ColumnStatsTestCase): Unit = {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c7,c8,c9.car_brand"
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "c1,c2,c3,c4,c5,c6,c7,c8,c9.c9_1_car_brand,c10.c10_1.c10_2_1_nested_lvl2_field2"
     )
 
     val commonOpts = Map(
@@ -200,15 +199,44 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
-    // expectation is that, the nested field will be ignored and stats will be generated only for top level fields.
+    var expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-table-nested-1.json"
+    } else {
+      "index/colstats/mor-table-nested-1.json"
+    }
+
+    // expectation is that, the nested field will also be indexed.
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
-      expectedColStatsSourcePath = "index/colstats/cow-table-nested.json",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite), true)
+      saveMode = SaveMode.Overwrite,
+      validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
+        "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue", "`c9.c9_1_car_brand_maxValue`", "`c9.c9_1_car_brand_minValue`",
+      "`c10.c10_1.c10_2_1_nested_lvl2_field2_maxValue`","`c10.c10_1.c10_2_1_nested_lvl2_field2_minValue`")),
+      addNestedFiled = true)
 
       validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8"))
+        HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8", "c9.c9_1_car_brand","c10.c10_1.c10_2_1_nested_lvl2_field2"))
+
+    expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-table-nested-2.json"
+    } else {
+      "index/colstats/mor-table-nested-2.json"
+    }
+
+      doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+        dataSourcePath = "index/colstats/update2-input-table-json/",
+        expectedColStatsSourcePath = expectedColStatsSourcePath,
+        operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append,
+        numPartitions =  1,
+        parquetMaxFileSize = 100 * 1024 * 1024,
+        smallFileLimit = 0,
+        validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
+          "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue", "`c9.c9_1_car_brand_maxValue`", "`c9.c9_1_car_brand_minValue`",
+          "`c10.c10_1.c10_2_1_nested_lvl2_field2_maxValue`","`c10.c10_1.c10_2_1_nested_lvl2_field2_minValue`")),
+        addNestedFiled = true)
   }
 
   @ParameterizedTest
@@ -863,7 +891,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
       // Collect Column Stats manually (reading individual Parquet files)
       val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema, sourceTableSchema)
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
@@ -915,7 +943,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
       // Collect Column Stats manually (reading individual Parquet files)
       val manualUpdatedColStatsTableDF =
-        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema, sourceTableSchema)
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
