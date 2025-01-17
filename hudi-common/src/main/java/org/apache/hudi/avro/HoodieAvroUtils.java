@@ -109,7 +109,6 @@ import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
 import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
 
 /**
@@ -1474,16 +1473,14 @@ public class HoodieAvroUtils {
    * @param avroValueWrapper A wrapped value with Avro type wrapper.
    * @return Java value.
    */
-  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper, boolean handleObfuscatedFlow, Option<String> fieldName, Option<GenericRecord> record) {
+  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper, boolean handleObfuscatedFlow, Option<String> fieldName, Option<GenericRecord> colStatsRecord) {
     if (avroValueWrapper == null) {
       return null;
     }
 
-    if (handleObfuscatedFlow) {
-      Pair<Boolean, String> isValueWrapperObfuscated = getIsValueWrapperObfuscated(record.get(), fieldName.get());
-      if (isValueWrapperObfuscated.getKey()) {
-        return unwrapAvroValueWrapper(avroValueWrapper, isValueWrapperObfuscated.getValue());
-      }
+    Pair<Boolean, String> isValueWrapperObfuscated = getIsValueWrapperObfuscated(avroValueWrapper);
+    if (isValueWrapperObfuscated.getKey()) {
+      return unwrapAvroValueWrapper(avroValueWrapper, isValueWrapperObfuscated.getValue());
     }
 
     if (avroValueWrapper instanceof DateWrapper) {
@@ -1524,27 +1521,44 @@ public class HoodieAvroUtils {
     if (avroValueWrapper == null) {
       return null;
     } else if (DateWrapper.class.getSimpleName().equals(wrapperClassName)) {
-      return Date.valueOf(LocalDate.ofEpochDay((Integer)((Record) avroValueWrapper).get(0)));
+      if (avroValueWrapper instanceof GenericRecord) {
+        return Date.valueOf(LocalDate.ofEpochDay((Integer) ((GenericRecord) avroValueWrapper).get(0)));
+      } else {
+        return Date.valueOf(LocalDate.ofEpochDay((Integer) ((Record) avroValueWrapper).get(0)));
+      }
     } else if (LocalDateWrapper.class.getSimpleName().equals(wrapperClassName)) {
-      return LocalDate.ofEpochDay((Integer)((Record) avroValueWrapper).get(0));
+      if (avroValueWrapper instanceof GenericRecord) {
+        return LocalDate.ofEpochDay((Integer) ((GenericRecord) avroValueWrapper).get(0));
+      } else {
+        return LocalDate.ofEpochDay((Integer) ((Record) avroValueWrapper).get(0));
+      }
     } else if (TimestampMicrosWrapper.class.getSimpleName().equals(wrapperClassName)) {
-      Instant instant = microsToInstant((Long)((Record) avroValueWrapper).get(0));
-      return Timestamp.from(instant);
+      if (avroValueWrapper instanceof GenericRecord) {
+        Instant instant = microsToInstant((Long) ((GenericRecord) avroValueWrapper).get(0));
+        return Timestamp.from(instant);
+      } else {
+        Instant instant = microsToInstant((Long) ((Record) avroValueWrapper).get(0));
+        return Timestamp.from(instant);
+      }
     } else if (DecimalWrapper.class.getSimpleName().equals(wrapperClassName)) {
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
-      return AVRO_DECIMAL_CONVERSION.fromBytes((ByteBuffer) ((Record) avroValueWrapper).get(0), valueSchema, valueSchema.getLogicalType());
+      if (avroValueWrapper instanceof GenericRecord) {
+        return AVRO_DECIMAL_CONVERSION.fromBytes((ByteBuffer)((GenericRecord) avroValueWrapper).get(0), valueSchema, valueSchema.getLogicalType());
+      } else {
+        return AVRO_DECIMAL_CONVERSION.fromBytes((ByteBuffer) ((Record) avroValueWrapper).get(0), valueSchema, valueSchema.getLogicalType());
+      }
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
     }
   }
 
-  private static Pair<Boolean, String> getIsValueWrapperObfuscated(GenericRecord record, String subFieldName) {
-    Object statsValue = ((GenericRecord) record.get(SCHEMA_FIELD_ID_COLUMN_STATS)).get(subFieldName);
+  private static Pair<Boolean, String> getIsValueWrapperObfuscated(Object statsValue) {
     if (statsValue != null) {
       String statsValueSchemaClassName = ((GenericRecord) statsValue).getSchema().getName();
       boolean toReturn = statsValueSchemaClassName.equals(DateWrapper.class.getSimpleName())
           || statsValueSchemaClassName.equals(LocalDateWrapper.class.getSimpleName())
-          || statsValueSchemaClassName.equals(TimestampMicrosWrapper.class.getSimpleName());
+          || statsValueSchemaClassName.equals(TimestampMicrosWrapper.class.getSimpleName())
+          || statsValueSchemaClassName.equals(DecimalWrapper.class.getSimpleName());
       if (toReturn) {
         return Pair.of(true, ((GenericRecord) statsValue).getSchema().getName());
       }

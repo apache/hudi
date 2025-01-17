@@ -241,7 +241,7 @@ public class ColumnStatsIndexHelper {
 
     StructType indexSchema = ColumnStatsIndexSupport$.MODULE$.composeIndexSchema(
         JavaScalaConverters.<String>convertJavaListToScalaSeq(columnNames),
-        JavaScalaConverters.convertJavaListToScalaList(columnNames).toSet(),
+        JavaScalaConverters.convertJavaListToScalaList(columnNames),
           StructType$.MODULE$.apply(orderedColumnSchemas)
     )._1;
 
