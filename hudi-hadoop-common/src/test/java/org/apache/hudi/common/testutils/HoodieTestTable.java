@@ -1337,6 +1337,10 @@ public class HoodieTestTable implements AutoCloseable {
                                                                              HoodieTableType tableType,
                                                                              String commitTime,
                                                                              Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap) {
+    if (partitionToFilesNameLengthMap.isEmpty()) {
+      return testTableState;
+    }
+
     for (Map.Entry<String, List<Pair<String, Integer>>> partitionEntry : partitionToFilesNameLengthMap.entrySet()) {
       String partitionName = partitionEntry.getKey();
       List<Pair<String, Integer>> fileNameAndLengthList = partitionEntry.getValue();
@@ -1356,6 +1360,10 @@ public class HoodieTestTable implements AutoCloseable {
   public static List<HoodieWriteStat> generateHoodieWriteStatForPartition(Map<String, List<Pair<String, Integer>>> partitionToFileIdMap,
                                                                           String commitTime, boolean bootstrap) {
     List<HoodieWriteStat> writeStats = new ArrayList<>();
+    if (partitionToFileIdMap == null || partitionToFileIdMap.isEmpty()) {
+      return writeStats;
+    }
+
     for (Map.Entry<String, List<Pair<String, Integer>>> entry : partitionToFileIdMap.entrySet()) {
       String partition = entry.getKey();
       for (Pair<String, Integer> fileIdInfo : entry.getValue()) {
