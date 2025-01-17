@@ -1045,31 +1045,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private boolean shouldDeleteMetadataPartition(MetadataPartitionType partitionType) {
     // Only delete metadata table partition when all the following conditions are met:
     // (1) This is data table.
-    // (2) Index corresponding to this metadata partition is disabled in HoodieWriteConfig.
+    // (2) This metadata partition does NOT exist on storage.
     // (3) The completed metadata partitions in table config contains this partition.
     // NOTE: Inflight metadata partitions are not considered as they could have been inflight due to async indexer.
     if (isMetadataTable() || !config.isMetadataTableEnabled()) {
       return false;
     }
-    boolean metadataIndexDisabled;
-    switch (partitionType) {
-      // NOTE: FILES partition type is always considered in sync with hoodie.metadata.enable.
-      //       It cannot be the case that metadata is enabled but FILES is disabled.
-      case COLUMN_STATS:
-        metadataIndexDisabled = !config.isMetadataColumnStatsIndexEnabled();
-        break;
-      case BLOOM_FILTERS:
-        metadataIndexDisabled = !config.isMetadataBloomFilterIndexEnabled();
-        break;
-      case RECORD_INDEX:
-        metadataIndexDisabled = !config.isRecordIndexEnabled();
-        break;
-      default:
-        LOG.debug("Not a valid metadata partition type: " + partitionType.name());
-        return false;
-    }
-    return metadataIndexDisabled
-        && metaClient.getTableConfig().getMetadataPartitions().contains(partitionType.getPartitionPath());
+    return !MetadataPartitionType.getEnabledPartitions(config.getProps(), metaClient).contains(partitionType);
   }
 
   private boolean shouldExecuteMetadataTableDeletion() {
