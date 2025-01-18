@@ -18,6 +18,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -26,15 +27,20 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableQueryType;
+import org.apache.hudi.common.serialization.HoodieFileSliceSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -50,6 +56,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -61,6 +68,10 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.HOODIE_FILE_INDEX_SPILLABLE_MEMORY;
+import static org.apache.hudi.common.config.HoodieCommonConfig.HOODIE_FILE_INDEX_USE_SPILLABLE_MAP;
+import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
@@ -83,7 +94,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final String[] partitionColumns;
 
   protected final HoodieMetadataConfig metadataConfig;
-
+  private final TypedProperties configProperties;
   private final HoodieTableQueryType queryType;
   private final Option<String> specifiedQueryInstant;
   private final Option<String> beginInstantTime;
@@ -166,7 +177,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.metaClient = metaClient;
     this.engineContext = engineContext;
     this.fileStatusCache = fileStatusCache;
-
+    this.configProperties = configProperties;
     doRefresh();
   }
 
@@ -226,7 +237,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     if (!areAllFileSlicesCached()) {
       ensurePreloadedPartitions(getAllQueryPartitionPaths());
     }
-
     return cachedAllInputFileSlices;
   }
 
@@ -428,7 +438,21 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // Reset it to null to trigger re-loading of all partition path
     this.cachedAllPartitionPaths = null;
     // Reset to force reload file slices inside partitions
-    this.cachedAllInputFileSlices = new HashMap<>();
+    try {
+      if (ConfigUtils.getBooleanWithAltKeys(configProperties, HOODIE_FILE_INDEX_USE_SPILLABLE_MAP)) {
+        long spillableMemory = ConfigUtils.getLongWithAltKeys(configProperties, HOODIE_FILE_INDEX_SPILLABLE_MEMORY);
+        String spillablePath = ConfigUtils.getStringWithAltKeys(configProperties, HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH, true);
+        DiskMapType diskMapType = ConfigUtils.getRawValueWithAltKeys(configProperties, SPILLABLE_DISK_MAP_TYPE, true);
+        boolean isBitCaskCompressionEnabled = ConfigUtils.getBooleanWithAltKeys(configProperties, DISK_MAP_BITCASK_COMPRESSION_ENABLED);
+        this.cachedAllInputFileSlices = new ExternalSpillableMap<>(
+            spillableMemory, spillablePath, new DefaultSizeEstimator<>(), new DefaultSizeEstimator<>(), diskMapType,
+            new HoodieFileSliceSerializer(), isBitCaskCompressionEnabled, BaseHoodieTableFileIndex.class.getSimpleName());
+      } else {
+        this.cachedAllInputFileSlices = new HashMap<>();
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to refresh file index", e);
+    }
     if (!shouldListLazily) {
       ensurePreloadedPartitions(getAllQueryPartitionPaths());
     }
@@ -514,7 +538,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * Partition path information containing the relative partition path
    * and values of partition columns.
    */
-  public static final class PartitionPath {
+  public static final class PartitionPath implements Serializable {
 
     final String path;
     final Object[] values;

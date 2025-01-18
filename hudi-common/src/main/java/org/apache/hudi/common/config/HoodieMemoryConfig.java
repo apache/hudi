@@ -16,13 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.config;
+package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.config.ConfigClassProperty;
-import org.apache.hudi.common.config.ConfigGroups;
-import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import javax.annotation.concurrent.Immutable;
