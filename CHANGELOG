@@ -553,3 +553,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-01-16 16:03:43] [release-v1.76.0] ---
 [ENG-17105][HUDI-7949] insert into hudi table with columns specified (#1140)
 [AUDIT-1071]: Changelog for release-v1.75.0 (#1139)
+
+--- [2025-01-18 16:03:18] [release-v1.77.0] ---
+[ENG-18351][HUDI-8868] Use external spillable map for cachedAllInputFileSlices in BaseHoodieTableFileIndex (#1111)
+[AUDIT-1071]: Changelog for release-v1.76.0 (#1145)
