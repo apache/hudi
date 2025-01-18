@@ -98,7 +98,7 @@ public class TestCompactionUtil {
         .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
         .getInstants();
     assertThat("all the instants should be in pending state", instants.size(), is(3));
-    CompactionUtil.rollbackCompaction(table);
+    CompactionUtil.rollbackCompaction(table, FlinkWriteClients.createWriteClient(conf));
     boolean allRolledBack = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstantsAsStream()
         .allMatch(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     assertTrue(allRolledBack, "all the instants should be rolled back");
