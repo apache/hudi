@@ -429,23 +429,22 @@ public class TableSizeStats implements Serializable {
     if (partition.contains("=")) {
       // Assume partition date format of "<column>=<date>" and try parsing out date.
       String[] parts = partition.split("=");
-      if (parts != null && parts.length == 2) {
+      if (parts.length == 2) {
         dateString = parts[1].trim();
       }
     }
 
-    LocalDate partitionDate = null;
     try {
       return LocalDate.parse(dateString, DATE_FORMATTER);
     } catch (DateTimeParseException dtpe) {
       LOG.error("Partition name {} must conform to date format if --start-date, --end-date, or --num-days are specified. ", partition, dtpe);
     }
-    return partitionDate;
+    return null;
   }
 
-  private static String getFileSizeUnit(double size) {
+  static String getFileSizeUnit(double size) {
     int counter = 0;
-    while (size > 1024 && counter < FILE_SIZE_UNITS.length) {
+    while (size > 1024 && counter < (FILE_SIZE_UNITS.length - 1)) {
       size /= 1024;
       counter++;
     }
