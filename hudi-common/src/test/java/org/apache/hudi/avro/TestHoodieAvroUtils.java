@@ -65,7 +65,6 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
@@ -700,7 +699,7 @@ public class TestHoodieAvroUtils {
       assertEquals(((Timestamp) value).getTime() * 1000L,
           ((GenericRecord) wrapperValue).get(0));
       assertEquals(((Timestamp) value).getTime(),
-          ((Instant) unwrapAvroValueWrapper(wrapperValue)).toEpochMilli());
+          ((Timestamp) unwrapAvroValueWrapper(wrapperValue)).getTime());
     } else if (value instanceof Date) {
       assertEquals((int) ChronoUnit.DAYS.between(
               LocalDate.ofEpochDay(0), ((Date) value).toLocalDate()),

@@ -1803,14 +1803,14 @@ public class HoodieTableMetadataUtil {
 
   private static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType) {
     // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
-    //if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
-    return (schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
+    if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
+      return (schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
           && schema.getType() != Schema.Type.ENUM);
-    //}
+    }
     // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
     // HUDI-8585 will add support for BYTES and FIXED
-    //return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
-      //  && schema.getType() != Schema.Type.ENUM && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED;
+    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
+        && schema.getType() != Schema.Type.ENUM && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
@@ -2423,7 +2423,7 @@ public class HoodieTableMetadataUtil {
     }
     Lazy<Option<Schema>> lazyWriterSchemaOpt = writerSchemaOpt.isPresent() ? Lazy.eagerly(writerSchemaOpt) : Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient));
     final List<String> columnsToIndex = getColumnsToIndex(dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt,
-        dataTableMetaClient.getActiveTimeline().filterCompletedInstants().empty());
+        dataTableMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().empty());
     if (columnsToIndex.isEmpty()) {
       LOG.warn("No columns to index for partition stats index");
       return engineContext.emptyHoodieData();
