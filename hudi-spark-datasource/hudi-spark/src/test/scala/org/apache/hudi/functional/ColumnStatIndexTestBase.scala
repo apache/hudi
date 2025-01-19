@@ -358,23 +358,29 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
           .json(getClass.getClassLoader.getResource(expectedColStatsSourcePath).toString)
       }
 
+      val colsToDrop = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+        Seq("fileName")
+      } else {
+        Seq("fileName","valueCount")
+      }
+
       //assertEquals(expectedColStatsIndexTableDf.schema, transposedColStatsDF.schema)
       // NOTE: We have to drop the `fileName` column as it contains semi-random components
       //       that we can't control in this test. Nevertheless, since we manually verify composition of the
       //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
-      //assertEquals(asJson(sort(pExpectedColStatsIndexTableDf, pValidationSortColumns)),
-      //asJson(sort(pTransposedColStatsDF.drop("fileName"), pValidationSortColumns)))
+      assertEquals(asJson(sort(pExpectedColStatsIndexTableDf.drop(colsToDrop: _*), pValidationSortColumns)),
+        asJson(sort(pTransposedColStatsDF.drop(colsToDrop: _*), pValidationSortColumns)))
 
       val convertedSchema = AvroConversionUtils.convertAvroSchemaToStructType(AvroConversionUtils.convertStructTypeToAvroSchema(pExpectedColStatsSchema, "col_stats_schema"))
 
       //if (validatePartitionStatsManually) {
         // TODO(HUDI-4557): support validation of column stats of avro log files
         // Collect Column Stats manually (reading individual Parquet files)
-      val manualColStatsTableDF =
-      buildPartitionStatsTableManually(basePath, pIndexedColumns, pIndexedColumns, convertedSchema)
-
-      assertEquals(asJson(sort(manualColStatsTableDF.drop("fileName"), pValidationSortColumns)),
-        asJson(sort(pTransposedColStatsDF.drop("fileName"), pValidationSortColumns)))
+            val manualColStatsTableDF =
+            buildPartitionStatsTableManually(basePath, pIndexedColumns, pIndexedColumns, convertedSchema)
+      //
+            assertEquals(asJson(sort(manualColStatsTableDF.drop(colsToDrop: _*), pValidationSortColumns)),
+              asJson(sort(pTransposedColStatsDF.drop(colsToDrop: _*), pValidationSortColumns)))
       //}
     }
   }
