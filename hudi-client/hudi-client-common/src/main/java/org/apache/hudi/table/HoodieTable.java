@@ -1058,6 +1058,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       case COLUMN_STATS:
         metadataIndexDisabled = !config.isMetadataColumnStatsIndexEnabled();
         break;
+      case PARTITION_STATS:
+        metadataIndexDisabled = !config.isPartitionStatsIndexEnabled();
+        break;
       case BLOOM_FILTERS:
         metadataIndexDisabled = !config.isMetadataBloomFilterIndexEnabled();
         break;

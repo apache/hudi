@@ -40,7 +40,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions, config}
@@ -66,12 +65,44 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
     HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
 
+  @Test
+  def testMetadataPST(): Unit = {
+    val testCase: ColumnStatsTestCase = ColumnStatsTestCase(HoodieTableType.COPY_ON_WRITE, true)
+
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true"
+      //HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c6,c7"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      PARTITIONPATH_FIELD.key() -> "c8",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    ) ++ metadataOpts
+
+    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/input-table-json",
+      expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      shouldValidateColStats = false,
+      shouldValidatePartitionSats = true))
+  }
+
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParams"))
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c8"
     )
 
     val commonOpts = Map(
@@ -111,13 +142,14 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append))
 
-    validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
+    validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c8"))
 
     // update list of columns to explicit list of cols.
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c6,c7,c8" // ignore c4
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c6,c8" // ignore c4
     )
 
     expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
@@ -133,14 +165,14 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Append))
 
     validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c6","c7","c8"))
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c6","c8"))
 
     // lets explicitly override again. ignore c6
     // update list of columns to explicit list of cols.
     val metadataOpts2 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7,c8" // ignore c4,c6
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c8" // ignore c4,c6
     )
 
     expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
@@ -156,13 +188,13 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Append))
 
     validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c7","c8"))
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c8"))
 
     // update list of columns to explicit list of cols.
     val metadataOpts3 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7" // ignore c4,c5,c8.
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5" // ignore c4,c5,c8.
     )
     // disable col stats
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts3, commonOpts,
@@ -170,7 +202,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       shouldValidateManually = false))
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -354,7 +386,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -365,7 +397,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -488,7 +520,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -533,7 +565,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -549,7 +581,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -599,7 +631,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -615,7 +647,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidate = false,
+      shouldValidateColStats = false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -854,7 +886,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       // We have to include "c1", since we sort the expected outputs by this column
       val requestedColumns = Seq("c4", "c1")
 
-      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
+      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex, sourceTableSchema)
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
         spark.read
@@ -907,7 +939,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
       val requestedColumns = sourceTableSchema.fieldNames
 
-      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex.toSet, sourceTableSchema)
+      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted, targetColumnsToIndex, sourceTableSchema)
       val expectedColStatsIndexUpdatedDF =
         spark.read
           .schema(expectedColStatsSchema)
