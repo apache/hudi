@@ -80,6 +80,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_TH
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_LIMIT_INSTANTS;
 
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
@@ -353,6 +354,8 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
             InstantComparatorV1.getComparableAction(i.getAction()))));
 
     return instantsToArchive.stream()
+        .sorted()
+        .limit(config.getLongOrDefault(ARCHIVE_LIMIT_INSTANTS))
         .flatMap(hoodieInstant ->
             groupByTsAction.getOrDefault(Pair.of(hoodieInstant.requestedTime(),
                 InstantComparatorV1.getComparableAction(hoodieInstant.getAction())), Collections.emptyList()).stream())
