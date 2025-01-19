@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
@@ -40,6 +41,7 @@ import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.storage.HoodieOSSStorageStrategy;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -48,6 +50,7 @@ import org.apache.hudi.util.Lazy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 
 import javax.annotation.Nullable;
 
@@ -430,13 +433,21 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * Returns the files added as part of this record.
    */
-  public List<StoragePathInfo> getFileList(HoodieStorage storage, StoragePath partitionPath) {
+  public List<StoragePathInfo> getFileList(HoodieTableMetaClient dataMetaClient, StoragePath partitionPath) {
+    HoodieStorage storage = dataMetaClient.getStorage();
+    String tableName = dataMetaClient.getTableConfig().getTableName();
+    StoragePath dataBasePath = dataMetaClient.getBasePath();
     long blockSize = storage.getDefaultBlockSize(partitionPath);
     return filterFileInfoEntries(false)
         .map(e -> {
           // NOTE: Since we know that the Metadata Table's Payload is simply a file-name we're
           //       creating Hadoop's Path using more performant unsafe variant
-          return new StoragePathInfo(new StoragePath(partitionPath, e.getKey()), e.getValue().getSize(),
+          HashMap<String, String> config = new HashMap<>();
+          config.put(HoodieOSSStorageStrategy.FILE_ID_KEY, FSUtils.getFileId(new Path(e.getKey()).getName()));
+          config.put(HoodieOSSStorageStrategy.TABLE_BASE_PATH, dataBasePath.getPathWithoutSchemeAndAuthority().toUri().getPath());
+          StoragePath part = storage.storageLocation(FSUtils.getRelativePartitionPath(dataBasePath, partitionPath), config);
+          StoragePath filePath = new StoragePath(part, new Path(e.getKey()).getName());
+          return new StoragePathInfo(filePath, e.getValue().getSize(),
               false, (short) 0, blockSize, 0);
         })
         .collect(Collectors.toList());
