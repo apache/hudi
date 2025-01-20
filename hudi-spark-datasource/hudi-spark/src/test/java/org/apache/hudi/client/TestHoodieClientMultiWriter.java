@@ -152,25 +152,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     cleanupResources();
   }
 
-  private static final List<Class> LOCK_PROVIDER_CLASSES = Arrays.asList(
-      InProcessLockProvider.class,
-      FileSystemBasedLockProvider.class);
-
-  private static final List<ConflictResolutionStrategy> CONFLICT_RESOLUTION_STRATEGY_CLASSES = Arrays.asList(
-      new SimpleConcurrentFileWritesConflictResolutionStrategy(),
-      new PreferWriterConflictResolutionStrategy());
-
-  private static Iterable<Object[]> providerClassResolutionStrategyAndTableType() {
-    List<Object[]> opts = new ArrayList<>();
-    for (Object providerClass : LOCK_PROVIDER_CLASSES) {
-      for (ConflictResolutionStrategy resolutionStrategy : CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
-        opts.add(new Object[] {HoodieTableType.COPY_ON_WRITE, providerClass, resolutionStrategy});
-        opts.add(new Object[] {HoodieTableType.MERGE_ON_READ, providerClass, resolutionStrategy});
-      }
-    }
-    return opts;
-  }
-
   @ParameterizedTest
   @MethodSource("configParamsDirectBased")
   public void testHoodieClientBasicMultiWriterWithEarlyConflictDetectionDirect(String tableType, String earlyConflictDetectionStrategy) throws Exception {
@@ -499,6 +480,26 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
   }
 
+  private static final List<Class> LOCK_PROVIDER_CLASSES = Arrays.asList(
+//      InProcessLockProvider.class,
+      FileSystemBasedLockProvider.class);
+
+  private static final List<ConflictResolutionStrategy> CONFLICT_RESOLUTION_STRATEGY_CLASSES = Arrays.asList(
+      new SimpleConcurrentFileWritesConflictResolutionStrategy()
+//      new PreferWriterConflictResolutionStrategy()
+  );
+
+  private static Iterable<Object[]> providerClassResolutionStrategyAndTableType() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object providerClass : LOCK_PROVIDER_CLASSES) {
+      for (ConflictResolutionStrategy resolutionStrategy : CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
+//        opts.add(new Object[] {HoodieTableType.COPY_ON_WRITE, providerClass, resolutionStrategy});
+        opts.add(new Object[] {HoodieTableType.MERGE_ON_READ, providerClass, resolutionStrategy});
+      }
+    }
+    return opts;
+  }
+
   @ParameterizedTest
   @MethodSource("providerClassResolutionStrategyAndTableType")
   public void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType, Class<? extends LockProvider<?>> providerClass,
@@ -586,6 +587,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
         // Since the concurrent modifications went in, this upsert has
         // to fail
+        // ----- This line error out, go to the assertThrows API and set breakpoint there, keep running the test for 20 times in debug mode should repro the issue
+        // to keep running a test, modify Run configuration of the test (right click the run button next to the test, choose the last option) -> modify options -> repeat -> run until stopped.
+        // the run test in debug mode. when there is a repro it will stop at the breakpoint
         assertThrows(HoodieWriteConflictException.class, () -> {
           createCommitWithUpserts(cfg, client1, thirdCommitTime, commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
         });
