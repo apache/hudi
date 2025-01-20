@@ -1692,26 +1692,22 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private HoodieData<HoodieRecord> getRecordIndexReplacedRecords(HoodieReplaceCommitMetadata replaceCommitMetadata) {
-    //try {
-    HoodieMetadataFileSystemView fsView = getMetadataView();
-    List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = replaceCommitMetadata
-        .getPartitionToReplaceFileIds()
-        .keySet().stream()
-        .flatMap(partition -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f)))
-        .collect(Collectors.toList());
-    return readRecordKeysFromBaseFiles(
-        engineContext,
-        dataWriteConfig,
-        partitionBaseFilePairs,
-        true,
-        dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
-        dataMetaClient.getBasePath(),
-        storageConf,
-        this.getClass().getSimpleName());
-    /*} finally {
-      // re-init metadata reader.
-      initMetadataReader();
-    }*/
+    try (HoodieMetadataFileSystemView fsView = getMetadataView()) {
+      List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = replaceCommitMetadata
+          .getPartitionToReplaceFileIds()
+          .keySet().stream()
+          .flatMap(partition -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f)))
+          .collect(Collectors.toList());
+      return readRecordKeysFromBaseFiles(
+          engineContext,
+          dataWriteConfig,
+          partitionBaseFilePairs,
+          true,
+          dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
+          dataMetaClient.getBasePath(),
+          storageConf,
+          this.getClass().getSimpleName());
+    }
   }
 
   private HoodieData<HoodieRecord> getRecordIndexAdditionalUpserts(HoodieData<HoodieRecord> updatesFromWriteStatuses, HoodieCommitMetadata commitMetadata) {

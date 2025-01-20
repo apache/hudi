@@ -32,7 +32,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -133,7 +132,7 @@ public class TestHoodieDeleteBlock {
       if (deleteRecords[i].getOrderingValue() != null) {
         if (deleteRecords[i].getOrderingValue() instanceof Timestamp) {
           assertEquals(((Timestamp) deleteRecords[i].getOrderingValue()).getTime(),
-              ((Instant) deserializedDeleteRecords[i].getOrderingValue()).toEpochMilli());
+              ((Timestamp) deserializedDeleteRecords[i].getOrderingValue()).getTime());
         } else if (deleteRecords[i].getOrderingValue() instanceof BigDecimal) {
           assertEquals("0.000000000000000",
               ((BigDecimal) deleteRecords[i].getOrderingValue())
