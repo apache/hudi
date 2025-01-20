@@ -73,13 +73,13 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
-                                    requestedColumns: Array[String],
+                                    optionalSchema: HoodieTableSchema,
                                     filters: Array[Filter]): RDD[InternalRow] = {
     // The only required filters are ones that make sure we're only fetching records that
     // fall into incremental span of the timeline being queried
     val requiredFilters = incrementalSpanRecordFilters
     val optionalFilters = filters
-    val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
+    val readers = createBaseFileReaders(tableSchema, requiredSchema, optionalSchema, requiredFilters, optionalFilters)
 
     new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,
@@ -235,10 +235,13 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
   }
 
   override lazy val mandatoryFields: Seq[String] = {
-    // NOTE: These columns are required for Incremental flow to be able to handle the rows properly, even in
+    // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
     //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
-    Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
-      preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+    Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+  }
+
+  override lazy val optionalExtraFields: Seq[String] = {
+    Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
   }
 
   protected def validate(): Unit = {
