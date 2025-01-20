@@ -35,6 +35,7 @@ import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.avro.generic.GenericRecord;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -85,6 +86,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_REC
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_IS_DELETED;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
@@ -341,13 +343,6 @@ public enum MetadataPartitionType {
     return partitionType.equals(SECONDARY_INDEX) || partitionType.equals(EXPRESSION_INDEX);
   }
 
-  public static String getGenericIndexNameWithoutPrefix(String indexName) {
-    String prefix = indexName.startsWith(SECONDARY_INDEX.getPartitionPath())
-        ? SECONDARY_INDEX.getPartitionPath()
-        : EXPRESSION_INDEX.getPartitionPath();
-    return indexName.substring(prefix.length());
-  }
-
   // Partition path in metadata table.
   private final String partitionPath;
   // FileId prefix used for all file groups in this partition.
@@ -485,7 +480,8 @@ public enum MetadataPartitionType {
       return false;
     }
     // check the index definition already exists or not for this column
-    return dataMetaClient.getIndexMetadata().isEmpty() || !isIndexDefinitionPresentForColumn(secondaryIndexColumn, PARTITION_NAME_SECONDARY_INDEX, dataMetaClient);
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(secondaryIndexColumn, PARTITION_NAME_SECONDARY_INDEX, dataMetaClient);
+    return indexDefinitions.isEmpty();
   }
 
   /**
@@ -503,13 +499,24 @@ public enum MetadataPartitionType {
       return false;
     }
 
-    String expression = expressionIndexOptions.get(HoodieExpressionIndex.EXPRESSION_OPTION);
-    if (StringUtils.isNullOrEmpty(expression)) {
-      return false;
-    }
+    // get all index definitions for this column and index type
+    // check if none of the index definitions has index function matching the expression
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(expressionIndexColumn, PARTITION_NAME_EXPRESSION_INDEX, dataMetaClient);
+    return indexDefinitions.isEmpty()
+        || indexDefinitions.stream().noneMatch(indexDefinition -> indexDefinition.getIndexFunction().equals(expressionIndexOptions.get(HoodieExpressionIndex.EXPRESSION_OPTION)));
+  }
 
-    // check the index definition already exists or not for this expression
-    return dataMetaClient.getIndexMetadata().isEmpty() || !isIndexDefinitionPresentForColumn(expressionIndexColumn, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, dataMetaClient);
+  /**
+   * Return all the index definitions for the given column with the same indexType.
+   */
+  private static List<HoodieIndexDefinition> getIndexDefinitions(String indexType, String sourceField, HoodieTableMetaClient metaClient) {
+    List<HoodieIndexDefinition> indexDefinitions = new ArrayList<>();
+    if (metaClient.getIndexMetadata().isPresent()) {
+      metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+          .filter(indexDefinition -> indexDefinition.getSourceFields().contains(sourceField) && indexDefinition.getIndexType().equals(indexType))
+          .forEach(indexDefinitions::add);
+    }
+    return indexDefinitions;
   }
 
   private static boolean isIndexDefinitionPresentForColumn(String indexedColumn, String indexType, HoodieTableMetaClient dataMetaClient) {

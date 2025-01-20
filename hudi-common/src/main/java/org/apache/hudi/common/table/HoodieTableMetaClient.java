@@ -220,11 +220,6 @@ public class HoodieTableMetaClient implements Serializable {
   public boolean buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
     boolean isIndexDefnImmutable = !indexDefinition.getIndexName().equals(PARTITION_NAME_COLUMN_STATS); // only col stats is mutable.
-    if (isIndexDefnImmutable) {
-      checkState(
-          !indexMetadataOpt.isPresent() || (!indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)),
-          "Index metadata is already present");
-    }
     String indexMetaPath = getIndexDefinitionPath();
     boolean updateIndexDefn = true;
     if (indexMetadataOpt.isPresent()) {

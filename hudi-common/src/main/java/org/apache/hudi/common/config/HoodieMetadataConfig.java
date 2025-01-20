@@ -364,26 +364,27 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.expression.column")
       .noDefaultValue()
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("1.0.1")
       .withDocumentation("Column for which expression index will be built.");
+
   public static final ConfigProperty<String> EXPRESSION_INDEX_NAME = ConfigProperty
       .key(METADATA_PREFIX + ".index.expression.name")
       .defaultValue("")
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("1.0.1")
       .withDocumentation("Name of the expression index. It is optional and default is the name of the column, prefixed by '" + PARTITION_NAME_EXPRESSION_INDEX_PREFIX + "'.");
 
   public static final ConfigProperty<String> EXPRESSION_INDEX_TYPE = ConfigProperty
       .key(METADATA_PREFIX + ".index.expression.type")
       .noDefaultValue()
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("1.0.1")
       .withDocumentation("Index type i.e. column_stats aor bloom_filters, for which expression index will be built e.g. date_format(ts).");
   public static final ConfigProperty<String> EXPRESSION_INDEX_OPTIONS = ConfigProperty
       .key(METADATA_PREFIX + ".index.expression.options")
       .noDefaultValue()
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("1.0.1")
       .withDocumentation("Options for the expression index, e.g. \"expr='from_unixtime', format='yyyy-MM-dd'\"");
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty

@@ -63,8 +63,7 @@ public class HoodieIndexDefinition implements Serializable {
   public HoodieIndexDefinition() {
   }
 
-  public HoodieIndexDefinition(String indexName, String indexType, String indexFunction, List<String> sourceFields,
-                               Map<String, String> indexOptions) {
+  HoodieIndexDefinition(String indexName, String indexType, String indexFunction, List<String> sourceFields, Map<String, String> indexOptions) {
     this.indexName = indexName;
     this.indexType = indexType;
     this.indexFunction = nonEmpty(indexFunction) ? indexFunction : EMPTY_STRING;

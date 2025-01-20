@@ -130,8 +130,13 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
   @Override
   public void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(PARTITION_NAME_COLUMN_STATS, PARTITION_NAME_COLUMN_STATS, PARTITION_NAME_COLUMN_STATS,
-        columnsToIndex, Collections.EMPTY_MAP);
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName(PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withIndexFunction(PARTITION_NAME_COLUMN_STATS)
+        .withSourceFields(columnsToIndex)
+        .withIndexOptions(Collections.EMPTY_MAP)
+        .build();
     LOG.info("Registering Or Updating the index " + PARTITION_NAME_COLUMN_STATS);
     register(metaClient, indexDefinition);
   }
