@@ -146,9 +146,6 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
 
       @Override
       public HoodieRecord<?> next() {
-        if (!hasNext()) {
-          throw new NoSuchElementException();
-        }
         return recordIterator.next();
       }
 
