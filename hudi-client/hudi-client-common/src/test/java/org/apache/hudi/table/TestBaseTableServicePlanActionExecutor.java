@@ -87,10 +87,10 @@ public class TestBaseTableServicePlanActionExecutor {
    * |requestTime<---commit type--->completionTime|(written partitions in current commit)
    * ---------------------------------------------------------------------------------------------------------------------------------------------> timeline
    * |0<-c1->1|(part=0000)
-   *           |2<------cl2------>4|
+   *           |2<------cl2------>4|(part=0000)
    *                        |3<-----------c3--------->6|(part=0003)
    *                                         |5<-----------c4--------->7|(part=0005)
-   *                                                                                |8<-------------------c5----------------->10|(part=0008)
+   *                                                                                |8<-------------------c5----------------->N|(part=0008)
    *                                                                                                             | start incr clustering at 9
    */
   @Test
@@ -110,14 +110,13 @@ public class TestBaseTableServicePlanActionExecutor {
     instants.put("0002", "0004"); // clustering 1
     instants.put("0003", "0006"); // commit 2
     instants.put("0005", "0007"); // commit 3
-    instants.put("0008", "0010"); // commit 4
 
-    prepareTimeline(metaClient, instants);
+    prepareTimeline(metaClient, instants, Collections.singletonList("0008"));
 
     DummyTableServicePlanActionExecutor executor = new DummyTableServicePlanActionExecutor(context, writeConfig, getMockHoodieTable(metaClient), "0009");
     Set<String> incrementalPartitions = (Set<String>)executor.getIncrementalPartitions(TableServiceType.CLUSTER).getRight();
 
-    assertEquals(incrementalPartitions.size(), 2);
+    assertEquals(2, incrementalPartitions.size());
     assertTrue(incrementalPartitions.contains("0003"));
     assertTrue(incrementalPartitions.contains("0005"));
     assertFalse(incrementalPartitions.contains("0008"));
@@ -136,13 +135,13 @@ public class TestBaseTableServicePlanActionExecutor {
 
     // <requestTime, CompletionTime>
     HashMap<String, String> instants = new HashMap<>();
-    instants.put("0000", "0001"); // commit 1
-    instants.put("0002", "0004"); // clustering 1
-    instants.put("0003", "0006"); // commit 2
-    instants.put("0005", "0007"); // commit 3
-    instants.put("0008", "0010"); // commit 4
+    instants.put("0000", "0001");
+    instants.put("0002", "0004");
+    instants.put("0003", "0006");
+    instants.put("0005", "0007");
+    instants.put("0008", "0010");
 
-    prepareTimeline(metaClient, instants);
+    prepareTimeline(metaClient, instants, Collections.emptyList());
     instants.keySet().forEach(instant -> {
       try {
         FileCreateUtils.createPartitionMetaFile(tablePath, instant);
@@ -153,7 +152,7 @@ public class TestBaseTableServicePlanActionExecutor {
     DummyStrategy incrementalStrategy = new DummyStrategy();
     DummyTableServicePlanActionExecutor executor = new DummyTableServicePlanActionExecutor(context, writeConfig, getMockHoodieTable(metaClient), "0009");
     List<String> partitions = (List<String>) executor.getPartitions(incrementalStrategy, TableServiceType.CLUSTER);
-    assertEquals(partitions.size(), 2);
+    assertEquals(2, partitions.size());
 
     // Simulation archive commit instant 0000 and clustering instant 0002
     Path path = new Path(tablePath);
@@ -215,9 +214,10 @@ public class TestBaseTableServicePlanActionExecutor {
     assertTrue(partitions.isEmpty());
   }
 
-  private void prepareTimeline(HoodieTableMetaClient metaClient, HashMap<String, String> instants) throws Exception {
+  private void prepareTimeline(HoodieTableMetaClient metaClient, HashMap<String, String> commitInstants,
+                               List<String> requestInstants) throws Exception {
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
-    instants.forEach((requestTime, completionTime) -> {
+    commitInstants.forEach((requestTime, completionTime) -> {
       try {
         if (requestTime.equalsIgnoreCase("0002")) {
           Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
@@ -229,6 +229,15 @@ public class TestBaseTableServicePlanActionExecutor {
         }
       } catch (Exception e) {
         throw new HoodieException(e);
+      }
+    });
+
+    requestInstants.forEach(instant -> {
+      try {
+        testTable.addRequestedCommit(instant);
+        FileCreateUtils.createPartitionMetaFile(metaClient.getBasePath().toString(), instant);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
       }
     });
   }

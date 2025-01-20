@@ -116,7 +116,11 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
     String rightBoundary = instantTime;
     // compute [leftBoundary, rightBoundary) as time window
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    Set<String> partitionsInCommitMeta = table.getActiveTimeline().findInstantsAfter(leftBoundary).filterCompletedInstants().getCommitsTimeline().getInstantsAsStream()
+    Set<String> partitionsInCommitMeta = table.getActiveTimeline().filterCompletedInstants().getCommitsTimeline().getInstantsAsStream()
+        .filter(instant -> {
+          // ignore lastCompleteTableServiceInstant(left boundary) itself
+          return !(lastCompleteTableServiceInstant.isPresent() && instant.equals(lastCompleteTableServiceInstant.get()));
+        })
         .filter(this::filterCommitByTableType).flatMap(instant -> {
           try {
             String completionTime = instant.getCompletionTime();
