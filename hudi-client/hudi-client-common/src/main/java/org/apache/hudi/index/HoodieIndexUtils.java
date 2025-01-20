@@ -510,8 +510,13 @@ public class HoodieIndexUtils {
       throw new HoodieMetadataIndexException("Not eligible for indexing: " + indexType + ", indexName: " + userIndexName);
     }
 
-    return new HoodieIndexDefinition(fullIndexName, indexType, options.getOrDefault(EXPRESSION_OPTION, IDENTITY_TRANSFORM),
-        new ArrayList<>(columns.keySet()), options);
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(indexType)
+        .withIndexFunction(options.getOrDefault(EXPRESSION_OPTION, IDENTITY_TRANSFORM))
+        .withSourceFields(new ArrayList<>(columns.keySet()))
+        .withIndexOptions(options)
+        .build();
   }
 
   public static boolean indexExists(HoodieTableMetaClient metaClient, String indexName) {

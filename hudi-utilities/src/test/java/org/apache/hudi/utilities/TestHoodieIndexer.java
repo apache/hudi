@@ -200,16 +200,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // build RLI
     indexMetadataPartitionsAndAssert(RECORD_INDEX, Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName,
         "streamer-config/indexer-record-index.properties");
-    // rebuild metadata config with secondary index name and indexed column
-    String indexName = "idx_name";
-    /*metadataConfigBuilder = HoodieMetadataConfig.newBuilder()
-        .enable(true)
-        .withAsyncIndex(false).withMetadataIndexColumnStats(false)
-        .withSecondaryIndexName(indexName)
-        .withSecondaryIndexForColumn("name");
-    upsertToTable(metadataConfigBuilder.build(), tableName);*/
-
     // build SI
+    String indexName = "idx_name";
     indexMetadataPartitionsAndAssert(SECONDARY_INDEX, Arrays.asList(new MetadataPartitionType[] {FILES, RECORD_INDEX}),
         Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName, "streamer-config/indexer-secondary-index.properties");
     // validate the secondary index is built

@@ -140,7 +140,13 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
   private HoodieIndexDefinition getIndexDefinition(String indexName, String indexType, String indexFunc, List<String> sourceFields,
                                                    Map<String, String> indexOptions) {
     String fullIndexName = getIndexFullName(indexName, indexType);
-    return new HoodieIndexDefinition(fullIndexName, indexType, indexFunc, sourceFields, indexOptions);
+    return HoodieIndexDefinition.newBuilder()
+        .withIndexName(fullIndexName)
+        .withIndexType(indexType)
+        .withIndexFunction(indexFunc)
+        .withSourceFields(sourceFields)
+        .withIndexOptions(indexOptions)
+        .build();
   }
 
   private String getIndexFullName(String indexName, String indexType) {
