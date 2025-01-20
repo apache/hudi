@@ -23,14 +23,17 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Configurations used by the HUDI Metadata Table.
@@ -391,6 +394,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating secondary index.");
 
+  // Config to specify metadata index to delete
+  public static final ConfigProperty<String> DROP_METADATA_INDEX = ConfigProperty
+      .key(METADATA_PREFIX + ".index.drop")
+      .noDefaultValue()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Drop the specified index. "
+          + "The value should be the name of the index to delete. You can check index names using `SHOW INDEXES` command. "
+          + "The index name either starts with or matches exactly can be one of the following: "
+          + StringUtils.join(Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()), ", "));
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -550,6 +563,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getSecondaryIndexParallelism() {
     return getInt(SECONDARY_INDEX_PARALLELISM);
+  }
+
+  public String getMetadataIndexToDrop() {
+    return getString(DROP_METADATA_INDEX);
   }
 
   public static class Builder {
@@ -757,6 +774,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withSecondaryIndexParallelism(int parallelism) {
       metadataConfig.setValue(SECONDARY_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withDropMetadataIndex(String indexName) {
+      metadataConfig.setValue(DROP_METADATA_INDEX, indexName);
       return this;
     }
 
