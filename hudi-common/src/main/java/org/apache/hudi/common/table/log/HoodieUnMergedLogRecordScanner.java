@@ -40,8 +40,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.Schema;
 
 import java.util.Iterator;
+
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 /**
