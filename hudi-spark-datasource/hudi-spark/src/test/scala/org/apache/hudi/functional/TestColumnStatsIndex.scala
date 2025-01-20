@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
+import org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions, config}
 import org.apache.spark.sql._
@@ -162,6 +163,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val metadataOpts3 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
+      HoodieMetadataConfig.DROP_METADATA_INDEX.key -> COLUMN_STATS.getPartitionPath,
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7" // ignore c4,c5,c8.
     )
     // disable col stats

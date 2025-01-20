@@ -53,9 +53,9 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -1051,8 +1051,39 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     if (isMetadataTable() || !config.isMetadataTableEnabled()) {
       return false;
     }
-    boolean metadataIndexDisabled = !partitionType.isMetadataPartitionAvailable(metaClient);
+    boolean metadataIndexDisabled = isMetadataIndexDisabled(partitionType);
     return metadataIndexDisabled && metaClient.getTableConfig().getMetadataPartitions().contains(partitionType.getPartitionPath());
+  }
+
+  private boolean isMetadataIndexDisabled(MetadataPartitionType partitionType) {
+    boolean metadataIndexDisabled;
+    switch (partitionType) {
+      // NOTE: FILES partition type is always considered in sync with hoodie.metadata.enable.
+      //       It cannot be the case that metadata is enabled but FILES is disabled.
+      case COLUMN_STATS:
+        metadataIndexDisabled = !config.isMetadataColumnStatsIndexEnabled();
+        break;
+      case BLOOM_FILTERS:
+        metadataIndexDisabled = !config.isMetadataBloomFilterIndexEnabled();
+        break;
+      case RECORD_INDEX:
+        metadataIndexDisabled = !config.isRecordIndexEnabled();
+        break;
+      // PARTITION_STATS should have same behavior as COLUMN_STATS
+      case PARTITION_STATS:
+        metadataIndexDisabled = !config.isPartitionStatsIndexEnabled();
+        break;
+      // Expression and Secondary index can be in different partitions for different keys,
+      // and do not delete unless DROP INDEX is called.
+      case EXPRESSION_INDEX:
+      case SECONDARY_INDEX:
+        metadataIndexDisabled = !partitionType.isMetadataPartitionAvailable(metaClient);
+        break;
+      default:
+        LOG.debug("Not a valid metadata partition type: " + partitionType.name());
+        return false;
+    }
+    return metadataIndexDisabled;
   }
 
   private boolean shouldExecuteMetadataTableDeletion() {
