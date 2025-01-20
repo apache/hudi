@@ -73,7 +73,7 @@
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-datahub-sync</include>
 
-                  <include>io.acryl:datahub-client</include>
+                  <include>io.acryl:datahub-client-java8</include>
                   <include>com.beust:jcommander</include>
                   <include>commons-io:commons-io</include>
                   <include>org.apache.httpcomponents:httpasyncclient</include>
