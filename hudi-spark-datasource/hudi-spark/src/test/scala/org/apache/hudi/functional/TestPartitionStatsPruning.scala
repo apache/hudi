@@ -44,8 +44,8 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
   val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
     HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
 
-  //@ParameterizedTest
-  //@MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
   def testMetadataPSISimple(testCase: ColumnStatsTestCase): Unit = {
 
     val metadataOpts = Map(
@@ -74,17 +74,13 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       shouldValidatePartitionSats = true))
   }
 
-  //@ParameterizedTest
-  //@MethodSource(Array("testMetadataColumnStatsIndexParams"))
-  //@Test
-  def testMetadataColumnStatsIndex(): Unit = {
-    //testCase: ColumnStatsTestCase
-    val testCase = ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, true)
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c8"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true"
     )
 
     val commonOpts = Map(
@@ -124,14 +120,14 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       shouldValidatePartitionSats = true))
 
     validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c8"))
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8"))
 
     // update list of columns to explicit list of cols.
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c6,c8" // ignore c4
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c6,c7,c8" // ignore c4
     )
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
@@ -143,7 +139,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       shouldValidatePartitionSats = true))
 
     validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c6","c8"))
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c6","c7","c8"))
 
     // lets explicitly override again. ignore c6
     // update list of columns to explicit list of cols.
@@ -151,7 +147,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c8" // ignore c4,c6
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7,c8" // ignore c4,c6
     )
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts2, commonOpts,
@@ -163,7 +159,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       shouldValidatePartitionSats = true))
 
     validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c8"))
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c7","c8"))
 
     // disable cols stats
     val metadataOpts3 = Map(
@@ -225,7 +221,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c8"
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c7,c8"
     )
 
     // updates
@@ -256,7 +252,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c8"
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c7,c8"
     )
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -302,7 +298,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       shouldValidatePartitionSats = true))
 
     validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c8"))
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8"))
   }
 
   //@ParameterizedTest

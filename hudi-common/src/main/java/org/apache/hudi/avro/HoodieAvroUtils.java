@@ -1463,17 +1463,13 @@ public class HoodieAvroUtils {
     }
   }
 
-  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper) {
-    return unwrapAvroValueWrapper(avroValueWrapper, false, Option.empty(), Option.empty());
-  }
-
   /**
    * Unwraps Avro value wrapper into Java value.
    *
    * @param avroValueWrapper A wrapped value with Avro type wrapper.
    * @return Java value.
    */
-  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper, boolean handleObfuscatedFlow, Option<String> fieldName, Option<GenericRecord> colStatsRecord) {
+  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper) {
     if (avroValueWrapper == null) {
       return null;
     }
