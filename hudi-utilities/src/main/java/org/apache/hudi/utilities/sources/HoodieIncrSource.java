@@ -190,7 +190,7 @@ public class HoodieIncrSource extends RowSource {
 
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    if (CheckpointUtils.targetCheckpointV2(writeTableVersion)) {
+    if (CheckpointUtils.targetCheckpointV2(writeTableVersion, getClass().getName())) {
       return fetchNextBatchBasedOnCompletionTime(lastCheckpoint, sourceLimit);
     } else {
       return fetchNextBatchBasedOnRequestedTime(lastCheckpoint, sourceLimit);
@@ -215,7 +215,7 @@ public class HoodieIncrSource extends RowSource {
     IncrementalQueryAnalyzer analyzer = IncrSourceHelper.getIncrementalQueryAnalyzer(
         sparkContext, srcPath, lastCheckpoint, missingCheckpointStrategy,
         getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH),
-        getLatestSourceProfile());
+        getLatestSourceProfile(), getHollowCommitHandleMode(props));
     QueryContext queryContext = analyzer.analyze();
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
