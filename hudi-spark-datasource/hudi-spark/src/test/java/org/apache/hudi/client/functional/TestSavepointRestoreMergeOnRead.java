@@ -314,7 +314,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       updateBatchWithoutCommit(client.createNewInstantTime(),
           Objects.requireNonNull(baseRecordsToUpdate, "The records to update should not be null"));
       // rollback the delta_commit
-      assertTrue(writeClient.rollbackFailedWrites(), "The last delta_commit should be rolled back");
+      assertTrue(writeClient.rollbackFailedWrites(metaClient), "The last delta_commit should be rolled back");
 
       // another update
       upsertBatch(writeClient, baseRecordsToUpdate);

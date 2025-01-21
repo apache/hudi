@@ -931,15 +931,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
   public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
-    if (needsUpgradeOrDowngrade(metaClient)) {
-      executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
-    }
-
-    CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
-        HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
-
     String instantTime = createNewInstantTime();
-    startCommit(instantTime, actionType, metaClient);
+    startCommitWithTime(instantTime, actionType, metaClient);
     return instantTime;
   }
 
@@ -969,7 +962,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
-        HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
+        HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
     startCommit(instantTime, actionType, metaClient);
   }
 
@@ -1517,8 +1510,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @return true if rollback happened. false otherwise.
    */
-  public boolean rollbackFailedWrites() {
-    return tableServiceClient.rollbackFailedWrites();
+  public boolean rollbackFailedWrites(HoodieTableMetaClient metaClient) {
+    return tableServiceClient.rollbackFailedWrites(metaClient);
   }
 
   /**
