@@ -207,7 +207,11 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 
       val startInstantArchived = !queryContext.getArchivedInstants.isEmpty
-      val endInstantTime = queryContext.getEndInstant.get()
+      if (queryContext.isEmpty) {
+        // no commits to read
+        return sqlContext.sparkContext.emptyRDD[Row]
+      }
+      val endInstantTime = queryContext.getLastInstant
 
       val scanDf = if (fallbackToFullTableScan && startInstantArchived) {
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived")
