@@ -557,3 +557,9 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-01-18 16:03:18] [release-v1.77.0] ---
 [ENG-18351][HUDI-8868] Use external spillable map for cachedAllInputFileSlices in BaseHoodieTableFileIndex (#1111)
 [AUDIT-1071]: Changelog for release-v1.76.0 (#1145)
+
+--- [2025-01-21 21:15:42] [release-v1.78.0] ---
+[AUDIT-1071] Modify changelog workflow to allow for manual audit runs (#1151)
+[AUDIT-1136] Make Spark 3.5 the default for Hudi Internal (#1150)
+[AUDIT-1071][INTERNAL] Fix dependency for HoodieMemoryConfig (#1149)
+[AUDIT-1071]: Changelog for release-v1.77.0 (#1148)
