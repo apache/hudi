@@ -146,6 +146,24 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     return 0;
   }
 
+  /**
+   * This method can be used to enable projection push down for the payload to trim columns.
+   * @return true if projection push down is enabled, false otherwise.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  default boolean enableProjectionPushDown() {
+    return false;
+  }
+
+  /**
+   * This method can be used to specify the mandatory fields required for merging.
+   * @return the mandatory fields required for merging.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  default String[] mandatoryFields() {
+    return new String[]{};
+  }
+
   static String getAvroPayloadForMergeMode(RecordMergeMode mergeMode) {
     switch (mergeMode) {
       //TODO: After we have merge mode working for writing, we should have a dummy payload that will throw exception when used

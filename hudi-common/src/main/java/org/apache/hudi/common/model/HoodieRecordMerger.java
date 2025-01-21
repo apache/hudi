@@ -146,7 +146,7 @@ public interface HoodieRecordMerger extends Serializable {
    * If true, mor merging can be done without all columns. The columns required can be configured
    * by overriding getMandatoryFieldsForMerging
    */
-  default boolean isProjectionCompatible() {
+  default boolean isProjectionCompatible(HoodieTableConfig cfg, TypedProperties properties) {
     return false;
   }
 

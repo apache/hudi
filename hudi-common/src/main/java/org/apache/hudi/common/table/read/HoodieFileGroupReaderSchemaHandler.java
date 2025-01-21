@@ -156,7 +156,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     }
 
     if (hoodieTableConfig.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
-      if (!recordMerger.get().isProjectionCompatible()) {
+      if (!recordMerger.get().isProjectionCompatible(hoodieTableConfig, properties)) {
         return dataSchema;
       }
     }
