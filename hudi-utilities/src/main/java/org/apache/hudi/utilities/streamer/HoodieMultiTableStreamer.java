@@ -33,6 +33,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
+import org.apache.hudi.utilities.exception.HoodieStreamerWriteException;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 
@@ -55,6 +56,8 @@ import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL;
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_SOURCE_URL_SUFFIX;
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_TARGET_URL_SUFFIX;
@@ -62,7 +65,6 @@ import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL;
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.TRANSFORMER_CLASS;
-
 /**
  * Wrapper over HoodieStreamer.java class.
  * Helps with ingesting incremental data into hoodie datasets for multiple tables.
@@ -235,6 +237,7 @@ public class HoodieMultiTableStreamer {
       tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
       tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
       tableConfig.sourceClassName = globalConfig.sourceClassName;
+      tableConfig.criticalTable = globalConfig.criticalTable;
       tableConfig.tableType = globalConfig.tableType;
       tableConfig.targetTableName = globalConfig.targetTableName;
       tableConfig.operation = globalConfig.operation;
@@ -319,6 +322,10 @@ public class HoodieMultiTableStreamer {
             + "Built-in options: org.apache.hudi.utilities.sources.{JsonDFSSource (default), AvroDFSSource, "
             + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
     public String sourceClassName = JsonDFSSource.class.getName();
+
+    @Parameter(names = {"--critical-table"},
+            description = "This identifies a table to be market as critical and incase of its failed the whole to be failed")
+    public boolean criticalTable = false;
 
     @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
         + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
@@ -453,21 +460,64 @@ public class HoodieMultiTableStreamer {
    * Creates actual HoodieDeltaStreamer objects for every table/topic and does incremental sync.
    */
   public void sync() {
+    int totalTables = tableExecutionContexts.size();
+    logger.info("Starting sync for {} tables", totalTables);
     for (TableExecutionContext context : tableExecutionContexts) {
       try {
         new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
         successTables.add(Helpers.getTableWithDatabase(context));
       } catch (Exception e) {
-        logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
+        logger.error("error while running MultiTableDeltaStreamer for table: {}", context.getTableName(), e);
         failedTables.add(Helpers.getTableWithDatabase(context));
+        if (context.getConfig().criticalTable) {
+          String errorMsg = String.format("Critical table %s failed. Stopping sync process.", context.getTableName());
+          logger.error(errorMsg);
+          throw new HoodieStreamerWriteException(errorMsg, e);
+        }
       }
     }
-
-    logger.info("Ingestion was successful for topics: " + successTables);
+    // Log summary
+    logSyncSummary(totalTables);
+    // Handle failed tables if any
     if (!failedTables.isEmpty()) {
-      logger.info("Ingestion failed for topics: " + failedTables);
+      handleFailedTables();
     }
   }
+
+
+  /**
+   * Handles failed tables and enforces the failure limit if configured
+   *
+   * @throws HoodieStreamerWriteException if the number of failed tables exceeds the configured limit
+   */
+  private void handleFailedTables() {
+    TypedProperties properties = tableExecutionContexts.get(0).getProperties();
+
+    boolean isFailedTableLimitEnabled = getBooleanWithAltKeys(properties,
+            HoodieStreamerConfig.FAILED_TABLE_LIMIT_ENABLED);
+
+    int failedTableLimit = getIntWithAltKeys(properties,
+            HoodieStreamerConfig.FAILED_TABLE_LIMIT);
+
+    if (isFailedTableLimitEnabled && failedTables.size() > failedTableLimit) {
+      String errorMsg = String.format(
+              "Failed tables count (%d) exceeded configured limit of %d. Failed tables: %s",
+              failedTables.size(), failedTableLimit, failedTables);
+      logger.error(errorMsg);
+      throw new HoodieStreamerWriteException(errorMsg);
+    }
+  }
+
+  /**
+   * Logs a summary of the sync operation
+   */
+  private void logSyncSummary(int totalTables) {
+    logger.info("Sync Summary:");
+    logger.info("Total Tables: {}", totalTables);
+    logger.info("Successful Tables: {} - {}", successTables.size(), successTables);
+    logger.info("Failed Tables: {} - {}", failedTables.size(), failedTables);
+  }
+
 
   public static class Constants {
     @Deprecated
