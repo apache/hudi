@@ -58,7 +58,6 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
     if (!previousAvroData.isPresent()) {
       return Option.empty();
     }
-
     return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), schema, props);
   }
 

@@ -31,9 +31,17 @@ import java.io.IOException;
  * Avro Merger that always chooses the newer record
  */
 public class OverwriteWithLatestMerger implements HoodieRecordMerger {
+  public static final OverwriteWithLatestMerger INSTANCE = new OverwriteWithLatestMerger();
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older,
+                                                  Schema oldSchema,
+                                                  HoodieRecord newer,
+                                                  Schema newSchema,
+                                                  TypedProperties props) throws IOException {
+    if (newer.isDelete(newSchema, props)) {
+      return Option.empty();
+    }
     return Option.of(Pair.of(newer, newSchema));
   }
 

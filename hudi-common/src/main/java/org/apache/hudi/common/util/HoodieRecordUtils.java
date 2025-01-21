@@ -76,6 +76,9 @@ public class HoodieRecordUtils {
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
                                                       List<String> mergerClassList, String recordMergerStrategy) {
+    // Currently we fall back to `HoodieAvroRecordMerger` (event time based) even the specified merger strategy
+    // is commit time based. This behavior has been treated as the norm in Hudi.
+    // TODO: evaluate the impact of this behavior and unify/simplify merge behavior in Hudi repo.
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
