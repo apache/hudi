@@ -60,8 +60,8 @@ jobs:
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          if [ "$SPARK_PROFILE" == "spark3.5" ]; then
-            echo "VERSION=$ADHOC_JAR_VERSION-spark35" >> $GITHUB_ENV
+          if [ "$SPARK_PROFILE" == "spark3.2" ]; then
+            echo "VERSION=$ADHOC_JAR_VERSION-spark32" >> $GITHUB_ENV
           elif [ "$SPARK_PROFILE" == "spark3.4" ]; then
             echo "VERSION=$ADHOC_JAR_VERSION-spark34" >> $GITHUB_ENV
           else

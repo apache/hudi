@@ -16,6 +16,7 @@ env:
   SPARK3_COMMON_MODULE: "hudi-spark-datasource/hudi-spark3-common"
   SPARK3PLUS_COMMON_MODULE: "hudi-spark-datasource/hudi-spark3.2plus-common"
   SPARK_MODULE: "hudi-spark-datasource/hudi-spark"
+  SPARK3_MODULE: "hudi-spark-datasource/hudi-spark3.5.x"
   HUDI_COMMON_MODULE: "hudi-common"
   CLIENT_COMMON_MODULE: "hudi-client/hudi-client-common"
   SPARK_CLIENT_MODULE: "hudi-client/hudi-spark-client"
@@ -69,9 +70,6 @@ jobs:
     strategy:
       matrix:
         include:
-            - scalaProfile: "scala-2.12"
-              sparkProfile: "spark3.2"
-
             - scalaProfile: "scala-2.12"
               sparkProfile: "spark3.5"
     steps:
@@ -145,9 +143,6 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.2"
-
-          - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
     steps:
       - uses: actions/checkout@v2
@@ -212,9 +207,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.2"
-
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
     steps:
@@ -281,9 +273,6 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.2"
-
-          - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
     steps:
       - uses: actions/checkout@v2
@@ -301,37 +290,19 @@ jobs:
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-        run: |
-          if [[ "$SPARK_PROFILE" == "spark3.5" ]]; then
-            echo "SPARK3_MODULE=hudi-spark-datasource/hudi-spark3.5.x" >> $GITHUB_ENV
-          elif [[ "$SPARK_PROFILE" == "spark3.2" ]]; then
-            echo "SPARK3_MODULE=hudi-spark-datasource/hudi-spark3.2.x" >> $GITHUB_ENV
-          fi
-          mvn clean install -T 2 -DskipTests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
+        run: mvn clean install -T 2 -DskipTests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
       - name: Spark Datasource Unit Tests
         if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-        run: |
-          if [[ "$SPARK_PROFILE" == "spark3.5" ]]; then
-            echo "SPARK3_MODULE=hudi-spark-datasource/hudi-spark3.5.x" >> $GITHUB_ENV
-          elif [[ "$SPARK_PROFILE" == "spark3.2" ]]; then
-            echo "SPARK3_MODULE=hudi-spark-datasource/hudi-spark3.2.x" >> $GITHUB_ENV
-          fi
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
+        run: mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
       - name: Spark Datasource Functional Tests
         if: needs.skip-check.outputs.skip != 'true' # Skip condition
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-        run: |
-          if [[ "$SPARK_PROFILE" == "spark3.5" ]]; then
-            echo "SPARK3_MODULE=hudi-spark-datasource/hudi-spark3.5.x" >> $GITHUB_ENV
-          elif [[ "$SPARK_PROFILE" == "spark3.2" ]]; then
-            echo "SPARK3_MODULE=hudi-spark-datasource/hudi-spark3.2.x" >> $GITHUB_ENV
-          fi
-          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
+        run: mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
       - name: Sonar Report
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
