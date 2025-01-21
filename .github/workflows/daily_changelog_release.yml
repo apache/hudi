@@ -33,23 +33,22 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.PAT_DAILY_DATAPLANE_RELEASE }}
 
-      - name: Install GitHub CLI
-        run: sudo apt-get install -y gh
-
       - name: Determine most recent HUDI release version
         id: determine-hudi-release-version
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_DAILY_DATAPLANE_RELEASE }}
         run: |
+          RELEASE_WORKFLOW_YAML="release.yml"
+          MAJOR_VERSION="1"
           gh auth setup-git
 
           # Store branches in a variable
-          branches=$(gh run list --repo onehouseinc/hudi-internal \
-          --workflow "release.yml" \
+          branches=$(gh run list --repo "${{ github.repository }}" \
+          --workflow "$RELEASE_WORKFLOW_YAML" \
           --limit 5 --json headBranch -q '.[].headBranch')
 
           # Extract the matching pattern "1.XXX.X" from the branches
-          highest=$(echo "$branches" | grep -Eo '1\.[0-9]+\.[0-9]+' | sed -E 's/^1\.([0-9]+)\.[0-9]+$/\1/' | sort -nr | head -n 1)
+          highest=$(echo "$branches" | grep -Eo "$MAJOR_VERSION\.[0-9]+\.[0-9]+" | sed -E "s/^$MAJOR_VERSION\.([0-9]+)\.[0-9]+$/\1/" | sort -nr | head -n 1)
 
           new_minor_version=$((highest + 1))
           echo "CALCULATED_MINOR_VERSION=$new_minor_version" >> $GITHUB_OUTPUT
@@ -59,6 +58,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_DAILY_DATAPLANE_RELEASE }}
         run: |
+          HEAD_BRANCH=${{ github.event.repository.default_branch }}
+          MAJOR_VERSION="1"
+
           # Detect the previous X.XXX.0 release version from the CHANGELOG file using grep/sed magic
           # VERY IMPORTANT!! This will skip patch releases (anything with X.XXX.[1-9])
           FILE="CHANGELOG"
@@ -76,7 +78,7 @@ jobs:
           fi
           if [ "$RELEASE_VERSION_INPUT" == "auto-detect" ]; then
               # Use this to bump the major version.
-              RELEASE_MAJOR_VERSION="1"
+              RELEASE_MAJOR_VERSION=$MAJOR_VERSION
               RELEASE_MINOR_VERSION="${{ steps.determine-hudi-release-version.outputs.CALCULATED_MINOR_VERSION }}"
               RELEASE_PATCH_VERSION="0"
 
@@ -109,15 +111,11 @@ jobs:
           # Adapted from: https://app.clickup.com/18029943/v/dc/h67bq-25107/h67bq-532657
 
           # Now get the SHA from the previous release branch:
-          # Couple of pitfalls here:
-            # 1. The previous release branch might not be found.
-            # 2. The previous release branch might be a hotfix, in which case
-            #    the changelog may end up being super long, ex: https://github.com/onehouseinc/hudi-internal/pull/1038/files
           # Fetch all branches matching release-* and master in one step
-          git fetch origin '+refs/heads/release-*:refs/remotes/origin/release-*' master
+          git fetch origin '+refs/heads/release-*:refs/remotes/origin/release-*' "$HEAD_BRANCH"
 
           # Ensure you're on the latest master
-          git switch master
+          git switch "$HEAD_BRANCH"
           git pull
           PREVIOUS_RELEASE_BRANCH="release-v${DETECTED_PREV_RELEASE_VERSION}"
           PREVIOUS_RELEASE_SHA=$(git rev-parse "origin/${PREVIOUS_RELEASE_BRANCH}")
@@ -147,8 +145,14 @@ jobs:
           NON_AUDIT_COMMITS=$(echo "$COMMIT_MESSAGES" | awk '!/^\[AUDIT-/')
 
           # Check if there are any non-audit commits
-          if [ -n "$(echo "$NON_AUDIT_COMMITS" | xargs)" ]; then
-            echo "There are non-audit commits: $NON_AUDIT_COMMITS"
+          # If audit number is empty, default to [AUDIT-1071]
+          AUDIT_NUMBER="${{ inputs.auditNumber }}"
+          if [ -z "$AUDIT_NUMBER" ]; then
+            echo "Audit number is empty. Defaulting to [AUDIT-1071]."
+            AUDIT_NUMBER="[AUDIT-1071]"
+          fi
+          if [ -n "$(echo "$NON_AUDIT_COMMITS" | xargs)" ] || [ "$AUDIT_NUMBER" != "[AUDIT-1071]" ]; then
+            echo "Either there are non-audit commits ($NON_AUDIT_COMMITS) OR AUDIT_NUMBER is [AUDIT-1071]."
           else
             echo "All commit messages start with [AUDIT-]. Exiting workflow."
             exit 0
@@ -169,12 +173,6 @@ jobs:
           # git config --list
           git push -u origin "$RELEASE_BRANCH_NAME" # --verbose
 
-          # If audit number is empty, default to [AUDIT-1071]
-          AUDIT_NUMBER="${{ inputs.auditNumber }}"
-          if [ -z "$AUDIT_NUMBER" ]; then
-            echo "Audit number is empty. Defaulting to [AUDIT-1071]."
-            AUDIT_NUMBER="[AUDIT-1071]"
-          fi
           # Commit the changelog to the release branch locally (but don't push).
           git add CHANGELOG
           git commit -m "$AUDIT_NUMBER: Changelog for $RELEASE_BRANCH_NAME"
@@ -183,7 +181,7 @@ jobs:
           # Now checkout the master branch (this behavior is a bit wonky,
           # but it ensures we get a fresh copy of the changelog when doing this locally).
           # Keeping this here for now for consistency.
-          git checkout master
+          git checkout "$HEAD_BRANCH"
 
           # Now checkout the changelog branch.
           CHANGELOG_BRANCH_NAME="changelog-${RELEASE_BRANCH_NAME}"
@@ -202,7 +200,7 @@ jobs:
 
           # Create the PR
           gh pr create \
-            --base master \
+            --base "$HEAD_BRANCH" \
             --head "$CHANGELOG_BRANCH_NAME" \
             --title "$AUDIT_NUMBER: Changelog for $RELEASE_BRANCH_NAME" \
             --body "Auto-created PR to update the changelog for release $RELEASE_VERSION." \
