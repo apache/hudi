@@ -530,12 +530,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Port at which the timeline server listens for requests. When running embedded in each writer, it picks "
           + "a free port and communicates to all the executors. This should rarely be changed.");
 
-  public static final ConfigProperty<Long> CDC_FILE_GROUP_ITERATOR_MEMORY_SPILL_BYTES = ConfigProperty
-      .key("hoodie.cdc.file.group.iterator.memory.spill.bytes")
-      .defaultValue(DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
-      .markAdvanced()
-      .withDocumentation("Amount of memory in bytes to be used in bytes for CDCFileGroupIterator holding data in-memory, before spilling to disk.");
-
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_NUM_SERVER_THREADS = ConfigProperty
       .key("hoodie.embed.timeline.server.threads")
       .defaultValue("-1")
@@ -644,6 +638,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "'partial-update' use-cases (like `MERGE INTO` Spark SQL statement for ex) where only "
           + "a projection of the incoming dataset might be used to update the records in the existing table, "
           + "prompting us to override the writer's schema");
+
+  public static final ConfigProperty<Long> CDC_FILE_GROUP_ITERATOR_MEMORY_SPILL_BYTES = ConfigProperty
+      .key("hoodie.cdc.file.group.iterator.memory.spill.bytes")
+      .defaultValue(DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
+      .markAdvanced()
+      .sinceVersion("1.0.1")
+      .withDocumentation("Amount of memory in bytes to be used in bytes for CDCFileGroupIterator holding data in-memory, before spilling to disk.");
 
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
