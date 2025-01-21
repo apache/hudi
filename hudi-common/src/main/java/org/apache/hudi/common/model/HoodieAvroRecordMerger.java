@@ -80,7 +80,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   public boolean isProjectionCompatible(HoodieTableConfig cfg, TypedProperties properties) {
     String payloadClass = cfg.getPayloadClass();
     ValidationUtils.checkArgument(payloadClass != null, "Payload class must be set in HoodieTableConfig for avro record merger");
-    HoodieRecordPayload dummyInstance = HoodieRecordUtils.loadPayload(payloadClass, new Object[] {new EmptyRecord(), 0}, GenericRecord.class, Comparable.class);
+    HoodieRecordPayload dummyInstance = HoodieRecordUtils.loadPayload(payloadClass, new Object[] {null, 0}, GenericRecord.class, Comparable.class);
     return dummyInstance.enableProjectionPushDown();
   }
 
@@ -91,7 +91,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   public String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
     String payloadClass = cfg.getPayloadClass();
     ValidationUtils.checkArgument(payloadClass != null, "Payload class must be set in HoodieTableConfig for avro record merger");
-    HoodieRecordPayload dummyInstance = HoodieRecordUtils.loadPayload(payloadClass, new Object[] {new EmptyRecord(), 0}, GenericRecord.class, Comparable.class);
+    HoodieRecordPayload dummyInstance = HoodieRecordUtils.loadPayload(payloadClass, new Object[] {null, 0}, GenericRecord.class, Comparable.class);
     String[] specifiedMandatoryFields = dummyInstance.mandatoryFields();
     String[] commonMandatoryFields = HoodieRecordMerger.super.getMandatoryFieldsForMerging(dataSchema, cfg, properties);
     List<String> allNeedMandatoryFields = Arrays.asList(commonMandatoryFields);
@@ -99,31 +99,4 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
     return allNeedMandatoryFields.toArray(new String[0]);
   }
 
-  private static class EmptyRecord implements GenericRecord {
-    private EmptyRecord() {
-    }
-
-    @Override
-    public void put(int i, Object v) {
-    }
-
-    @Override
-    public Object get(int i) {
-      return null;
-    }
-
-    @Override
-    public Schema getSchema() {
-      return null;
-    }
-
-    @Override
-    public void put(String key, Object v) {
-    }
-
-    @Override
-    public Object get(String key) {
-      return null;
-    }
-  }
 }
