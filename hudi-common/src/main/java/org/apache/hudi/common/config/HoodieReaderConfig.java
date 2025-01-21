@@ -68,7 +68,7 @@ public class HoodieReaderConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> MERGE_USE_RECORD_POSITIONS = ConfigProperty
       .key("hoodie.merge.use.record.positions")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to use positions in the block header for data blocks containing updates and delete blocks for merging.");

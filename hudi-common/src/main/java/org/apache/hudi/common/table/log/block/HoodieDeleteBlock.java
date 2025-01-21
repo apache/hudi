@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -76,10 +77,12 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private DeleteRecord[] recordsToDelete;
 
   public HoodieDeleteBlock(List<Pair<DeleteRecord, Long>> recordsToDelete,
+                           String baseFileInstantTimeForPositions,
                            boolean shouldWriteRecordPositions,
                            Map<HeaderMetadataType, String> header) {
     this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
-    if (shouldWriteRecordPositions && !recordsToDelete.isEmpty()) {
+    if (shouldWriteRecordPositions && !recordsToDelete.isEmpty()
+        && !StringUtils.isNullOrEmpty(baseFileInstantTimeForPositions)) {
       recordsToDelete.sort((o1, o2) -> {
         long v1 = o1.getRight();
         long v2 = o2.getRight();
@@ -87,6 +90,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
       });
       if (isPositionValid(recordsToDelete.get(0).getRight())) {
         addRecordPositionsToHeader(
+            baseFileInstantTimeForPositions,
             recordsToDelete.stream().map(Pair::getRight).collect(Collectors.toSet()),
             recordsToDelete.size());
       } else {
