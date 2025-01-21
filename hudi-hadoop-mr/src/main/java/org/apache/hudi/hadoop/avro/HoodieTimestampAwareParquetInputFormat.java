@@ -23,6 +23,8 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.util.ContextUtil;
 
@@ -33,12 +35,18 @@ import java.io.IOException;
  * we need to handle timestamp types separately based on the parquet-avro approach.
  */
 public class HoodieTimestampAwareParquetInputFormat extends ParquetInputFormat<ArrayWritable> {
+  private final Option<InternalSchema> internalSchemaOption;
+
+  public HoodieTimestampAwareParquetInputFormat(Option<InternalSchema> internalSchemaOption) {
+    super();
+    this.internalSchemaOption = internalSchemaOption;
+  }
 
   @Override
   public RecordReader<Void, ArrayWritable> createRecordReader(
       InputSplit inputSplit,
       TaskAttemptContext taskAttemptContext) throws IOException {
     Configuration conf = ContextUtil.getConfiguration(taskAttemptContext);
-    return new HoodieAvroParquetReader(inputSplit, conf);
+    return new HoodieAvroParquetReader(inputSplit, conf, internalSchemaOption);
   }
 }
