@@ -91,7 +91,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd,
         partitionToFilesNameLengthMap, bootstrap, true);
     if (writer != null && !createInflightCommit) {
-      writer.performTableServices(Option.of(commitTime));
+      writer.performTableServices(Option.of(commitTime), true);
       writer.update(commitMetadata, commitTime);
     }
     // DT should be committed after MDT.
