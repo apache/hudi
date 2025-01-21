@@ -338,7 +338,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     }
   }
 
-  //@Test to fix.
+  @Test
   public void testKeepLatestFileVersionsWithBootstrapFileClean() throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
