@@ -288,7 +288,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def timeline: HoodieTimeline =
   // NOTE: We're including compaction here since it's not considering a "commit" operation
-    metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
+    metaClient.reloadActiveTimeline().getCommitsAndCompactionTimeline.filterCompletedInstants
 
   private def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.requestedTime))
@@ -350,6 +350,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * NOTE: DO NOT OVERRIDE THIS METHOD
    */
   override final def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+    fileIndex.refresh()
     // NOTE: PLEASE READ CAREFULLY BEFORE MAKING CHANGES
     //       *Appending* additional columns to the ones requested by the caller is not a problem, as those
     //       will be eliminated by the caller's projection;
