@@ -211,7 +211,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Builds expression index definition and writes to index definition file.
+   * Builds index definition and writes to index definition file.
    * Support mutable and immutable index definition. Only col stats is mutable, while all others are immutable.
    * Inacse of immutable index definition, we could only create or delete the definition.
    * Incase of mutable (col stats), list of source columns (or list of columns to index) could also change.
@@ -220,11 +220,6 @@ public class HoodieTableMetaClient implements Serializable {
   public boolean buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
     boolean isIndexDefnImmutable = !indexDefinition.getIndexName().equals(PARTITION_NAME_COLUMN_STATS); // only col stats is mutable.
-    if (isIndexDefnImmutable) {
-      checkState(
-          !indexMetadataOpt.isPresent() || (!indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)),
-          "Index metadata is already present");
-    }
     String indexMetaPath = getIndexDefinitionPath();
     boolean updateIndexDefn = true;
     if (indexMetadataOpt.isPresent()) {
@@ -293,7 +288,7 @@ public class HoodieTableMetaClient implements Serializable {
           return Option.of(new HoodieIndexMetadata());
         }
       } catch (IOException e) {
-        throw new HoodieIOException("Could not load expression index metadata at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
+        throw new HoodieIOException("Could not load index definition at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
       }
     }
     return Option.empty();

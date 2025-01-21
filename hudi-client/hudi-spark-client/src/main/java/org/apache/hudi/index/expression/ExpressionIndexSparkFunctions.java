@@ -64,7 +64,7 @@ public class ExpressionIndexSparkFunctions {
   private static final String SPARK_REGEXP_REPLACE = "regexp_replace";
   private static final String SPARK_REGEXP_EXTRACT = "regexp_extract";
   private static final String SPARK_SPLIT = "split";
-  public static final String IDENTITY_FUNCTION = "identity";
+  public static final String IDENTITY_FUNCTION = HoodieExpressionIndex.IDENTITY_TRANSFORM;
 
   private static final Map<String, SparkFunction> SPARK_FUNCTION_MAP = new HashMap<>();
   static {
