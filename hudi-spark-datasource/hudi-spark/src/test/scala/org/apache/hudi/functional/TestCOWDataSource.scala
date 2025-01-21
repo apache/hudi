@@ -669,8 +669,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(1000, snapshotDF1.count())
 
     val countDownLatch = new CountDownLatch(2)
+    val sharedUpdates = recordsToStrings(dataGen.generateUpdatesForAllRecords("300")).asScala.toList
+
     for (x <- 1 to 2) {
-      val thread = new Thread(new UpdateThread(dataGen, spark, CommonOptionUtils.commonOpts, basePath, x + "00", countDownLatch, numRetries))
+      val thread = new Thread(new UpdateThread(
+        dataGen, spark, CommonOptionUtils.commonOpts, basePath, x + "00", countDownLatch, numRetries, sharedUpdates))
       thread.setName(x + "00_THREAD")
       thread.start()
     }
@@ -687,12 +690,17 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-  class UpdateThread(dataGen: HoodieTestDataGenerator, spark: SparkSession, commonOpts: Map[String, String], basePath: String,
-                     instantTime: String, countDownLatch: CountDownLatch, numRetries: Integer = 0) extends Runnable {
+  class UpdateThread(dataGen: HoodieTestDataGenerator,
+                     spark: SparkSession,
+                     commonOpts: Map[String, String],
+                     basePath: String,
+                     instantTime: String,
+                     countDownLatch: CountDownLatch,
+                     numRetries: Integer = 0,
+                     sharedUpdates: List[String]) extends Runnable {
     override def run() {
-      val updateRecs = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 500)).asScala.toList
       val insertRecs = recordsToStrings(dataGen.generateInserts(instantTime, 1000)).asScala.toList
-      val updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecs, 2))
+      val updateDf = spark.read.json(spark.sparkContext.parallelize(sharedUpdates, 2))
       val insertDf = spark.read.json(spark.sparkContext.parallelize(insertRecs, 2))
       try {
         updateDf.union(insertDf).write.format("org.apache.hudi")
