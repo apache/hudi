@@ -92,7 +92,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected lazy val mandatoryFieldsForMerging: Seq[String] =
     Seq(recordKeyField) ++ preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
 
-  override lazy val mandatoryFields: Seq[String] = mandatoryFieldsForMerging
+  override lazy val optionalExtraFields: Seq[String] = mandatoryFieldsForMerging
 
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
@@ -106,11 +106,11 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
-                                    requestedColumns: Array[String],
+                                    optionalSchema: HoodieTableSchema,
                                     filters: Array[Filter]): RDD[InternalRow] = {
     val requiredFilters = Seq.empty
     val optionalFilters = filters
-    val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
+    val readers = createBaseFileReaders(tableSchema, requiredSchema, optionalSchema, requiredFilters, optionalFilters)
 
     new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,
