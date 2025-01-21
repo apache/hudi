@@ -282,4 +282,10 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
     }
     return false;
   }
+
+  @Override
+  public boolean enableProjectionPushDown() {
+    return true;
+  }
+
 }

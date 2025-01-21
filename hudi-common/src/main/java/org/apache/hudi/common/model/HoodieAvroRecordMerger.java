@@ -20,13 +20,19 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -65,5 +71,59 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   @Override
   public HoodieRecordMerger asPreCombiningMode() {
     return HoodiePreCombineAvroRecordMerger.INSTANCE;
+  }
+
+  /**
+   * Check if the projection is compatible with the record merger according to the payload class.
+   */
+  @Override
+  public boolean isProjectionCompatible(HoodieTableConfig cfg, TypedProperties properties) {
+    String payloadClass = cfg.getPayloadClass();
+    ValidationUtils.checkArgument(payloadClass != null, "Payload class must be set in HoodieTableConfig for avro record merger");
+    HoodieRecordPayload dummyInstance = HoodieRecordUtils.loadPayload(payloadClass, new Object[] {new EmptyRecord(), 0}, GenericRecord.class, Comparable.class);
+    return dummyInstance.enableProjectionPushDown();
+  }
+
+  /**
+   * Get the mandatory fields for merging according to the payload class.
+   */
+  @Override
+  public String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
+    String payloadClass = cfg.getPayloadClass();
+    ValidationUtils.checkArgument(payloadClass != null, "Payload class must be set in HoodieTableConfig for avro record merger");
+    HoodieRecordPayload dummyInstance = HoodieRecordUtils.loadPayload(payloadClass, new Object[] {new EmptyRecord(), 0}, GenericRecord.class, Comparable.class);
+    String[] specifiedMandatoryFields = dummyInstance.mandatoryFields();
+    String[] commonMandatoryFields = HoodieRecordMerger.super.getMandatoryFieldsForMerging(dataSchema, cfg, properties);
+    List<String> allNeedMandatoryFields = Arrays.asList(commonMandatoryFields);
+    Arrays.stream(specifiedMandatoryFields).filter(f -> !allNeedMandatoryFields.contains(f)).forEach(allNeedMandatoryFields::add);
+    return allNeedMandatoryFields.toArray(new String[0]);
+  }
+
+  private static class EmptyRecord implements GenericRecord {
+    private EmptyRecord() {
+    }
+
+    @Override
+    public void put(int i, Object v) {
+    }
+
+    @Override
+    public Object get(int i) {
+      return null;
+    }
+
+    @Override
+    public Schema getSchema() {
+      return null;
+    }
+
+    @Override
+    public void put(String key, Object v) {
+    }
+
+    @Override
+    public Object get(String key) {
+      return null;
+    }
   }
 }
