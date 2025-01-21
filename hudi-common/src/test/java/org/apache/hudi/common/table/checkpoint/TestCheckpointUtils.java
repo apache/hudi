@@ -30,9 +30,14 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.BLOCK;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.FAIL;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -95,7 +100,7 @@ public class TestCheckpointUtils {
     when(activeTimeline.getInstantsAsStream()).thenReturn(Stream.of(instant));
 
     Checkpoint checkpoint = new StreamerCheckpointV1(instantTime);
-    StreamerCheckpointV2 translatedCheckpoint = CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient);
+    StreamerCheckpointV2 translatedCheckpoint = CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient, FAIL);
 
     assertEquals(completionTime, translatedCheckpoint.getCheckpointKey());
   }
@@ -126,7 +131,7 @@ public class TestCheckpointUtils {
     Checkpoint checkpoint = new StreamerCheckpointV1(instantTime);
 
     Exception exception = assertThrows(UnsupportedOperationException.class,
-        () -> CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient));
+        () -> CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient, BLOCK));
     assertTrue(exception.getMessage().contains("Unable to find completion time"));
   }
 
@@ -155,7 +160,7 @@ public class TestCheckpointUtils {
 
     Checkpoint checkpoint = new StreamerCheckpointV1(instantTime);
     Exception exception = assertThrows(UnsupportedOperationException.class,
-        () -> CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient));
+        () -> CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient, FAIL));
     assertTrue(exception.getMessage().contains("Unable to find completion time"));
   }
 
@@ -168,7 +173,39 @@ public class TestCheckpointUtils {
     assertEquals(HoodieTimeline.INIT_INSTANT_TS, translated.getCheckpointKey());
 
     checkpoint = new StreamerCheckpointV2(instantTime);
-    translated = CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient);
+    translated = CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient, BLOCK);
     assertEquals(HoodieTimeline.INIT_INSTANT_TS, translated.getCheckpointKey());
+  }
+
+  @Test
+  public void testConvertCheckpointWithUseTransitionTime() {
+    String instantTime = "20231127010101";
+    String completionTime = "20231127020102";
+
+    // Mock active timeline
+    HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    when(activeTimeline.getInstantsAsStream()).thenReturn(Stream.of(instant));
+
+    Checkpoint checkpoint = new StreamerCheckpointV1(completionTime);
+    StreamerCheckpointV2 translatedCheckpoint = CheckpointUtils.convertToCheckpointV2ForCommitTime(checkpoint, metaClient, USE_TRANSITION_TIME);
+
+    assertEquals(completionTime, translatedCheckpoint.getCheckpointKey());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      // version, sourceClassName, expectedResult
+      // Version >= 8 with allowed sources should return true
+      "8, org.apache.hudi.utilities.sources.TestSource, true",
+      "9, org.apache.hudi.utilities.sources.AnotherSource, true",
+      // Version < 8 should return false regardless of source
+      "7, org.apache.hudi.utilities.sources.TestSource, false",
+      "6, org.apache.hudi.utilities.sources.AnotherSource, false",
+      // Disallowed sources should return false even with version >= 8
+      "8, org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource, false",
+      "8, org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource, false"
+  })
+  public void testTargetCheckpointV2(int version, String sourceClassName, boolean expected) {
+    assertEquals(expected, CheckpointUtils.targetCheckpointV2(version, sourceClassName));
   }
 }
