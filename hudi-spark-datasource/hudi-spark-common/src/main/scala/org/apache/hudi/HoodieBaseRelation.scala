@@ -614,7 +614,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema),
+      hadoopConf = embedInternalSchema(new Configuration(conf), optionalSchema.internalSchema),
       baseFileFormat = baseFileFormat
     )
 
