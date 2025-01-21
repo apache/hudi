@@ -238,6 +238,30 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
   }
 
   /**
+   * Test case for do not let the parttitonpath field change
+   */
+  @Test
+  def testChangeWriteTableVersion(): Unit = {
+    Seq(6, 8).foreach { tableVersion =>
+      val tempPath = s"$tempBasePath/${tableVersion}"
+      val tableModifier1 = Map(
+        "path" -> tempPath,
+        HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+        "hoodie.write.table.version" -> s"$tableVersion",
+        "hoodie.datasource.write.recordkey.field" -> "uuid",
+        "hoodie.datasource.write.partitionpath.field" -> "ts"
+      )
+      val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
+
+      // Make sure table version is adopted.
+      val metaClient = HoodieTableMetaClient.builder().setBasePath(tempPath)
+        .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())).build()
+      assertEquals(metaClient.getTableConfig.getTableVersion.versionCode(), tableVersion)
+    }
+  }
+
+  /**
    * Test case for each bulk insert sort mode
    *
    * @param sortMode Bulk insert sort mode
@@ -518,13 +542,14 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
 
   /**
    * Test cases for HoodieSparkSqlWriter functionality with datasource bootstrap
-   * for different type of tables.
+   * for different type of tables and table versions.
    *
    * @param tableType Type of table
+   * @param tableVersion Version of table
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testWithDatasourceBootstrapForTableType(tableType: String): Unit = {
+  @MethodSource(Array("bootstrapTestParams"))
+  def testWithDatasourceBootstrapForTableType(tableType: String, tableVersion: Int): Unit = {
     val srcPath = java.nio.file.Files.createTempDirectory("hoodie_bootstrap_source_path")
     try {
       val sourceDF = TestBootstrap.generateTestRawTripDataset(Instant.now.toEpochMilli, 0, 100, Collections.emptyList(), sc,
@@ -542,6 +567,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName,
         DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getCanonicalName,
+        "hoodie.write.table.version" -> tableVersion.toString,
         HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
@@ -564,6 +590,9 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       assertFalse(ignoreResult)
       verify(client, times(2)).close()
 
+      // Assert the table version is adopted.
+      val metaClient = createMetaClient(spark, tempBasePath)
+      assertEquals(metaClient.getTableConfig.getTableVersion.versionCode(), tableVersion)
       // fetch all records from parquet files generated from write to hudi
       val actualDf = sqlContext.read.parquet(tempBasePath)
       assert(actualDf.count == 100)
@@ -1137,7 +1166,6 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[NonpartitionedKeyGenerator].getName}\t${classOf[SimpleKeyGenerator].getName}"))
   }
 
-
   @Test
   def testNoKeyGenToSimpleKeyGen(): Unit = {
     val _spark = spark
@@ -1324,5 +1352,13 @@ object TestHoodieSparkSqlWriter {
     java.util.stream.Stream.of(
       Arguments.arguments("*5/03/1*", Seq("2016/03/15")),
       Arguments.arguments("2016/03/*", Seq("2015/03/16", "2015/03/17")))
+  }
+
+  def bootstrapTestParams(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      Arguments.arguments("MERGE_ON_READ", Integer.valueOf(8)),
+      Arguments.arguments("MERGE_ON_READ", Integer.valueOf(6)),
+      Arguments.arguments("COPY_ON_WRITE", Integer.valueOf(8))
+    )
   }
 }
