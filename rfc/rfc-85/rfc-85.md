@@ -15,7 +15,7 @@
   limitations under the License.
 -->
 
-# RFC-82: Hudi Issue and Sprint Management in Jira
+# RFC-85: Hudi Issue and Sprint Management in Jira
 
 ## Proposers
 
@@ -47,13 +47,14 @@ The task hierarchy is composed of three levels, **Epic**, **Issue**, **Sub-task*
 - **Epic**: represents a theme of work in one or multiple releases that span across one or multiple months.
   For example, The Epic of [1.0 Migration](https://issues.apache.org/jira/browse/HUDI-7856) for 1.0.0 release.
 
-- **Issue**: represents a story achieving a single goal within an Epic, for one (or more) week(s). The Issue can also
+- **Issue**: represents a story achieving a single goal within an Epic, for one (or more) week(s). A story has a clear exit 
+  criteria that spells out what impact is achieved when the story is completed. The Issue can also
   be a bug fix, addressing a known problem discovered. An Epic can contain multiple Issues. If an Issue does not fit
-  into
-  any existing Epic such as a bug fix or a small feature, it is OK to leave Epic Link of the Issue empty.
+  into any existing epic, it is OK to leave Epic Link of the Issue empty.
 
 - **Sub-task**: represents a small task contributing to a goal targeted by an Issue that can be finished in a day or
-  two. An issue can contain multiple sub-tasks. The sub-tasks are created through Jira sub-task in Issue screen.
+  two. An issue can contain multiple sub-tasks. The sub-tasks are created through Jira sub-task in Issue screen. A sub-task 
+  maps to 1 or more actual Github pull requests. 
 
 ### Sprint Management
 
