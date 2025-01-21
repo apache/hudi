@@ -28,9 +28,6 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataU
 
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api._
-
-import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
@@ -41,24 +38,19 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     HoodieMetadataConfig.ENABLE.key -> "true",
     HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
   )
-  val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    RECORDKEY_FIELD.key -> "_row_key",
+  val commonOpts: Map[String, String] = Map(
     PARTITIONPATH_FIELD.key -> "partition",
-    PRECOMBINE_FIELD.key -> "timestamp",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15"
-  ) ++ metadataOpts
+  ) ++ baseOpts ++ metadataOpts
 
-  val secondaryIndexOpts = Map(
+  val secondaryIndexOpts: Map[String, String] = Map(
     HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key -> "true"
   )
 
-  val commonOptsWithSecondaryIndex = commonOpts ++ secondaryIndexOpts ++ metadataOpts
+  val commonOptsWithSecondaryIndex: Map[String, String] = commonOpts ++ secondaryIndexOpts ++ metadataOpts
 
-  val commonOptsNewTableSITest = Map(
+  val commonOptsNewTableSITest: Map[String, String] = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
     HoodieWriteConfig.TBL_NAME.key -> "trips_table",
@@ -69,30 +61,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
   ) ++ metadataOpts
 
-  val commonOptsWithSecondaryIndexSITest = commonOptsNewTableSITest ++ secondaryIndexOpts
-
-  @BeforeEach
-  override def setUp() {
-    initPath()
-    initQueryIndexConf()
-    initSparkContexts()
-    initHoodieStorage()
-    initTestDataGenerator()
-
-    setTableName("hoodie_test")
-    initMetaClient()
-    metaClientReloaded = false
-
-    instantTime = new AtomicInteger(1)
-
-    spark = sqlContext.sparkSession
-  }
-
-  @AfterEach
-  override def tearDown() = {
-    cleanupFileSystem()
-    cleanupSparkContexts()
-  }
+  val commonOptsWithSecondaryIndexSITest: Map[String, String] = commonOptsNewTableSITest ++ secondaryIndexOpts
 
   protected def doWriteAndValidateDataAndRecordIndex(hudiOpts: Map[String, String],
                                                    operation: String,

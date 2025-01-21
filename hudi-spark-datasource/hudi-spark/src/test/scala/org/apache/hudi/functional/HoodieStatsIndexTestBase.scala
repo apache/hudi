@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
@@ -32,7 +32,8 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql.functions.{col, not}
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
@@ -45,6 +46,37 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
   var instantTime: AtomicInteger = _
   var metaClientReloaded = false
   var mergedDfList: List[DataFrame] = List.empty
+
+  val baseOpts: Map[String, String] = Map(
+    "hoodie.insert.shuffle.parallelism" -> "4",
+    "hoodie.upsert.shuffle.parallelism" -> "4",
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+    RECORDKEY_FIELD.key -> "_row_key",
+    PRECOMBINE_FIELD.key -> "timestamp"
+  )
+
+  @BeforeEach
+  override def setUp() {
+    initPath()
+    initQueryIndexConf()
+    initSparkContexts()
+    initHoodieStorage()
+    initTestDataGenerator()
+
+    setTableName("hoodie_test")
+    initMetaClient()
+    metaClientReloaded = false
+
+    instantTime = new AtomicInteger(1)
+
+    spark = sqlContext.sparkSession
+  }
+
+  @AfterEach
+  override def tearDown() = {
+    cleanupFileSystem()
+    cleanupSparkContexts()
+  }
 
   protected def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
     getLatestMetaClient(false).getActiveTimeline
@@ -62,7 +94,7 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
-    val lastInstant = HoodieInstantTimeGenerator.getLastInstantTime
+    val lastInstant = getLastInstant()
     if (enforce || metaClient.getActiveTimeline.lastInstant().isEmpty
       || metaClient.getActiveTimeline.lastInstant().get().requestedTime.compareTo(lastInstant) < 0) {
       println("Reloaded timeline")
@@ -74,6 +106,10 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
 
   protected def getMetadataMetaClient(hudiOpts: Map[String, String]): HoodieTableMetaClient = {
     getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
+  }
+
+  protected def getLastInstant(): String = {
+    HoodieInstantTimeGenerator.getLastInstantTime
   }
 
   protected def getLatestClusteringInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
@@ -135,6 +171,10 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
+  protected def createJoinCondition(prevDf: DataFrame, latestBatchDf: DataFrame): Column = {
+    prevDf("_row_key") === latestBatchDf("_row_key") && prevDf("partition") === latestBatchDf("partition")
+  }
+
   /**
    * @return [[DataFrame]] that should not exist as of the latest instant; used for non-existence validation.
    */
@@ -161,16 +201,13 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
         prevDf.filter(col("partition").isInCollection(overwrittenPartitions))
       } else {
         val prevDf = prevDfOpt.get
-        if (globalIndexEnableUpdatePartitions) {
-          val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key"), "leftanti")
-          val latestSnapshot = prevDfOld.union(latestBatchDf)
-          mergedDfList = mergedDfList :+ latestSnapshot
+        val prevDfOld = if (globalIndexEnableUpdatePartitions) {
+          prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key"), "leftanti")
         } else {
-          val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key")
-            && prevDf("partition") === latestBatchDf("partition"), "leftanti")
-          val latestSnapshot = prevDfOld.union(latestBatchDf)
-          mergedDfList = mergedDfList :+ latestSnapshot
+          prevDf.join(latestBatchDf, createJoinCondition(prevDf, latestBatchDf), "leftanti")
         }
+        val latestSnapshot = prevDfOld.union(latestBatchDf)
+        mergedDfList = mergedDfList :+ latestSnapshot
         sparkSession.emptyDataFrame
       }
     }
