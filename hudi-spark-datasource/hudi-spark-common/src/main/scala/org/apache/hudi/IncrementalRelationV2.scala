@@ -207,78 +207,83 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 
       val startInstantArchived = !queryContext.getArchivedInstants.isEmpty
-      val endInstantTime = queryContext.getEndInstant.get()
-
-      val scanDf = if (fallbackToFullTableScan && startInstantArchived) {
-        log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived")
-        fullTableScanDataFrame(commitsToReturn)
+      if (queryContext.isEmpty) {
+        // no commits to read
+        sqlContext.sparkContext.emptyRDD[Row]
       } else {
-        if (filteredRegularFullPaths.isEmpty && filteredMetaBootstrapFullPaths.isEmpty) {
-          sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
+        val endInstantTime = queryContext.getLastInstant
+
+        val scanDf = if (fallbackToFullTableScan && startInstantArchived) {
+          log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived")
+          fullTableScanDataFrame(commitsToReturn)
         } else {
-          log.info("Additional Filters to be applied to incremental source are :" + filters.mkString("Array(", ", ", ")"))
-
-          var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
-
-          var doFullTableScan = false
-
-          if (fallbackToFullTableScan) {
-            val timer = HoodieTimer.start
-
-            val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
-            val storageConf = HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration)
-            val localBasePathStr = basePath.toString
-            val firstNotFoundPath = sqlContext.sparkContext.parallelize(allFilesToCheck.toSeq, allFilesToCheck.size)
-              .map(path => {
-                val storage = HoodieStorageUtils.getStorage(localBasePathStr, storageConf)
-                storage.exists(new StoragePath(path))
-              }).collect().find(v => !v)
-            val timeTaken = timer.endTimer()
-            log.info("Checking if paths exists took " + timeTaken + "ms")
-
-            if (firstNotFoundPath.isDefined) {
-              doFullTableScan = true
-              log.info("Falling back to full table scan as some files cannot be found.")
-            }
-          }
-
-          if (doFullTableScan) {
-            fullTableScanDataFrame(commitsToReturn)
+          if (filteredRegularFullPaths.isEmpty && filteredMetaBootstrapFullPaths.isEmpty) {
+            sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
           } else {
-            if (metaBootstrapFileIdToFullPath.nonEmpty) {
-              df = sqlContext.sparkSession.read
-                .format("hudi_v1")
-                .schema(usedSchema)
-                .option(DataSourceReadOptions.READ_PATHS.key, filteredMetaBootstrapFullPaths.mkString(","))
-                // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
-                .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
-                .load()
-            }
+            log.info("Additional Filters to be applied to incremental source are :" + filters.mkString("Array(", ", ", ")"))
 
-            if (regularFileIdToFullPath.nonEmpty) {
-              try {
-                val commitTimesToReturn = commitsToReturn.map(_.requestedTime)
-                df = df.union(sqlContext.read.options(sOpts)
-                  .schema(usedSchema).format(formatClassName)
-                  // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
-                  .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
-                  .load(filteredRegularFullPaths.toList: _*)
-                  .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToReturn: _*)))
-              } catch {
-                case e : AnalysisException =>
-                  if (e.getMessage.contains("Path does not exist")) {
-                    throw new HoodieIncrementalPathNotFoundException(e)
-                  } else {
-                    throw e
-                  }
+            var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
+
+            var doFullTableScan = false
+
+            if (fallbackToFullTableScan) {
+              val timer = HoodieTimer.start
+
+              val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
+              val storageConf = HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration)
+              val localBasePathStr = basePath.toString
+              val firstNotFoundPath = sqlContext.sparkContext.parallelize(allFilesToCheck.toSeq, allFilesToCheck.size)
+                .map(path => {
+                  val storage = HoodieStorageUtils.getStorage(localBasePathStr, storageConf)
+                  storage.exists(new StoragePath(path))
+                }).collect().find(v => !v)
+              val timeTaken = timer.endTimer()
+              log.info("Checking if paths exists took " + timeTaken + "ms")
+
+              if (firstNotFoundPath.isDefined) {
+                doFullTableScan = true
+                log.info("Falling back to full table scan as some files cannot be found.")
               }
             }
-            df
+
+            if (doFullTableScan) {
+              fullTableScanDataFrame(commitsToReturn)
+            } else {
+              if (metaBootstrapFileIdToFullPath.nonEmpty) {
+                df = sqlContext.sparkSession.read
+                  .format("hudi_v1")
+                  .schema(usedSchema)
+                  .option(DataSourceReadOptions.READ_PATHS.key, filteredMetaBootstrapFullPaths.mkString(","))
+                  // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
+                  .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
+                  .load()
+              }
+
+              if (regularFileIdToFullPath.nonEmpty) {
+                try {
+                  val commitTimesToReturn = commitsToReturn.map(_.requestedTime)
+                  df = df.union(sqlContext.read.options(sOpts)
+                    .schema(usedSchema).format(formatClassName)
+                    // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
+                    .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
+                    .load(filteredRegularFullPaths.toList: _*)
+                    .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToReturn: _*)))
+                } catch {
+                  case e: AnalysisException =>
+                    if (e.getMessage.contains("Path does not exist")) {
+                      throw new HoodieIncrementalPathNotFoundException(e)
+                    } else {
+                      throw e
+                    }
+                }
+              }
+              df
+            }
           }
         }
-      }
 
-      filters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
+        filters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
+      }
     }
   }
 
