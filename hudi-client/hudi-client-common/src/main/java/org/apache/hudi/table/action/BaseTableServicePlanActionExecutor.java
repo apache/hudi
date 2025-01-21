@@ -73,7 +73,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
    * @return
    */
   public List<String> getPartitions(Object strategy, TableServiceType type) {
-    if (config.isIncrementalTableServiceEnable() && strategy instanceof IncrementalPartitionAwareStrategy) {
+    if (config.isIncrementalTableServiceEnabled() && strategy instanceof IncrementalPartitionAwareStrategy) {
       try {
         // get incremental partitions.
         LOG.info("Start to fetch incremental partitions for " + type);
@@ -154,7 +154,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
   }
 
   public Pair<Option<HoodieInstant>, List<String>> fetchMissingPartitions(TableServiceType tableServiceType) {
-    if (!config.isIncrementalTableServiceEnable()) {
+    if (!config.isIncrementalTableServiceEnabled()) {
       return Pair.of(Option.empty(), Collections.emptyList());
     }
 

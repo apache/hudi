@@ -46,16 +46,16 @@ public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrat
     // Order the operations based on the reverse size of the logs and limit them by the IO
     long threshold = writeConfig.getCompactionLogFileSizeThreshold();
     ArrayList<String> missingPartitions = new ArrayList<>();
-    boolean incrementalTableServiceEnable = writeConfig.isIncrementalTableServiceEnable();
+    boolean incrementalTableServiceEnabled = writeConfig.isIncrementalTableServiceEnabled();
     List<HoodieCompactionOperation> filterOperator = operations.stream()
         .filter(e -> {
-          if (incrementalTableServiceEnable && e.getMetrics().getOrDefault(TOTAL_LOG_FILE_SIZE, 0d) < threshold) {
+          if (incrementalTableServiceEnabled && e.getMetrics().getOrDefault(TOTAL_LOG_FILE_SIZE, 0d) < threshold) {
             missingPartitions.add(e.getPartitionPath());
           }
           return e.getMetrics().getOrDefault(TOTAL_LOG_FILE_SIZE, 0d) >= threshold;
         }).sorted(this).collect(Collectors.toList());
 
-    if (incrementalTableServiceEnable) {
+    if (incrementalTableServiceEnabled) {
       Pair<List<HoodieCompactionOperation>, List<String>> resPair = super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans);
       List<HoodieCompactionOperation> compactOperations = resPair.getLeft();
       List<String> innerMissingPartitions = resPair.getRight();

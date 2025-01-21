@@ -181,7 +181,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       }
     }, partitionPaths.size());
 
-    if (config.isIncrementalTableServiceEnable()) {
+    if (config.isIncrementalTableServiceEnabled()) {
       Set<String> skippedPartitions = new HashSet<>();
       List<HoodieClusteringGroup> collectedGroups = res.stream().flatMap(pair -> {
         String missingPartition = pair.getRight();

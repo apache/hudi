@@ -41,17 +41,17 @@ public class LogFileNumBasedCompactionStrategy extends BoundedIOCompactionStrate
                                                                             List<HoodieCompactionPlan> pendingCompactionPlans) {
     Long numThreshold = writeConfig.getCompactionLogFileNumThreshold();
     ArrayList<String> missingPartitions = new ArrayList<>();
-    boolean incrementalTableServiceEnable = writeConfig.isIncrementalTableServiceEnable();
+    boolean incrementalTableServiceEnabled = writeConfig.isIncrementalTableServiceEnabled();
     List<HoodieCompactionOperation> filterOperator = operations.stream()
         .filter(e -> {
-          if (incrementalTableServiceEnable && e.getDeltaFilePaths().size() < numThreshold) {
+          if (incrementalTableServiceEnabled && e.getDeltaFilePaths().size() < numThreshold) {
             missingPartitions.add(e.getPartitionPath());
           }
           return e.getDeltaFilePaths().size() >= numThreshold;
         })
         .sorted(this).collect(Collectors.toList());
 
-    if (incrementalTableServiceEnable) {
+    if (incrementalTableServiceEnabled) {
       Pair<List<HoodieCompactionOperation>, List<String>> resPair = super.orderAndFilter(writeConfig, filterOperator, pendingCompactionPlans);
       List<HoodieCompactionOperation> compactOperations = resPair.getLeft();
       List<String> innerMissingPartitions = resPair.getRight();

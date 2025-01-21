@@ -189,7 +189,7 @@ public class TestIncrementalClustering extends SparkClientFunctionalTestHarness 
     properties.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
     properties.put("hoodie.parquet.small.file.limit", String.valueOf(-1));
     return getConfigBuilder(true)
-        .withIncrementalTableServiceEnable(enableIncrTableService)
+        .withIncrementalTableServiceEnabled(enableIncrTableService)
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringMaxNumGroups(maxClusteringGroup)
             .withClusteringMaxBytesInGroup(maxClusteringGroup)

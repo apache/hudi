@@ -50,7 +50,7 @@ public class BoundedIOCompactionStrategy extends CompactionStrategy {
       if (targetIORemaining > 0) {
         targetIORemaining -= opIo;
         finalOperations.add(op);
-      } else if (writeConfig.isIncrementalTableServiceEnable()) {
+      } else if (writeConfig.isIncrementalTableServiceEnabled()) {
         missingPartitions.add(op.getPartitionPath());
       } else  {
         return Pair.of(finalOperations, Collections.emptyList());

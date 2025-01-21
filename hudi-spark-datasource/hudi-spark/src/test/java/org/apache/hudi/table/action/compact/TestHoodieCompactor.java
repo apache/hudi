@@ -353,7 +353,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   @Test
   public void testPartitionsForIncrCompaction() throws Exception {
     HoodieWriteConfig config = getConfigBuilder()
-        .withIncrementalTableServiceEnable(true)
+        .withIncrementalTableServiceEnabled(true)
         .withCompactionConfig(HoodieCompactionConfig
             .newBuilder()
             .withCompactionStrategy(new SmallBoundedIOCompactionStrategy())
@@ -362,7 +362,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     String[] partitions = {"20250115"};
 
     HoodieWriteConfig config2 = getConfigBuilder()
-        .withIncrementalTableServiceEnable(true)
+        .withIncrementalTableServiceEnabled(true)
         .withCompactionConfig(HoodieCompactionConfig
             .newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(2).build())

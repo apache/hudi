@@ -65,7 +65,7 @@ public class CompositeCompactionStrategy extends CompactionStrategy {
       partitionsToProcess = innerRes.getLeft();
       missingPartitions.addAll(innerRes.getRight());
     }
-    return writeConfig.isIncrementalTableServiceEnable() ? Pair.of(partitionsToProcess, missingPartitions) : Pair.of(partitionsToProcess, Collections.emptyList());
+    return writeConfig.isIncrementalTableServiceEnabled() ? Pair.of(partitionsToProcess, missingPartitions) : Pair.of(partitionsToProcess, Collections.emptyList());
   }
 
   @Override

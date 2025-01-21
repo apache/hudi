@@ -80,7 +80,7 @@ public abstract class CompactionStrategy implements IncrementalPartitionAwareStr
     List<HoodieCompactionOperation> operationsToProcess = resPair.getLeft();
     List<String> missingPartitions = resPair.getRight();
     missingPartitions.addAll(partitionPair.getRight());
-    List<String> res = writeConfig.isIncrementalTableServiceEnable() ? missingPartitions.stream().distinct().collect(Collectors.toList()) : null;
+    List<String> res = writeConfig.isIncrementalTableServiceEnabled() ? missingPartitions.stream().distinct().collect(Collectors.toList()) : null;
     return HoodieCompactionPlan.newBuilder()
         .setOperations(operationsToProcess)
         .setMissingSchedulePartitions(res)

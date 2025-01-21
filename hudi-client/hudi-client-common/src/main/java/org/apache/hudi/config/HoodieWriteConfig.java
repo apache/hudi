@@ -808,7 +808,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
           + "Hudi write client and user is not expected to manually change the value.");
 
-  public static final ConfigProperty<Boolean> INCREMENTAL_TABLE_SERVICE_ENABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> INCREMENTAL_TABLE_SERVICE_ENABLED = ConfigProperty
       .key("hoodie.table.services.incremental.enabled")
       .defaultValue(true)
       .markAdvanced()
@@ -2186,8 +2186,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(WRITE_PARTIAL_UPDATE_SCHEMA);
   }
 
-  public boolean isIncrementalTableServiceEnable() {
-    return getBoolean(INCREMENTAL_TABLE_SERVICE_ENABLE);
+  public boolean isIncrementalTableServiceEnabled() {
+    return getBoolean(INCREMENTAL_TABLE_SERVICE_ENABLED);
   }
 
   public double getParquetCompressionRatio() {
@@ -3352,8 +3352,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withIncrementalTableServiceEnable(boolean incrementalTableServiceEnable) {
-      writeConfig.setValue(INCREMENTAL_TABLE_SERVICE_ENABLE, String.valueOf(incrementalTableServiceEnable));
+    public Builder withIncrementalTableServiceEnabled(boolean incrementalTableServiceEnabled) {
+      writeConfig.setValue(INCREMENTAL_TABLE_SERVICE_ENABLED, String.valueOf(incrementalTableServiceEnabled));
       return this;
     }
 

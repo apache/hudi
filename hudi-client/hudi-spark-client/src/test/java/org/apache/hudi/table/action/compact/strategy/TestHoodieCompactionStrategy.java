@@ -64,7 +64,7 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
     UnBoundedCompactionStrategy strategy = new UnBoundedCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
-        .withIncrementalTableServiceEnable(enableIncrTableService)
+        .withIncrementalTableServiceEnabled(enableIncrTableService)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap).getLeft();
     Pair<List<HoodieCompactionOperation>, List<String>> resPair = writeConfig.getCompactionStrategy()
@@ -86,7 +86,7 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
     BoundedIOCompactionStrategy strategy = new BoundedIOCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
-        .withIncrementalTableServiceEnable(enableIncrTableService)
+        .withIncrementalTableServiceEnabled(enableIncrTableService)
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
         .build();
@@ -161,7 +161,7 @@ public class TestHoodieCompactionStrategy {
     DayBasedCompactionStrategy strategy = new DayBasedCompactionStrategy();
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath("/tmp")
-            .withIncrementalTableServiceEnable(enableIncrTableService)
+            .withIncrementalTableServiceEnabled(enableIncrTableService)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(1).build()).build();
     Pair<List<String>, List<String>> resPair = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths));
@@ -208,7 +208,7 @@ public class TestHoodieCompactionStrategy {
     DayBasedCompactionStrategy strategy = new DayBasedCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
-        .withIncrementalTableServiceEnable(enableIncrTableService)
+        .withIncrementalTableServiceEnabled(enableIncrTableService)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy)
             .withTargetPartitionsPerDayBasedCompaction(1)
@@ -280,7 +280,7 @@ public class TestHoodieCompactionStrategy {
     BoundedPartitionAwareCompactionStrategy strategy = new BoundedPartitionAwareCompactionStrategy();
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath("/tmp")
-            .withIncrementalTableServiceEnable(enableIncrTableService)
+            .withIncrementalTableServiceEnabled(enableIncrTableService)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(2).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
@@ -337,7 +337,7 @@ public class TestHoodieCompactionStrategy {
     UnBoundedPartitionAwareCompactionStrategy strategy = new UnBoundedPartitionAwareCompactionStrategy();
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath("/tmp")
-            .withIncrementalTableServiceEnable(enableIncrTableService)
+            .withIncrementalTableServiceEnabled(enableIncrTableService)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(2).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
