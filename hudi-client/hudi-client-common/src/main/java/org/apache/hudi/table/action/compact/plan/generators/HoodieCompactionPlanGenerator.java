@@ -22,11 +22,13 @@ import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.slf4j.Logger;
@@ -43,22 +45,28 @@ public class HoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, 
 
   private final CompactionStrategy compactionStrategy;
 
-  public HoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
-    super(table, engineContext, writeConfig);
+  public HoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig,
+                                       BaseTableServicePlanActionExecutor executor) {
+    super(table, engineContext, writeConfig, executor);
     this.compactionStrategy = writeConfig.getCompactionStrategy();
     LOG.info("Compaction Strategy used is: " + compactionStrategy.toString());
   }
 
   @Override
-  protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations) {
+  protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations, Pair<List<String>, List<String>> partitionPair) {
     // Filter the compactions with the passed in filter. This lets us choose most effective
     // compactions only
     return compactionStrategy.generateCompactionPlan(writeConfig, operations,
-        CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
+        CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()), getStrategyParams(), partitionPair);
   }
 
   @Override
-  protected List<String> filterPartitionPathsByStrategy(List<String> partitionPaths) {
+  protected List<String> getPartitions() {
+    return executor.getPartitions(compactionStrategy, TableServiceType.COMPACT);
+  }
+
+  @Override
+  protected Pair<List<String>, List<String>> filterPartitionPathsByStrategy(List<String> partitionPaths) {
     return compactionStrategy.filterPartitionPaths(writeConfig, partitionPaths);
   }
 

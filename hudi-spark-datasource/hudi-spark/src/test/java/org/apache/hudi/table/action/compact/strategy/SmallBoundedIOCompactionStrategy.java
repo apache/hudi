@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.table.action.compact.strategy;
@@ -27,26 +28,23 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * CompactionStrategy which looks at total IO to be done for the compaction (read + write) and limits the list of
- * compactions to be under a configured limit on the IO.
- *
- * @see CompactionStrategy
- */
-public class BoundedIOCompactionStrategy extends CompactionStrategy {
+public class SmallBoundedIOCompactionStrategy extends BoundedIOCompactionStrategy {
+
+  // Compare to BoundedIOCompactionStrategy, SmallBoundedIOCompactionStrategy is limit targetIO to 0.1M
+  private final double targetIO = 0.1;
+  private final long opIo = 1;
+  public SmallBoundedIOCompactionStrategy() {
+    super();
+  }
 
   @Override
   public Pair<List<HoodieCompactionOperation>, List<String>> orderAndFilter(HoodieWriteConfig writeConfig,
                                                                             List<HoodieCompactionOperation> operations,
                                                                             List<HoodieCompactionPlan> pendingCompactionPlans) {
     ArrayList<String> missingPartitions = new ArrayList<>();
-    // Iterate through the operations in order and accept operations as long as we are within the
-    // IO limit
-    // Preserves the original ordering of compactions
     List<HoodieCompactionOperation> finalOperations = new ArrayList<>();
-    long targetIORemaining = writeConfig.getTargetIOPerCompactionInMB();
+    double targetIORemaining = targetIO;
     for (HoodieCompactionOperation op : operations) {
-      long opIo = op.getMetrics().get(TOTAL_IO_MB).longValue();
       if (targetIORemaining > 0) {
         targetIORemaining -= opIo;
         finalOperations.add(op);

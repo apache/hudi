@@ -96,6 +96,14 @@
        "name":"preserveHoodieMetadata",
        "type":["boolean", "null"],
        "default": false
+    },
+    {
+       "name":"missingSchedulePartitions",
+       "type":["null", {
+          "type":"array",
+          "items":"string"
+       }],
+       "default": null
     }
   ]
 }
