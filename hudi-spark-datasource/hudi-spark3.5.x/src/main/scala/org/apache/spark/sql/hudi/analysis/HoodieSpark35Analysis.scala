@@ -18,14 +18,15 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.DefaultSource
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 
+import org.apache.spark.sql.{SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.{LogicalRelation, PreprocessTableInsertion}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
-import org.apache.spark.sql.{SQLContext, SparkSession}
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -62,5 +63,42 @@ case class HoodieSpark35DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
       buildHoodieConfig(v2Table.hoodieCatalogTable), v2Table.hoodieCatalogTable.tableSchema)
 
     LogicalRelation(relation, output, catalogTable, isStreaming = false)
+  }
+}
+
+/**
+ * In Spark 3.5, the following Resolution rules are removed,
+ * [[ResolveUserSpecifiedColumns]] and [[ResolveDefaultColumns]]
+ * (see code changes in [[org.apache.spark.sql.catalyst.analysis.Analyzer]]
+ * from https://github.com/apache/spark/pull/41262).
+ * The same logic of resolving the user specified columns and default values,
+ * which are required for a subset of columns as user specified compared to the table
+ * schema to work properly, are deferred to [[PreprocessTableInsertion]] for v1 INSERT.
+ *
+ * Note that [[HoodieAnalysis]] intercepts the [[InsertIntoStatement]] after Spark's built-in
+ * Resolution rules are applies, the logic of resolving the user specified columns and default
+ * values may no longer be applied. To make INSERT with a subset of columns specified by user
+ * to work, the following custom resolution rule is added to achieve the same, before converting
+ * [[InsertIntoStatement]] into [[InsertIntoHoodieTableCommand]].
+ *
+ * Also note that, the project logic in [[ResolveImplementationsEarly]] for INSERT is still
+ * needed in the case of INSERT with all columns in a different ordering.
+ */
+case class HoodieSpark35ResolveColumnsForInsertInto() extends Rule[LogicalPlan] {
+  override def apply(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case i: InsertIntoStatement
+        if i.userSpecifiedCols.nonEmpty && i.table.isInstanceOf[LogicalRelation]
+          && sparkAdapter.isHoodieTable(i.table.asInstanceOf[LogicalRelation].catalogTable.get)
+      => val newPlan = PreprocessTableInsertion.apply(plan)
+        if (newPlan != plan) {
+          // Remove the user specified columns from the [[InsertIntoStatement]]
+          // for Hudi table as they are already processed.
+          newPlan.asInstanceOf[InsertIntoStatement].copy(userSpecifiedCols = Seq())
+        } else {
+          newPlan
+        }
+      case _ => plan
+    }
   }
 }
