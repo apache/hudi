@@ -237,13 +237,9 @@ public class SparkDatasetTestUtils {
   }
 
   public static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
-      throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, ClassNotFoundException {
+      throws InvocationTargetException, IllegalAccessException, NoSuchMethodException {
     Object serializer = encoder.createSerializer();
-    try {
-      Method applyMethod = serializer.getClass().getMethod("apply", Object.class);
-      return (InternalRow) applyMethod.invoke(serializer, row);
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to serialize row", e);
-    }
+    Method applyMethod = serializer.getClass().getMethod("apply", Object.class);
+    return (InternalRow) applyMethod.invoke(serializer, row);
   }
 }
