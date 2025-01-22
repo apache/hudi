@@ -74,25 +74,6 @@ public class DataSourceUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(DataSourceUtils.class);
 
-  @VisibleForTesting
-  public static Pair<String, StructField> getSchemaForField(StructType schema, String fieldName) {
-    return getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING);
-  }
-
-  @VisibleForTesting
-  public static Pair<String, StructField> getSchemaForField(StructType schema, String fieldName, String prefix) {
-    if (!fieldName.contains(".")) {
-      return Pair.of(prefix + schema.fields()[schema.fieldIndex(fieldName)].name(), schema.fields()[schema.fieldIndex(fieldName)]);
-    } else {
-      int rootFieldIndex = fieldName.indexOf(".");
-      StructField rootField = schema.fields()[schema.fieldIndex(fieldName.substring(0, rootFieldIndex))];
-      if (rootField == null) {
-        throw new HoodieException("Failed to find " + fieldName + " in the table schema ");
-      }
-      return getSchemaForField((StructType) rootField.dataType(), fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1));
-    }
-  }
-
   public static String getTablePath(HoodieStorage storage,
                                     List<StoragePath> userProvidedPaths) throws IOException {
     LOG.info("Getting table path..");

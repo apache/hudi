@@ -45,6 +45,8 @@ import scala.collection.JavaConverters._
 object HoodieSchemaUtils {
   private val log = LoggerFactory.getLogger(getClass)
 
+
+
   /**
    * get latest internalSchema from table
    *

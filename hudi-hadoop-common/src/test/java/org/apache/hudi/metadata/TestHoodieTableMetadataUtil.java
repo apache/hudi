@@ -65,8 +65,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES;
-import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD;
+import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
+import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.computeRevivedAndDeletedKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForPartitionStats;
@@ -473,7 +473,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(getTableSchema(expected))), false));
 
     //test with avro schema
-    schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES);
+    schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withColumnStatsIndexForColumns("booleanField,decimalField,localTimestampMillisField")
@@ -485,7 +485,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(schema)), true));
 
     //test with avro schema and nested fields and unsupported types
-    schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD);
+    schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withColumnStatsIndexForColumns("firstname,student.lastname,student")
@@ -496,7 +496,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertEquals(expected, HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig, Lazy.eagerly(Option.of(schema)), false));
 
     //test with avro schema with max cols set
-    schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES);
+    schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withMaxColumnsToIndexForColStats(2)
