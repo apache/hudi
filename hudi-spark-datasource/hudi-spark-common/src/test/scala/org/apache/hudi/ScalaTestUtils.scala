@@ -1,6 +1,7 @@
 package org.apache.hudi
 
 object ScalaTestUtils {
+  
   /**
    * Utility method to run a test multiple times. For using the test call the method on the test block.
    * Example:
