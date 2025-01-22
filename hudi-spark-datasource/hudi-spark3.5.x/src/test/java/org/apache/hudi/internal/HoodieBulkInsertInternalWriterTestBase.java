@@ -122,7 +122,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieSparkClientTes
       }
       assertNull(writeStatus.getGlobalError());
       assertEquals(0, writeStatus.getTotalErrorRecords());
-      assertEquals(writeStatus.getTotalErrorRecords(), 0);
+      assertEquals(0, writeStatus.getTotalErrorRecords());
       assertFalse(writeStatus.hasErrors());
       assertNotNull(writeStatus.getFileId());
       String fileId = writeStatus.getFileId();

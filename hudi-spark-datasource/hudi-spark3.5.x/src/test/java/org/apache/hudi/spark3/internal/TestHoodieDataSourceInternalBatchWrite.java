@@ -54,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit tests {@link HoodieDataSourceInternalBatchWrite}.
  */
-public class TestHoodieDataSourceInternalBatchWrite extends
+class TestHoodieDataSourceInternalBatchWrite extends
     HoodieBulkInsertInternalWriterTestBase {
 
   private static Stream<Arguments> bulkInsertTypeParams() {
@@ -122,7 +122,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
   }
 
   @Test
-  public void testDataSourceWriterExtraCommitMetadata() throws Exception {
+  void testDataSourceWriterExtraCommitMetadata() throws Exception {
     String commitExtraMetaPrefix = "commit_extra_meta_";
     Map<String, String> extraMeta = new HashMap<>();
     extraMeta.put(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key(), commitExtraMetaPrefix);
@@ -139,7 +139,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
   }
 
   @Test
-  public void testDataSourceWriterEmptyExtraCommitMetadata() throws Exception {
+  void testDataSourceWriterEmptyExtraCommitMetadata() throws Exception {
     String commitExtraMetaPrefix = "commit_extra_meta_";
     Map<String, String> extraMeta = new HashMap<>();
     extraMeta.put(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key(), commitExtraMetaPrefix);
