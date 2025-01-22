@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.utils;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
@@ -204,8 +203,6 @@ public class MetadataConversionUtils {
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(
           HoodieCommitMetadata hoodieCommitMetadata) {
     ObjectMapper mapper = JsonUtils.getObjectMapper();
-    // Need this to ignore other public get() methods
-    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData =
             mapper.convertValue(hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
     if (hoodieCommitMetadata.getCompacted()) {

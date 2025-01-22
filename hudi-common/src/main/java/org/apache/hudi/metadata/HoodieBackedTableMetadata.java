@@ -125,7 +125,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     } else if (this.metadataMetaClient == null) {
       try {
         this.metadataMetaClient = HoodieTableMetaClient.builder().setConf(getHadoopConf()).setBasePath(metadataBasePath).build();
-        this.metadataFileSystemView = getFileSystemView(engineContext, metadataMetaClient);
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
       } catch (TableNotFoundException e) {
         LOG.warn("Metadata table was not found at path " + metadataBasePath);
@@ -196,7 +195,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     //       to scan all file-groups for all key-prefixes as each of these might contain some
     //       records matching the key-prefix
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
-        k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
+        k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     ValidationUtils.checkState(partitionFileSlices.size() > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
     return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
@@ -248,7 +247,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
-        k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
+        k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     final int numFileSlices = partitionFileSlices.size();
     ValidationUtils.checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
@@ -580,12 +579,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   public HoodieTableFileSystemView getMetadataFileSystemView() {
+    if (metadataFileSystemView == null) {
+      metadataFileSystemView = getFileSystemView(engineContext, metadataMetaClient);
+    }
     return metadataFileSystemView;
   }
 
   public Map<String, String> stats() {
     Set<String> allMetadataPartitionPaths = Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
-    return metrics.map(m -> m.getStats(true, metadataFileSystemView, this, allMetadataPartitionPaths)).orElseGet(HashMap::new);
+    return metrics.map(m -> m.getStats(true, getMetadataFileSystemView(), this, allMetadataPartitionPaths)).orElseGet(HashMap::new);
   }
 
   @Override
@@ -616,8 +618,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     dataMetaClient.reloadActiveTimeline();
     if (metadataMetaClient != null) {
       metadataMetaClient.reloadActiveTimeline();
-      metadataFileSystemView.close();
-      metadataFileSystemView = getFileSystemView(engineContext, metadataMetaClient);
+      if (metadataFileSystemView != null) {
+        metadataFileSystemView.close();
+      }
+      metadataFileSystemView = null;
     }
     // the cached reader has max instant time restriction, they should be cleared
     // because the metadata timeline may have changed.
@@ -629,7 +633,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     partitionFileSliceMap.computeIfAbsent(partition.getPartitionPath(),
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient,
-            metadataFileSystemView, partition.getPartitionPath()));
+            getMetadataFileSystemView(), partition.getPartitionPath()));
     return partitionFileSliceMap.get(partition.getPartitionPath()).size();
   }
 

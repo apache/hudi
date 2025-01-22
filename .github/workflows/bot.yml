@@ -67,6 +67,7 @@ jobs:
   utilities:
     needs: skip-check
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     strategy:
       matrix:
         include:

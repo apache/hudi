@@ -41,6 +41,7 @@ import org.apache.hudi.table.action.BaseActionExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -195,6 +196,25 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
    * @return Cleaner Plan if generated
    */
   protected Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
+    // Check if the last clean completed successfully and wrote out its metadata. If not, it should be retried.
+    Option<HoodieInstant> lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
+    if (lastClean.isPresent()) {
+      HoodieInstant cleanInstant = lastClean.get();
+      HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+      if (activeTimeline.isEmpty(cleanInstant)) {
+        activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
+        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.getTimestamp());
+        try {
+          return Option.of(activeTimeline.deserializeInstantContent(cleanPlanInstant, HoodieCleanerPlan.class));
+        } catch (IOException ex) {
+          if (ex.getCause() instanceof EOFException) {
+            return Option.of(new HoodieCleanerPlan());
+          } else {
+            throw new HoodieIOException("Failed to parse cleaner plan", ex);
+          }
+        }
+      }
+    }
     final HoodieCleanerPlan cleanerPlan = requestClean(context);
     if ((cleanerPlan.getPartitionsToBeDeleted() != null && !cleanerPlan.getPartitionsToBeDeleted().isEmpty())
         || (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())

@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -32,6 +33,7 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 
@@ -40,8 +42,11 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieBackedTableMetadataWriter {
@@ -158,5 +163,44 @@ public class TestHoodieBackedTableMetadataWriter {
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER).build())
         .build();
     assertSame(mockMetaClient, HoodieBackedTableMetadataWriter.rollbackFailedWrites(lazyWriteConfig, mockWriteClient, mockMetaClient));
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = {
+      "true,true,false,true",
+      "false,true,false,true",
+      "true,false,false,true",
+      "false,false,false,false",
+      "false,false,true,false",
+  })
+  void runPendingTableServicesOperations(boolean hasPendingCompaction, boolean hasPendingLogCompaction, boolean requiresRefresh, boolean ranService) {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline initialTimeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    if (requiresRefresh) {
+      when(metaClient.reloadActiveTimeline()).thenReturn(initialTimeline);
+    } else {
+      when(metaClient.getActiveTimeline()).thenReturn(initialTimeline);
+    }
+    if (hasPendingCompaction) {
+      when(initialTimeline.filterPendingCompactionTimeline().countInstants()).thenReturn(1);
+    }
+    if (hasPendingLogCompaction) {
+      when(initialTimeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(1);
+    }
+    HoodieActiveTimeline expectedResult;
+    if (ranService) {
+      HoodieActiveTimeline timelineReloadedAfterServicesRun = mock(HoodieActiveTimeline.class);
+      when(metaClient.reloadActiveTimeline()).thenReturn(timelineReloadedAfterServicesRun);
+      expectedResult = timelineReloadedAfterServicesRun;
+    } else {
+      expectedResult = initialTimeline;
+    }
+    assertSame(expectedResult, HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(metaClient, writeClient, requiresRefresh));
+
+    verify(writeClient, times(hasPendingCompaction ? 1 : 0)).runAnyPendingCompactions();
+    verify(writeClient, times(hasPendingLogCompaction ? 1 : 0)).runAnyPendingLogCompactions();
+    int expectedTimelineReloads = (requiresRefresh ? 1 : 0) + (ranService ? 1 : 0);
+    verify(metaClient, times(expectedTimelineReloads)).reloadActiveTimeline();
   }
 }

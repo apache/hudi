@@ -302,7 +302,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       if (!allPartitionsInitialized) {
         // initialized new partitions as applicable.
-        metadataMetaClient.reloadActiveTimeline();
         initMetadataReader();
       }
       enableInitializedPartitions();
@@ -468,7 +467,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Perform the commit using bulkCommit
       HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
       bulkCommit(commitTimeForPartition, partitionType, records, fileGroupCount);
-      metadataMetaClient.reloadActiveTimeline();
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, true);
       // initialize the metadata reader again so the MDT partition can be read after initialization
       initMetadataReader();
@@ -1293,15 +1291,15 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * optimizations. We will relax this after MDT code has been hardened.
    */
   @Override
-  public void performTableServices(Option<String> inFlightInstantTimestamp) {
+  public void performTableServices(Option<String> inFlightInstantTimestamp, boolean requiresTimelineRefresh) {
     HoodieTimer metadataTableServicesTimer = HoodieTimer.start();
     boolean allTableServicesExecutedSuccessfullyOrSkipped = true;
     BaseHoodieWriteClient<?, I, ?, ?> writeClient = getWriteClient();
     try {
-      // Run any pending table services operations.
-      runPendingTableServicesOperations(writeClient);
+      // Run any pending table services operations and return the active timeline
+      HoodieActiveTimeline activeTimeline = runPendingTableServicesOperationsAndRefreshTimeline(metadataMetaClient, writeClient, requiresTimelineRefresh);
 
-      Option<HoodieInstant> lastInstant = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline()
+      Option<HoodieInstant> lastInstant = activeTimeline.getDeltaCommitTimeline()
           .filterCompletedInstants()
           .lastInstant();
       if (!lastInstant.isPresent()) {
@@ -1334,10 +1332,21 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
-  private void runPendingTableServicesOperations(BaseHoodieWriteClient writeClient) {
+  static HoodieActiveTimeline runPendingTableServicesOperationsAndRefreshTimeline(HoodieTableMetaClient metadataMetaClient,
+                                                                                  BaseHoodieWriteClient<?, ?, ?, ?> writeClient,
+                                                                                  boolean initialTimelineRequiresRefresh) {
+    HoodieActiveTimeline activeTimeline = initialTimelineRequiresRefresh ? metadataMetaClient.reloadActiveTimeline() : metadataMetaClient.getActiveTimeline();
     // finish off any pending log compaction or compactions operations if any from previous attempt.
-    writeClient.runAnyPendingCompactions();
-    writeClient.runAnyPendingLogCompactions();
+    boolean ranServices = false;
+    if (activeTimeline.filterPendingCompactionTimeline().countInstants() > 0) {
+      writeClient.runAnyPendingCompactions();
+      ranServices = true;
+    }
+    if (activeTimeline.filterPendingLogCompactionTimeline().countInstants() > 0) {
+      writeClient.runAnyPendingLogCompactions();
+      ranServices = true;
+    }
+    return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
   }
 
   /**
@@ -1380,7 +1389,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   protected void cleanIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
-    Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.reloadActiveTimeline()
+    Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient
         .getCommitTimeline().filterCompletedInstants().lastInstant();
     if (lastCompletedCompactionInstant.isPresent()
         && metadataMetaClient.getActiveTimeline().filterCompletedInstants()

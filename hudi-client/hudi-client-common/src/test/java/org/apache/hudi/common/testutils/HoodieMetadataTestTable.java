@@ -81,7 +81,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd,
         partitionToFilesNameLengthMap, bootstrap, createInflightCommit);
     if (writer != null && !createInflightCommit) {
-      writer.performTableServices(Option.of(commitTime));
+      writer.performTableServices(Option.of(commitTime), true);
       writer.updateFromWriteStatuses(commitMetadata, context.get().emptyHoodieData(), commitTime);
     }
     return commitMetadata;
