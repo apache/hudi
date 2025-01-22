@@ -563,3 +563,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [AUDIT-1136] Make Spark 3.5 the default for Hudi Internal (#1150)
 [AUDIT-1071][INTERNAL] Fix dependency for HoodieMemoryConfig (#1149)
 [AUDIT-1071]: Changelog for release-v1.77.0 (#1148)
+
+--- [2025-01-22 16:03:50] [release-v1.79.0] ---
+[ENG-19951][INTERNAL] Fix code issues reported by SonarQube (#1120)
+[ENG-20453][HUDI-8885] Improve the efficiency of initializing the metadata table and table services (#1024)
+[AUDIT-1136]: Changelog for release-v1.78.0 (#1152)
