@@ -808,6 +808,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
           + "Hudi write client and user is not expected to manually change the value.");
 
+  public static final ConfigProperty<Boolean> INCREMENTAL_TABLE_SERVICE_ENABLED = ConfigProperty
+      .key("hoodie.table.services.incremental.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2179,6 +2186,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(WRITE_PARTIAL_UPDATE_SCHEMA);
   }
 
+  public boolean isIncrementalTableServiceEnabled() {
+    return getBoolean(INCREMENTAL_TABLE_SERVICE_ENABLED);
+  }
+
   public double getParquetCompressionRatio() {
     return getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION);
   }
@@ -3338,6 +3349,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteRecordPositionsEnabled(boolean shouldWriteRecordPositions) {
       writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(shouldWriteRecordPositions));
+      return this;
+    }
+
+    public Builder withIncrementalTableServiceEnabled(boolean incrementalTableServiceEnabled) {
+      writeConfig.setValue(INCREMENTAL_TABLE_SERVICE_ENABLED, String.valueOf(incrementalTableServiceEnabled));
       return this;
     }
 

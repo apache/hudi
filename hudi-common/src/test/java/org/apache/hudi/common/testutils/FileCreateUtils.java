@@ -305,6 +305,11 @@ public class FileCreateUtils {
         serializeCommitMetadata(commitMetadataSerDe, metadata).get());
   }
 
+  public static void createReplaceCommit(CommitMetadataSerDe commitMetadataSerDe, String basePath,
+                                         String instantTime, String completionTime, HoodieReplaceCommitMetadata metadata) throws IOException {
+    createMetaFile(basePath, instantTime, () -> completionTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, serializeCommitMetadata(commitMetadataSerDe, metadata).get());
+  }
+
   public static void createRequestedClusterCommit(String basePath, String instantTime,
                                                   HoodieRequestedReplaceMetadata requestedReplaceMetadata)
       throws IOException {

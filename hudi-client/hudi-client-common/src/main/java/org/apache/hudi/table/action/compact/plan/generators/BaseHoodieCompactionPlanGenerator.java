@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -41,6 +40,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 
 import org.slf4j.Logger;
@@ -64,11 +64,14 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
   protected final HoodieTable<T, I, K, O> hoodieTable;
   protected final HoodieWriteConfig writeConfig;
   protected final transient HoodieEngineContext engineContext;
+  protected final BaseTableServicePlanActionExecutor executor;
 
-  public BaseHoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
+  public BaseHoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig,
+                                           BaseTableServicePlanActionExecutor executor) {
     this.hoodieTable = table;
     this.writeConfig = writeConfig;
     this.engineContext = engineContext;
+    this.executor = executor;
   }
 
   @Nullable
@@ -82,13 +85,14 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     // TODO - rollback any compactions in flight
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(
-        engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
+    List<String> partitionPaths = getPartitions();
 
     int allPartitionSize = partitionPaths.size();
 
     // filter the partition paths if needed to reduce list status
-    partitionPaths = filterPartitionPathsByStrategy(partitionPaths);
+    Pair<List<String>, List<String>> partitionPair = filterPartitionPathsByStrategy(partitionPaths);
+    partitionPaths = partitionPair.getLeft();
+
     LOG.info("Strategy: {} matched {} partition paths from all {} partitions for table {}",
         writeConfig.getCompactionStrategy().getClass().getSimpleName(), partitionPaths.size(), allPartitionSize,
         hoodieTable.getConfig().getBasePath());
@@ -169,7 +173,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     }
 
     // Filter the compactions with the passed in filter. This lets us choose most effective compactions only
-    HoodieCompactionPlan compactionPlan = getCompactionPlan(metaClient, operations);
+    HoodieCompactionPlan compactionPlan = getCompactionPlan(metaClient, operations, partitionPair);
     ValidationUtils.checkArgument(
         compactionPlan.getOperations().stream().noneMatch(
             op -> fgIdsInPendingCompactionAndClustering.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
@@ -182,12 +186,14 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     return compactionPlan;
   }
 
-  protected abstract HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations);
+  protected abstract List<String> getPartitions();
+
+  protected abstract HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations, Pair<List<String>,List<String>> partitionPair);
 
   protected abstract boolean filterLogCompactionOperations();
 
-  protected List<String> filterPartitionPathsByStrategy(List<String> partitionPaths) {
-    return partitionPaths;
+  protected Pair<List<String>, List<String>> filterPartitionPathsByStrategy(List<String> partitionPaths) {
+    return Pair.of(partitionPaths, Collections.emptyList());
   }
 
   protected boolean filterFileSlice(FileSlice fileSlice, String lastCompletedInstantTime,
