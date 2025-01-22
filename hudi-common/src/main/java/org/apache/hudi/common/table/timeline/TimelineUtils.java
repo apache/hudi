@@ -105,7 +105,9 @@ public class TimelineUtils {
             .map(partition -> new AbstractMap.SimpleEntry<>(partition, pair.getLeft().getTimestamp()))
         ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
     // cleaner could delete a partition when there are no active filegroups in the partition
-    HoodieTimeline cleanerTimeline = TimelineUtils.getCleanerTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced).filterCompletedInstants();
+    HoodieTimeline cleanerTimeline = lastCommitTimeSynced.isPresent()
+        ? TimelineUtils.getCleanerTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced).filterCompletedInstants()
+        : metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
     cleanerTimeline.getInstantsAsStream()
         .forEach(instant -> {
           try {
