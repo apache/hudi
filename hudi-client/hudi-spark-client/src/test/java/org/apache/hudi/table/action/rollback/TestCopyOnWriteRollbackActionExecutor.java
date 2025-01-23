@@ -455,12 +455,11 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     // Save an older instant for us to run clustering.
     String clusteringInstant1 = clusteringClient.createNewInstantTime();
+    // Now execute clustering on the saved instant and do not allow it to commit.
+    ClusteringTestUtils.runClusteringOnInstant(clusteringClient, false, false, clusteringInstant1);
 
     // Create completed clustering commit
     ClusteringTestUtils.runClustering(clusteringClient, false, true);
-
-    // Now execute clustering on the saved instant and do not allow it to commit.
-    ClusteringTestUtils.runClusteringOnInstant(clusteringClient, false, false, clusteringInstant1);
 
     HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().build());
     HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, secondCommit);
