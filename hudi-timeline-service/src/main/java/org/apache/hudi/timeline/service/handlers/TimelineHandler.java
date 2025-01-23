@@ -27,11 +27,9 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -43,8 +41,8 @@ public class TimelineHandler extends Handler {
   private static final Logger LOG = LoggerFactory.getLogger(TimelineHandler.class);
 
   public TimelineHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
-                         FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
-    super(conf, timelineServiceConfig, fileSystem, viewManager);
+                         FileSystemViewManager viewManager) {
+    super(conf, timelineServiceConfig, viewManager);
   }
 
   public List<InstantDTO> getLastInstant(String basePath) {

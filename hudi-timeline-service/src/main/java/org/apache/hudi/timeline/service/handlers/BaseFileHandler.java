@@ -23,9 +23,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +35,8 @@ import java.util.stream.Collectors;
 public class BaseFileHandler extends Handler {
 
   public BaseFileHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
-                         FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
-    super(conf, timelineServiceConfig, fileSystem, viewManager);
+                         FileSystemViewManager viewManager) {
+    super(conf, timelineServiceConfig, viewManager);
   }
 
   public List<BaseFileDTO> getLatestDataFiles(String basePath, String partitionPath) {

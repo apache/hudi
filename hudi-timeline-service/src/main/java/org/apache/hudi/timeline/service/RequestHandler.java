@@ -51,7 +51,6 @@ import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,17 +84,17 @@ public class RequestHandler {
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
 
   public RequestHandler(Javalin app, Configuration conf, TimelineService.Config timelineServiceConfig,
-                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
-                        FileSystemViewManager viewManager) throws IOException {
+                        HoodieEngineContext hoodieEngineContext,
+                        FileSystemViewManager viewManager) {
     this.timelineServiceConfig = timelineServiceConfig;
     this.viewManager = viewManager;
     this.app = app;
-    this.instantHandler = new TimelineHandler(conf, timelineServiceConfig, fileSystem, viewManager);
-    this.sliceHandler = new FileSliceHandler(conf, timelineServiceConfig, fileSystem, viewManager);
-    this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    this.instantHandler = new TimelineHandler(conf, timelineServiceConfig, viewManager);
+    this.sliceHandler = new FileSliceHandler(conf, timelineServiceConfig, viewManager);
+    this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, viewManager);
     if (timelineServiceConfig.enableMarkerRequests) {
       this.markerHandler = new MarkerHandler(
-          conf, timelineServiceConfig, hoodieEngineContext, fileSystem, viewManager, metricsRegistry);
+          conf, timelineServiceConfig, hoodieEngineContext, viewManager, metricsRegistry);
     } else {
       this.markerHandler = null;
     }

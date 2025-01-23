@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -77,7 +76,7 @@ class TestTimelineHandler extends HoodieCommonTestHarness {
         .withStorageType(FileSystemViewStorageType.MEMORY)
         .build();
     fileSystemViewManager = FileSystemViewManager.createViewManager(getEngineContext(), metadataConfig, fileSystemViewStorageConfig, commonConfig);
-    timelineHandler = new TimelineHandler(new Configuration(), new TimelineService.Config(), FileSystem.get(new Configuration()), fileSystemViewManager);
+    timelineHandler = new TimelineHandler(new Configuration(), new TimelineService.Config(), fileSystemViewManager);
   }
 
   @AfterEach
@@ -92,19 +91,19 @@ class TestTimelineHandler extends HoodieCommonTestHarness {
 
   @Test
   void initializeTimeline() throws IOException {
-    TimelineHandler timelineHandler = new TimelineHandler(new Configuration(), new TimelineService.Config(), FileSystem.get(new Configuration()), mockFileSystemViewManager);
+    TimelineHandler mockTimelineHandler = new TimelineHandler(new Configuration(), new TimelineService.Config(), mockFileSystemViewManager);
     // Init without any view.
     SyncableFileSystemView firstView = fileSystemViewManager.getFileSystemView(basePath);
     when(mockFileSystemViewManager.doesFileSystemViewExists(basePath)).thenReturn(false);
     when(mockFileSystemViewManager.getFileSystemView(basePath)).thenReturn(firstView);
     when(mockFileSystemViewManager.getFileSystemView(eq(metaClient), argThat(timeline -> timeline.getInstants().isEmpty()))).thenReturn(firstView);
-    timelineHandler.initializeTimeline(basePath, TimelineDTO.fromTimeline(metaClient.getActiveTimeline()));
+    mockTimelineHandler.initializeTimeline(basePath, TimelineDTO.fromTimeline(metaClient.getActiveTimeline()));
     verify(mockFileSystemViewManager, times(0)).clearFileSystemView(basePath);
     // Init with one instant in client.
     writeInstantToTimeline(basePath);
     when(mockFileSystemViewManager.doesFileSystemViewExists(basePath)).thenReturn(true);
     when(mockFileSystemViewManager.getFileSystemView(eq(metaClient), argThat(timeline -> timeline.getInstants().size() == 1))).thenReturn(firstView);
-    timelineHandler.initializeTimeline(basePath, TimelineDTO.fromTimeline(metaClient.reloadActiveTimeline()));
+    mockTimelineHandler.initializeTimeline(basePath, TimelineDTO.fromTimeline(metaClient.reloadActiveTimeline()));
     verify(mockFileSystemViewManager, times(1)).clearFileSystemView(basePath);
     verify(mockFileSystemViewManager, times(1)).getFileSystemView(basePath);
     verify(mockFileSystemViewManager, times(2)).getFileSystemView(any(), argThat(timeline -> timeline.getInstants().size() == 1));
@@ -112,7 +111,7 @@ class TestTimelineHandler extends HoodieCommonTestHarness {
     SyncableFileSystemView secondView = fileSystemViewManager.getFileSystemView(basePath);
     Mockito.clearInvocations(mockFileSystemViewManager);
     when(mockFileSystemViewManager.getFileSystemView(basePath)).thenReturn(secondView);
-    timelineHandler.initializeTimeline(basePath, TimelineDTO.fromTimeline(metaClient.reloadActiveTimeline()));
+    mockTimelineHandler.initializeTimeline(basePath, TimelineDTO.fromTimeline(metaClient.reloadActiveTimeline()));
     verify(mockFileSystemViewManager, times(1)).clearFileSystemView(basePath);
   }
 

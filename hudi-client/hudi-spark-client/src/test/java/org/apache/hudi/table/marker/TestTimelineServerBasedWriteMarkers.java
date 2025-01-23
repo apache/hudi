@@ -41,7 +41,6 @@ import org.apache.hudi.timeline.service.TimelineServiceTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
@@ -150,7 +149,6 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
       builder.withNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
       timelineService = builder.build(hoodieEngineContext, new Configuration(),
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
-          FileSystem.get(new Configuration()),
           FileSystemViewManager.createViewManager(
               hoodieEngineContext, metadataConfig, storageConf, HoodieCommonConfig.newBuilder().build()));
       timelineService.startService();

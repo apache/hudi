@@ -33,7 +33,6 @@ import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import io.javalin.core.util.JavalinBindException;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
@@ -56,7 +55,6 @@ public class TimelineService {
   private final Config timelineServerConf;
   private final Configuration conf;
   private transient HoodieEngineContext context;
-  private transient FileSystem fs;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
@@ -66,12 +64,11 @@ public class TimelineService {
   }
 
   public TimelineService(HoodieEngineContext context, Configuration hadoopConf, Config timelineServerConf,
-                         FileSystem fileSystem, FileSystemViewManager globalFileSystemViewManager) throws IOException {
+                         FileSystemViewManager globalFileSystemViewManager) {
     this.conf = FSUtils.prepareHadoopConf(hadoopConf);
     this.timelineServerConf = timelineServerConf;
     this.serverPort = timelineServerConf.serverPort;
     this.context = context;
-    this.fs = fileSystem;
     this.fsViewsManager = globalFileSystemViewManager;
   }
 
@@ -348,7 +345,7 @@ public class TimelineService {
     return realServerPort;
   }
 
-  private void createApp() throws IOException {
+  private void createApp() {
     // if app needs to be recreated, stop the existing one
     if (app != null) {
       app.stop();
@@ -367,7 +364,7 @@ public class TimelineService {
       c.server(() -> server);
     });
     requestHandler = new RequestHandler(
-        app, conf, timelineServerConf, context, fs, fsViewsManager);
+        app, conf, timelineServerConf, context, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
   }
@@ -427,10 +424,6 @@ public class TimelineService {
     return conf;
   }
 
-  public FileSystem getFs() {
-    return fs;
-  }
-
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
@@ -443,7 +436,7 @@ public class TimelineService {
     FileSystemViewManager viewManager = buildFileSystemViewManager(cfg, new SerializableConfiguration(conf));
     TimelineService service = new TimelineService(
         new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
-        new Configuration(), cfg, FileSystem.get(new Configuration()), viewManager);
+        new Configuration(), cfg, viewManager);
     service.run();
   }
 }

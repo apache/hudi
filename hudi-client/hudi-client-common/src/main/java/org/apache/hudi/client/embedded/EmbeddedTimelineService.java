@@ -20,7 +20,6 @@ package org.apache.hudi.client.embedded;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -31,7 +30,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -175,8 +173,7 @@ public class EmbeddedTimelineService {
 
     this.serviceConfig = timelineServiceConfBuilder.build();
 
-    server = timelineServiceCreator.create(context, hadoopConf.newCopy(), serviceConfig,
-        FSUtils.getFs(writeConfig.getBasePath(), hadoopConf.newCopy()), viewManager);
+    server = timelineServiceCreator.create(context, hadoopConf.newCopy(), serviceConfig, viewManager);
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }
@@ -184,7 +181,7 @@ public class EmbeddedTimelineService {
   @FunctionalInterface
   interface TimelineServiceCreator {
     TimelineService create(HoodieEngineContext context, Configuration hadoopConf, TimelineService.Config timelineServerConf,
-                           FileSystem fileSystem, FileSystemViewManager globalFileSystemViewManager) throws IOException;
+                           FileSystemViewManager globalFileSystemViewManager) throws IOException;
   }
 
   private void setHostAddr(String embeddedTimelineServiceHostAddr) {

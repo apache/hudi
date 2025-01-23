@@ -81,7 +81,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
         .build();
     EmbeddedTimelineService.TimelineServiceCreator mockCreator = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
     TimelineService mockService = Mockito.mock(TimelineService.class);
-    when(mockCreator.create(any(), any(), any(), any(), any())).thenReturn(mockService);
+    when(mockCreator.create(any(), any(), any(), any())).thenReturn(mockService);
     when(mockService.startService()).thenReturn(123);
     EmbeddedTimelineService service1 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig1, mockCreator);
 
@@ -122,7 +122,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
         .build();
     EmbeddedTimelineService.TimelineServiceCreator mockCreator = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
     TimelineService mockService = Mockito.mock(TimelineService.class);
-    when(mockCreator.create(any(), any(), any(), any(), any())).thenReturn(mockService);
+    when(mockCreator.create(any(), any(), any(), any())).thenReturn(mockService);
     when(mockService.startService()).thenReturn(321);
     EmbeddedTimelineService service1 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig1, mockCreator);
 
@@ -136,7 +136,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
         .build();
     EmbeddedTimelineService.TimelineServiceCreator mockCreator2 = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
     TimelineService mockService2 = Mockito.mock(TimelineService.class);
-    when(mockCreator2.create(any(), any(), any(), any(), any())).thenReturn(mockService2);
+    when(mockCreator2.create(any(), any(), any(), any())).thenReturn(mockService2);
     when(mockService2.startService()).thenReturn(456);
     EmbeddedTimelineService service2 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig2, mockCreator2);
     assertNotSame(service1, service2);
@@ -159,7 +159,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
         .build();
     EmbeddedTimelineService.TimelineServiceCreator mockCreator = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
     TimelineService mockService = Mockito.mock(TimelineService.class);
-    when(mockCreator.create(any(), any(), any(), any(), any())).thenReturn(mockService);
+    when(mockCreator.create(any(), any(), any(), any())).thenReturn(mockService);
     when(mockService.startService()).thenReturn(789);
     EmbeddedTimelineService service1 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig1, mockCreator);
 
@@ -170,7 +170,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
         .build();
     EmbeddedTimelineService.TimelineServiceCreator mockCreator2 = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
     TimelineService mockService2 = Mockito.mock(TimelineService.class);
-    when(mockCreator2.create(any(), any(), any(), any(), any())).thenReturn(mockService2);
+    when(mockCreator2.create(any(), any(), any(), any())).thenReturn(mockService2);
     when(mockService2.startService()).thenReturn(987);
     EmbeddedTimelineService service2 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig2, mockCreator2);
     assertNotSame(service1, service2);
@@ -195,7 +195,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
         .build();
     EmbeddedTimelineService.TimelineServiceCreator mockCreator = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
     TimelineService mockService = Mockito.mock(TimelineService.class);
-    when(mockCreator.create(any(), any(), any(), any(), any())).thenReturn(mockService);
+    when(mockCreator.create(any(), any(), any(), any())).thenReturn(mockService);
     when(mockService.startService()).thenReturn(555);
     EmbeddedTimelineService service1 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig1, mockCreator);
 
@@ -208,7 +208,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
         .build();
     EmbeddedTimelineService.TimelineServiceCreator mockCreator2 = Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
     TimelineService mockService2 = Mockito.mock(TimelineService.class);
-    when(mockCreator2.create(any(), any(), any(), any(), any())).thenReturn(mockService2);
+    when(mockCreator2.create(any(), any(), any(), any())).thenReturn(mockService2);
     when(mockService2.startService()).thenReturn(111);
     EmbeddedTimelineService service2 = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(engineContext, null, writeConfig2, mockCreator2);
     // a new service will be started since the original was shutdown already

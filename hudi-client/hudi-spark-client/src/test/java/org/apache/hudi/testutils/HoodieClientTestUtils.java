@@ -320,7 +320,6 @@ public class HoodieClientTestUtils {
       TimelineService timelineService = new TimelineService(context, new Configuration(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
-          FileSystem.get(new Configuration()),
           FileSystemViewManager.createViewManager(context, config.getMetadataConfig(),
               config.getViewStorageConfig(), config.getCommonConfig()));
       timelineService.startService();

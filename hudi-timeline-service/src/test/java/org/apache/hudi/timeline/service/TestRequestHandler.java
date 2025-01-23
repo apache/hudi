@@ -34,7 +34,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +42,11 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_URL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.DELETE_MARKER_DIR_URL;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_BASEPATH_PARAM;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.BASEPATH_PARAM;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.INIT_TIMELINE;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LAST_INSTANT_TS;
@@ -76,7 +80,7 @@ class TestRequestHandler extends HoodieCommonTestHarness {
       }
       TimelineServiceTestHarness.Builder builder = TimelineServiceTestHarness.newBuilder();
       server = builder.build(localEngineContext, new Configuration(),
-          TimelineService.Config.builder().serverPort(0).build(), FileSystem.get(new Configuration()),
+          TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {
@@ -134,5 +138,41 @@ class TestRequestHandler extends HoodieCommonTestHarness {
     // Test that if a request is made with no partitionPaths in body, then an exception is thrown.
     assertThrows(HttpResponseException.class, () -> timelineServiceClient.makeRequest(
           TimelineServiceClient.Request.newBuilder(POST, LOAD_PARTITIONS_URL).addQueryParams(queryParameters).build()));
+  }
+
+  @Test
+  void testCreateAndDeleteMarkerAPI() throws IOException {
+    Map<String, String> queryParameters = new HashMap<>();
+    queryParameters.put(BASEPATH_PARAM, basePath);
+    String markerDir = metaClient.getMarkerFolderPath("101");
+    String markerFile1 = "marker-file-1";
+    String markerFile2 = "marker-file-2";
+    queryParameters.put(MARKER_DIR_PATH_PARAM, markerDir);
+    queryParameters.put(MARKER_NAME_PARAM, markerFile1);
+    queryParameters.put(MARKER_BASEPATH_PARAM, basePath);
+
+    boolean content = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL).addQueryParams(queryParameters)
+                .build())
+        .getDecodedContent(new TypeReference<Boolean>() {
+        });
+    assertTrue(content);
+
+    queryParameters.put(MARKER_NAME_PARAM, markerFile2);
+    content = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL).addQueryParams(queryParameters)
+                .build())
+        .getDecodedContent(new TypeReference<Boolean>() {
+        });
+    assertTrue(content);
+
+    Map<String, String> deleteQueryParams = new HashMap<>();
+    deleteQueryParams.put(MARKER_DIR_PATH_PARAM, markerDir);
+    content = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, DELETE_MARKER_DIR_URL).addQueryParams(deleteQueryParams)
+                .build())
+        .getDecodedContent(new TypeReference<Boolean>() {
+        });
+    assertTrue(content);
   }
 }

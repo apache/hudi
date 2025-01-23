@@ -71,13 +71,13 @@ public class TimelineServerPerf implements Serializable {
   private final boolean useExternalTimelineServer;
   private String hostAddr;
 
-  public TimelineServerPerf(Config cfg) throws IOException {
+  public TimelineServerPerf(Config cfg) {
     this.cfg = cfg;
     useExternalTimelineServer = (cfg.serverHost != null);
     TimelineService.Config timelineServiceConf = cfg.getTimelineServerConfig();
     this.timelineServer = new TimelineService(
         new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
-        new Configuration(), timelineServiceConf, FileSystem.get(new Configuration()),
+        new Configuration(), timelineServiceConf,
         TimelineService.buildFileSystemViewManager(timelineServiceConf,
             new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))));
   }
