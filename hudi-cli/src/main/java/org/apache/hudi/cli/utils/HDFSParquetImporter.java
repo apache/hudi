@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.cli.utils;
 
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -35,12 +35,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.utilities.streamer.HoodieStreamer;
+import org.apache.hudi.utilities.UtilHelpers;
 
-import com.beust.jcommander.IValueValidator;
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import com.beust.jcommander.ParameterException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -60,15 +56,12 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
- * Loads data from Parquet Sources.
- *
- * @see HoodieStreamer
- * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieStreamer.Config#runBootstrap} instead.
+ * Loads data from Parquet Sources. This class is moved to hudi-cli from hudi-utilities.
+ * This feature, as separate utility, was deprecated in 0.10.0 and should be removed in 0.11.0.
+ * Now it is used only by hudi-cli SparkMain IMPORT and UPSERT commands (for compatibility support of hudi-cli API).
  */
 public class HDFSParquetImporter implements Serializable {
 
@@ -88,28 +81,6 @@ public class HDFSParquetImporter implements Serializable {
     this.cfg = cfg;
   }
 
-  public static void main(String[] args) {
-    final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
-    HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
-    JavaSparkContext jssc =
-        UtilHelpers.buildSparkContext("data-importer-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
-    int exitCode = 0;
-    try {
-      dataImporter.dataImport(jssc, cfg.retry);
-    } catch (Throwable throwable) {
-      exitCode = 1;
-      throw new HoodieException("Failed to run HoodieStreamer ", throwable);
-    } finally {
-      SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
-    }
-
-  }
-
   private boolean isUpsert() {
     return "upsert".equalsIgnoreCase(cfg.command);
   }
@@ -118,7 +89,7 @@ public class HDFSParquetImporter implements Serializable {
     this.fs = HadoopFSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
         : UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
-    LOG.info("Starting data import with configs : " + props.toString());
+    LOG.info("Starting data import with configs : {}", props.toString());
     int ret = -1;
     try {
       // Verify that targetPath is not present.
@@ -134,7 +105,7 @@ public class HDFSParquetImporter implements Serializable {
     return ret;
   }
 
-  protected int dataImport(JavaSparkContext jsc) throws IOException {
+  protected int dataImport(JavaSparkContext jsc) {
     try {
       if (fs.exists(new Path(cfg.targetPath)) && !isUpsert()) {
         // cleanup target directory.
@@ -186,20 +157,20 @@ public class HDFSParquetImporter implements Serializable {
           GenericRecord genericRecord = ((scala.Tuple2<Void, GenericRecord>) entry)._2();
           Object partitionField = genericRecord.get(cfg.partitionKey);
           if (partitionField == null) {
-            throw new HoodieIOException("partition key is missing. :" + cfg.partitionKey);
+            throw new HoodieIOException("partition key is missing:" + cfg.partitionKey);
           }
           Object rowField = genericRecord.get(cfg.rowKey);
           if (rowField == null) {
-            throw new HoodieIOException("row field is missing. :" + cfg.rowKey);
+            throw new HoodieIOException("row key field is missing:" + cfg.rowKey);
           }
           String partitionPath = partitionField.toString();
-          LOG.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
+          LOG.debug("Row Key : {}, Partition Path is ({})", rowField, partitionPath);
           if (partitionField instanceof Number) {
             try {
               long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
               partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
             } catch (NumberFormatException nfe) {
-              LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
+              LOG.warn("Unable to parse date from partition field. Assuming partition as ({})", partitionField);
             }
           }
           return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),
@@ -230,72 +201,21 @@ public class HDFSParquetImporter implements Serializable {
     }
   }
 
-  public static class CommandValidator implements IValueValidator<String> {
-
-    List<String> validCommands = Arrays.asList("insert", "upsert", "bulkinsert");
-
-    @Override
-    public void validate(String name, String value) {
-      if (value == null || !validCommands.contains(value.toLowerCase())) {
-        throw new ParameterException(
-            String.format("Invalid command: value:%s: supported commands:%s", value, validCommands));
-      }
-    }
-  }
-
-  public static class FormatValidator implements IValueValidator<String> {
-
-    List<String> validFormats = Collections.singletonList("parquet");
-
-    @Override
-    public void validate(String name, String value) {
-      if (value == null || !validFormats.contains(value)) {
-        throw new ParameterException(
-            String.format("Invalid format type: value:%s: supported formats:%s", value, validFormats));
-      }
-    }
-  }
-
   public static class Config implements Serializable {
 
-    @Parameter(names = {"--command", "-c"}, description = "Write command Valid values are insert(default)/upsert/bulkinsert",
-        validateValueWith = CommandValidator.class)
-    public String command = "INSERT";
-    @Parameter(names = {"--src-path", "-sp"}, description = "Base path for the input table", required = true)
-    public String srcPath = null;
-    @Parameter(names = {"--target-path", "-tp"}, description = "Base path for the target hoodie table",
-        required = true)
-    public String targetPath = null;
-    @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
-    public String tableName = null;
-    @Parameter(names = {"--table-type", "-tt"}, description = "Table type", required = true)
-    public String tableType = null;
-    @Parameter(names = {"--table-version", "-tv"}, description = "Table version")
-    public int tableVersion = HoodieTableVersion.current().versionCode();
-    @Parameter(names = {"--row-key-field", "-rk"}, description = "Row key field name", required = true)
-    public String rowKey = null;
-    @Parameter(names = {"--partition-key-field", "-pk"}, description = "Partition key field name", required = true)
-    public String partitionKey = null;
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert(default)/upsert/bulkinsert", required = true)
-    public int parallelism = 1;
-    @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = true)
-    public String schemaFile = null;
-    @Parameter(names = {"--format", "-f"}, description = "Format for the input data.", validateValueWith = FormatValidator.class)
-    public String format = null;
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
-    public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
-    public String sparkMemory = null;
-    @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
-    public int retry = 0;
-    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
-        + "hoodie client for importing")
-    public String propsFilePath = null;
-    @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
-            splitter = IdentitySplitter.class)
-    public List<String> configs = new ArrayList<>();
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
+    public String command = "INSERT"; // Write command Valid values are insert(default)/upsert/bulkinsert
+    public String srcPath = null; // Base path for the input table
+    public String targetPath = null; // Base path for the target hoodie table
+    public String tableName = null; // Table name
+    public String tableType = null; // Table type
+    public int tableVersion = HoodieTableVersion.current().versionCode(); // Table version
+    public String rowKey = null; // Row key field name
+    public String partitionKey = null; // Partition key field name
+    public int parallelism = 1; // Parallelism for hoodie insert(default)/upsert/bulkinsert
+    public String schemaFile = null; // path for Avro schema file
+    public String format = null; // Format for the input data
+    public String propsFilePath = null; // path to properties file on localfs or dfs, with configurations for hoodie client for importing
+    public List<String> configs = new ArrayList<>(); // Any configuration that can be set in the properties file
+    // can also be passed command line using this parameter. This can be repeated
   }
 }
