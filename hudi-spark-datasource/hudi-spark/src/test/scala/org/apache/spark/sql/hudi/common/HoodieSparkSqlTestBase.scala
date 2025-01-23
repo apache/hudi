@@ -124,7 +124,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
-    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
+    val ex = expects.map(row => Row(row: _*)).toArray.sortBy(_.toString())
+    val actual = spark.sql(sql).collect().sortBy(_.toString())
+    assertResult(ex)(actual)
   }
 
   protected def checkAnswer(array: Array[Row])(expects: Seq[Any]*): Unit = {

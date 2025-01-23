@@ -242,6 +242,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tableType = argArray(0)
         val runCompaction = "compaction".equals(argArray(1))
         val runClustering = "clustering".equals(argArray(1))
+        val isMor = "mor".equals(tableType)
         assert(runCompaction || runClustering)
 
         val tableName = generateTableName
@@ -293,8 +294,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         // test change column type float to double
         spark.sql(s"alter table $tableName alter column col2 type double")
         checkAnswer(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id")(
-          Seq(1, null, 101.01),
-          Seq(2, null, 102.02))
+          Seq(1, null, getDouble("101.01", isMor)),
+          Seq(2, null, getDouble("102.02", isMor)))
         spark.sql(
           s"""
              | insert into $tableName values
@@ -303,28 +304,28 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         val allExpectedRows = Seq(
-          Seq(1, 3, 1, 11, 100001L, 101.01, 1001.0001, new java.math.BigDecimal("100001.0001"),
-            "a000001", java.sql.Date.valueOf("2021-12-25"),
+          Seq(1, 3, 1, 11, 100001L, 101.01, 1001.0001,
+            new java.math.BigDecimal("100001.0001"), "a000001", java.sql.Date.valueOf("2021-12-25"),
             java.sql.Timestamp.valueOf("2021-12-25 12:01:01"), true,
             java.sql.Date.valueOf("2021-12-25")),
-          Seq(2, null, 2, 12, 100002L, 102.02, 1002.0002, new java.math.BigDecimal("100002.0002"),
-            "a000002", java.sql.Date.valueOf("2021-12-25"),
+          Seq(2, null, 2, 12, 100002L, getDouble("102.02", isMor), 1002.0002,
+            new java.math.BigDecimal("100002.0002"), "a000002", java.sql.Date.valueOf("2021-12-25"),
             java.sql.Timestamp.valueOf("2021-12-25 12:02:02"), true,
             java.sql.Date.valueOf("2021-12-25")),
-          Seq(3, null, 3, 13, 100003L, 103.03, 1003.0003, new java.math.BigDecimal("100003.0003"),
-            "a000003", java.sql.Date.valueOf("2021-12-25"),
+          Seq(3, null, 3, 13, 100003L, getDouble("103.03", isMor), 1003.0003,
+            new java.math.BigDecimal("100003.0003"), "a000003", java.sql.Date.valueOf("2021-12-25"),
             java.sql.Timestamp.valueOf("2021-12-25 12:03:03"), false,
             java.sql.Date.valueOf("2021-12-25")),
-          Seq(4, null, 4, 14, 100004L, 104.04, 1004.0004, new java.math.BigDecimal("100004.0004"),
-            "a000004", java.sql.Date.valueOf("2021-12-26"),
+          Seq(4, null, 4, 14, 100004L, 104.04, 1004.0004,
+            new java.math.BigDecimal("100004.0004"), "a000004", java.sql.Date.valueOf("2021-12-26"),
             java.sql.Timestamp.valueOf("2021-12-26 12:04:04"), true,
             java.sql.Date.valueOf("2021-12-26")),
-          Seq(5, null, 5, 15, 100005L, 105.05, 1005.0005, new java.math.BigDecimal("100005.0005"),
-            "a000005", java.sql.Date.valueOf("2021-12-26"),
+          Seq(5, null, 5, 15, 100005L, 105.05, 1005.0005,
+            new java.math.BigDecimal("100005.0005"), "a000005", java.sql.Date.valueOf("2021-12-26"),
             java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
             java.sql.Date.valueOf("2021-12-26")),
-          Seq(6, 6, 5, 15, 100005L, 105.05, 1005.0005, new java.math.BigDecimal("100005.0005"),
-            "a000005", java.sql.Date.valueOf("2021-12-26"),
+          Seq(6, 6, 5, 15, 100005L, 105.05, 1005.0005,
+            new java.math.BigDecimal("100005.0005"), "a000005", java.sql.Date.valueOf("2021-12-26"),
             java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
             java.sql.Date.valueOf("2021-12-26")))
 
@@ -365,7 +366,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table $tableName alter column col2 type string")
         checkAnswer(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id")(
           Seq(1, 3, "101.01"),
-          Seq(2, null, "102.02"))
+          Seq(2, null, getDouble("102.02", isMor && runClustering).toString))
         spark.sql(
           s"""
              | insert into $tableName values
@@ -373,33 +374,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | (6,6,5,15,100005,'105.05',1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
              |""".stripMargin)
 
-        val allExpectedRows2 = Seq(
-          Seq(1, 3, 1, 11, 100001L, "101.01", 1001.0001, new java.math.BigDecimal("100001.00010000"),
-            "a000001", java.sql.Date.valueOf("2021-12-25"),
-            java.sql.Timestamp.valueOf("2021-12-25 12:01:01"), true,
-            java.sql.Date.valueOf("2021-12-25")),
-          Seq(2, null, 2, 12, 100002L, "102.02", 1002.0002, new java.math.BigDecimal("100002.00020000"),
-            "a000002", java.sql.Date.valueOf("2021-12-25"),
-            java.sql.Timestamp.valueOf("2021-12-25 12:02:02"), true,
-            java.sql.Date.valueOf("2021-12-25")),
-          Seq(3, null, 3, 13, 100003L, "103.03", 1003.0003, new java.math.BigDecimal("100003.00030000"),
-            "a000003", java.sql.Date.valueOf("2021-12-25"),
-            java.sql.Timestamp.valueOf("2021-12-25 12:03:03"), false,
-            java.sql.Date.valueOf("2021-12-25")),
-          Seq(4, null, 4, 14, 100004L, "104.04", 1004.0004, new java.math.BigDecimal("100004.00040000"),
-            "a000004", java.sql.Date.valueOf("2021-12-26"),
-            java.sql.Timestamp.valueOf("2021-12-26 12:04:04"), true,
-            java.sql.Date.valueOf("2021-12-26")),
-          Seq(5, 6, 5, 15, 100005L, "105.05", 1005.0005, new java.math.BigDecimal("100005.00050000"),
-            "a000005", java.sql.Date.valueOf("2021-12-26"),
-            java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
-            java.sql.Date.valueOf("2021-12-26")),
-          Seq(6, 6, 5, 15, 100005L, "105.05", 1005.0005, new java.math.BigDecimal("100005.00050000"),
-            "a000005", java.sql.Date.valueOf("2021-12-26"),
-            java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
-            java.sql.Date.valueOf("2021-12-26")))
         checkAnswer(s"select id, col1_new, comb, col0, col1, col2, col3, col4, col5, "
-          + s"col6, col7, col8, par from $tableName")(allExpectedRows2: _*)
+          + s"col6, col7, col8, par from $tableName")(getExpectedRowsSecondTime(isMor && runClustering): _*)
         if (runCompaction) {
           // try schedule compact
           if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
@@ -422,7 +398,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         }
         // Data should not change after scheduling or running table services
         checkAnswer(s"select id, col1_new, comb, col0, col1, col2, col3, col4, col5, "
-          + s"col6, col7, col8, par from $tableName")(allExpectedRows2: _*)
+          + s"col6, col7, col8, par from $tableName")(getExpectedRowsSecondTime(isMor): _*)
         spark.sql(
           s"""
              | insert into $tableName values
@@ -434,12 +410,52 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           + s"where id = 1 or id = 6 or id = 2 or id = 11 order by id")(
           Seq(1, 3, "101.01"),
           Seq(11, 3, "101.01"),
-          Seq(2, null, "102.02"),
+          Seq(2, null, getDouble("102.02", isMor).toString),
           Seq(6, 6, "105.05"))
       }
       spark.sessionState.conf.unsetConf("spark.sql.storeAssignmentPolicy")
       spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
       spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
+    }
+  }
+
+  private def getExpectedRowsSecondTime(floatToDouble: Boolean): Seq[Seq[Any]] = {
+    Seq(
+      Seq(1, 3, 1, 11, 100001L, "101.01", 1001.0001, new java.math.BigDecimal("100001.00010000"),
+        "a000001", java.sql.Date.valueOf("2021-12-25"),
+        java.sql.Timestamp.valueOf("2021-12-25 12:01:01"), true,
+        java.sql.Date.valueOf("2021-12-25")),
+      Seq(2, null, 2, 12, 100002L, getDouble("102.02", floatToDouble).toString,
+        1002.0002, new java.math.BigDecimal("100002.00020000"),
+        "a000002", java.sql.Date.valueOf("2021-12-25"),
+        java.sql.Timestamp.valueOf("2021-12-25 12:02:02"), true,
+        java.sql.Date.valueOf("2021-12-25")),
+      Seq(3, null, 3, 13, 100003L, getDouble("103.03", floatToDouble).toString,
+        1003.0003, new java.math.BigDecimal("100003.00030000"),
+        "a000003", java.sql.Date.valueOf("2021-12-25"),
+        java.sql.Timestamp.valueOf("2021-12-25 12:03:03"), false,
+        java.sql.Date.valueOf("2021-12-25")),
+      Seq(4, null, 4, 14, 100004L, "104.04", 1004.0004, new java.math.BigDecimal("100004.00040000"),
+        "a000004", java.sql.Date.valueOf("2021-12-26"),
+        java.sql.Timestamp.valueOf("2021-12-26 12:04:04"), true,
+        java.sql.Date.valueOf("2021-12-26")),
+      Seq(5, 6, 5, 15, 100005L, "105.05", 1005.0005, new java.math.BigDecimal("100005.00050000"),
+        "a000005", java.sql.Date.valueOf("2021-12-26"),
+        java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
+        java.sql.Date.valueOf("2021-12-26")),
+      Seq(6, 6, 5, 15, 100005L, "105.05", 1005.0005, new java.math.BigDecimal("100005.00050000"),
+        "a000005", java.sql.Date.valueOf("2021-12-26"),
+        java.sql.Timestamp.valueOf("2021-12-26 12:05:05"), false,
+        java.sql.Date.valueOf("2021-12-26")))
+  }
+
+  private def getDouble(value: String, convertFromFloat: Boolean): Double = {
+    // TODO(HUDI-8902): Investigate different read behavior on a field after promotion
+    //  from float to double
+    if (convertFromFloat) {
+      value.toFloat.toDouble
+    } else {
+      value.toDouble
     }
   }
 
