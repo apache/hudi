@@ -568,3 +568,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-19951][INTERNAL] Fix code issues reported by SonarQube (#1120)
 [ENG-20453][HUDI-8885] Improve the efficiency of initializing the metadata table and table services (#1024)
 [AUDIT-1136]: Changelog for release-v1.78.0 (#1152)
+
+--- [2025-01-23 16:03:50] [release-v1.80.0] ---
+[ENG-20769][HUDI-8901] Fix Timeline Server to process requests from multiple storage lakes (#1157)
+[AUDIT-1071]: Changelog for release-v1.79.0 (#1155)
