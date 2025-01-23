@@ -182,7 +182,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<T> records = readRecordsFromFileGroup(getStorageConf(), getBasePath(), metaClient,  fileSlice,
           avroSchema, RecordMergeMode.COMMIT_TIME_ORDERING, false);
       HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf());
-      Comparable castedOrderingField = readerContext.castValue(100, Schema.Type.STRING);
+      Comparable castedOrderingField = "100";
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
         try (ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> spillableMap =
                  new ExternalSpillableMap<>(16L, baseMapPath, new DefaultSizeEstimator(),
@@ -200,8 +200,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             spillableMap.put(position++,
                 Pair.of(
                     Option.ofNullable(readerContext.seal(record)),
-                    readerContext.generateMetadataForRecord(recordKey,
-                        dataGen.getPartitionPaths()[0], 100, orderingFieldType)));
+                    readerContext.generateMetadataForRecord(
+                        recordKey, dataGen.getPartitionPaths()[0], "100")));
           }
 
           assertEquals(records.size() * 2, spillableMap.size());
