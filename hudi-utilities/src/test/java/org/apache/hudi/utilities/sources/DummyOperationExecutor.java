@@ -1,0 +1,100 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.utilities.sources;
+
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+
+import java.util.function.BiFunction;
+
+/**
+ * Helper class to execute dummy operations for testing S3EventsHoodieIncrSource.
+ * Provides different scenarios of empty row sets with various checkpoint configurations.
+ */
+public class DummyOperationExecutor {
+  /**
+   * Operation keys for different test scenarios returning empty row sets with different checkpoint configurations.
+   */
+  public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY";
+  public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP2_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP2_KEY";
+  public static final String OP_EMPTY_ROW_SET_NULL_CKP_KEY = "OP_EMPTY_ROW_SET_NULL_CKP";
+  
+  /**
+   * Custom checkpoint values used in testing.
+   */
+  public static final String CUSTOM_CHECKPOINT1 = "custom-checkpoint1";
+  public static final String CUSTOM_CHECKPOINT2 = "custom-checkpoint2";
+
+  private static final BiFunction<Option<Checkpoint>, Long, Pair<Option<Dataset<Row>>, Checkpoint>> EMPTY_ROW_SET_NONE_NULL_CKP_1 =
+      (checkpoint, limit) -> {
+        Option<Dataset<Row>> empty = Option.empty();
+        return Pair.of(
+          empty,
+          new StreamerCheckpointV1(CUSTOM_CHECKPOINT1));
+      };
+
+  private static final BiFunction<Option<Checkpoint>, Long, Pair<Option<Dataset<Row>>, Checkpoint>> EMPTY_ROW_SET_NONE_NULL_CKP_2 =
+      (checkpoint, limit) -> {
+        Option<Dataset<Row>> empty = Option.empty();
+        return Pair.of(
+            empty,
+            new StreamerCheckpointV1(CUSTOM_CHECKPOINT2)
+        );
+      };
+
+  private static final BiFunction<Option<Checkpoint>, Long, Pair<Option<Dataset<Row>>, Checkpoint>> EMPTY_ROW_SET_NULL_CKP =
+      (checkpoint, limit) -> {
+        Option<Dataset<Row>> empty = Option.empty();
+        return Pair.of(
+            empty,
+            null
+        );
+      };
+
+  /**
+   * Executes the dummy operation based on the operation type.
+   *
+   * @param lastCheckpoint Option containing the last checkpoint
+   * @param sourceLimit maximum number of records to fetch
+   * @param opType type of operation to execute
+   * @return Pair containing Option<Dataset<Row>> and Checkpoint
+   * @throws IllegalArgumentException if operation type is not supported
+   */
+  public static Pair<Option<Dataset<Row>>, Checkpoint> executeDummyOperation(
+      Option<Checkpoint> lastCheckpoint, 
+      long sourceLimit, 
+      String opType) {
+    if (opType.equals(OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY)) {
+      return EMPTY_ROW_SET_NONE_NULL_CKP_1.apply(lastCheckpoint, sourceLimit);
+    }
+    if (opType.equals(OP_EMPTY_ROW_SET_NONE_NULL_CKP2_KEY)) {
+      return EMPTY_ROW_SET_NONE_NULL_CKP_2.apply(lastCheckpoint, sourceLimit);
+    }
+    if (opType.equals(OP_EMPTY_ROW_SET_NULL_CKP_KEY)) {
+      return EMPTY_ROW_SET_NULL_CKP.apply(lastCheckpoint, sourceLimit);
+    }
+    throw new IllegalArgumentException("Unsupported operation type: " + opType);
+  }
+} 

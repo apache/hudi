@@ -44,7 +44,8 @@ public class CheckpointUtils {
 
   public static final Set<String> DATASOURCES_MUST_USE_CKP_V1 = new HashSet<>(Arrays.asList(
       "org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource",
-      "org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource"
+      "org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource",
+      "org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource"
   ));
   public static Checkpoint getCheckpoint(HoodieCommitMetadata commitMetadata) {
     if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))
