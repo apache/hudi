@@ -382,7 +382,12 @@ public class HoodieCommonTestHarness {
     }
   }
 
-  protected byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
+  public byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
+      throws IOException {
+    return getCommitMetadata(metaClient, basePath, partition, commitTs, count, extraMetadata);
+  }
+
+  public static byte[] getCommitMetadata(HoodieTableMetaClient metaClient, String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
       throws IOException {
     HoodieCommitMetadata commit = new HoodieCommitMetadata();
     for (int i = 1; i <= count; i++) {
