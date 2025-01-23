@@ -46,10 +46,11 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test Insert Into with subset of columns") {
     // This is only supported by Spark 3.4 and above
     if (HoodieSparkUtils.gteqSpark3_4) {
-      Seq(true, false).foreach(isPartitioned => withTempDir { tmp =>
-        testInsertIntoWithSubsetOfColumns(
-          "hudi", s"${tmp.getCanonicalPath}/1", isPartitioned)
-      })
+      Seq("cow", "mor").foreach(tableType =>
+        Seq(true, false).foreach(isPartitioned => withTempDir { tmp =>
+          testInsertIntoWithSubsetOfColumns(
+            "hudi", tableType, s"${tmp.getCanonicalPath}/hudi_table", isPartitioned)
+        }))
     }
   }
 
@@ -60,12 +61,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       // INSERT INTO statements on Hudi tables
       Seq(true, false).foreach(isPartitioned => withTempDir { tmp =>
         testInsertIntoWithSubsetOfColumns(
-          "parquet", s"${tmp.getCanonicalPath}/1", isPartitioned)
+          "parquet", "", s"${tmp.getCanonicalPath}/parquet_table", isPartitioned)
       })
     }
   }
 
   private def testInsertIntoWithSubsetOfColumns(format: String,
+                                                tableType: String,
                                                 tablePath: String,
                                                 isPartitioned: Boolean): Unit = {
     val tableName = generateTableName
@@ -80,7 +82,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
          |  price double,
          |  ts long
          |) using $format
-         | tblproperties (primaryKey = 'id')
+         | tblproperties (
+         | type = '$tableType',
+         | primaryKey = 'id'
+         | )
          | $createTablePartitionClause
          | location '$tablePath'
        """.stripMargin)
