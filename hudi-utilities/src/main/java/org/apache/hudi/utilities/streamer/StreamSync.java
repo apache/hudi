@@ -47,6 +47,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -139,6 +140,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.targetCheckpointV2;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
@@ -808,14 +810,7 @@ public class StreamSync implements Serializable, Closeable {
     }
     boolean hasErrors = totalErrorRecords > 0;
     if (!hasErrors || cfg.commitOnErrors) {
-      Map<String, String> checkpointCommitMetadata =
-          !getBooleanWithAltKeys(props, CHECKPOINT_FORCE_SKIP)
-              ? inputBatch.getCheckpointForNextBatch() != null
-              ? inputBatch.getCheckpointForNextBatch().getCheckpointCommitMetadata(
-              cfg.checkpoint, cfg.ignoreCheckpoint)
-              : new StreamerCheckpointV2((String) null).getCheckpointCommitMetadata(
-              cfg.checkpoint, cfg.ignoreCheckpoint)
-              : Collections.emptyMap();
+      Map<String, String> checkpointCommitMetadata = extractCheckpointMetadata(inputBatch, props, writeClient.getConfig().getWriteVersion().versionCode(), cfg);
 
       if (hasErrors) {
         LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
@@ -877,6 +872,26 @@ public class StreamSync implements Serializable, Closeable {
     // Send DeltaStreamer Metrics
     metrics.updateStreamerMetrics(overallTimeNanos);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
+  }
+
+  Map<String, String> extractCheckpointMetadata(InputBatch inputBatch, TypedProperties props, int versionCode, HoodieStreamer.Config cfg) {
+    // If checkpoint force skip is enabled, return empty map
+    if (getBooleanWithAltKeys(props, CHECKPOINT_FORCE_SKIP)) {
+      return Collections.emptyMap();
+    }
+
+    // If we have a next checkpoint batch, use its metadata
+    if (inputBatch.getCheckpointForNextBatch() != null) {
+      return inputBatch.getCheckpointForNextBatch()
+          .getCheckpointCommitMetadata(cfg.checkpoint, cfg.ignoreCheckpoint);
+    }
+
+    // Otherwise create new checkpoint based on version
+    Checkpoint checkpoint = targetCheckpointV2(versionCode, cfg.sourceClassName)
+        ? new StreamerCheckpointV2((String) null)
+        : new StreamerCheckpointV1((String) null);
+    
+    return checkpoint.getCheckpointCommitMetadata(cfg.checkpoint, cfg.ignoreCheckpoint);
   }
 
   /**

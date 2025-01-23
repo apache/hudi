@@ -25,6 +25,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -38,6 +39,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -87,6 +89,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -181,12 +184,19 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return getHoodieMetaClient(storageConf, basePath, getPropertiesForKeyGen(true));
   }
 
+  public HoodieTableMetaClient getHoodieMetaClientWithTableVersion(StorageConfiguration<?> storageConf, String basePath, String tableVersion) throws IOException {
+    Properties props = getPropertiesForKeyGen(true);
+    props.put(WRITE_TABLE_VERSION.key(), tableVersion);
+    return getHoodieMetaClient(storageConf, basePath, props);
+  }
+
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
     return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(COPY_ON_WRITE)
         .setPayloadClass(HoodieAvroPayload.class)
+        .setTableVersion(ConfigUtils.getIntWithAltKeys(new TypedProperties(props), WRITE_TABLE_VERSION))
         .fromProperties(props)
         .initTable(storageConf.newInstance(), basePath);
   }

@@ -58,7 +58,7 @@ public class StreamerCheckpointUtils {
                                                              TypedProperties props) throws IOException {
     Option<Checkpoint> checkpoint = Option.empty();
     if (commitsTimelineOpt.isPresent()) {
-      checkpoint = getCheckpointToResumeString(commitsTimelineOpt, streamerConfig, props);
+      checkpoint = getCheckpointToResumeString(commitsTimelineOpt.get(), streamerConfig, props);
     }
 
     LOG.debug("Checkpoint from config: " + streamerConfig.checkpoint);
@@ -73,28 +73,30 @@ public class StreamerCheckpointUtils {
   /**
    * Process previous commit metadata and checkpoint configs set by user to determine the checkpoint to resume from.
    *
-   * @param commitsTimelineOpt commits timeline of interest, including .commit and .deltacommit.
+   * @param commitsTimeline commits timeline of interest, including .commit and .deltacommit.
    *
    * @return the checkpoint to resume from if applicable.
    * @throws IOException
    */
   @VisibleForTesting
-  static Option<Checkpoint> getCheckpointToResumeString(Option<HoodieTimeline> commitsTimelineOpt,
+  static Option<Checkpoint> getCheckpointToResumeString(HoodieTimeline commitsTimeline,
                                                         HoodieStreamer.Config streamerConfig,
                                                         TypedProperties props) throws IOException {
     Option<Checkpoint> resumeCheckpoint = Option.empty();
-    // try get checkpoint from commits(including commit and deltacommit)
-    // in COW migrating to MOR case, the first batch of the deltastreamer will lost the checkpoint from COW table, cause the dataloss
-    HoodieTimeline deltaCommitTimeline = commitsTimelineOpt.get().filter(instant -> instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
     // has deltacommit and this is a MOR table, then we should get checkpoint from .deltacommit
     // if changing from mor to cow, before changing we must do a full compaction, so we can only consider .commit in such case
-    if (streamerConfig.tableType.equals(HoodieTableType.MERGE_ON_READ.name()) && !deltaCommitTimeline.empty()) {
-      commitsTimelineOpt = Option.of(deltaCommitTimeline);
+    if (streamerConfig.tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+      // try get checkpoint from commits(including commit and deltacommit)
+      // in COW migrating to MOR case, the first batch of the deltastreamer will lost the checkpoint from COW table, cause the dataloss
+      HoodieTimeline deltaCommitTimeline = commitsTimeline.filter(instant -> instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
+      if (!deltaCommitTimeline.empty()) {
+        commitsTimeline = deltaCommitTimeline;
+      }
     }
-    Option<HoodieInstant> lastCommit = commitsTimelineOpt.get().lastInstant();
+    Option<HoodieInstant> lastCommit = commitsTimeline.lastInstant();
     if (lastCommit.isPresent()) {
       // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
-      Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitsTimelineOpt.get());
+      Option<HoodieCommitMetadata> commitMetadataOption = getLatestCommitMetadataWithValidCheckpointInfo(commitsTimeline);
       int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION);
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
@@ -116,7 +118,7 @@ public class StreamerCheckpointUtils {
           throw new HoodieStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
                   + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                  + commitsTimelineOpt.get().getInstants());
+                  + commitsTimeline.getInstants());
         }
         // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_RESET_KEY))) {

@@ -325,7 +325,7 @@ public class HoodieClientTestUtils {
     return HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(spark.sessionState().newHadoopConf()), basePath);
   }
 
-  private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+  public static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       byte[] data = timeline.getInstantDetails(instant).get();
