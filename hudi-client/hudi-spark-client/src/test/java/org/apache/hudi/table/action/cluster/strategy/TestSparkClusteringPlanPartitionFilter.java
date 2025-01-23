@@ -101,7 +101,7 @@ public class TestSparkClusteringPlanPartitionFilter {
     fakeTimeBasedPartitionsPath.add("20211221");
     fakeTimeBasedPartitionsPath.add("20211222");
     fakeTimeBasedPartitionsPath.add("20211224");
-    List list = (List)sg.filterPartitionPaths(table.getConfig(), fakeTimeBasedPartitionsPath).getLeft();
+    List list = (List)sg.filterPartitionPaths(config, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(1, list.size());
     assertSame("20211222", list.get(0));
   }

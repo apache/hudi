@@ -448,6 +448,8 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // Create completed clustering commit
     Properties properties = new Properties();
     properties.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
+    // not incremental related UTs, here just disable incremental, allowed continuous scheduling of two full clustering to simplify testing
+    properties.put("hoodie.table.services.incremental.enabled", String.valueOf(false));
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(
         ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
 
