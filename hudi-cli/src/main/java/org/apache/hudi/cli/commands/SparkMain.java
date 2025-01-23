@@ -50,8 +50,8 @@ import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
-import org.apache.hudi.utilities.HDFSParquetImporter;
-import org.apache.hudi.utilities.HDFSParquetImporter.Config;
+import org.apache.hudi.cli.utils.HDFSParquetImporter;
+import org.apache.hudi.cli.utils.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCleaner;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
