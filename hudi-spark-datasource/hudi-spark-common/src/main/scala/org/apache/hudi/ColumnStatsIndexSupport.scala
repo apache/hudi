@@ -36,7 +36,6 @@ import org.apache.hudi.util.JFunction
 import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.generic.GenericData
-import org.apache.hudi.schema.HoodieSparkSchemaUtils
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -65,9 +64,17 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   //       on to the executor
   protected val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
 
-  private lazy val indexedColumns: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
+  private lazy val indexedColumns: Set[String] = getIndexedColumns(metaClient)
 
   override def getIndexName: String = ColumnStatsIndexSupport.INDEX_NAME
+
+  def getIndexedColumns(metaClient: HoodieTableMetaClient): Set[String] = {
+    if (metaClient.getIndexMetadata.isPresent && metaClient.getIndexMetadata.get().getIndexDefinitions.containsKey(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
+      metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
+    } else {
+      Set.empty
+    }
+  }
 
   override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
                                          queryFilters: Seq[Expression],
@@ -219,7 +226,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     //       of the transposed table
     val sortedTargetColumnsSet = TreeSet(queryColumns:_*)
 
-    val sortedTargetColDataTypeMap = sortedTargetColumnsSet.toSeq.map(fieldName => (fieldName, HoodieSparkSchemaUtils.getSchemaForField(tableSchema, fieldName).getValue)).toMap
+    val sortedTargetColDataTypeMap = sortedTargetColumnsSet.toSeq.map(fieldName => (fieldName, HoodieSchemaUtils.getSchemaForField(tableSchema, fieldName).getValue)).toMap
 
     // NOTE: This is a trick to avoid pulling all of [[ColumnStatsIndexSupport]] object into the lambdas'
     //       closures below
@@ -405,7 +412,7 @@ object ColumnStatsIndexSupport {
     val valueCountField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT, LongType, nullable = true, Metadata.empty)
 
     val targetIndexedColumns = targetColumnNames.filter(indexedColumns.contains(_))
-    val targetIndexedFields = targetIndexedColumns.map(colName => HoodieSparkSchemaUtils.getSchemaForField(tableSchema, colName))
+    val targetIndexedFields = targetIndexedColumns.map(colName => HoodieSchemaUtils.getSchemaForField(tableSchema, colName))
 
     (StructType(
       targetIndexedFields.foldLeft(Seq(fileNameField, valueCountField)) {

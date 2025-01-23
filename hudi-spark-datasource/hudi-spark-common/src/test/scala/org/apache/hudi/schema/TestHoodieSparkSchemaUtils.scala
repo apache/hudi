@@ -19,6 +19,7 @@
 
 package org.apache.hudi.schema
 
+import org.apache.hudi.HoodieSchemaUtils
 import org.apache.spark.sql.types.{DataType, IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -54,7 +55,7 @@ class TestHoodieSparkSchemaUtils {
   }
 
   def assertFieldType(schema: StructType, fieldName: String, expectedDataType: DataType): Unit = {
-    val fieldNameSchemaPair = HoodieSparkSchemaUtils.getSchemaForField(schema, fieldName)
+    val fieldNameSchemaPair = HoodieSchemaUtils.getSchemaForField(schema, fieldName)
     assertEquals(fieldName, fieldNameSchemaPair.getKey)
     assertEquals(expectedDataType, fieldNameSchemaPair.getValue.dataType)
   }
