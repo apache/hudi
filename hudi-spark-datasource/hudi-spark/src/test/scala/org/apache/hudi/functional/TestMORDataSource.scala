@@ -1598,6 +1598,5 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertTrue(metadataPartitionExists(basePath, context, PARTITION_NAME_SECONDARY_INDEX_PREFIX + secondaryIndexName2))
     assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_NAME_SECONDARY_INDEX_PREFIX + secondaryIndexName2))
-
   }
 }

@@ -133,7 +133,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
 
   private HoodieIndexPartitionInfo buildIndexPartitionInfo(MetadataPartitionType partitionType, HoodieInstant indexUptoInstant) {
     // for expression index, we need to pass the index name as the partition name
-    // TODO: see the index partition info is built correctly. Should we register the index here?
     String partitionName = MetadataPartitionType.EXPRESSION_INDEX.equals(partitionType) || MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)
         ? config.getIndexingConfig().getIndexName()
         : partitionType.getPartitionPath();

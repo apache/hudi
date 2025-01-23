@@ -82,7 +82,7 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TR
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryIndex;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
 
 /**
@@ -506,7 +506,7 @@ public class HoodieIndexUtils {
     }
     checkArgument(columns.size() == 1, "Only one column can be indexed for functional or secondary index.");
 
-    if (!isEligibleForIndexing(metaClient, indexType, tableProperties, columns)) {
+    if (!isEligibleForSecondaryOrExpressionIndex(metaClient, indexType, tableProperties, columns)) {
       throw new HoodieMetadataIndexException("Not eligible for indexing: " + indexType + ", indexName: " + userIndexName);
     }
 
@@ -523,8 +523,11 @@ public class HoodieIndexUtils {
     return metaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(partition -> partition.equals(indexName));
   }
 
-  private static boolean isEligibleForIndexing(HoodieTableMetaClient metaClient, String indexType, Map<String, String> options, Map<String, Map<String, String>> columns) throws Exception {
-    if (!validateDataTypeForSecondaryIndex(new ArrayList<>(columns.keySet()), new TableSchemaResolver(metaClient).getTableAvroSchema())) {
+  private static boolean isEligibleForSecondaryOrExpressionIndex(HoodieTableMetaClient metaClient,
+                                                                 String indexType,
+                                                                 Map<String, String> options,
+                                                                 Map<String, Map<String, String>> columns) throws Exception {
+    if (!validateDataTypeForSecondaryOrExpressionIndex(new ArrayList<>(columns.keySet()), new TableSchemaResolver(metaClient).getTableAvroSchema())) {
       return false;
     }
     // for secondary index, record index is a must

@@ -1036,7 +1036,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   public void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos, String instantTime) throws IOException {
-    // TODO: so we need to create an index definition in case we're coming via the indexer
     if (indexPartitionInfos.isEmpty()) {
       LOG.warn("No partition to index in the plan");
       return;

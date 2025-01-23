@@ -91,7 +91,6 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -211,33 +210,28 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Builds index definition and writes to index definition file.
-   * Support mutable and immutable index definition. Only col stats is mutable, while all others are immutable.
-   * Inacse of immutable index definition, we could only create or delete the definition.
-   * Incase of mutable (col stats), list of source columns (or list of columns to index) could also change.
+   * Builds index definition and writes to index definition file. Support mutable and immutable index definition.
+   * For instance, if index definition is mutable (like column stats), list of source columns (or list of columns to index) could also change.
+   * If an index definition is present for the index name, it will be updated only when there is difference between present and new index definition.
+   *
    * @return true if index definition is updated.
    */
   public boolean buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
-    boolean isIndexDefnImmutable = !indexDefinition.getIndexName().equals(PARTITION_NAME_COLUMN_STATS); // only col stats is mutable.
     String indexMetaPath = getIndexDefinitionPath();
     boolean updateIndexDefn = true;
     if (indexMetadataOpt.isPresent()) {
-      if (isIndexDefnImmutable) {
-        indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
-      } else {
-        // if index defn is mutable, lets check for difference and only update if required.
-        if (indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)) {
-          if (!indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields().equals(indexDefinition.getSourceFields())) {
-            LOG.info(String.format("List of columns to index is changing. Old value %s. New value %s",
-                indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields(), indexDefinition.getSourceFields()));
-            indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
-          } else {
-            updateIndexDefn = false;
-          }
-        } else {
+      // if index definition is present, lets check for difference and only update if required.
+      if (indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)) {
+        if (!indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields().equals(indexDefinition.getSourceFields())) {
+          LOG.info("List of columns to index is changing. Old value {}. New value {}", indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields(),
+              indexDefinition.getSourceFields());
           indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
+        } else {
+          updateIndexDefn = false;
         }
+      } else {
+        indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
       }
     } else {
       Map<String, HoodieIndexDefinition> indexDefinitionMap = new HashMap<>();
