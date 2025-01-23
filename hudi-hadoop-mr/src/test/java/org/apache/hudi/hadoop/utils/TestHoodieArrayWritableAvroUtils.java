@@ -99,8 +99,8 @@ public class TestHoodieArrayWritableAvroUtils {
     HiveHoodieReaderContext readerContext = Mockito.mock(HiveHoodieReaderContext.class, Mockito.CALLS_REAL_METHODS);
     assertEquals(new Text("ASDF"), readerContext.convertValueToEngineType(new Text("ASDF")));
     assertEquals(new Text("ASDF"), readerContext.convertValueToEngineType("ASDF"));
-    assertEquals(new IntWritable(0), readerContext.convertValueToEngineType(new IntWritable(0)));
-    assertEquals(new IntWritable(0), readerContext.convertValueToEngineType(0));
+    assertEquals(new IntWritable(8), readerContext.convertValueToEngineType(new IntWritable(8)));
+    assertEquals(new IntWritable(8), readerContext.convertValueToEngineType(8));
     assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.convertValueToEngineType(new LongWritable(Long.MAX_VALUE / 2L)));
     assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.convertValueToEngineType(Long.MAX_VALUE / 2L));
     assertEquals(new FloatWritable(20.24f), readerContext.convertValueToEngineType(new FloatWritable(20.24f)));

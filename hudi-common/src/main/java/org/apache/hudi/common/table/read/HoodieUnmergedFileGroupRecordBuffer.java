@@ -127,7 +127,8 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
     // never used for now
     records.put(index, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-        deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue())));
+        deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(),
+        getOrderingValue(readerContext, deleteRecord))));
   }
 
   @Override

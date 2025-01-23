@@ -203,7 +203,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       String recordKey = recordOpt.get().getRecordKey();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
           recordKey, recordOpt.get().getPartitionPath(),
-          recordOpt.get().getOrderingValue() == null ? COMMIT_TIME_ORDERING_VALUE : recordOpt.get().getOrderingValue())));
+          getOrderingValue(readerContext, recordOpt.get()))));
     }
   }
 

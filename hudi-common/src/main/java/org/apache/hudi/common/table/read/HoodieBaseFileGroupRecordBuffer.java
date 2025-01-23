@@ -559,9 +559,20 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     return Pair.of(transformer, evolvedSchema);
   }
 
+  protected static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
+    return orderingValue.equals(COMMIT_TIME_ORDERING_VALUE);
+  }
+
+  protected static Comparable getOrderingValue(HoodieReaderContext readerContext,
+                                               DeleteRecord deleteRecord) {
+    return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
+        ? COMMIT_TIME_ORDERING_VALUE
+        : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
+  }
+
   private boolean isDeleteRecordWithNaturalOrder(Option<T> rowOption,
                                                  Comparable orderingValue) {
-    return rowOption.isEmpty() && orderingValue.equals(COMMIT_TIME_ORDERING_VALUE);
+    return rowOption.isEmpty() && isCommitTimeOrderingValue(orderingValue);
   }
 
   private boolean isDeleteRecord(Option<T> record, Schema schema) {

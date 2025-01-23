@@ -285,7 +285,7 @@ public abstract class HoodieReaderContext<T> implements Closeable {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, recordKey);
     meta.put(INTERNAL_META_PARTITION_PATH, partitionPath);
-    meta.put(INTERNAL_META_ORDERING_FIELD, convertValueToEngineType(orderingVal));
+    meta.put(INTERNAL_META_ORDERING_FIELD, orderingVal);
     return meta;
   }
 
