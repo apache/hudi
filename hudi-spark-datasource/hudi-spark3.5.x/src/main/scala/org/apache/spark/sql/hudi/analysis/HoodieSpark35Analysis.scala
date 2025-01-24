@@ -109,10 +109,9 @@ case class HoodieSpark35ResolveColumnsForInsertInto() extends ResolveInsertionBa
             preprocess(i, metadata.identifier.quotedString, metadata.partitionSchema,
               Some(metadata))
           case LogicalRelation(h: HadoopFsRelation, _, catalogTable, _) =>
-            val tblName = catalogTable.map(_.identifier.quotedString).getOrElse("unknown")
-            preprocess(i, tblName, h.partitionSchema, catalogTable)
+            preprocess(i, catalogTable, h.partitionSchema)
           case LogicalRelation(_: InsertableRelation, _, catalogTable, _) =>
-            preprocess(i, catalogTable)
+            preprocess(i, catalogTable, new StructType())
           // The two conditions below are adapted to Hudi relations
           case LogicalRelation(_: EmptyRelation, _, catalogTable, _) =>
             preprocess(i, catalogTable)
@@ -126,8 +125,14 @@ case class HoodieSpark35ResolveColumnsForInsertInto() extends ResolveInsertionBa
 
   private def preprocess(insert: InsertIntoStatement,
                          catalogTable: Option[CatalogTable]): InsertIntoStatement = {
+    preprocess(insert, catalogTable, catalogTable.map(_.partitionSchema).getOrElse(new StructType()))
+  }
+
+  private def preprocess(insert: InsertIntoStatement,
+                         catalogTable: Option[CatalogTable],
+                         partitionSchema: StructType): InsertIntoStatement = {
     val tblName = catalogTable.map(_.identifier.quotedString).getOrElse("unknown")
-    preprocess(insert, tblName, new StructType(), catalogTable)
+    preprocess(insert, tblName, partitionSchema, catalogTable)
   }
 
   // NOTE: this is copied from [[PreprocessTableInsertion]] with additional logic
