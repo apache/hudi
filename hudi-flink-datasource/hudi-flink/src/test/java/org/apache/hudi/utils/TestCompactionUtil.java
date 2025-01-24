@@ -174,7 +174,7 @@ public class TestCompactionUtil {
    */
   private String generateCompactionPlan() {
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
-    HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1, null, null);
+    HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1, null, null, null);
     String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant compactionInstant =
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);

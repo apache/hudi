@@ -18,18 +18,23 @@
 
 package org.apache.hudi.table.action.compact.strategy;
 
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class PartitionRegexBasedCompactionStrategy extends CompactionStrategy {
 
+  /**
+   * Regex filtered partitions are not included in missing partitions.
+   */
   @Override
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+  public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
     String regex = writeConfig.getCompactionSpecifyPartitionPathRegex();
     Pattern pattern = Pattern.compile(regex);
-    return allPartitionPaths.stream().filter(pattern.asPredicate()).collect(Collectors.toList());
+    return Pair.of(allPartitionPaths.stream().filter(pattern.asPredicate()).collect(Collectors.toList()), Collections.emptyList());
   }
 }
