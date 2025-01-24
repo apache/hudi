@@ -58,7 +58,7 @@ import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING
 import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
@@ -309,32 +309,32 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
         arguments(null, null, null, "",
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
         arguments(null, null, null, orderingFieldName,
-            false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+            false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
         arguments(null, "", "", null,
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
         arguments(null, "", "", orderingFieldName,
-            false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+            false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
 
         //test legal event time ordering combos
         arguments(EVENT_TIME_ORDERING, null, null, orderingFieldName,
-            false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+            false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
         arguments(EVENT_TIME_ORDERING, defaultPayload, null, orderingFieldName,
-            false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID, orderingFieldName,
-            false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(EVENT_TIME_ORDERING, null, DEFAULT_MERGE_STRATEGY_UUID, orderingFieldName,
-            false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+            false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(EVENT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
         arguments(null, defaultPayload, null, orderingFieldName,
-            false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(null, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID, orderingFieldName,
-            false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
-        arguments(null, null, DEFAULT_MERGE_STRATEGY_UUID, orderingFieldName,
-            false, EVENT_TIME_ORDERING, defaultPayload, DEFAULT_MERGE_STRATEGY_UUID),
+            false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments(null, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            false, EVENT_TIME_ORDERING, defaultPayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
 
         //test legal overwrite combos
         arguments(COMMIT_TIME_ORDERING, null, null, null,
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-        arguments(COMMIT_TIME_ORDERING, null, null, orderingFieldName,
+        arguments(COMMIT_TIME_ORDERING, null, null, "",
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
         arguments(COMMIT_TIME_ORDERING, overwritePayload, null, null,
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
@@ -344,7 +344,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
         arguments(null, overwritePayload, null, null,
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-        arguments(null, overwritePayload, null, orderingFieldName,
+        arguments(null, overwritePayload, null, "",
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
         arguments(null, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             false, COMMIT_TIME_ORDERING, overwritePayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
@@ -363,10 +363,9 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
         //test legal custom merger combos
         arguments(CUSTOM, null, customStrategy, null,
-            false, CUSTOM, defaultPayload, customStrategy),
-        //for now this case is ok but will need to be changed when we add dummy payload for [HUDI-8317]
-        arguments(CUSTOM, defaultPayload, customStrategy, null,
-            false, CUSTOM, defaultPayload, customStrategy),
+            false, CUSTOM, null, customStrategy),
+        arguments(CUSTOM, customPayload, customStrategy, null,
+            false, CUSTOM, customPayload, customStrategy),
 
         //test illegal combos due to missing info
         arguments(CUSTOM, null, null, null,
@@ -379,7 +378,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
             true, null, null, null),
         arguments(null, defaultPayload, null, null,
             true, null, null, null),
-        arguments(null, null, DEFAULT_MERGE_STRATEGY_UUID, null,
+        arguments(null, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
         arguments(null, defaultPayload, null, null,
             true, null, null, null),
@@ -393,11 +392,17 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
             true, null, null, null),
         arguments(EVENT_TIME_ORDERING, null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
             true, null, null, null),
+        arguments(COMMIT_TIME_ORDERING, null, null, orderingFieldName,
+            true, null, null, null),
+        arguments(null, overwritePayload, null, orderingFieldName,
+            true, null, null, null),
+        arguments(null, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, orderingFieldName,
+            true, null, null, null),
         arguments(COMMIT_TIME_ORDERING, defaultPayload, null, null,
             true, null, null, null),
         arguments(COMMIT_TIME_ORDERING, customPayload, null, null,
             true, null, null, null),
-        arguments(COMMIT_TIME_ORDERING, null, DEFAULT_MERGE_STRATEGY_UUID, null,
+        arguments(COMMIT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
         arguments(COMMIT_TIME_ORDERING, null, customStrategy, null,
             true, null, null, null),
@@ -407,7 +412,9 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
             true, null, null, null),
         arguments(CUSTOM, overwritePayload, null, null,
             true, null, null, null),
-        arguments(CUSTOM, null, DEFAULT_MERGE_STRATEGY_UUID, null,
+        arguments(CUSTOM, defaultPayload, customStrategy, null,
+            true, null, null, null),
+        arguments(CUSTOM, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
         arguments(CUSTOM, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
@@ -417,7 +424,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
             true, null, null, null),
         arguments(CUSTOM, defaultPayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
-        arguments(CUSTOM, overwritePayload, DEFAULT_MERGE_STRATEGY_UUID, null,
+        arguments(CUSTOM, overwritePayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
         arguments(null, defaultPayload, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
@@ -425,7 +432,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
             true, null, null, null),
         arguments(null, defaultPayload, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null),
-        arguments(null, overwritePayload, DEFAULT_MERGE_STRATEGY_UUID, null,
+        arguments(null, overwritePayload, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null,
             true, null, null, null));
     return arguments;
   }

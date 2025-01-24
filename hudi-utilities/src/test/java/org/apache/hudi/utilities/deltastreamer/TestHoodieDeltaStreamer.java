@@ -192,7 +192,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       opts.put(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), DefaultSparkRecordMerger.class.getName());
       opts.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
       opts.put(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
-      opts.put(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID);
+      opts.put(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
       for (Map.Entry<String, String> entry : opts.entrySet()) {
         hoodieConfig.add(String.format("%s=%s", entry.getKey(), entry.getValue()));
       }
@@ -561,7 +561,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         PROPS_FILENAME_TEST_SOURCE, false, true, false, null, tableType);
     addRecordMerger(recordType, cfg.configs);
     cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
-    cfg.recordMergeStrategyId = HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID;
+    cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
     cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
     cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source.avsc");
     cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source.avsc");

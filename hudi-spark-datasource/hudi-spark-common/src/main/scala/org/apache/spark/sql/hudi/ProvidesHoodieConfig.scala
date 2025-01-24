@@ -24,9 +24,9 @@ import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
 import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
-import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
@@ -259,7 +259,7 @@ trait ProvidesHoodieConfig extends Logging {
 
     val deducedPayloadClassName = classOf[DefaultHoodieRecordPayload].getCanonicalName
     val recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING.name
-    val recordMergeStrategy = HoodieRecordMerger.DEFAULT_MERGE_STRATEGY_UUID
+    val recordMergeStrategy = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
 
     if (tableConfig.getPayloadClass.equals(classOf[DefaultHoodieRecordPayload].getCanonicalName) &&
         tableConfig.getRecordMergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING)) {

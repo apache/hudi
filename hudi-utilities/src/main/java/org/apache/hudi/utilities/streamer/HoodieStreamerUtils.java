@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieException;
@@ -83,7 +82,8 @@ public class HoodieStreamerUtils {
     boolean useConsistentLogicalTimestamp = ConfigUtils.getBooleanWithAltKeys(
         props, KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
     Set<String> partitionColumns = getPartitionColumns(props);
-    String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName) ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode) : cfg.payloadClassName;
+    String payloadClassName = HoodieRecordPayload.getAvroPayloadForMergeMode(
+        cfg.recordMergeMode, cfg.payloadClassName);
     return avroRDDOptional.map(avroRDD -> {
       SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
       SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns(props) ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
