@@ -857,9 +857,6 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
   @Deprecated
   val PRECOMBINE_FIELD_OPT_KEY = HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()
-  /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
-  @Deprecated
-  val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = PRECOMBINE_FIELD.defaultValue()
 
   /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated
