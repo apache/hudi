@@ -201,7 +201,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                 Pair.of(
                     Option.ofNullable(readerContext.seal(record)),
                     readerContext.generateMetadataForRecord(
-                        recordKey, dataGen.getPartitionPaths()[0], orderingFieldValue)));
+                        recordKey, dataGen.getPartitionPaths()[0],
+                        readerContext.convertValueToEngineType(orderingFieldValue))));
           }
 
           assertEquals(records.size() * 2, spillableMap.size());
