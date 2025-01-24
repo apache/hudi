@@ -193,7 +193,10 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Hood
         hoodieTable.getMetaClient(),
         hoodieTable.getMetaClient().getTableConfig().getProps(),
         0,
-        Long.MAX_VALUE,
+        // The compaction plan does not contain the length of the bootstrap data or skeleton
+        // files, so we set -1 as the file length for the file group reader to fetch the
+        // length from the file system
+        -1,
         usePosition)) {
       fileGroupReader.initRecordIterators();
       // Reads the records from the file slice
