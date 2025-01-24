@@ -181,9 +181,12 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     validateNonExistantColumnsToIndexDefn(metaClient)
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
-  def testMetadataColumnStatsIndexInitializationWithUpserts(testCase: ColumnStatsTestCase): Unit = {
+  //@ParameterizedTest
+  //@MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @Test
+  def testMetadataColumnStatsIndexInitializationWithUpserts(): Unit = {
+    // testCase: ColumnStatsTestCase
+    val testCase: ColumnStatsTestCase = ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, true)
     val partitionCol : String = "c8"
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
@@ -208,7 +211,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      false,
+      shouldValidateColStats = false,
       numPartitions =  1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))

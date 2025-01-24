@@ -24,6 +24,7 @@ import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
@@ -297,7 +298,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
       .build()
-
+    metaClient = HoodieTableMetaClient.reload(metaClient)
     val schemaUtil = new TableSchemaResolver(metaClient)
     val tableSchema = schemaUtil.getTableAvroSchema(false)
     val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
@@ -349,9 +350,14 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
     val pStatsIndex = new PartitionStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-    val pIndexedColumns: Seq[String] = HoodieTableMetadataUtil
-      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, convertScalaListToJavaList(sourceTableSchema.fieldNames))
-      .asScala.filter(colName => !colName.startsWith("_hoodie")).toSeq.sorted
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    val tableSchema = schemaUtil.getTableAvroSchema(false)
+    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
+    val lazyOptTableSchema : Lazy[org.apache.hudi.common.util.Option[Schema]] = Lazy.eagerly(org.apache.hudi.common.util.Option.of(tableSchema))
+    val indexedColumnswithMeta: Set[String] = HoodieTableMetadataUtil
+      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, lazyOptTableSchema, false).asScala.toSet
+    val pIndexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
+      .toSeq.sorted
 
     val (pExpectedColStatsSchema, _) = composeIndexSchema(pIndexedColumns, pIndexedColumns, sourceTableSchema)
     val pValidationSortColumns = if (pIndexedColumns.contains("c5")) {
