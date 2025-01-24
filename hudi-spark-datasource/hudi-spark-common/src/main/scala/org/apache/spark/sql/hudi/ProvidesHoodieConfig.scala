@@ -262,7 +262,7 @@ trait ProvidesHoodieConfig extends Logging {
     val recordMergeStrategy = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
 
     if (tableConfig.getPayloadClass.equals(classOf[DefaultHoodieRecordPayload].getCanonicalName) &&
-        tableConfig.getRecordMergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING)) {
+      RecordMergeMode.EVENT_TIME_ORDERING.equals(tableConfig.getRecordMergeMode)) {
       tableConfig.clearValue(HoodieTableConfig.PAYLOAD_CLASS_NAME)
       tableConfig.clearValue(HoodieTableConfig.RECORD_MERGE_MODE)
       tableConfig.clearValue(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID)

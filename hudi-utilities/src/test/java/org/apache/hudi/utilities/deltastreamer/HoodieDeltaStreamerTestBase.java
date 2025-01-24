@@ -22,9 +22,9 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -580,7 +580,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, List<String> transformerClassNames,
                                                  String propsFilename, boolean enableHiveSync) {
       return makeConfig(basePath, op, transformerClassNames, propsFilename, enableHiveSync, true,
-          true, OverwriteWithLatestAvroPayload.class.getName(), null);
+          true, DefaultHoodieRecordPayload.class.getName(), null);
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, List<String> transformerClassNames,
