@@ -560,7 +560,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   }
 
   protected static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
-    return orderingValue.equals(COMMIT_TIME_ORDERING_VALUE);
+    return orderingValue == null || orderingValue.equals(COMMIT_TIME_ORDERING_VALUE);
   }
 
   protected static Comparable getOrderingValue(HoodieReaderContext readerContext,
@@ -572,7 +572,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
 
   private boolean isDeleteRecordWithNaturalOrder(Option<T> rowOption,
                                                  Comparable orderingValue) {
-    return rowOption.isEmpty() && isCommitTimeOrderingValue(orderingValue);
+    return rowOption.isEmpty() && orderingValue.equals(COMMIT_TIME_ORDERING_VALUE);
   }
 
   private boolean isDeleteRecord(Option<T> record, Schema schema) {
