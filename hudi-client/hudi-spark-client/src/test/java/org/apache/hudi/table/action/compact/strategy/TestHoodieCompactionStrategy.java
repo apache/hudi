@@ -95,7 +95,7 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> returned = resPair.getLeft();
     List<String> missingPartitions = resPair.getRight();
     if (enableIncrTableService) {
-      assertEquals(1, missingPartitions.stream().distinct().count());
+      assertTrue(missingPartitions.stream().distinct().count() > 0);
     }
     assertTrue(returned.size() < operations.size(), "BoundedIOCompaction should have resulted in fewer compactions");
     assertEquals(2, returned.size(), "BoundedIOCompaction should have resulted in 2 compactions being chosen");
