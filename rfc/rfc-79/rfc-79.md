@@ -143,7 +143,7 @@ a seperate utility application to directly cancel/abort cancellable cluster inst
 for a dataset progresses immediately or confirm that a cancellable table service plan will not be completed or attempted again.
 The two new cancel APIs in the below proposal provide a method to achieve this.
 
-#### Enabling clustering execution and clean table service to support cancellation and automatic cleanup
+#### Enabling clustering execution cancellation and automatic cleanup
 
 The clustering execution flow will be updated to check the /.cancel folder during a pre-commit check before completing
 the instant. If the instant is a target of /.cancel, then all of its data files will be deleted and the instant will be
