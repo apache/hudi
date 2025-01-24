@@ -559,12 +559,12 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     return Pair.of(transformer, evolvedSchema);
   }
 
-  protected static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
+  static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
     return orderingValue == null || orderingValue.equals(COMMIT_TIME_ORDERING_VALUE);
   }
 
-  protected static Comparable getOrderingValue(HoodieReaderContext readerContext,
-                                               DeleteRecord deleteRecord) {
+  static Comparable getOrderingValue(HoodieReaderContext readerContext,
+                                     DeleteRecord deleteRecord) {
     return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
         ? COMMIT_TIME_ORDERING_VALUE
         : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
