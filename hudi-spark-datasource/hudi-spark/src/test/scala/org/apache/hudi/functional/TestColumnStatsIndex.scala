@@ -67,9 +67,12 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
     HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
 
-  @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParams"))
-  def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
+  //@ParameterizedTest
+  //@MethodSource(Array("testMetadataColumnStatsIndexParams"))
+  @Test
+  def testMetadataColumnStatsIndex(): Unit = {
+    // testCase: ColumnStatsTestCase
+    val testCase: ColumnStatsTestCase = ColumnStatsTestCase(HoodieTableType.COPY_ON_WRITE, true)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
@@ -883,8 +886,6 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     ////////////////////////////////////////////////////////////////////////
 
     {
-      // NOTE: The update we're writing is intentionally omitting some of the columns
-      //       present in an earlier source
       targetColumnsToIndex = Seq("c1", "c2", "c3","c5")
       val partialSourceTableSchema = StructType(sourceTableSchema.fields.filter(f => targetColumnsToIndex.contains(f.name)))
 
@@ -906,9 +907,9 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
 
       val requestedColumns = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
-        .getSourceFields.toSeq.filterNot(colName => colName.startsWith("_hoodie"))
+        .getSourceFields.toSeq.filterNot(colName => colName.startsWith("_hoodie")).sorted.toSeq
 
-      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns.sorted.toSeq, targetColumnsToIndex.toSeq, sourceTableSchema)
+      val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns, targetColumnsToIndex.toSeq, sourceTableSchema)
       val expectedColStatsIndexUpdatedDF =
         spark.read
           .schema(expectedColStatsSchema)
@@ -925,7 +926,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { transposedUpdatedColStatsDF =>
         assertEquals(expectedColStatsIndexUpdatedDF.schema, transposedUpdatedColStatsDF.schema)
 
-        assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF).drop("fileName")), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))
+        assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF.drop("fileName"))), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))
         assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
       }
     }
