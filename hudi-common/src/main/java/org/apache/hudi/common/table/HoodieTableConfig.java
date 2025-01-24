@@ -794,13 +794,18 @@ public class HoodieTableConfig extends HoodieConfig {
               recordMergeMode, payloadClassName, recordMergeStrategyId));
     }
 
-    // Validate ordering field name based on record merge mode
+    // Check ordering field name based on record merge mode
     if (inferredRecordMergeMode == COMMIT_TIME_ORDERING) {
-      checkArgument(isNullOrEmpty(orderingFieldName),
-          "COMMIT_TIME_ORDERING merge mode cannot have precombine or ordering field set.");
+      if (nonEmpty(orderingFieldName)) {
+        LOG.warn("The precombine or ordering field ({}) is specified. COMMIT_TIME_ORDERING "
+            + "merge mode does not use precombine or ordering field anymore.", orderingFieldName);
+      }
     } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
-      checkArgument(nonEmpty(orderingFieldName),
-          "EVENT_TIME_ORDERING merge mode requires precombine or ordering field to be set.");
+      if (isNullOrEmpty(orderingFieldName)) {
+        LOG.warn("The precombine or ordering field is not specified. EVENT_TIME_ORDERING "
+            + "merge mode requires precombine or ordering field to be set for getting the "
+            + "event time. Using commit time-based ordering now.");
+      }
     }
 
     // Inferring payload class name
