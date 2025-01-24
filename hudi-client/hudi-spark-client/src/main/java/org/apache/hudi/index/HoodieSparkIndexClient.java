@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.index;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -39,7 +39,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.table.action.index.BaseHoodieIndexClient;
@@ -166,6 +165,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
         throw new HoodieMetadataIndexException("Scheduling of index action did not return any instant.");
       }
     } catch (Throwable t) {
+      LOG.warn("Error while creating index: {}. So drop it.", indexDefinition.getIndexName(), t);
       drop(metaClient, indexDefinition.getIndexName(), Option.ofNullable(indexDefinition));
       throw t;
     }

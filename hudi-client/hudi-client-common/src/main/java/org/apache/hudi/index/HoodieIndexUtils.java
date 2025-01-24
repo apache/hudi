@@ -496,8 +496,8 @@ public class HoodieIndexUtils {
     }
   }
 
-  public static HoodieIndexDefinition getSecondaryOrExpressionIndexDefinition(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns,
-                                                                              Map<String, String> options, Map<String, String> tableProperties) throws Exception {
+  static HoodieIndexDefinition getSecondaryOrExpressionIndexDefinition(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns,
+                                                                       Map<String, String> options, Map<String, String> tableProperties) throws Exception {
     String fullIndexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
         ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + userIndexName
         : PARTITION_NAME_EXPRESSION_INDEX_PREFIX + userIndexName;
@@ -519,7 +519,7 @@ public class HoodieIndexUtils {
         .build();
   }
 
-  public static boolean indexExists(HoodieTableMetaClient metaClient, String indexName) {
+  static boolean indexExists(HoodieTableMetaClient metaClient, String indexName) {
     return metaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(partition -> partition.equals(indexName));
   }
 
