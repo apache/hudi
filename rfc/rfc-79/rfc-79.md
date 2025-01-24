@@ -204,7 +204,8 @@ goal (B) with respect to concurrent workers.
 The below visualization shows the flow for cancellable table service plans (steps that are already in existing table
 service flow are grey-ed out)
 
-![cancel table service lifecycle with lock (5)](https://github.com/user-attachments/assets/c05dae68-4330-4d85-b29e-e3e47754509e)
+![cancel table service lifecycle with lock (6)](https://github.com/user-attachments/assets/087aa35e-eb87-477d-88f9-9d0ab6649b04)
+
 
 Having this new .hoodie/.cancel folder (in addition to only having the .aborted state) is needed not only to allow any
 caller to forcebily block an instant from being committed, but also to prevent the need for table service workers to
