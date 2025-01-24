@@ -55,19 +55,11 @@ transitions at a high level
 
 ![table service lifecycle (1)](https://github.com/user-attachments/assets/4a656bde-4046-4d37-9398-db96144207aa)
 
-## Clean and rollback of failed writes
-
-The clean table service, in addition to performing a clean action, is responsible for rolling back any failed ingestion
-writes (non-clustering/non-compaction inflight instants that are not being concurrently executed by a writer). This
-means that inflight clustering plans are not currently subject to clean's rollback of failed writes. As detailed below,
-this proposal for supporting cancellable clustering will benefit from enabling clean be capable of targeting such
-cancellable clustering plans.
-
 ## Goals
 
 ### (A) An ingestion job should be able to cancel and ignore any inflight cancellable clustering instants targeting the same data as the ingestion writer.
 
-The current requirement of HUDI needing to execute a clustering plan to completion, forces ingestion writers to abort a
+The current requirement of HUDI needing to execute a clustering plan to completion forces ingestion writers to abort a
 commit if a table service plan is conflicting. Becuase an ingestion writer typically determines the exact file groups it
 will be updating/replacing after building a workload profile and performing record tagging, the writer may have already
 spent a lot of time and resources before realizing that it needs to abort. In the face of frequent table service plans
@@ -82,38 +74,13 @@ for cancellation but have not yet been aborted, can be ignored by ingestion writ
 
 In conjunction with (A), any caller(ingestion writer for eg) should be able to request cancellation for an inflight
 cancellable clustering plan. We should not need any synchronous mechanism where in the clustering plan of interest
-should be aborted completely before which the ingestion writer can proceeed. We should have alight weight mechanism with
+should be aborted completely before which the ingestion writer can proceeed. We should have a light weight mechanism with
 which the ingestion writer make a cancellation request and moves on to carry out its operation with the assumption that
 the respective clustering plan will be aborted. This requirement is needed due to presence of concurrent and async
 writers for clustering execution, as another worker should not need to wait (for the respective concurrent clustering
 worker to proceed with execution or fail) before confirming that its cancellation request will be honored. Once the
 request for cancellation succeeds, all interested entities like the ingestion writer, reader, asynchronous clusteirng
 execution job should assume the clustering plan is cancelled.
-
-### (C) An incomplete cancellable clustering plan should eventually have its partial writes cleaned up.
-
-Although a cancellable clustering plan being requested for cancellation can ensure that the instant is never committed,
-there still needs to be a mechanism to have its data and instant files cleaned up permanantly. The clustering worker
-itself should be able to do the cleanup, but this may not be sufficient as transient failures/resource allocation issues
-can prevent workers from re-attempting their execution of the plan. In such cases, the `CLEAN` table service can be used
-to guarantee, that an incomplete cancellable plan which has a request for cancellation, is eventually cleaned up(rolled
-back and aborted), since datasets that undergo clustering are anyway expected to undergo regular clean operations.
-Because an inflight plan remaining on the timeline can degrade performance of reads/writes (as mentioned earlier), a
-cancellable table service plan should be elligible to be targeted for cleanup if it has been already requested for
-cancellation or if HUDI clean, deems that it has remained inflight for too long (or some other critera). In other words,
-the two main scenarios that `CLEAN` will now address are
-
-- If a cancellable clustering plan is scheduled but is never successfully executed (due to the corresponding worker
-  never running or repeatedly failing), `CLEAN` will requested the instant for cancellation (allowed by (B) ) and clean
-  it up. This has a chance of prematurely cleaning up a cancellable clustering plan before it has the chance to be
-  executed (if execution of clustering is handled async) but that can be minimized by allowing clean to only do this if
-  instant is very old.
-- If a cancellable clustering plan was requested for cancellation but never cleaned up (again due to the corresponding
-  worker never running or repeatedly failing), `CLEAN` will take up task of cleaning up the inflight instant.
-
-Note that a failed cancellable clustering plan should still be able to be safely cleaned up immediately - the goal here
-is just to make sure, an inflight plan won't stay on the timeline for an unbounded amount of time but also won't be
-likely to be prematurely cleaned up by clean before it has a chance to be executed.
 
 ## Design
 
@@ -129,9 +96,9 @@ are cancellable. For the purpose of this design proposal, consider the existing 
 steps:
 
 1. Schedule itself on the timeline with a new instant time in a .requested file
-2. Process/record tag incoming records, build a workload profile, and write the updating/replaced file groups to a "
-   inflight" instant file on the timeline. Check for conflicts and abort if needed.
-3. Perform write conflict checks and commit the instant on the timeline
+2. Process/record tag incoming records, build a workload profile, and write the updating/replaced file groups to a "inflight"
+   instant file on the timeline. Check for conflicts and abort if needed.
+4. Perform write conflict checks and commit the instant on the timeline
 
 The aforementioned changes to ingestion and clustering flow will ensure that in the event of a conflicting ingestion and
 cancellable table service writer, the ingestion job will take precedence (and cause the cancellable table service
@@ -165,30 +132,16 @@ following changes:
   ingestion writes). The new ".aborted" state will allow writers to infer whether a cancelled table service plan needs
   to still have it's partial data writes cleaned up from the dataset, which is needed for (C). Once an instant appears
   in /.cancel folder, it can and must eventually be transitioned to .aborted state. This new state will ensure that
-  cancelled instants are eventually "cleaned up" from the dataset and internal timeline metadata. The additional design
-  change below will complete the remaining requirement for (C) of eventual cleanup.
+  cancelled instants are eventually "cleaned up" from the dataset and internal timeline metadata.
 
 ### Handling cancellation of plans
 
-An additional config "cancellation-policy" can be added to the table service plan to indicate when it is eligible to be
-cancelled and aborted by `CLEAN` operation. This policy can be a threshold of hours or instants on timeline, where if
-that # of hours/instants have elapsed since the plan was scheduled(w/o being executed), any call to `CLEAN` operation
-will also cancel and abort the instant. This policy should be configured by the worker scheduling a cancellable table
-service plan, based on the amount of time they expect the plan to remain on the timeline before being picked up for
-execution. For example, if the plan is expected to have its execution deferred to a few hours later, then the
-cancellation-policy should be lenient in allowing the plan to remain many hours on the timeline before it could be
-deemed eligible for abortion. Note that this cancellation policy is not used to infer whether a clustering plan is
-currently being executed - similar to how concurrent ingestion writes are rolled back by lazy clean policy, A
-cancellable clustering plan can only be aborted once it is confirmed that an ongoing writer is no longer progressing it.
-
 In order to ensure that other writers can indeed permanantely cancel a cancellable table service plan (such that it can
-no longer be executed), additional changes to clean and table service flow will be need to be added as well, as will be
-proposed below. Also, note that the cancellation-policy is only required to be honored by `CLEAN`: a user can choose
-setup an application to aggresively cancel a failed cancellable table service plan even if it has not meet the critera
-for its cancellation-policy yet. This can be useful if a user wants a utility to manually ensure that clean/archival for
-a dataset progresses immediately or knows that a cancellable table service plan will not be attempted again or cancelled
-& aborted by a table service worker in the future. The two new cancel APIs in the below proposal provide a method to
-achieve this.
+no longer be executed), additional changes to cluster table service flow will be need to be added as well, as will be
+proposed below. In addition to clustering being able to cleanup/abort an instant, a user may want to setup
+a seperate utility application to directly cancel/abort cancellable cluster instants, in order to manually ensure that clean/archival
+for a dataset progresses immediately or confirm that a cancellable table service plan will not be completed or attempted again.
+The two new cancel APIs in the below proposal provide a method to achieve this.
 
 #### Enabling clustering execution and clean table service to support cancellation and automatic cleanup
 
@@ -260,10 +213,55 @@ calling execute_abort or cancellable table service API again after this point wo
 files in /.cancel for already-aborted instants from accumulating.
 
 Although any user can invoke request_cancel and execute_abort, the ingestion flow is expected to use request_cancel
-against any conflicting cancellable inflight clustering instants. In addition, the clean operation will be required to
-use both of these APIs in order to cancel any incomplete plans that have satisfied their cancellation policy or already
-been requested for cancellation. This is analagous to how clean schedules and executes the rollback of any failed
-ingestion writes. Specifically, clean will now perform the following steps
+against any conflicting cancellable inflight clustering instants. 
+
+Note that archival will also be updated to delete instants transitioned to .aborted state, since .aborted is a terminal state.
+
+### Optional feature: Ensure incomplete cancellable clustering plan eventually have their partial writes cleaned up by CLEAN
+
+The clean table service, in addition to performing a clean action, is responsible for rolling back any failed ingestion
+writes (non-clustering/non-compaction inflight instants that are not being concurrently executed by a writer). Currently, inflight
+clustering plans are not currently subject to clean's rollback of failed writes. As an added feature, clean
+can also be made capable of cancelling/aborting cancellable clustering plans.
+
+With this additional feature, the new cancellation logic can be updated to have CLEAN "cleanup" pending cancellable clustering
+plans that have not been executed for a while. The clustering worker itself can/will already perform all necessary cleanup of a cancelled instant.
+But relying on the clustering executution for cleanup may not be sufficient/reliable as transient failures/resource allocation issues
+can prevent workers from re-attempting their execution of the plan. In such cases, the `CLEAN` table service can be used
+to guarantee, that an incomplete cancellable plan which has a request for cancellation, is eventually cleaned up(rolled
+back and aborted), since datasets that undergo clustering are anyway expected to undergo regular clean operations.
+Because an inflight plan remaining on the timeline can degrade performance of reads/writes (as mentioned earlier), a
+cancellable table service plan should be elligible to be targeted for cleanup if it has been already requested for
+cancellation or if HUDI clean, deems that it has remained inflight for too long (or some other critera). In other words,
+the two main scenarios that `CLEAN` will now address are
+
+- If a cancellable clustering plan is scheduled but is never successfully executed (due to the corresponding worker
+  never running or repeatedly failing), `CLEAN` will requested the instant for cancellation (allowed by (B) ) and clean
+  it up. This has a chance of prematurely cleaning up a cancellable clustering plan before it has the chance to be
+  executed (if execution of clustering is handled async) but that can be minimized by allowing clean to only do this if
+  instant is very old.
+- If a cancellable clustering plan was requested for cancellation but never fully aborted (again due to the corresponding
+  worker never running or repeatedly failing), `CLEAN` will take up task of cleaning up and aborting the inflight instant.
+
+Note that a non-retried and failed cancellable clustering plan can still be safely cleaned up immediately by execute_abort API - the goal here
+is just to make sure, an inflight plan won't stay on the timeline for an unbounded amount of time but also won't be
+likely to be prematurely cleaned up by clean before it has a chance to be executed.
+
+An additional config "cancellation-policy" will be added to the table service plan to indicate when it is eligible to be
+cancelled and aborted by `CLEAN` operation. This policy can be a threshold of hours or instants on timeline, where if
+that # of hours/instants have elapsed since the plan was scheduled(w/o being executed), any call to `CLEAN` operation
+will also cancel and abort the instant. This policy should be configured by the worker scheduling a cancellable table
+service plan, based on the amount of time they expect the plan to remain on the timeline before being picked up for
+execution. For example, if the plan is expected to have its execution deferred to a few hours later, then the
+cancellation-policy should be lenient in allowing the plan to remain many hours on the timeline before it could be
+deemed eligible for abortion. Note that this cancellation policy is not used to infer whether a clustering plan is
+currently being executed - similar to how concurrent ingestion writes are rolled back by lazy clean policy, A
+cancellable clustering plan can only be aborted once it is confirmed that an ongoing writer is no longer progressing it
+(which the aforementioned execute_abort API already enforces). Note that the cancellation-policy is only required to be honored by `CLEAN`
+
+To implement this optional feature, the clean operation can use both of these APIs in order to cancel any incomplete plans that have
+satisfied their cancellation policy or already been requested for cancellation. This is analagous to how clean schedules and
+executes the rollback of any failed ingestion writes. Specifically, clean will now perform the following steps
 
 1. Iterate through each inflight cancellable instant, for each instant that has met their cancellation policy, call
    request_cancel if not already has an request for cancellation.
@@ -271,7 +269,7 @@ ingestion writes. Specifically, clean will now perform the following steps
    are responsible for ensuring that already-committed instants aren't cancelled and that ongoing writers aren't
    concurrently having their files cleaned up by a writer doing cancellation.
 
-Archival will also be updated to delete instants transitioned to .aborted state, since .aborted is a terminal state.
+
 
 ### Summarizing proposed internal timeline/instant format changes
 
@@ -298,7 +296,7 @@ Before users can be allowed to set cancellation policy/flag, the below must all 
 1. All File system /timeline related logic should be able to process .aborted state and consider it as a terminal state
 2. Archival should handle deleting .aborted instants
 3. The /.hoodie/.cancel metadata should be added & supported
-4. Clean should be updated as per the design proposal
+4. (Optional) Clean should be updated as per the design proposal
 5. The write conflict detection check for ingestion should be updated to request cancellation for any table service plans
    with cancellation flag set, as per the design proposal.
 6. Table service execution flow should be updated as per the design proposal, just for clustering table service
