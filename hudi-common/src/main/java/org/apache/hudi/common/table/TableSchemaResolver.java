@@ -72,8 +72,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
-import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -616,9 +614,9 @@ public class TableSchemaResolver {
     // filtering when we actually need the table schema.
     Stream<HoodieInstant> reversedTimelineWithTableSchema = timelineStream
         // Only focuses on those who could potentially evolve the table schema.
-        .filter(s -> actions.contains(s.getAction()))
+        .filter(instant -> actions.contains(instant.getAction()))
         // Further filtering out clustering operations as it does not evolve table schema.
-        .filter(s -> isaBoolean(s, timeline))
+        .filter(instant -> !ClusteringUtils.isClusteringInstant(timeline, instant, metaClient.getInstantGenerator()))
         .filter(HoodieInstant::isCompleted)
         // We reverse the order as the operation against this timeline would be very efficient if
         // we always start from the tail.
@@ -626,10 +624,5 @@ public class TableSchemaResolver {
     return timelineLayout.getTimelineFactory().createDefaultTimeline(
         reversedTimelineWithTableSchema,
         metaClient.getActiveTimeline()::getInstantDetails);
-  }
-
-  private boolean isaBoolean(HoodieInstant s, HoodieActiveTimeline timeline) {
-    return !s.getAction().equals(REPLACE_COMMIT_ACTION)
-      || !ClusteringUtils.isClusteringInstant(timeline, s, metaClient.getInstantGenerator());
   }
 }
