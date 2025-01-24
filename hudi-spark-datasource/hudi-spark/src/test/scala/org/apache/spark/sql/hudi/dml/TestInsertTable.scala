@@ -157,6 +157,23 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       Seq(5, null, 50.0, 5000, "2025-01-05"),
       Seq(6, "a6", null, 6000, "2025-01-06")
     )
+
+    if (isPartitioned) {
+      spark.sql(
+        s"""
+           | insert into $tableName partition(dt='2025-01-07') (ts, id, name)
+           | values (7000, 7, 'a7')
+        """.stripMargin)
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+        Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+        Seq(3, "a3", 30.0, 3000, "2025-01-03"),
+        Seq(4, "a4", null, 4000, "2025-01-04"),
+        Seq(5, null, 50.0, 5000, "2025-01-05"),
+        Seq(6, "a6", null, 6000, "2025-01-06"),
+        Seq(7, "a7", null, 7000, "2025-01-07")
+      )
+    }
   }
 
   test("Test table type name incase-sensitive test") {
