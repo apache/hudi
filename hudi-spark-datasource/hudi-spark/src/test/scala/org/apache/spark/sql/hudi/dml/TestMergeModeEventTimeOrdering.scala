@@ -208,13 +208,14 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
                | select 6, 'F', 60.0, 100
              """.stripMargin)
 
-          // Merge operation - delete with an equal or higher ts (should work)
+          // Merge operation - delete with arbitrary ts value (lower, equal and higher). Lower ts won't take effect.
           spark.sql(
             s"""
                | merge into $tableName t
                | using (
                |   select 0 as id, 'B2' as name, 25.0 as price, 100 as ts union all
-               |   select 1 as id, 'B2' as name, 25.0 as price, 101 as ts
+               |   select 1 as id, 'B2' as name, 25.0 as price, 101 as ts union all
+               |   select 2 as id, 'B2' as name, 25.0 as price, 99 as ts
                | ) s
                | on t.id = s.id
                | when matched then delete

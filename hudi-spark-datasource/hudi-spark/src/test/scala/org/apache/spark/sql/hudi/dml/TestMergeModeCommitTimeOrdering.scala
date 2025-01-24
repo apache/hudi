@@ -177,6 +177,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
             s"""
                | insert into $tableName
                | select 1 as id, 'A' as name, 10.0 as price, 100 as ts union all
+               | select 0, 'X', 20.0, 100 union all
                | select 2, 'B', 20.0, 100 union all
                | select 3, 'C', 30.0, 100 union all
                | select 4, 'D', 40.0, 100 union all
@@ -184,12 +185,14 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
                | select 6, 'F', 60.0, 100
              """.stripMargin)
 
-          // Merge operation - delete
+          // Merge operation - delete with higher, lower and equal ordering field value, all should take effect.
           spark.sql(
             s"""
                | merge into $tableName t
                | using (
-               |   select 1 as id, 'B2' as name, 25.0 as price, 101 as ts
+               |   select 1 as id, 'B2' as name, 25.0 as price, 101 as ts union all
+               |   select 2, '', 55.0, 99 as ts union all
+               |   select 0, '', 55.0, 100 as ts
                | ) s
                | on t.id = s.id
                | when matched then delete
@@ -210,7 +213,6 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
           // Verify state after merges
           checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-            Seq(2, "B", 20.0, 100),
             Seq(3, "C", 30.0, 100),
             Seq(4, "D2", 45.0, 101),
             Seq(5, "E2", 55.0, 99),
@@ -231,7 +233,6 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
           // Verify final state
           checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-            Seq(2, "B", 20.0, 100),
             Seq(3, "C", 30.0, 100),
             Seq(4, "D2", 45.0, 101),
             Seq(5, "E2", 55.0, 99),
