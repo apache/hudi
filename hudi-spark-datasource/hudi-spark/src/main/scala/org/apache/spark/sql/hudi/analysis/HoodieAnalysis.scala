@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
+import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -100,6 +100,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
       // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
       rules ++= Seq(dataSourceV2ToV1Fallback, spark32PlusResolveReferences)
+    }
+
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark35ResolveColumnsForInsertInto"))
     }
 
     if (HoodieSparkUtils.isSpark3) {

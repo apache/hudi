@@ -72,57 +72,137 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test Insert Into with static partition") {
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      // Create a partitioned table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  dt string,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | tblproperties (primaryKey = 'id')
-           | partitioned by (dt)
-           | location '${tmp.getCanonicalPath}'
+  test("Test Insert Into with subset of columns") {
+    // This is only supported by Spark 3.5
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      Seq("cow", "mor").foreach(tableType =>
+        Seq(true, false).foreach(isPartitioned => withTempDir { tmp =>
+          testInsertIntoWithSubsetOfColumns(
+            "hudi", tableType, s"${tmp.getCanonicalPath}/hudi_table", isPartitioned)
+        }))
+    }
+  }
+
+  test("Test Insert Into with subset of columns on Parquet table") {
+    // This is only supported by Spark 3.5
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      // Make sure parquet tables are not affected by the custom rules for
+      // INSERT INTO statements on Hudi tables
+      Seq(true, false).foreach(isPartitioned => withTempDir { tmp =>
+        testInsertIntoWithSubsetOfColumns(
+          "parquet", "", s"${tmp.getCanonicalPath}/parquet_table", isPartitioned)
+      })
+    }
+  }
+
+  private def testInsertIntoWithSubsetOfColumns(format: String,
+                                                tableType: String,
+                                                tablePath: String,
+                                                isPartitioned: Boolean): Unit = {
+    val tableName = generateTableName
+    val createTablePartitionClause = if (isPartitioned) "partitioned by (dt)" else ""
+    // Create a partitioned table
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  dt string,
+         |  name string,
+         |  price double,
+         |  ts long
+         |) using $format
+         | tblproperties (
+         | type = '$tableType',
+         | primaryKey = 'id'
+         | )
+         | $createTablePartitionClause
+         | location '$tablePath'
        """.stripMargin)
-      // Insert into static partition
-      spark.sql(
-        s"""
-           | insert into $tableName partition(dt = '2021-01-05')
-           | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
-              """.stripMargin)
 
-      spark.sql(
-        s"""
-           | insert into $tableName partition(dt = '2021-01-06')
-           | select 20 as price, 2000 as ts, 2 as id, 'a2' as name
-              """.stripMargin)
-      // should not mess with the original order after write the out-of-order data.
-      val metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(tmp.getCanonicalPath)
-        .setConf(spark.sessionState.newHadoopConf())
-        .build()
-      val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
-      assert(schema.getFieldIndex("id").contains(0))
-      assert(schema.getFieldIndex("price").contains(2))
-
-      // Note: Do not write the field alias, the partition field must be placed last.
-      spark.sql(
-        s"""
-           | insert into $tableName
-           | select 3, 'a3', 30, 3000, '2021-01-07'
+    // INSERT INTO with all columns
+    // Same ordering of columns as the schema
+    spark.sql(
+      s"""
+         | insert into $tableName (id, name, price, ts, dt)
+         | values (1, 'a1', 10, 1000, '2025-01-01'),
+         | (2, 'a2', 20, 2000, '2025-01-02')
         """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02")
+    )
 
+    // Different ordering of columns compared to the schema
+    spark.sql(
+      s"""
+         | insert into $tableName (dt, name, id, price, ts)
+         | values ('2025-01-03', 'a3', 3, 30, 3000)
+        """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+      Seq(3, "a3", 30.0, 3000, "2025-01-03")
+    )
+
+    // INSERT INTO with a subset of columns
+    // Using different ordering of subset of columns in user-specified columns,
+    // and VALUES without column names
+    spark.sql(
+      s"""
+         | insert into $tableName (dt, ts, name, id)
+         | values ('2025-01-04', 4000, 'a4', 4)
+        """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+      Seq(3, "a3", 30.0, 3000, "2025-01-03"),
+      Seq(4, "a4", null, 4000, "2025-01-04")
+    )
+
+    spark.sql(
+      s"""
+         | insert into $tableName (id, price, ts, dt)
+         | values (5, 50.0, 5000, '2025-01-05')
+        """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+      Seq(3, "a3", 30.0, 3000, "2025-01-03"),
+      Seq(4, "a4", null, 4000, "2025-01-04"),
+      Seq(5, null, 50.0, 5000, "2025-01-05")
+    )
+
+    // Using a subset of columns in user-specified columns, and VALUES with column names
+    spark.sql(
+      s"""
+         | insert into $tableName (dt, ts, id, name)
+         | values ('2025-01-06' as dt, 6000 as ts, 6 as id, 'a6' as name)
+        """.stripMargin)
+    checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+      Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+      Seq(3, "a3", 30.0, 3000, "2025-01-03"),
+      Seq(4, "a4", null, 4000, "2025-01-04"),
+      Seq(5, null, 50.0, 5000, "2025-01-05"),
+      Seq(6, "a6", null, 6000, "2025-01-06")
+    )
+
+    if (isPartitioned) {
+      spark.sql(
+        s"""
+           | insert into $tableName partition(dt='2025-01-07') (ts, id, name)
+           | values (7000, 7, 'a7')
+        """.stripMargin)
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+        Seq(1, "a1", 10.0, 1000, "2025-01-01"),
+        Seq(2, "a2", 20.0, 2000, "2025-01-02"),
+        Seq(3, "a3", 30.0, 3000, "2025-01-03"),
+        Seq(4, "a4", null, 4000, "2025-01-04"),
+        Seq(5, null, 50.0, 5000, "2025-01-05"),
+        Seq(6, "a6", null, 6000, "2025-01-06"),
+        Seq(7, "a7", null, 7000, "2025-01-07")
       )
-    })
+    }
   }
 
   test("Test Insert Into with dynamic partition") {
