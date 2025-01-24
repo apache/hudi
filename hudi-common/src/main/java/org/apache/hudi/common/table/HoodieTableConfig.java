@@ -739,7 +739,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public RecordMergeMode getRecordMergeMode() {
-    return RecordMergeMode.getValue(getStringOrDefault(RECORD_MERGE_MODE));
+    return RecordMergeMode.getValue(getString(RECORD_MERGE_MODE));
   }
 
   /**
