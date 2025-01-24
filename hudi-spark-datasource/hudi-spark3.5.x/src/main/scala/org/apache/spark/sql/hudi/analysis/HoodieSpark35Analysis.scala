@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.{DefaultSource, EmptyRelation, MergeOnReadSnapshotRelation}
+import org.apache.hudi.{DefaultSource, EmptyRelation, HoodieBaseRelation}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 
 import org.apache.spark.sql.{AnalysisException, SparkSession, SQLContext}
@@ -89,6 +89,9 @@ case class HoodieSpark35DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
  * to achieve the same, before converting [[InsertIntoStatement]] into
  * [[InsertIntoHoodieTableCommand]].
  *
+ * The implementation is copied and adapted from [[PreprocessTableInsertion]]
+ * https://github.com/apache/spark/blob/d061aadf25fd258d2d3e7332a489c9c24a2b5530/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/rules.scala#L373
+ *
  * Also note that, the project logic in [[ResolveImplementationsEarly]] for INSERT is still
  * needed in the case of INSERT with all columns in a different ordering.
  */
@@ -113,7 +116,7 @@ case class HoodieSpark35ResolveColumnsForInsertInto() extends ResolveInsertionBa
           // The two conditions below are adapted to Hudi relations
           case LogicalRelation(_: EmptyRelation, _, catalogTable, _) =>
             preprocess(i, catalogTable)
-          case LogicalRelation(_: MergeOnReadSnapshotRelation, _, catalogTable, _) =>
+          case LogicalRelation(_: HoodieBaseRelation, _, catalogTable, _) =>
             preprocess(i, catalogTable)
           case _ => i
         }
@@ -127,7 +130,7 @@ case class HoodieSpark35ResolveColumnsForInsertInto() extends ResolveInsertionBa
     preprocess(insert, tblName, new StructType(), catalogTable)
   }
 
-  // NOTE: this is copied from PreprocessTableInsertion with additional logic
+  // NOTE: this is copied from [[PreprocessTableInsertion]] with additional logic
   // to unset user-specified columns at the end
   private def preprocess(insert: InsertIntoStatement,
                          tblName: String,
