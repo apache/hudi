@@ -46,11 +46,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
   def customResolutionRules: Seq[RuleBuilder] = {
     val rules: ListBuffer[RuleBuilder] = ListBuffer()
 
-    if (HoodieSparkUtils.gteqSpark3_5) {
-      rules += (_ => instantiateKlass(
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark35ResolveColumnsForInsertInto"))
-    }
-
     // NOTE: This rule adjusts [[LogicalRelation]]s resolving into Hudi tables such that
     //       meta-fields are not affecting the resolution of the target columns to be updated by Spark (Except in the
     //       case of MergeInto. We leave the meta columns on the target table, and use other means to ensure resolution)
@@ -79,6 +74,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
     rules ++= Seq(dataSourceV2ToV1Fallback, spark3ResolveReferences)
+
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark35ResolveColumnsForInsertInto"))
+    }
 
     val resolveAlterTableCommandsClass =
       if (HoodieSparkUtils.gteqSpark3_5) {
