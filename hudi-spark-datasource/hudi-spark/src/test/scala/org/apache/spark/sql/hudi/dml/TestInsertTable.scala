@@ -44,8 +44,8 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test Insert Into with subset of columns") {
-    // This is only supported by Spark 3.4 and above
-    if (HoodieSparkUtils.gteqSpark3_4) {
+    // This is only supported by Spark 3.5
+    if (HoodieSparkUtils.gteqSpark3_5) {
       Seq("cow", "mor").foreach(tableType =>
         Seq(true, false).foreach(isPartitioned => withTempDir { tmp =>
           testInsertIntoWithSubsetOfColumns(
@@ -55,8 +55,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Into with subset of columns on Parquet table") {
-    // This is only supported by Spark 3.4 and above
-    if (HoodieSparkUtils.gteqSpark3_4) {
+    // This is only supported by Spark 3.5
+    if (HoodieSparkUtils.gteqSpark3_5) {
       // Make sure parquet tables are not affected by the custom rules for
       // INSERT INTO statements on Hudi tables
       Seq(true, false).foreach(isPartitioned => withTempDir { tmp =>
