@@ -19,26 +19,27 @@
 package org.apache.hudi.functional
 
 
-import org.apache.avro.Schema
+import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestParams
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
 import org.apache.hudi.util.JavaScalaConverters.convertScalaListToJavaList
+import org.apache.hudi.util.Lazy
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.functions.{lit, struct, typedLit}
@@ -55,6 +56,7 @@ import java.util
 import java.util.List
 import java.util.stream.Collectors
 import scala.collection.JavaConverters._
+import scala.collection.immutable.TreeSet
 import scala.util.Random
 
 @Tag("functional")
@@ -101,7 +103,12 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
     val inputDF = if (addNestedFiled) {
       preInputDF.withColumn("c9",
-        functions.struct("c2").withField("car_brand", lit("abc_brand")))
+        functions.struct("c2").withField("c9_1_car_brand", lit("abc_brand")))
+      .withColumn("c10",
+        functions.struct("c2").withField("c10_1_car_brand", lit("abc_brand"))
+      .withField("c10_1", functions.struct("c2")
+        .withField("c10_2_1_nested_lvl2_field1", lit("random_val1"))
+        .withField("c10_2_1_nested_lvl2_field2", lit("random_val2"))))
     } else {
       preInputDF
     }
@@ -136,9 +143,10 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def buildColumnStatsTableManually(tablePath: String,
-                                            includedCols: Seq[String],
+                                              includedCols: Seq[String],
                                             indexedCols: Seq[String],
-                                            indexSchema: StructType): DataFrame = {
+                                            indexSchema: StructType,
+                                              sourceTableSchema: StructType): DataFrame = {
     val metaClient = HoodieTableMetaClient.builder().setConf(new HadoopStorageConfiguration(jsc.hadoopConfiguration())).setBasePath(tablePath).build()
     val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().enable(false).build())
     fsv.loadAllPartitions()
@@ -153,26 +161,23 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
         val exprs: Seq[String] =
           s"'${typedLit(file.getName)}' AS file" +:
             s"sum(1) AS valueCount" +:
-            df.columns
-              .filter(col => includedCols.contains(col))
-              .filter(col => indexedCols.contains(col))
-              .flatMap(col => {
-                val minColName = s"${col}_minValue"
-                val maxColName = s"${col}_maxValue"
-                if (indexedCols.contains(col)) {
-                  Seq(
-                    s"min($col) AS $minColName",
-                    s"max($col) AS $maxColName",
-                    s"sum(cast(isnull($col) AS long)) AS ${col}_nullCount"
-                  )
-                } else {
-                  Seq(
-                    s"null AS $minColName",
-                    s"null AS $maxColName",
-                    s"null AS ${col}_nullCount"
-                  )
-                }
-              })
+            includedCols.union(indexedCols).distinct.sorted.flatMap(col => {
+          val minColName = s"`${col}_minValue`"
+          val maxColName = s"`${col}_maxValue`"
+          if (indexedCols.contains(col)) {
+            Seq(
+              s"min($col) AS $minColName",
+              s"max($col) AS $maxColName",
+              s"sum(cast(isnull($col) AS long)) AS `${col}_nullCount`"
+            )
+          } else {
+            Seq(
+              s"null AS $minColName",
+              s"null AS $maxColName",
+              s"null AS ${col}_nullCount"
+            )
+          }
+        })
 
         df.selectExpr(exprs: _*)
           .collect()
@@ -247,13 +252,17 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    val tableSchema = schemaUtil.getTableAvroSchema(false)
+    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
 
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, localSourceTableSchema, metadataConfig, metaClient)
+    val lazyOptTableSchema : Lazy[org.apache.hudi.common.util.Option[Schema]] = Lazy.eagerly(org.apache.hudi.common.util.Option.of(tableSchema))
     val indexedColumnswithMeta: Set[String] = HoodieTableMetadataUtil
-      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, convertScalaListToJavaList(sourceTableSchema.fieldNames)).asScala.toSet
+      .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, lazyOptTableSchema, false).asScala.toSet
     val indexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
-
-    val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
+    val sortedIndexedColumns : Set[String] = TreeSet(indexedColumns.toSeq:_*)
+    val (expectedColStatsSchema, _) = composeIndexSchema(sortedIndexedColumns.toSeq, indexedColumns, localSourceTableSchema)
     columnStatsIndex.loadTransposed(indexedColumns.toSeq, testCase.shouldReadInMemory) { transposedColStatsDF =>
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
@@ -272,7 +281,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
         // TODO(HUDI-4557): support validation of column stats of avro log files
         // Collect Column Stats manually (reading individual Parquet files)
         val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, indexedColumns.toSeq, sourceTableSchema.fieldNames, expectedColStatsSchema)
+        buildColumnStatsTableManually(basePath, indexedColumns.toSeq, indexedColumns.toSeq, expectedColStatsSchema, localSourceTableSchema)
 
         assertEquals(asJson(sort(manualColStatsTableDF, validationSortColumns)),
           asJson(sort(transposedColStatsDF, validationSortColumns)))
@@ -329,11 +338,12 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   private def sort(df: DataFrame, sortColumns: Seq[String]): DataFrame = {
-    val sortedCols = df.columns.sorted
+    //val sortedCols = df.columns.sorted
     // Sort dataset by specified columns (to minimize non-determinism in case multiple files have the same
     // value of the first column)
-    df.select(sortedCols.head, sortedCols.tail: _*)
+    df.select(sortColumns.head, sortColumns.tail: _*)
       .sort(sortColumns.head, sortColumns.tail: _*)
+      .select(sortColumns.head, sortColumns.tail: _*)
   }
 }
 
@@ -345,6 +355,13 @@ object ColumnStatIndexTestBase {
     java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
       Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true)),
         Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false))
+      )
+    ): _*)
+  }
+
+  def testMetadataColumnStatsIndexParamsInMemory: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
+      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true))
       )
     ): _*)
   }
