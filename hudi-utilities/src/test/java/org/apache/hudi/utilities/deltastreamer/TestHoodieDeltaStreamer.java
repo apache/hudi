@@ -506,7 +506,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=false", HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
     cfg.targetBasePath = newDatasetBasePath;
     new HoodieDeltaStreamer(cfg, jsc).sync();
-    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, newDatasetBasePath));
     Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath);
     LOG.info("Schema :");
     res.printSchema();
@@ -664,8 +663,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ds.sync();
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
     assertFalse(Metrics.isInitialized(tableBasePath), "Metrics should be shutdown");
-    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
     assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
   @Timeout(600)
@@ -694,8 +693,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ds.sync();
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
     assertFalse(Metrics.isInitialized(tableBasePath), "Metrics should be shutdown");
-    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
     assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
   private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir, HoodieRecordType recordType) throws Exception {

@@ -22,12 +22,16 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase;
+import org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource;
+import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource;
 import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -219,5 +223,14 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     Map<String, String> expectedMetadata = new HashMap<>();
     expectedMetadata.put("schema", "");
     verifyLastInstantCommitMetadata(expectedMetadata);
+  }
+
+  @Test
+  public void testTargetCheckpointV2ForS3Gcs() {
+    // To ensure we properly track sources that must use checkpoint V1.
+    assertFalse(CheckpointUtils.targetCheckpointV2(8, S3EventsHoodieIncrSource.class.getName()));
+    assertFalse(CheckpointUtils.targetCheckpointV2(6, S3EventsHoodieIncrSource.class.getName()));
+    assertFalse(CheckpointUtils.targetCheckpointV2(8, GcsEventsHoodieIncrSource.class.getName()));
+    assertFalse(CheckpointUtils.targetCheckpointV2(6, GcsEventsHoodieIncrSource.class.getName()));
   }
 }
