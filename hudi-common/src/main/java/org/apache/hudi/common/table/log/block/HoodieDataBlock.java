@@ -44,7 +44,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -88,15 +87,9 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     super(header, footer, Option.empty(), Option.empty(), null, false);
     if (shouldWriteRecordPositions && !records.isEmpty()) {
       String baseFileInstantTime = records.get(0).getCurrentBaseFileInstantTime();
-      for (HoodieRecord record : records) {
-        if (!baseFileInstantTime.equals(record.getCurrentBaseFileInstantTime())) {
-          baseFileInstantTime = EMPTY_STRING;
-          break;
-        }
-      }
       if (StringUtils.isNullOrEmpty(baseFileInstantTime)) {
-        LOG.warn("Base file instant time of delete positions cannot be determined, possibly "
-            + "due to inserts or different base file instant times for the input records.");
+        LOG.warn("Base file instant time of record positions cannot be determined, possibly "
+            + "due to insert records.");
       } else {
         records.sort((o1, o2) -> {
           long v1 = o1.getCurrentPosition();

@@ -32,7 +32,8 @@ import java.util.Objects;
 public class HoodieRecordLocation implements Serializable, KryoSerializable {
   public static final long INVALID_POSITION = -1L;
 
-  // Instant time of the base file where the record is stored
+  // When used as current location of the record, this tracks
+  // the instant time of the base file where the record is stored
   protected String instantTime;
   protected String fileId;
   // Position of the record in the file, e.g., row position starting from 0 in the Parquet file
