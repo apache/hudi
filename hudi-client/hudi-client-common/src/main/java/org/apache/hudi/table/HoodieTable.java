@@ -1072,10 +1072,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       case RECORD_INDEX:
         metadataIndexDisabled = !config.isRecordIndexEnabled();
         break;
-      // PARTITION_STATS should have same behavior as COLUMN_STATS
-      case PARTITION_STATS:
-        metadataIndexDisabled = !config.isPartitionStatsIndexEnabled();
-        break;
       // Expression and Secondary index can be in different partitions for different keys,
       // and do not delete unless DROP INDEX is called.
       case EXPRESSION_INDEX:
