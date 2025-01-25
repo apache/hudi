@@ -75,6 +75,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
     rules ++= Seq(dataSourceV2ToV1Fallback, spark3ResolveReferences)
 
+    if (HoodieSparkUtils.gteqSpark3_5) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark35ResolveColumnsForInsertInto"))
+    }
+
     val resolveAlterTableCommandsClass =
       if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
