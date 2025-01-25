@@ -37,9 +37,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
-
 /**
  * Configurations used by the HUDI Metadata Table.
  */
@@ -367,19 +364,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.1")
       .withDocumentation("Column for which expression index will be built.");
 
-  public static final ConfigProperty<String> EXPRESSION_INDEX_NAME = ConfigProperty
-      .key(METADATA_PREFIX + ".index.expression.name")
-      .defaultValue("")
-      .markAdvanced()
-      .sinceVersion("1.0.1")
-      .withDocumentation("Name of the expression index. It is optional and default is the name of the column, prefixed by '" + PARTITION_NAME_EXPRESSION_INDEX_PREFIX + "'.");
+  public static final ConfigProperty<String> EXPRESSION_INDEX_NAME = HoodieIndexingConfig.INDEX_NAME;
 
-  public static final ConfigProperty<String> EXPRESSION_INDEX_TYPE = ConfigProperty
-      .key(METADATA_PREFIX + ".index.expression.type")
-      .noDefaultValue()
-      .markAdvanced()
-      .sinceVersion("1.0.1")
-      .withDocumentation("Index type i.e. column_stats aor bloom_filters, for which expression index will be built e.g. date_format(ts).");
+  public static final ConfigProperty<String> EXPRESSION_INDEX_TYPE = HoodieIndexingConfig.INDEX_TYPE;
+
   public static final ConfigProperty<String> EXPRESSION_INDEX_OPTIONS = ConfigProperty
       .key(METADATA_PREFIX + ".index.expression.options")
       .noDefaultValue()
@@ -426,12 +414,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating secondary index.");
 
-  public static final ConfigProperty<String> SECONDARY_INDEX_NAME = ConfigProperty
-      .key(METADATA_PREFIX + ".index.secondary.name")
-      .defaultValue("")
-      .markAdvanced()
-      .sinceVersion("1.0.1")
-      .withDocumentation("Name of the secondary index. It is optional and default is the name of the column, prefixed by '" + PARTITION_NAME_SECONDARY_INDEX_PREFIX + "'.");
+  public static final ConfigProperty<String> SECONDARY_INDEX_NAME = HoodieIndexingConfig.INDEX_NAME;
 
   public static final ConfigProperty<String> SECONDARY_INDEX_COLUMN = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.column")
