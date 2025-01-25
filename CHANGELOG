@@ -572,3 +572,9 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-01-23 16:03:50] [release-v1.80.0] ---
 [ENG-20769][HUDI-8901] Fix Timeline Server to process requests from multiple storage lakes (#1157)
 [AUDIT-1071]: Changelog for release-v1.79.0 (#1155)
+
+--- [2025-01-25 08:56:42] [release-v1.81.0] ---
+[ENG-20941][INTERNAL] Avoid scheduling rollback for compaction and clustering (#1164)
+[ENG-21049][MINOR] Fix bloom index shuffle setup (#1163)
+[ENG-20414][HUDI-8898] Support INSERT SQL statement with a subset of columns in Spark 3.5 (#1158)
+[AUDIT-1071]: Changelog for release-v1.80.0 (#1160)
