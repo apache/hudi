@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
@@ -47,6 +48,9 @@ import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -89,7 +93,7 @@ public class FileCreateUtilsV2 extends FileCreateUtilsBase {
   }
 
   private static void createMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix, byte[] content) throws IOException {
-    createMetaFileInTimelinePath(metaClient.getTimelinePath().toUri().getPath(), instantTime, InProcessTimeGenerator::createNewInstantTime, suffix, content);
+    createMetaFileInTimelinePath(metaClient, instantTime, InProcessTimeGenerator::createNewInstantTime, suffix, content);
   }
 
   private static void deleteMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix,
@@ -107,10 +111,10 @@ public class FileCreateUtilsV2 extends FileCreateUtilsBase {
     final Supplier<String> completionTimeSupplier = () -> completionTime.isPresent() ? completionTime.get() : InProcessTimeGenerator.createNewInstantTime();
     if (metadata.isPresent()) {
       HoodieCommitMetadata commitMetadata = metadata.get();
-      createMetaFileInTimelinePath(metaClient.getTimelinePath().toUri().getPath(), instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
+      createMetaFileInTimelinePath(metaClient, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
           serializeCommitMetadata(commitMetadataSerDe, commitMetadata).get());
     } else {
-      createMetaFileInTimelinePath(metaClient.getTimelinePath().toUri().getPath(), instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
+      createMetaFileInTimelinePath(metaClient, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
           getUTF8Bytes(""));
     }
   }
@@ -184,7 +188,7 @@ public class FileCreateUtilsV2 extends FileCreateUtilsBase {
   public static void createReplaceCommit(HoodieTableMetaClient metaClient, CommitMetadataSerDe commitMetadataSerDe,
                                          String instantTime, String completionTime, HoodieReplaceCommitMetadata metadata) throws IOException {
     createMetaFileInTimelinePath(
-        metaClient.getTimelinePath().toUri().getPath(), instantTime, () -> completionTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION,
+        metaClient, instantTime, () -> completionTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION,
         serializeCommitMetadata(commitMetadataSerDe, metadata).get());
   }
 
@@ -308,6 +312,45 @@ public class FileCreateUtilsV2 extends FileCreateUtilsBase {
 
   public static void createInflightSavepoint(HoodieTableMetaClient metaClient, String instantTime) throws IOException {
     createMetaFile(metaClient, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
+  }
+
+  protected static void createMetaFileInTimelinePath(
+      HoodieTableMetaClient metaClient, String instantTime, Supplier<String> completionTimeSupplier, String suffix, byte[] content) throws IOException {
+    try {
+      Path parentPath = Paths.get(metaClient.getTimelinePath().makeQualified(new URI("file:///")).toUri());
+      Files.createDirectories(parentPath);
+      if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
+        Path metaFilePath = parentPath.resolve(instantTime + suffix);
+        if (Files.notExists(metaFilePath)) {
+          if (content.length == 0) {
+            Files.createFile(metaFilePath);
+          } else {
+            Files.write(metaFilePath, content);
+          }
+        }
+      } else {
+        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(parentPath, instantTime + "*" + suffix)) {
+          // The instant file is not exist
+          if (!dirStream.iterator().hasNext()) {
+            // doesn't contains completion time
+            String completedInstantFilePrefix = "";
+            if (metaClient.getTimelineLayoutVersion().getVersion().equals(TimelineLayoutVersion.VERSION_1)) {
+              completedInstantFilePrefix = instantTime;
+            } else if (metaClient.getTimelineLayoutVersion().getVersion().equals(TimelineLayoutVersion.VERSION_2)) {
+              completedInstantFilePrefix = instantTime + "_" + completionTimeSupplier.get();
+            }
+            Path metaFilePath = parentPath.resolve(completedInstantFilePrefix + suffix);
+            if (content.length == 0) {
+              Files.createFile(metaFilePath);
+            } else {
+              Files.write(metaFilePath, content);
+            }
+          }
+        }
+      }
+    } catch (URISyntaxException ex) {
+      throw new HoodieException(ex);
+    }
   }
 
   public static String createBaseFile(HoodieTableMetaClient metaClient, String partitionPath, String instantTime, String fileId)
