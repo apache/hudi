@@ -17,58 +17,28 @@
  * under the License.
  */
 
-package org.apache.hudi.table.action.index.functional;
+package org.apache.hudi.table.action.index;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.storage.StoragePath;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
 
 public abstract class BaseHoodieIndexClient {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieIndexClient.class);
-
   public BaseHoodieIndexClient() {
   }
 
   /**
-   * Register a expression index.
-   * Index definitions are stored in user-specified path or, by default, in .hoodie/.index_defs/index.json.
-   * For the first time, the index definition file will be created if not exists.
-   * For the second time, the index definition file will be updated if exists.
-   * Table Config is updated if necessary.
-   */
-  public void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
-    LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
-    // build HoodieIndexMetadata and then add to index definition file
-    boolean indexDefnUpdated = metaClient.buildIndexDefinition(indexDefinition);
-    if (indexDefnUpdated) {
-      String indexMetaPath = metaClient.getIndexDefinitionPath();
-      // update table config if necessary
-      if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
-          || !metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()) {
-        metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(indexMetaPath)));
-        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
-      }
-    }
-  }
-
-  /**
-   * Create a expression index.
+   * Create a metadata index.
    */
   public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
                               Map<String, String> tableProperties) throws Exception;
 
   /**
    * Creates or updated the col stats index definition.
-   * @param metaClient data table's {@link HoodieTableMetaClient} instance.
+   *
+   * @param metaClient     data table's {@link HoodieTableMetaClient} instance.
    * @param columnsToIndex list of columns to index.
    */
   public abstract void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex);

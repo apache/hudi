@@ -137,6 +137,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -165,10 +166,14 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
+import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
 
 /**
  * A utility to convert timeline information to metadata table records.
@@ -2331,7 +2336,7 @@ public class HoodieTableMetadataUtil {
    * @param tableSchema  table schema
    * @return true if each field's data type are supported, false otherwise
    */
-  public static boolean validateDataTypeForSecondaryIndex(List<String> sourceFields, Schema tableSchema) {
+  public static boolean validateDataTypeForSecondaryOrExpressionIndex(List<String> sourceFields, Schema tableSchema) {
     return sourceFields.stream().anyMatch(fieldToIndex -> {
       Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
       return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
@@ -2764,6 +2769,112 @@ public class HoodieTableMetadataUtil {
     if (type == MetadataPartitionType.FILES.getRecordType()) {
       filesystemMetadata.forEach((fileName, fileInfo) -> checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0"));
     }
+  }
+
+  public static Set<String> getExpressionIndexPartitionsToInit(MetadataPartitionType partitionType, HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
+    return getIndexPartitionsToInit(
+        partitionType,
+        metadataConfig,
+        dataMetaClient,
+        () -> isNewExpressionIndexDefinitionRequired(metadataConfig, dataMetaClient),
+        metadataConfig::getExpressionIndexColumn,
+        metadataConfig::getExpressionIndexName,
+        PARTITION_NAME_EXPRESSION_INDEX_PREFIX,
+        metadataConfig.getExpressionIndexType()
+    );
+  }
+
+  public static Set<String> getSecondaryIndexPartitionsToInit(MetadataPartitionType partitionType, HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
+    return getIndexPartitionsToInit(
+        partitionType,
+        metadataConfig,
+        dataMetaClient,
+        () -> isNewSecondaryIndexDefinitionRequired(metadataConfig, dataMetaClient),
+        metadataConfig::getSecondaryIndexColumn,
+        metadataConfig::getSecondaryIndexName,
+        PARTITION_NAME_SECONDARY_INDEX_PREFIX,
+        PARTITION_NAME_SECONDARY_INDEX
+    );
+  }
+
+  /**
+   * Fetches uninitialized index partitions for the given partition type.
+   * If no such partitions are found and a new index definition is required,
+   * this method adds the new index definition before re-fetching the partitions.
+   * This ensures that all required index partitions are initialized.
+   *
+   * @param partitionType       The type of metadata partition (e.g., expression index, secondary index).
+   * @param metadataConfig      Configuration object containing metadata-related properties.
+   * @param dataMetaClient      Metadata client for interacting with the table's metadata.
+   * @param isNewIndexRequired  A supplier to determine whether a new index definition is required.
+   * @param getIndexedColumn    A supplier to fetch the column to be indexed.
+   * @param getIndexName        A supplier to fetch the user-defined index name.
+   * @param partitionNamePrefix A prefix to ensure index names follow naming conventions.
+   * @param indexType           The type of index being initialized (e.g., expression index, secondary index).
+   * @return A set of index partitions that require initialization, or an empty set if none are required.
+   */
+  private static Set<String> getIndexPartitionsToInit(MetadataPartitionType partitionType,
+                                                      HoodieMetadataConfig metadataConfig,
+                                                      HoodieTableMetaClient dataMetaClient,
+                                                      Supplier<Boolean> isNewIndexRequired,
+                                                      Supplier<String> getIndexedColumn,
+                                                      Supplier<String> getIndexName,
+                                                      String partitionNamePrefix,
+                                                      String indexType) {
+    // Fetch existing uninitialized partitions for which index definition already exists
+    Set<String> indexPartitionsToInit = getIndexPartitionsToInitBasedOnIndexDefinition(partitionType, dataMetaClient);
+
+    // If no index partition found, check if new index definition need to be added based on metadata write configs
+    if (indexPartitionsToInit.isEmpty() && isNewIndexRequired.get()) {
+      String indexedColumn = getIndexedColumn.get();
+      String indexName = getSecondaryOrExpressionIndexName(getIndexName, partitionNamePrefix, indexedColumn);
+
+      // Build and register the new index definition
+      HoodieIndexDefinition.Builder indexDefinitionBuilder = HoodieIndexDefinition.newBuilder()
+          .withIndexName(indexName)
+          .withIndexType(indexType)
+          .withSourceFields(Collections.singletonList(indexedColumn));
+      if (partitionNamePrefix.equals(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)) {
+        indexDefinitionBuilder.withIndexOptions(metadataConfig.getExpressionIndexOptions());
+        indexDefinitionBuilder.withIndexFunction(metadataConfig.getExpressionIndexOptions().getOrDefault(EXPRESSION_OPTION, IDENTITY_TRANSFORM));
+      }
+
+      dataMetaClient.buildIndexDefinition(indexDefinitionBuilder.build());
+
+      // Re-fetch the partitions after adding the new definition
+      indexPartitionsToInit = getIndexPartitionsToInitBasedOnIndexDefinition(partitionType, dataMetaClient);
+    }
+
+    return indexPartitionsToInit;
+  }
+
+  public static String getSecondaryOrExpressionIndexName(Supplier<String> getConfiguredIndexName, String partitionNamePrefix, String indexedColumn) {
+    String indexName = getConfiguredIndexName.get();
+
+    // Use a default index name if the indexed column is specified but index name is not
+    if (StringUtils.isNullOrEmpty(indexName) && StringUtils.nonEmpty(indexedColumn)) {
+      indexName = partitionNamePrefix + indexedColumn;
+    }
+
+    // Ensure the index name has the appropriate prefix
+    if (StringUtils.nonEmpty(indexName) && !indexName.startsWith(partitionNamePrefix)) {
+      indexName = partitionNamePrefix + indexName;
+    }
+    return indexName;
+  }
+
+  private static Set<String> getIndexPartitionsToInitBasedOnIndexDefinition(MetadataPartitionType partitionType, HoodieTableMetaClient dataMetaClient) {
+    if (dataMetaClient.getIndexMetadata().isEmpty()) {
+      return Collections.emptySet();
+    }
+
+    Set<String> indexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+        .map(HoodieIndexDefinition::getIndexName)
+        .filter(indexName -> indexName.startsWith(partitionType.getPartitionPath()))
+        .collect(Collectors.toSet());
+    Set<String> completedMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
+    indexPartitions.removeAll(completedMetadataPartitions);
+    return indexPartitions;
   }
 
   /**

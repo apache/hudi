@@ -318,7 +318,13 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // assert SI records from 1st commit
       List<String> expectedSecondaryIndexKeys = records1.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
       String firstCommitTime = commitTime;
-      HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition("secondary_index_idx_rider", "", "", Collections.singletonList("rider"), Collections.emptyMap());
+      HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+          .withIndexName("secondary_index_idx_rider")
+          .withIndexType("")
+          .withIndexFunction("")
+          .withSourceFields(Collections.singletonList("rider"))
+          .withIndexOptions(Collections.emptyMap())
+          .build();
       HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withSecondaryIndexParallelism(2).build();
       HoodieMetadataFileSystemView metadataView = new HoodieMetadataFileSystemView(engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
       metadataView.loadAllPartitions();
