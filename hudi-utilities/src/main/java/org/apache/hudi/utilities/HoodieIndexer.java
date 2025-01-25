@@ -324,8 +324,7 @@ public class HoodieIndexer {
       return false;
     }
     List<HoodieIndexPartitionInfo> indexPartitionInfos = commitMetadata.get().getIndexPartitionInfos();
-    LOG.info(String.format("Indexing complete for partitions: %s",
-        indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList())));
+    LOG.info("Indexing complete for partitions: {}", indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList()));
     return isIndexBuiltForAllRequestedTypes(indexPartitionInfos);
   }
 
@@ -335,7 +334,11 @@ public class HoodieIndexer {
     Set<String> requestedPartitions = getRequestedPartitionTypes(cfg.indexTypes, Option.empty()).stream()
         .map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedPartitions.removeAll(indexedPartitions);
-    return requestedPartitions.isEmpty();
+    if (requestedPartitions.isEmpty()) {
+      return true;
+    }
+    metaClient.reloadTableConfig();
+    return metaClient.getTableConfig().getMetadataPartitions().containsAll(indexedPartitions);
   }
 
   List<MetadataPartitionType> getRequestedPartitionTypes(String indexTypes, Option<HoodieMetadataConfig> metadataConfig) {

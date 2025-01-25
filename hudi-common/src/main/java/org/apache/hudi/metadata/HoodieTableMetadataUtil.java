@@ -166,6 +166,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
+import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
@@ -2825,17 +2827,7 @@ public class HoodieTableMetadataUtil {
     // If no index partition found, check if new index definition need to be added based on metadata write configs
     if (indexPartitionsToInit.isEmpty() && isNewIndexRequired.get()) {
       String indexedColumn = getIndexedColumn.get();
-      String indexName = getIndexName.get();
-
-      // Use a default index name if the indexed column is specified but index name is not
-      if (StringUtils.isNullOrEmpty(indexName) && StringUtils.nonEmpty(indexedColumn)) {
-        indexName = partitionNamePrefix + indexedColumn;
-      }
-
-      // Ensure the index name has the appropriate prefix
-      if (StringUtils.nonEmpty(indexName) && !indexName.startsWith(partitionNamePrefix)) {
-        indexName = partitionNamePrefix + indexName;
-      }
+      String indexName = getSecondaryOrExpressionIndexName(getIndexName, partitionNamePrefix, indexedColumn);
 
       // Build and register the new index definition
       HoodieIndexDefinition.Builder indexDefinitionBuilder = HoodieIndexDefinition.newBuilder()
@@ -2844,6 +2836,7 @@ public class HoodieTableMetadataUtil {
           .withSourceFields(Collections.singletonList(indexedColumn));
       if (partitionNamePrefix.equals(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)) {
         indexDefinitionBuilder.withIndexOptions(metadataConfig.getExpressionIndexOptions());
+        indexDefinitionBuilder.withIndexFunction(metadataConfig.getExpressionIndexOptions().getOrDefault(EXPRESSION_OPTION, IDENTITY_TRANSFORM));
       }
 
       dataMetaClient.buildIndexDefinition(indexDefinitionBuilder.build());
@@ -2853,6 +2846,21 @@ public class HoodieTableMetadataUtil {
     }
 
     return indexPartitionsToInit;
+  }
+
+  public static String getSecondaryOrExpressionIndexName(Supplier<String> getConfiguredIndexName, String partitionNamePrefix, String indexedColumn) {
+    String indexName = getConfiguredIndexName.get();
+
+    // Use a default index name if the indexed column is specified but index name is not
+    if (StringUtils.isNullOrEmpty(indexName) && StringUtils.nonEmpty(indexedColumn)) {
+      indexName = partitionNamePrefix + indexedColumn;
+    }
+
+    // Ensure the index name has the appropriate prefix
+    if (StringUtils.nonEmpty(indexName) && !indexName.startsWith(partitionNamePrefix)) {
+      indexName = partitionNamePrefix + indexName;
+    }
+    return indexName;
   }
 
   private static Set<String> getIndexPartitionsToInitBasedOnIndexDefinition(MetadataPartitionType partitionType, HoodieTableMetaClient dataMetaClient) {

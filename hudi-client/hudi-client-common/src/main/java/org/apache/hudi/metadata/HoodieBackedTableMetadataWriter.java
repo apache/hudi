@@ -427,10 +427,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             break;
           case EXPRESSION_INDEX:
             Set<String> expressionIndexPartitionsToInit = getExpressionIndexPartitionsToInit(partitionType, dataWriteConfig.getMetadataConfig(), dataMetaClient);
-            if (expressionIndexPartitionsToInit == null) {
+            if (expressionIndexPartitionsToInit.size() != 1) {
+              if (expressionIndexPartitionsToInit.size() > 1) {
+                LOG.warn("Skipping expression index initialization as only one expression index bootstrap at a time is supported for now. Provided: {}", expressionIndexPartitionsToInit);
+              }
               continue;
             }
-            ValidationUtils.checkState(expressionIndexPartitionsToInit.size() == 1, "Only one expression index at a time is supported for now");
             partitionName = expressionIndexPartitionsToInit.iterator().next();
             fileGroupCountAndRecordsPair = initializeExpressionIndexPartition(partitionName, instantTimeForPartition);
             break;
