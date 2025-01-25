@@ -140,9 +140,6 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       validateColumnStatsIndex(params.testCase, params.metadataOpts, params.expectedColStatsSourcePath,
         shouldValidateColumnStatsManually, params.validationSortColumns)
     } else if (params.shouldValidatePartitionStats) {
-      val shouldValidateColumnStatsManually = (params.testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
-        params.operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)) && params.shouldValidateManually
-
       validatePartitionStatsIndex(params.testCase, params.metadataOpts, params.expectedColStatsSourcePath)
     }
   }
@@ -308,13 +305,9 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val indexedColumnswithMeta: Set[String] = HoodieTableMetadataUtil
       .getColumnsToIndex(metaClient.getTableConfig, metadataConfig, lazyOptTableSchema, false).asScala.toSet
     val indexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
-//<<<<<<< HEAD
     val sortedIndexedColumns : Set[String] = TreeSet(indexedColumns.toSeq:_*)
     val (expectedColStatsSchema, _) = composeIndexSchema(sortedIndexedColumns.toSeq, indexedColumns.toSeq, localSourceTableSchema)
-//=======
 
-  //  val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns.toSeq, sourceTableSchema)
-//>>>>>>> 78c89f57cdf (Enabling partition stats by default)*/
     columnStatsIndex.loadTransposed(indexedColumns.toSeq, testCase.shouldReadInMemory) { transposedColStatsDF =>
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =

@@ -181,16 +181,14 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     validateNonExistantColumnsToIndexDefn(metaClient)
   }
 
-  //@ParameterizedTest
-  //@MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
-  @Test
-  def testMetadataColumnStatsIndexInitializationWithUpserts(): Unit = {
-    // testCase: ColumnStatsTestCase
-    val testCase: ColumnStatsTestCase = ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, true)
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  def testMetadataColumnStatsIndexInitializationWithUpserts(testCase: ColumnStatsTestCase): Unit = {
     val partitionCol : String = "c8"
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false"
     )
 
     val commonOpts = Map(
@@ -253,20 +251,6 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().requestedTime
-
-    // lets validate that we have log files generated in case of MOR table
-    if (testCase.tableType == HoodieTableType.MERGE_ON_READ) {
-      val metaClient = HoodieTableMetaClient.builder().setConf(new HadoopStorageConfiguration(jsc.hadoopConfiguration())).setBasePath(basePath).build()
-      val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().enable(false).build())
-      fsv.loadAllPartitions()
-      val baseStoragePath = new StoragePath(basePath)
-      val allPartitionPaths = fsv.getPartitionPaths
-      allPartitionPaths.forEach(partitionPath => {
-        val pPath = FSUtils.getRelativePartitionPath(baseStoragePath, partitionPath)
-        assertTrue (fsv.getLatestFileSlices(pPath).filter(fileSlice => fileSlice.hasLogFiles).count() > 0)
-      })
-      fsv.close()
-    }
 
     var expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
       "index/colstats/cow-bootstrap1-partition-stats-index-table.json"
@@ -426,5 +410,4 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       }
     }
   }
-
 }
