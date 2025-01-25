@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -54,14 +55,17 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class TestHoodieTable extends HoodieCommonTestHarness {
   @ParameterizedTest
@@ -146,9 +150,55 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     assertTrue(deserializedTable.getContext() instanceof HoodieLocalEngineContext);
   }
 
+  @Test
+  void testRollbackInflightInstant() throws IOException {
+    // Setup.
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+    HoodieTable hoodieTable =
+        new TestBaseHoodieTable(writeConfig, context, metaClient);
+    // Prepare test inputs.
+    HoodieInstant inflightInstant = new HoodieInstant(
+        HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, "123");
+    // Mock getPendingRollbackInstantFunc behavior.
+    Function<String, Option<HoodiePendingRollbackInfo>>
+        getPendingRollbackInstantFunc = mock(Function.class);
+    HoodiePendingRollbackInfo pendingRollbackInfo = new HoodiePendingRollbackInfo(
+        inflightInstant, new HoodieRollbackPlan());
+    when(getPendingRollbackInstantFunc.apply("123"))
+        .thenReturn(Option.of(pendingRollbackInfo));
+
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    timeline.createNewInstant(inflightInstant);
+    // Case 1: Execute the method with pending rollback instant.
+    hoodieTable.rollbackInflightInstant(
+        inflightInstant, getPendingRollbackInstantFunc);
+    // Validate that function scheduleRollback is not called.
+    assertEquals(0, ((TestBaseHoodieTable)hoodieTable).getCountOfScheduleRollbackFunctionCalls());
+
+    // Reset the parameters.
+    when(getPendingRollbackInstantFunc.apply("123"))
+        .thenReturn(Option.empty());
+    timeline.createNewInstant(inflightInstant);
+    // Case 2: Execute the method without pending rollback instant.
+    hoodieTable.rollbackInflightInstant(
+        inflightInstant, getPendingRollbackInstantFunc);
+    // Validate that function scheduleRollback is called.
+    assertEquals(1, ((TestBaseHoodieTable)hoodieTable).getCountOfScheduleRollbackFunctionCalls());
+  }
+
   private static class TestBaseHoodieTable extends HoodieTable {
     protected TestBaseHoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
       super(config, context, metaClient);
+    }
+
+    private int countOfScheduleRollbackFunctionCalls = 0;
+
+    public int getCountOfScheduleRollbackFunctionCalls() {
+      return countOfScheduleRollbackFunctionCalls;
     }
 
     @Override
@@ -218,6 +268,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     @Override
     public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
                                                        boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore) {
+      countOfScheduleRollbackFunctionCalls++;
       return null;
     }
 
