@@ -33,11 +33,15 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -82,7 +86,7 @@ public class FileCreateUtils extends FileCreateUtilsBase {
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
-    createMetaFileInTimelinePath(getTimelinePath(new StoragePath(basePath)).toUri().getPath(), instantTime, InProcessTimeGenerator::createNewInstantTime, suffix, content);
+    createMetaFile(getTimelinePath(new StoragePath(basePath)).toUri().getPath(), instantTime, InProcessTimeGenerator::createNewInstantTime, suffix, content);
   }
 
   public static void createCommit(String basePath, String instantTime) throws IOException {
@@ -100,10 +104,10 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     String timelinePath = getTimelinePath(new StoragePath(basePath)).toUri().getPath();
     if (metadata.isPresent()) {
       HoodieCommitMetadata commitMetadata = metadata.get();
-      createMetaFileInTimelinePath(timelinePath, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
+      createMetaFile(timelinePath, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
           serializeCommitMetadata(commitMetadataSerDe, commitMetadata).get());
     } else {
-      createMetaFileInTimelinePath(timelinePath, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
+      createMetaFile(timelinePath, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
           getUTF8Bytes(""));
     }
   }
@@ -246,6 +250,40 @@ public class FileCreateUtils extends FileCreateUtilsBase {
       Files.createFile(markerFilePath);
     }
     return markerFilePath.toAbsolutePath().toString();
+  }
+
+  private static void createMetaFile(String basePath, String instantTime, Supplier<String> completionTimeSupplier, String suffix, byte[] content) throws IOException {
+    try {
+      Path parentPath = Paths.get(getTimelinePath(new StoragePath(basePath)).makeQualified(new URI("file:///")).toUri());
+
+      Files.createDirectories(parentPath);
+      if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
+        Path metaFilePath = parentPath.resolve(instantTime + suffix);
+        if (Files.notExists(metaFilePath)) {
+          if (content.length == 0) {
+            Files.createFile(metaFilePath);
+          } else {
+            Files.write(metaFilePath, content);
+          }
+        }
+      } else {
+        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(parentPath, instantTime + "*" + suffix)) {
+          // The instant file is not exist
+          if (!dirStream.iterator().hasNext()) {
+            // doesn't contains completion time
+            String instantTimeAndCompletionTime = instantTime + "_" + completionTimeSupplier.get();
+            Path metaFilePath = parentPath.resolve(instantTimeAndCompletionTime + suffix);
+            if (content.length == 0) {
+              Files.createFile(metaFilePath);
+            } else {
+              Files.write(metaFilePath, content);
+            }
+          }
+        }
+      }
+    } catch (URISyntaxException ex) {
+      throw new HoodieException(ex);
+    }
   }
 
   public static void deleteCommit(String basePath, String instantTime) throws IOException {

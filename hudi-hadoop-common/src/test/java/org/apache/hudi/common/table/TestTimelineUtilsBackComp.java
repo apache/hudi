@@ -20,7 +20,6 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -63,7 +62,7 @@ public class TestTimelineUtilsBackComp extends HoodieCommonTestHarness {
       HoodieTableMetaClient.newTableBuilder()
         .setDatabaseName("dataset")
         .setTableName("testTable")
-        .setTimelineLayoutVersion(timelineLayoutVersion)
+        .setTimelineLayoutVersion(timelineLayoutVersion.getVersion())
         .setTableVersion(tableVersion)
         .setTableType(HoodieTableType.MERGE_ON_READ).initTable(getDefaultStorageConf(), basePath);
     HoodieTestTable.of(metaClient)

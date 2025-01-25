@@ -47,7 +47,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * Utils for creating dummy Hudi files in testing.
@@ -135,39 +134,6 @@ public class FileCreateUtilsBase {
           preTableVersion8 ? instantTime : instantTime + "_" + InProcessTimeGenerator.createNewInstantTime();
       storage.create(new StoragePath(metaPath, instantTimeWithCompletionTime + suffix))
           .close();
-    }
-  }
-
-  protected static void createMetaFileInTimelinePath(String timelinePath, String instantTime, Supplier<String> completionTimeSupplier, String suffix, byte[] content) throws IOException {
-    try {
-      Path parentPath = Paths.get(new StoragePath(timelinePath).makeQualified(new URI("file:///")).toUri());
-      Files.createDirectories(parentPath);
-      if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
-        Path metaFilePath = parentPath.resolve(instantTime + suffix);
-        if (Files.notExists(metaFilePath)) {
-          if (content.length == 0) {
-            Files.createFile(metaFilePath);
-          } else {
-            Files.write(metaFilePath, content);
-          }
-        }
-      } else {
-        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(parentPath, instantTime + "*" + suffix)) {
-          // The instant file is not exist
-          if (!dirStream.iterator().hasNext()) {
-            // doesn't contains completion time
-            String instantTimeAndCompletionTime = instantTime + "_" + completionTimeSupplier.get();
-            Path metaFilePath = parentPath.resolve(instantTimeAndCompletionTime + suffix);
-            if (content.length == 0) {
-              Files.createFile(metaFilePath);
-            } else {
-              Files.write(metaFilePath, content);
-            }
-          }
-        }
-      }
-    } catch (URISyntaxException ex) {
-      throw new HoodieException(ex);
     }
   }
 
