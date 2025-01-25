@@ -158,7 +158,7 @@ public class TestTableSchemaResolver extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
 
     TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresentV2(false);
+    Option<Schema> schemaOption = resolver.getTableAvroSchemaForClustering(false);
     assertTrue(schemaOption.isPresent());
     assertEquals(originalSchema, schemaOption.get());
   }
@@ -180,7 +180,7 @@ public class TestTableSchemaResolver extends HoodieCommonTestHarness {
     metaClient.getTableConfig().setValue(HoodieTableConfig.CREATE_SCHEMA, originalSchema.toString());
 
     TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresentV2(false);
+    Option<Schema> schemaOption = resolver.getTableAvroSchemaForClustering(false);
     assertTrue(schemaOption.isPresent());
     assertEquals(originalSchema, schemaOption.get());
   }
@@ -195,7 +195,7 @@ public class TestTableSchemaResolver extends HoodieCommonTestHarness {
     metaClient.getTableConfig().setValue(HoodieTableConfig.CREATE_SCHEMA, originalSchema.toString());
 
     TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
-    Option<Schema> schemaOption = resolver.getTableAvroSchemaIfPresentV2(false);
+    Option<Schema> schemaOption = resolver.getTableAvroSchemaForClustering(false);
     assertTrue(schemaOption.isPresent());
 
     Schema resultSchema = schemaOption.get();

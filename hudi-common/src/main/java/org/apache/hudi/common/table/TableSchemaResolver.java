@@ -242,8 +242,9 @@ public class TableSchemaResolver {
     }
   }
 
-  public Option<Schema> getTableAvroSchemaIfPresentV2(boolean includeMetadataFields) {
-    return getTableSchemaFromLatestCommitMetadataV2(includeMetadataFields)
+  // [HUDI-8219]: needs to be cleaned up when the jira is fully implemented.
+  public Option<Schema> getTableAvroSchemaForClustering(boolean includeMetadataFields) {
+    return getTableSchemaFromLatestCommitMetadataForClustering(includeMetadataFields)
       .or(() -> getTableCreateSchemaWithMetadata(includeMetadataFields))
       .or(() -> getSchemaFromDataFileIfPresent(includeMetadataFields))
         .map(this::handlePartitionColumnsIfNeeded);
@@ -256,7 +257,7 @@ public class TableSchemaResolver {
         : schemaFromDataFile.map(HoodieAvroUtils::removeMetadataFields));
   }
 
-  private Option<Schema> getTableSchemaFromLatestCommitMetadataV2(boolean includeMetadataFields) {
+  private Option<Schema> getTableSchemaFromLatestCommitMetadataForClustering(boolean includeMetadataFields) {
     HoodieTimeline reversedTimeline = getSchemaEvolutionTimelineInReverseOrder();
     // To find the table schema given an instant time, need to walk backwards from the latest instant in
     // the timeline finding a completed instant containing a valid schema.

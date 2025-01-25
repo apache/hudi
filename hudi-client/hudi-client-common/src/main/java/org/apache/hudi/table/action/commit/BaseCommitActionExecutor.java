@@ -293,7 +293,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     // Disable auto commit. Strategy is only expected to write data in new files.
     config.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
 
-    final Schema schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchemaIfPresentV2(false).get();
+    final Schema schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchemaForClustering(false).get();
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = (
         (ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>>)
             ReflectionUtils.loadClass(config.getClusteringExecutionStrategyClass(),
