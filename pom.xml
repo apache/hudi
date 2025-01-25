@@ -172,7 +172,7 @@
     <avro.version>1.11.4</avro.version>
     <bijection-avro.version>0.9.8</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
-    <commons.io.version>2.11.0</commons.io.version>
+    <commons.io.version>2.14.0</commons.io.version>
     <scala12.version>2.12.15</scala12.version>
     <scala13.version>2.13.8</scala13.version>
     <scala.version>${scala12.version}</scala.version>
