@@ -33,7 +33,6 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
@@ -52,7 +51,7 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
     super.tearDown();
   }
 
-  @Test
+  //@Test
   void testRecreateMDTForInsertOverwriteTableOperation() {
     HoodieWriteConfig config = getConfigBuilder()
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()

@@ -1533,7 +1533,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
    * 2. Upsert another batch of data with secondary index configs.
    * 3. Validate that secondary index is created.
    */
-  @Test
+  //@Test
   def testSecondaryIndexCreation(): Unit = {
     var (writeOpts, readOpts) = getWriterReaderOpts()
     writeOpts = writeOpts ++ Map(

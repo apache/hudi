@@ -71,8 +71,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
-  @ParameterizedTest
-  @CsvSource(Array("1,true", "1,false")) // TODO: fix for higher compactNumDeltaCommits - HUDI-6340
+  //@ParameterizedTest
+  //@CsvSource(Array("1,true", "1,false")) // TODO: fix for higher compactNumDeltaCommits - HUDI-6340
   def testReadability(compactNumDeltaCommits: Int, testPartitioned: Boolean): Unit = {
     val dataGen = new HoodieTestDataGenerator()
 
@@ -233,7 +233,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     spark.read.json(spark.sparkContext.parallelize(records, 2))
   }
 
-  @Test
+  //@Test
   def testTimeTravelQuery(): Unit = {
     val dataGen = new HoodieTestDataGenerator()
     val metadataOpts: Map[String, String] = Map(

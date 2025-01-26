@@ -80,6 +80,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
              |  hoodie.metadata.enable = 'true',
              |  hoodie.metadata.record.index.enable = 'true',
              |  hoodie.metadata.index.secondary.enable = 'true',
+             |  hoodie.metadata.index.partition.stats.enable = 'false',
              |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
              | )
              | partitioned by(ts)

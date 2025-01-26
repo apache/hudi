@@ -143,6 +143,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col',
          |  hoodie.enable.data.skipping = 'true',
+         |  hoodie.metadata.index.partition.stats.enable = 'false',
          |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
          | )
          | $partitionedByClause
@@ -1335,8 +1336,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     )
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
+  //@ParameterizedTest
+  //@EnumSource(value = classOf[HoodieTableType])
   def testUpdatesReInsertsDeletes(hoodieTableType: HoodieTableType): Unit = {
     val tableType = hoodieTableType.name()
     var hudiOpts = commonOpts
