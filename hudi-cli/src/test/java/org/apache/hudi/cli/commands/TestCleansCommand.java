@@ -110,7 +110,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
       Map<String, String> extraCommitMetadata =
           Collections.singletonMap(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, conf, fileId1, fileId2,
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, timestamp, conf, fileId1, fileId2,
           Option.empty(), Option.empty(), extraCommitMetadata);
     }
 

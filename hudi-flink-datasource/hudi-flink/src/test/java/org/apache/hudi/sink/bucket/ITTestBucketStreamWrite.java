@@ -120,7 +120,7 @@ public class ITTestBucketStreamWrite {
       String fileName = partitionFileNameSplit[1];
       try {
         String markerFileName = FileCreateUtils.markerFileName(fileName, IOType.CREATE);
-        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, markerFileName);
+        FileCreateUtils.createMarkerFile(metaClient, partition, commitInstant, markerFileName);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

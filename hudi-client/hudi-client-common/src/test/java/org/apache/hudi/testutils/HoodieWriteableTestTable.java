@@ -110,7 +110,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
   public StoragePath withInserts(String partition, String fileId, List<HoodieRecord> records,
                                  TaskContextSupplier contextSupplier) throws Exception {
-    FileCreateUtils.createPartitionMetaFile(basePath, partition);
+    FileCreateUtils.createPartitionMetaFile(metaClient, partition);
     String fileName = baseFileName(currentInstantTime, fileId);
 
     StoragePath baseFilePath = new StoragePath(Paths.get(basePath, partition, fileName).toString());

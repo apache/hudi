@@ -136,7 +136,7 @@ public class ClusteringTestUtils {
     try {
       String basePath = metaClient.getBasePath().toString();
       String partition = DEFAULT_PARTITION_PATHS[0];
-      createBaseFile(basePath, partition, instantTime, fileId, 1);
+      createBaseFile(metaClient, partition, instantTime, fileId, 1);
       FileSlice slice = new FileSlice(partition, instantTime, fileId);
       slice.setBaseFile(new CompactionTestUtils.DummyHoodieBaseFile(Paths.get(basePath, partition,
           baseFileName(instantTime, fileId)).toString()));

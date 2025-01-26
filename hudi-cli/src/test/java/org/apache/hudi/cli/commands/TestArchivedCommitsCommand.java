@@ -97,7 +97,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
       // Inflight Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), storageConf());
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, storageConf());
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, timestamp, storageConf());
     }
 
     // Simulate a compaction commit in metadata table timeline
@@ -197,7 +197,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     for (int i = 100; i < 102; i++) {
       String instant = String.valueOf(i);
       // Since HoodiePrintHelper order data by default, need to order commitMetadata
-      HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(tablePath, instant);
+      HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(HoodieCLI.getTableMetaClient(), instant);
       Comparable[] result = new Comparable[] {
           instant, "commit", HoodieTestCommitUtilities.convertAndOrderCommitMetadata(metadata)};
       rows.add(result);

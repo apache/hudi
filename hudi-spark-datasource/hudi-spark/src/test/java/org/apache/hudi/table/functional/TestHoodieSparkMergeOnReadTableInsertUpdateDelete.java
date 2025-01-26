@@ -248,9 +248,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       metaClient.reloadActiveTimeline();
       // verify that there is no new rollback instant generated
       HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
-      String basePathStr = metaClient.getBasePath().toString();
-      FileCreateUtils.deleteRollbackCommit(basePathStr.substring(basePathStr.indexOf(":") + 1),
-          rollbackInstant.requestedTime());
+      FileCreateUtils.deleteRollbackCommit(metaClient, rollbackInstant.requestedTime());
       metaClient.reloadActiveTimeline();
       try (SparkRDDWriteClient client1 = getHoodieWriteClient(cfg)) {
         // trigger compaction again.

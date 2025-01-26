@@ -71,9 +71,9 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void listEligibleFilesShouldIgnoreCertainPrefixes(Class<?> clazz) throws Exception {
     DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
-    createBaseFile(basePath, "p1", "000", "foo1", 1);
-    createBaseFile(basePath, "p1", "000", ".foo2", 1);
-    createBaseFile(basePath, "p1", "000", "_foo3", 1);
+    createBaseFile(metaClient, "p1", "000", "foo1", 1);
+    createBaseFile(metaClient, "p1", "000", ".foo2", 1);
+    createBaseFile(metaClient, "p1", "000", "_foo3", 1);
 
     List<FileStatus> eligibleFiles = selector.listEligibleFiles(
         (FileSystem) storage.getFileSystem(), inputPath, 0);
@@ -85,9 +85,9 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void listEligibleFilesShouldIgnore0LengthFiles(Class<?> clazz) throws Exception {
     DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
-    createBaseFile(basePath, "p1", "000", "foo1", 1);
-    createBaseFile(basePath, "p1", "000", "foo2", 0);
-    createBaseFile(basePath, "p1", "000", "foo3", 0);
+    createBaseFile(metaClient, "p1", "000", "foo1", 1);
+    createBaseFile(metaClient, "p1", "000", "foo2", 0);
+    createBaseFile(metaClient, "p1", "000", "foo3", 0);
 
     List<FileStatus> eligibleFiles = selector.listEligibleFiles(
         (FileSystem) storage.getFileSystem(), inputPath, 0);
@@ -99,9 +99,9 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void listEligibleFilesShouldIgnoreFilesEarlierThanCheckpointTime(Class<?> clazz) throws Exception {
     DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
-    createBaseFile(basePath, "p1", "000", "foo1", 1);
-    createBaseFile(basePath, "p1", "000", "foo2", 1);
-    createBaseFile(basePath, "p1", "000", "foo3", 1);
+    createBaseFile(metaClient, "p1", "000", "foo1", 1);
+    createBaseFile(metaClient, "p1", "000", "foo2", 1);
+    createBaseFile(metaClient, "p1", "000", "foo3", 1);
 
     List<FileStatus> eligibleFiles = selector.listEligibleFiles(
         (FileSystem) storage.getFileSystem(), inputPath, Long.MAX_VALUE);
@@ -112,11 +112,11 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void getNextFilePathsAndMaxModificationTimeShouldRespectSourceLimit(Class<?> clazz) throws Exception {
     DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
-    createBaseFile(basePath, "p1", "000", "foo1", 10, 1000);
-    createBaseFile(basePath, "p1", "000", "foo2", 10, 2000);
-    createBaseFile(basePath, "p1", "000", "foo3", 10, 3000);
-    createBaseFile(basePath, "p1", "000", "foo4", 10, 4000);
-    createBaseFile(basePath, "p1", "000", "foo5", 10, 5000);
+    createBaseFile(metaClient, "p1", "000", "foo1", 10, 1000);
+    createBaseFile(metaClient, "p1", "000", "foo2", 10, 2000);
+    createBaseFile(metaClient, "p1", "000", "foo3", 10, 3000);
+    createBaseFile(metaClient, "p1", "000", "foo4", 10, 4000);
+    createBaseFile(metaClient, "p1", "000", "foo5", 10, 5000);
     Pair<Option<String>, Checkpoint> nextFilePathsAndCheckpoint = selector
         .getNextFilePathsAndMaxModificationTime(jsc, Option.empty(), 30);
     List<String> fileNames = Arrays
@@ -134,11 +134,11 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void getNextFilePathsAndMaxModificationTimeShouldIgnoreSourceLimitIfSameModTimeFilesPresent(Class<?> clazz) throws Exception {
     DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
-    createBaseFile(basePath, "p1", "000", "foo1", 10, 1000);
-    createBaseFile(basePath, "p1", "000", "foo2", 10, 1000);
-    createBaseFile(basePath, "p1", "000", "foo3", 10, 1000);
-    createBaseFile(basePath, "p1", "000", "foo4", 10, 2000);
-    createBaseFile(basePath, "p1", "000", "foo5", 10, 2000);
+    createBaseFile(metaClient, "p1", "000", "foo1", 10, 1000);
+    createBaseFile(metaClient, "p1", "000", "foo2", 10, 1000);
+    createBaseFile(metaClient, "p1", "000", "foo3", 10, 1000);
+    createBaseFile(metaClient, "p1", "000", "foo4", 10, 2000);
+    createBaseFile(metaClient, "p1", "000", "foo5", 10, 2000);
     Pair<Option<String>, Checkpoint> nextFilePathsAndCheckpoint = selector
         .getNextFilePathsAndMaxModificationTime(jsc, Option.empty(), 20);
     List<String> fileNames1stRead = Arrays

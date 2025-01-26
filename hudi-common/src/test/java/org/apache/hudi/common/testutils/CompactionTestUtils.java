@@ -165,10 +165,10 @@ public class CompactionTestUtils {
         final String partition = DEFAULT_PARTITION_PATHS[0];
         final String fileId = UUID.randomUUID().toString();
         if (createDataFile) {
-          createBaseFile(basePath, partition, instantTime, fileId);
+          createBaseFile(metaClient, partition, instantTime, fileId);
         }
-        createLogFile(basePath, partition, instantTime, fileId, 1);
-        createLogFile(basePath, partition, instantTime, fileId, 2);
+        createLogFile(metaClient, partition, instantTime, fileId, 1);
+        createLogFile(metaClient, partition, instantTime, fileId, 2);
         FileSlice slice = new FileSlice(partition, instantTime, fileId);
         if (createDataFile) {
           slice.setBaseFile(new DummyHoodieBaseFile(Paths.get(basePath, partition,
@@ -183,8 +183,8 @@ public class CompactionTestUtils {
         HoodieCompactionOperation op =
             CompactionUtils.buildFromFileSlice(partition, slice, Option.empty());
         if (deltaCommitsAfterCompactionRequests) {
-          createLogFile(basePath, partition, compactionInstantTime, fileId, 1);
-          createLogFile(basePath, partition, compactionInstantTime, fileId, 2);
+          createLogFile(metaClient, partition, compactionInstantTime, fileId, 1);
+          createLogFile(metaClient, partition, compactionInstantTime, fileId, 2);
         }
         return op;
       } catch (Exception e) {

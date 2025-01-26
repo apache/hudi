@@ -1084,7 +1084,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // delete rollback.completed instant to mimic failed rollback of clustering. and then trigger rollback of clustering again. same rollback instant should be used.
     HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
-    FileCreateUtils.deleteRollbackCommit(metaClient.getBasePath().toString(), rollbackInstant.requestedTime());
+    FileCreateUtils.deleteRollbackCommit(metaClient, rollbackInstant.requestedTime());
     metaClient.reloadActiveTimeline();
 
     // create replace commit requested meta file so that rollback will not throw FileNotFoundException
@@ -1094,7 +1094,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
 
-    FileCreateUtils.createRequestedClusterCommit(metaClient.getBasePath().toString(), pendingClusteringInstant.requestedTime(), requestedReplaceMetadata);
+    FileCreateUtils.createRequestedClusterCommit(metaClient, pendingClusteringInstant.requestedTime(), requestedReplaceMetadata);
 
     // trigger clustering again. no new rollback instants should be generated.
     try {

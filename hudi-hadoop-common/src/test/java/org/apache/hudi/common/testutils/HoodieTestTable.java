@@ -215,22 +215,22 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addRequestedCommit(String instantTime) throws Exception {
-    createRequestedCommit(basePath, instantTime);
+    createRequestedCommit(metaClient, instantTime);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addInflightCommit(String instantTime) throws Exception {
-    createRequestedCommit(basePath, instantTime);
-    createInflightCommit(basePath, instantTime);
+    createRequestedCommit(metaClient, instantTime);
+    createInflightCommit(metaClient, instantTime);
     inflightCommits.add(instantTime);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addInflightDeltaCommit(String instantTime) throws Exception {
-    createRequestedDeltaCommit(basePath, instantTime);
-    createInflightDeltaCommit(basePath, instantTime);
+    createRequestedDeltaCommit(metaClient, instantTime);
+    createInflightDeltaCommit(metaClient, instantTime);
     inflightCommits.add(instantTime);
     currentInstantTime = instantTime;
     return this;
@@ -245,16 +245,16 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addCommit(String instantTime, Option<String> completionTime, Option<HoodieCommitMetadata> metadata) throws Exception {
-    createRequestedCommit(basePath, instantTime);
-    createInflightCommit(basePath, instantTime);
-    createCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, completionTime, metadata);
+    createRequestedCommit(metaClient, instantTime);
+    createInflightCommit(metaClient, instantTime);
+    createCommit(metaClient, instantTime);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addSavepointCommit(String instantTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
-    createInflightSavepoint(basePath, instantTime);
-    createSavepointCommit(basePath, instantTime, savepointMetadata);
+    createInflightSavepoint(metaClient, instantTime);
+    createSavepointCommit(metaClient, instantTime, savepointMetadata);
     return this;
   }
 
@@ -293,9 +293,9 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-      createCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, Option.of(metadata));
+      createCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, Option.of(metadata));
     } else {
-      createDeltaCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, metadata);
+      createDeltaCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, metadata);
     }
     inflightCommits.remove(instantTime);
     currentInstantTime = instantTime;
@@ -304,24 +304,24 @@ public class HoodieTestTable implements AutoCloseable {
 
   public void moveCompleteCommitToInflight(String instantTime) throws IOException {
     if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-      FileCreateUtils.deleteCommit(basePath, instantTime);
+      FileCreateUtils.deleteCommit(metaClient, instantTime);
     } else {
-      FileCreateUtils.deleteDeltaCommit(basePath, instantTime);
+      FileCreateUtils.deleteDeltaCommit(metaClient, instantTime);
     }
   }
 
   public HoodieTestTable addDeltaCommit(String instantTime) throws Exception {
-    createRequestedDeltaCommit(basePath, instantTime);
-    createInflightDeltaCommit(basePath, instantTime);
-    createDeltaCommit(basePath, instantTime);
+    createRequestedDeltaCommit(metaClient, instantTime);
+    createInflightDeltaCommit(metaClient, instantTime);
+    createDeltaCommit(metaClient, instantTime);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addDeltaCommit(String instantTime, HoodieCommitMetadata metadata) throws Exception {
-    createRequestedDeltaCommit(basePath, instantTime);
-    createInflightDeltaCommit(basePath, instantTime);
-    createDeltaCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, metadata);
+    createRequestedDeltaCommit(metaClient, instantTime);
+    createInflightDeltaCommit(metaClient, instantTime);
+    createDeltaCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, metadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -331,35 +331,35 @@ public class HoodieTestTable implements AutoCloseable {
       Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata,
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
-    createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
-    createReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, completeReplaceMetadata);
+    createRequestedReplaceCommit(metaClient, instantTime, requestedReplaceMetadata);
+    createInflightReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addPendingReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
-    createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createRequestedReplaceCommit(metaClient, instantTime, requestedReplaceMetadata);
+    createInflightReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addPendingCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
-    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightClusterCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
+    createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addRequestedCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws Exception {
-    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
+    createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
-    createInflightClusterCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -369,9 +369,9 @@ public class HoodieTestTable implements AutoCloseable {
       HoodieRequestedReplaceMetadata requestedReplaceMetadata,
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
-    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightClusterCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
-    createReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, completeReplaceMetadata);
+    createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
+    createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -382,28 +382,28 @@ public class HoodieTestTable implements AutoCloseable {
       Option<HoodieCommitMetadata> inflightReplaceMetadata,
       HoodieReplaceCommitMetadata completeReplaceMetadata,
       String completionTime) throws Exception {
-    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightClusterCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
-    createReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, completionTime, completeReplaceMetadata);
+    createRequestedClusterCommit(metaClient, instantTime, requestedReplaceMetadata);
+    createInflightClusterCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, completionTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addRequestedReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws Exception {
-    createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
+    createRequestedReplaceCommit(metaClient, instantTime, requestedReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addInflightReplace(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
-    createInflightReplaceCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
+    createInflightReplaceCommit(metaClient, COMMIT_METADATA_SER_DE, basePath, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addInflightClean(String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
-    createRequestedCleanFile(basePath, instantTime, cleanerPlan);
-    createInflightCleanFile(basePath, instantTime, cleanerPlan);
+    createRequestedCleanFile(metaClient, instantTime, cleanerPlan);
+    createInflightCleanFile(metaClient, instantTime, cleanerPlan);
     currentInstantTime = instantTime;
     return this;
   }
@@ -413,9 +413,9 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata, boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
-    createRequestedCleanFile(basePath, instantTime, cleanerPlan, isEmptyForAll);
-    createInflightCleanFile(basePath, instantTime, cleanerPlan, isEmptyForAll);
-    createCleanFile(basePath, instantTime, metadata, isEmptyCompleted);
+    createRequestedCleanFile(metaClient, instantTime, cleanerPlan, isEmptyForAll);
+    createInflightCleanFile(metaClient, instantTime, cleanerPlan, isEmptyForAll);
+    createCleanFile(metaClient, instantTime, metadata, isEmptyCompleted);
     currentInstantTime = instantTime;
     return this;
   }
@@ -447,13 +447,13 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addRequestedRollback(String instantTime, HoodieRollbackPlan plan) throws IOException {
-    createRequestedRollbackFile(basePath, instantTime, plan);
+    createRequestedRollbackFile(metaClient, instantTime, plan);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addInflightRollback(String instantTime) throws IOException {
-    createInflightRollbackFile(basePath, instantTime);
+    createInflightRollbackFile(metaClient, instantTime);
     currentInstantTime = instantTime;
     return this;
   }
@@ -464,24 +464,24 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata, boolean isEmpty, HoodieRollbackPlan rollbackPlan) throws IOException {
     if (rollbackPlan != null) {
-      createRequestedRollbackFile(basePath, instantTime, rollbackPlan);
+      createRequestedRollbackFile(metaClient, instantTime, rollbackPlan);
     } else {
-      createRequestedRollbackFile(basePath, instantTime);
+      createRequestedRollbackFile(metaClient, instantTime);
     }
-    createInflightRollbackFile(basePath, instantTime);
-    // createRollbackFile(basePath, instantTime, rollbackMetadata, isEmpty);
+    createInflightRollbackFile(metaClient, instantTime);
+    // createRollbackFile(metaClient, instantTime, rollbackMetadata, isEmpty);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addRollbackCompleted(String instantTime, HoodieRollbackMetadata rollbackMetadata, boolean isEmpty) throws IOException {
-    createRollbackFile(basePath, instantTime, rollbackMetadata, isEmpty);
+    createRollbackFile(metaClient, instantTime, rollbackMetadata, isEmpty);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addRestore(String instantTime, HoodieRestoreMetadata restoreMetadata) throws IOException {
-    createRestoreFile(basePath, instantTime, restoreMetadata);
+    createRestoreFile(metaClient, instantTime, restoreMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -500,7 +500,7 @@ public class HoodieTestTable implements AutoCloseable {
         long rollbackLogFileSize = 50 + RANDOM.nextInt(500);
         String fileId = UUID.randomUUID().toString();
         String logFileName = logFileName(instantTimeToDelete, fileId, 0);
-        FileCreateUtils.createLogFile(basePath, entry.getKey(), instantTimeToDelete, fileId, 0, (int) rollbackLogFileSize);
+        FileCreateUtils.createLogFile(metaClient, entry.getKey(), instantTimeToDelete, fileId, 0, (int) rollbackLogFileSize);
         rollbackPartitionMetadata.setRollbackLogFiles(singletonMap(logFileName, rollbackLogFileSize));
       }
       partitionMetadataMap.put(entry.getKey(), rollbackPartitionMetadata);
@@ -584,7 +584,7 @@ public class HoodieTestTable implements AutoCloseable {
       }
     }
     this.addRequestedCompaction(instantTime, fileSlices.toArray(new FileSlice[0]));
-    createInflightCompaction(basePath, instantTime);
+    createInflightCompaction(metaClient, instantTime);
     inflightCommits.add(instantTime);
     currentInstantTime = instantTime;
     return this;
@@ -593,7 +593,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
     addInflightCompaction(instantTime, commitMetadata);
     this.inflightCommits.remove(instantTime);
-    createCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, Option.of(commitMetadata));
+    createCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, Option.of(commitMetadata));
     return this;
   }
 
@@ -639,20 +639,20 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
-    createCommit(COMMIT_METADATA_SER_DE, basePath, instantTime, Option.of(metadata));
+    createCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, Option.of(metadata));
     inflightCommits.remove(instantTime);
     currentInstantTime = instantTime;
     return this;
   }
 
   public HoodieTestTable addSavepoint(String instantTime, HoodieSavepointMetadata savepointMetadata) throws IOException {
-    createInflightSavepoint(basePath, instantTime);
-    createSavepointCommit(basePath, instantTime, savepointMetadata);
+    createInflightSavepoint(metaClient, instantTime);
+    createSavepointCommit(metaClient, instantTime, savepointMetadata);
     return this;
   }
 
   public HoodieTestTable deleteSavepoint(String instantTime) throws IOException {
-    deleteSavepointCommit(basePath, instantTime, storage);
+    deleteSavepointCommit(metaClient, instantTime, storage);
     return this;
   }
 
@@ -673,20 +673,20 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable withPartitionMetaFiles(String... partitionPaths) throws IOException {
     for (String partitionPath : partitionPaths) {
-      FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
+      FileCreateUtils.createPartitionMetaFile(metaClient, partitionPath);
     }
     return this;
   }
 
   public HoodieTestTable withPartitionMetaFiles(List<String> partitionPaths) throws IOException {
     for (String partitionPath : partitionPaths) {
-      FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
+      FileCreateUtils.createPartitionMetaFile(metaClient, partitionPath);
     }
     return this;
   }
 
   public HoodieTestTable withMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
-    createMarkerFile(basePath, partitionPath, currentInstantTime, fileId, ioType);
+    createMarkerFile(metaClient, partitionPath, currentInstantTime, fileId, ioType);
     return this;
   }
 
@@ -697,7 +697,7 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable withMarkerFiles(String partitionPath, String[] fileIds, IOType ioType) throws IOException {
     for (String fileId : fileIds) {
-      createMarkerFile(basePath, partitionPath, currentInstantTime, fileId, ioType);
+      createMarkerFile(metaClient, partitionPath, currentInstantTime, fileId, ioType);
     }
     return this;
   }
@@ -705,7 +705,7 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable withLogMarkerFile(String partitionPath, String fileId, IOType ioType) throws IOException {
     String logFileName = FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, currentInstantTime, HoodieLogFile.LOGFILE_BASE_VERSION, HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
     String markerFileName = FileCreateUtils.markerFileName(logFileName, ioType);
-    FileCreateUtils.createMarkerFile(basePath, partitionPath, currentInstantTime, markerFileName);
+    FileCreateUtils.createMarkerFile(metaClient, partitionPath, currentInstantTime, markerFileName);
     return this;
   }
 
@@ -718,7 +718,7 @@ public class HoodieTestTable implements AutoCloseable {
     Map<String, String> partitionFileIdMap = new HashMap<>();
     for (String p : partitions) {
       String fileId = UUID.randomUUID().toString();
-      FileCreateUtils.createBaseFile(basePath, p, currentInstantTime, fileId);
+      FileCreateUtils.createBaseFile(metaClient, p, currentInstantTime, fileId);
       partitionFileIdMap.put(p, fileId);
     }
     return partitionFileIdMap;
@@ -735,7 +735,7 @@ public class HoodieTestTable implements AutoCloseable {
   public Pair<HoodieTestTable, List<String>> withBaseFilesInPartition(String partition, String... fileIds) throws Exception {
     List<String> files = new ArrayList<>();
     for (String f : fileIds) {
-      files.add(FileCreateUtils.createBaseFile(basePath, partition, currentInstantTime, f));
+      files.add(FileCreateUtils.createBaseFile(metaClient, partition, currentInstantTime, f));
     }
     return Pair.of(this, files);
   }
@@ -743,14 +743,14 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable withBaseFilesInPartition(String partition, int... lengths) throws Exception {
     for (int l : lengths) {
       String fileId = UUID.randomUUID().toString();
-      FileCreateUtils.createBaseFile(basePath, partition, currentInstantTime, fileId, l);
+      FileCreateUtils.createBaseFile(metaClient, partition, currentInstantTime, fileId, l);
     }
     return this;
   }
 
   public HoodieTestTable withBaseFilesInPartition(String partition, List<Pair<String, Integer>> fileInfos) throws Exception {
     for (Pair<String, Integer> fileInfo : fileInfos) {
-      FileCreateUtils.createBaseFile(basePath, partition, currentInstantTime, fileInfo.getKey(), fileInfo.getValue());
+      FileCreateUtils.createBaseFile(metaClient, partition, currentInstantTime, fileInfo.getKey(), fileInfo.getValue());
     }
     return this;
   }
@@ -768,14 +768,14 @@ public class HoodieTestTable implements AutoCloseable {
   public Pair<HoodieTestTable, List<String>> withLogFile(String partitionPath, String fileId, int... versions) throws Exception {
     List<String> logFiles = new ArrayList<>();
     for (int version : versions) {
-      logFiles.add(FileCreateUtils.createLogFile(basePath, partitionPath, currentInstantTime, fileId, version));
+      logFiles.add(FileCreateUtils.createLogFile(metaClient, partitionPath, currentInstantTime, fileId, version));
     }
     return Pair.of(this, logFiles);
   }
 
   public HoodieTestTable withLogFilesInPartition(String partition, List<Pair<String, Integer[]>> fileInfos) throws Exception {
     for (Pair<String, Integer[]> fileInfo : fileInfos) {
-      FileCreateUtils.createLogFile(basePath, partition, currentInstantTime, fileInfo.getKey(), fileInfo.getValue()[0], fileInfo.getValue()[1]);
+      FileCreateUtils.createLogFile(metaClient, partition, currentInstantTime, fileInfo.getKey(), fileInfo.getValue()[0], fileInfo.getValue()[1]);
     }
     return this;
   }

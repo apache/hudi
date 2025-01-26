@@ -144,7 +144,7 @@ public class TestBaseTableServicePlanActionExecutor {
     prepareTimeline(metaClient, instants, Collections.emptyList());
     instants.keySet().forEach(instant -> {
       try {
-        FileCreateUtils.createPartitionMetaFile(tablePath, instant);
+        FileCreateUtils.createPartitionMetaFile(metaClient, instant);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -193,7 +193,7 @@ public class TestBaseTableServicePlanActionExecutor {
     testTable.addCluster(clusteringRequestTime, replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue(), clusteringCompletionTIme);
 
     HoodieInstant clusteringInstant = metaClient.getActiveTimeline().filterCompletedInstants().getLastClusteringInstant().get();
-    FileCreateUtils.createPartitionMetaFile(tablePath, clusteringInstant.requestedTime());
+    FileCreateUtils.createPartitionMetaFile(metaClient, clusteringInstant.requestedTime());
 
     // create empty commit 0003_004
     String emptyCommitRequestTime = "0003";
@@ -235,7 +235,7 @@ public class TestBaseTableServicePlanActionExecutor {
     requestInstants.forEach(instant -> {
       try {
         testTable.addRequestedCommit(instant);
-        FileCreateUtils.createPartitionMetaFile(metaClient.getBasePath().toString(), instant);
+        FileCreateUtils.createPartitionMetaFile(metaClient, instant);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

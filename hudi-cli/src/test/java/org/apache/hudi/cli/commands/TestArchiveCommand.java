@@ -57,7 +57,7 @@ public class TestArchiveCommand extends CLIFunctionalTestHarness {
     // Create six commits
     for (int i = 100; i < 106; i++) {
       String timestamp = String.valueOf(i);
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, storageConf());
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, timestamp, storageConf());
     }
 
     Object cmdResult = shell.evaluate(() -> "trigger archival --minCommits 2 --maxCommits 3 --commitsRetainedByCleaner 1 --enableMetadata false");

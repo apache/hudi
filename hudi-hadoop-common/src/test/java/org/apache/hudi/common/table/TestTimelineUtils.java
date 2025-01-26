@@ -616,6 +616,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   @ParameterizedTest
   @EnumSource(value = HollowCommitHandling.class)
   public void testHandleHollowCommitIfNeeded(HollowCommitHandling handlingMode) throws Exception {
+    initMetaClient(true);
+
     HoodieTestTable.of(metaClient)
         .addCommit("001")
         .addInflightCommit("003")
@@ -645,6 +647,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       default:
         fail("should cover all handling mode.");
     }
+    initMetaClient(true);
   }
 
   @Test

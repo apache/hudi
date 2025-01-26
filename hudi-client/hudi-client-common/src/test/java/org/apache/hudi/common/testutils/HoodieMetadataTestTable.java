@@ -97,9 +97,9 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     // DT should be committed after MDT.
     if (!createInflightCommit) {
       if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-        createCommit(COMMIT_METADATA_SER_DE, basePath, commitTime, Option.of(commitMetadata));
+        createCommit(metaClient, COMMIT_METADATA_SER_DE, commitTime, Option.of(commitMetadata));
       } else {
-        createDeltaCommit(COMMIT_METADATA_SER_DE, basePath, commitTime, commitMetadata);
+        createDeltaCommit(metaClient, COMMIT_METADATA_SER_DE, commitTime, commitMetadata);
       }
       this.inflightCommits().remove(commitTime);
     }

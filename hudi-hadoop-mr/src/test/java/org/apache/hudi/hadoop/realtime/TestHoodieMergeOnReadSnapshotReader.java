@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -125,7 +126,9 @@ public class TestHoodieMergeOnReadSnapshotReader {
 
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
-    FileCreateUtils.createDeltaCommit(COMMIT_METADATA_SER_DE, basePath.toString(), baseInstant, commitMetadata);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString(), HoodieTableType.MERGE_ON_READ);
+
+    FileCreateUtils.createDeltaCommit(metaClient, COMMIT_METADATA_SER_DE, baseInstant, commitMetadata);
     // Add the paths
     FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
 
@@ -164,7 +167,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
         long size = writer.getCurrentSize();
         writer.close();
         assertTrue(size > 0, "block - size should be > 0");
-        FileCreateUtils.createDeltaCommit(COMMIT_METADATA_SER_DE, basePath.toString(), instantTime, commitMetadata);
+        FileCreateUtils.createDeltaCommit(metaClient, COMMIT_METADATA_SER_DE, instantTime, commitMetadata);
         fileSlice.addLogFile(writer.getLogFile());
 
         HoodieMergeOnReadSnapshotReader snapshotReader = new HoodieMergeOnReadSnapshotReader(

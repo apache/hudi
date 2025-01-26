@@ -26,9 +26,11 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 
 import com.codahale.metrics.Histogram;
@@ -87,10 +89,11 @@ public class TestStatsCommand extends CLIFunctionalTestHarness {
     data.put("101", new Integer[] {20, 10});
     data.put("102", new Integer[] {15, 15});
 
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieTestUtils.getDefaultStorageConf(), tablePath);
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String k = entry.getKey();
       Integer[] v = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, k, storageConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, k, storageConf(),
           Option.of(v[0]), Option.of(v[1]));
     }
 

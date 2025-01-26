@@ -203,7 +203,9 @@ public class TestHoodieParquetInputFormat {
         true, schema);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    FileCreateUtils.createCommit(COMMIT_METADATA_SER_DE, basePath.toString(), "100", Option.of(commitMetadata));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString(), HoodieTableType.MERGE_ON_READ);
+
+    FileCreateUtils.createCommit(metaClient, COMMIT_METADATA_SER_DE, "100", Option.of(commitMetadata));
 
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -673,7 +675,9 @@ public class TestHoodieParquetInputFormat {
 
     // add more files
     InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId2-", 5, "200");
-    FileCreateUtils.createInflightCommit(basePath.toString(), "200");
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString(), HoodieTableType.MERGE_ON_READ);
+
+    FileCreateUtils.createInflightCommit(metaClient, "200");
 
     // Verify that validate mode reads uncommitted files
     InputFormatTestUtil.setupSnapshotIncludePendingCommits(jobConf, "200");
@@ -714,7 +718,9 @@ public class TestHoodieParquetInputFormat {
 
     // create inflight commit add more files with same file_id.
     InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId1", 5, "100");
-    FileCreateUtils.createInflightCommit(basePath.toString(), "100");
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString(), HoodieTableType.MERGE_ON_READ);
+
+    FileCreateUtils.createInflightCommit(metaClient, "100");
 
     // Create another commit without datafiles.
     createCommitFile(basePath, "200", "2016/05/01");

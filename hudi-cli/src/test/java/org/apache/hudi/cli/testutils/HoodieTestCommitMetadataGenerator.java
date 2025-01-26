@@ -66,27 +66,27 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
   /**
    * Create a commit file with default CommitMetadata.
    */
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration) throws Exception {
-    createCommitFileWithMetadata(basePath, commitTime, configuration, Option.empty(), Option.empty());
+  public static void createCommitFileWithMetadata(HoodieTableMetaClient metaClient, String commitTime, StorageConfiguration<?> configuration) throws Exception {
+    createCommitFileWithMetadata(metaClient, commitTime, configuration, Option.empty(), Option.empty());
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
+  public static void createCommitFileWithMetadata(HoodieTableMetaClient metaClient, String commitTime, StorageConfiguration<?> configuration,
       Option<Integer> writes, Option<Integer> updates) throws Exception {
-    createCommitFileWithMetadata(basePath, commitTime, configuration, writes, updates, Collections.emptyMap());
+    createCommitFileWithMetadata(metaClient, commitTime, configuration, writes, updates, Collections.emptyMap());
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
+  public static void createCommitFileWithMetadata(HoodieTableMetaClient metaClient, String commitTime, StorageConfiguration<?> configuration,
                                                   Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
-    createCommitFileWithMetadata(basePath, commitTime, configuration, UUID.randomUUID().toString(),
+    createCommitFileWithMetadata(metaClient, commitTime, configuration, UUID.randomUUID().toString(),
         UUID.randomUUID().toString(), writes, updates, extraMetadata);
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
+  public static void createCommitFileWithMetadata(HoodieTableMetaClient metaClient, String commitTime, StorageConfiguration<?> configuration,
       String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates) throws Exception {
-    createCommitFileWithMetadata(basePath, commitTime, configuration, fileId1, fileId2, writes, updates, Collections.emptyMap());
+    createCommitFileWithMetadata(metaClient, commitTime, configuration, fileId1, fileId2, writes, updates, Collections.emptyMap());
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
+  public static void createCommitFileWithMetadata(HoodieTableMetaClient metaClient, String commitTime, StorageConfiguration<?> configuration,
       String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
     List<String> commitFileNames = Arrays.asList(
         INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
@@ -94,12 +94,12 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
         INSTANT_FILE_NAME_GENERATOR.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
-              generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, true);
-      createFileWithMetadata(basePath, configuration, name, serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
+              generateCommitMetadata(metaClient, commitTime, fileId1, fileId2, writes, updates, extraMetadata, true);
+      createFileWithMetadata(metaClient, configuration, name, serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
     }
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
+  public static void createCommitFileWithMetadata(HoodieTableMetaClient metaClient, String commitTime, StorageConfiguration<?> configuration,
                                                   String fileId1, String fileId2, Option<Integer> writes,
                                                   Option<Integer> updates, Map<String, String> extraMetadata,
                                                   boolean setDefaultFileId) throws Exception {
@@ -109,14 +109,14 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
         INSTANT_FILE_NAME_GENERATOR.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
-          generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, setDefaultFileId);
-      createFileWithMetadata(basePath, configuration, name, serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
+          generateCommitMetadata(metaClient, commitTime, fileId1, fileId2, writes, updates, extraMetadata, setDefaultFileId);
+      createFileWithMetadata(metaClient, configuration, name, serializeCommitMetadata(COMMIT_METADATA_SER_DE, commitMetadata).get());
     }
   }
 
-  static void createFileWithMetadata(String basePath, StorageConfiguration<?> configuration, String name, byte[] content) throws IOException {
-    Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
-    try (OutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+  static void createFileWithMetadata(HoodieTableMetaClient metaClient, StorageConfiguration<?> configuration, String name, byte[] content) throws IOException {
+    Path commitFilePath = new Path(metaClient.getMetaPath().toString() + "/" + name);
+    try (OutputStream os = HadoopFSUtils.getFs(metaClient.getBasePath().toString(), configuration).create(commitFilePath, true)) {
       os.write(content);
     }
   }
@@ -124,27 +124,27 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
   /**
    * Generate commitMetadata in path.
    */
-  public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime) throws Exception {
-    return generateCommitMetadata(basePath, commitTime, Option.empty(), Option.empty());
+  public static HoodieCommitMetadata generateCommitMetadata(HoodieTableMetaClient metaClient, String commitTime) throws Exception {
+    return generateCommitMetadata(metaClient, commitTime, Option.empty(), Option.empty());
   }
 
-  public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime,
+  public static HoodieCommitMetadata generateCommitMetadata(HoodieTableMetaClient metaClient, String commitTime,
       Option<Integer> writes, Option<Integer> updates) throws Exception {
-    return generateCommitMetadata(basePath, commitTime, UUID.randomUUID().toString(), UUID.randomUUID().toString(),
+    return generateCommitMetadata(metaClient, commitTime, UUID.randomUUID().toString(), UUID.randomUUID().toString(),
         writes, updates);
   }
 
-  public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime, String fileId1,
+  public static HoodieCommitMetadata generateCommitMetadata(HoodieTableMetaClient metaClient, String commitTime, String fileId1,
       String fileId2, Option<Integer> writes, Option<Integer> updates) throws Exception {
-    return generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, Collections.emptyMap(), true);
+    return generateCommitMetadata(metaClient, commitTime, fileId1, fileId2, writes, updates, Collections.emptyMap(), true);
   }
 
-  public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime, String fileId1,
+  public static HoodieCommitMetadata generateCommitMetadata(HoodieTableMetaClient metaClient, String commitTime, String fileId1,
                                                             String fileId2, Option<Integer> writes,
                                                             Option<Integer> updates, Map<String, String> extraMetadata,
                                                             boolean setDefaultFileId) throws Exception {
-    FileCreateUtils.createBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
-    FileCreateUtils.createBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
+    FileCreateUtils.createBaseFile(metaClient, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
+    FileCreateUtils.createBaseFile(metaClient, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
     return generateCommitMetadata(new HashMap<String, List<String>>() {
       {
         put(DEFAULT_FIRST_PARTITION_PATH, createImmutableList(baseFileName(DEFAULT_FIRST_PARTITION_PATH, fileId1)));

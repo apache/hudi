@@ -126,7 +126,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     // verify marker files for inflight commit exists
     for (String partitionPath : DEFAULT_PARTITION_PATHS) {
       assertEquals(1,
-          FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
+          FileCreateUtils.getTotalMarkerFileCount(metaClient, partitionPath, "101", IOType.MERGE));
     }
 
     if (fromVersion != HoodieTableVersion.FIVE) {
@@ -140,7 +140,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     if (toVersion == HoodieTableVersion.ZERO) {
       // verify marker files are non existent
       for (String partitionPath : DEFAULT_PARTITION_PATHS) {
-        assertEquals(0, FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
+        assertEquals(0, FileCreateUtils.getTotalMarkerFileCount(metaClient, partitionPath, "101", IOType.MERGE));
       }
     }
   }

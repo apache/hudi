@@ -45,8 +45,8 @@ import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -92,6 +92,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getRelativePartitionPath;
 import static org.apache.hudi.hive.HiveSyncConfig.HIVE_SYNC_FILTER_PUSHDOWN_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfig.RECREATE_HIVE_TABLE_ON_ERROR;
@@ -258,10 +259,10 @@ public class TestHiveSyncTool {
   @MethodSource("syncMode")
   public void testSyncAllPartition() throws Exception {
     // Create and write some partition
-    HiveTestUtil.createCOWTable("100", 1, true);
-    HiveTestUtil.addCOWPartition("2010/02/01", true, true, "101");
-    HiveTestUtil.addCOWPartition("2010/02/02", true, true, "102");
-    HiveTestUtil.addCOWPartition("2010/02/03", true, true, "103");
+    HoodieTableMetaClient metaClient = HiveTestUtil.createCOWTable("100", 1, true);
+    HiveTestUtil.addCOWPartition(metaClient, "2010/02/01", true, true, "101");
+    HiveTestUtil.addCOWPartition(metaClient, "2010/02/02", true, true, "102");
+    HiveTestUtil.addCOWPartition(metaClient, "2010/02/03", true, true, "103");
     reInitHiveSyncClient();
     reSyncHiveTable();
     assertEquals(4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
@@ -286,10 +287,10 @@ public class TestHiveSyncTool {
   public void testDropUpperCasePartitionWithHMS() throws Exception {
     hiveSyncConfig.setValue(META_SYNC_PARTITION_FIELDS.key(), "DATESTR");
     // Create and write some partition
-    HiveTestUtil.createCOWTable("100", 1, true);
-    HiveTestUtil.addCOWPartition("2010/02/01", true, true, "101");
-    HiveTestUtil.addCOWPartition("2010/02/02", true, true, "102");
-    HiveTestUtil.addCOWPartition("2010/02/03", true, true, "103");
+    HoodieTableMetaClient metaClient = HiveTestUtil.createCOWTable("100", 1, true);
+    HiveTestUtil.addCOWPartition(metaClient, "2010/02/01", true, true, "101");
+    HiveTestUtil.addCOWPartition(metaClient, "2010/02/02", true, true, "102");
+    HiveTestUtil.addCOWPartition(metaClient, "2010/02/03", true, true, "103");
     reInitHiveSyncClient();
     reSyncHiveTable();
     assertEquals(4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
@@ -319,9 +320,8 @@ public class TestHiveSyncTool {
   public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
-
     String instantTime = "100";
-    HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
 
     reInitHiveSyncClient();
     assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
@@ -345,8 +345,9 @@ public class TestHiveSyncTool {
     assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "No new partition should be added");
     hiveClient.addPartitionsToTable(HiveTestUtil.TABLE_NAME, newPartition);
-    FileCreateUtils.createPartitionMetaFile(basePath, "2050/01/01");
-    FileCreateUtils.createPartitionMetaFile(basePath, "2040/02/01");
+
+    FileCreateUtils.createPartitionMetaFile(metaClient, "2050/01/01");
+    FileCreateUtils.createPartitionMetaFile(metaClient, "2040/02/01");
     assertEquals(7, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "New partition should be added");
 
@@ -431,7 +432,7 @@ public class TestHiveSyncTool {
     assertEquals(7, tablePartitions.size());
 
     // Trigger the fallback of listing all partitions again.  There is no partition change.
-    HiveTestUtil.commitToTable("300", 1, useSchemaFromCommitMetadata);
+    HiveTestUtil.commitToTable(metaClient, "300", 1, useSchemaFromCommitMetadata);
     HiveTestUtil.removeCommitFromActiveTimeline("200", COMMIT_ACTION);
     reInitHiveSyncClient();
     reSyncHiveTable();
@@ -442,7 +443,7 @@ public class TestHiveSyncTool {
     // Add the following instants to the active timeline and sync: "400" (rollback), "500" (commit)
     // Last commit time sync is "500" after Hive sync
     HiveTestUtil.addRollbackInstantToTable("400", "350");
-    HiveTestUtil.commitToTable("500", 7, useSchemaFromCommitMetadata);
+    HiveTestUtil.commitToTable(metaClient, "500", 7, useSchemaFromCommitMetadata);
     reInitHiveSyncClient();
     reSyncHiveTable();
     tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
@@ -454,14 +455,12 @@ public class TestHiveSyncTool {
     // Before simulated archival: "300", "400" (rollback), "500", "600" (adding new partition), "700", "800"
     // After simulated archival: "400" (rollback), "700", "800"
     // In this case, listing all partitions should be triggered to catch up.
-    HiveTestUtil.commitToTable("600", 8, useSchemaFromCommitMetadata);
-    HiveTestUtil.commitToTable("700", 1, useSchemaFromCommitMetadata);
-    HiveTestUtil.commitToTable("800", 1, useSchemaFromCommitMetadata);
+    HiveTestUtil.commitToTable(metaClient, "600", 8, useSchemaFromCommitMetadata);
+    HiveTestUtil.commitToTable(metaClient, "700", 1, useSchemaFromCommitMetadata);
+    HiveTestUtil.commitToTable(metaClient, "800", 1, useSchemaFromCommitMetadata);
     HiveTestUtil.removeCommitFromActiveTimeline("300", COMMIT_ACTION);
     HiveTestUtil.removeCommitFromActiveTimeline("500", COMMIT_ACTION);
     HiveTestUtil.removeCommitFromActiveTimeline("600", COMMIT_ACTION);
-    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
-        new HadoopStorageConfiguration(hiveClient.config.getHadoopConf()), basePath);
     assertEquals(
         Arrays.asList("400", "700", "800"),
         metaClient.getActiveTimeline().getInstants().stream()
@@ -480,7 +479,7 @@ public class TestHiveSyncTool {
   public void testSyncDataBase(String syncMode) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     String instantTime = "100";
-    HiveTestUtil.createCOWTable(instantTime, 5, true);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createCOWTable(instantTime, 5, true);
     hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), HiveTestUtil.DB_NAME);
 
     // while autoCreateDatabase is false and database not exists;
@@ -535,7 +534,7 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
 
     String instantTime = "100";
-    HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
 
     reInitHiveSyncClient();
     reSyncHiveTable();
@@ -579,7 +578,7 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(HIVE_CREATE_MANAGED_TABLE.key(), Boolean.toString(createManagedTable));
 
     String instantTime = "100";
-    HiveTestUtil.createCOWTable(instantTime, 5, true);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createCOWTable(instantTime, 5, true);
 
     reInitHiveSyncClient();
     reSyncHiveTable();
@@ -718,7 +717,7 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
 
     String instantTime = "100";
-    HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
 
     reInitHiveSyncClient();
     reSyncHiveTable();
@@ -774,7 +773,8 @@ public class TestHiveSyncTool {
     // Now lets create more partitions and these are the only ones which needs to be synced
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
     String commitTime2 = "101";
-    HiveTestUtil.addCOWPartitions(1, true, true, dateTime, commitTime2);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+    HiveTestUtil.addCOWPartitions(metaClient, 1, true, true, dateTime, commitTime2);
 
     // Lets do the sync
     reSyncHiveTable();
@@ -809,7 +809,8 @@ public class TestHiveSyncTool {
     // Now lets create more partitions and these are the only ones which needs to be synced
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
     String commitTime2 = "101";
-    HiveTestUtil.addCOWPartitions(1, false, true, dateTime, commitTime2);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+    HiveTestUtil.addCOWPartitions(metaClient, 1, false, true, dateTime, commitTime2);
 
     // Lets do the sync
     reInitHiveSyncClient();
@@ -850,7 +851,8 @@ public class TestHiveSyncTool {
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
     String commitTime3 = "110";
     // let's add 2 more partitions to the new basepath
-    HiveTestUtil.addCOWPartitions(2, false, true, dateTime, commitTime3);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+    HiveTestUtil.addCOWPartitions(metaClient, 2, false, true, dateTime, commitTime3);
 
     // reinitialize hive client
     reInitHiveSyncClient();
@@ -891,7 +893,8 @@ public class TestHiveSyncTool {
     DateTimeFormatter dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     List<String> partitions = Arrays.asList(dateTime.format(dtfOut));
     String commitTime2 = "101";
-    HiveTestUtil.addCOWPartitions(partitions, "/complex-schema-evolved.avsc", "/complex-schema-evolved.data", true, commitTime2);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+    HiveTestUtil.addCOWPartitions(metaClient, partitions, "/complex-schema-evolved.avsc", "/complex-schema-evolved.data", true, commitTime2);
 
     // Lets do the sync
     reInitHiveSyncClient();
@@ -927,7 +930,8 @@ public class TestHiveSyncTool {
     // Now lets create more partitions and these are the only ones which needs to be synced
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
     String commitTime2 = "101";
-    HiveTestUtil.addCOWPartitions(1, false, true, dateTime, commitTime2);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+    HiveTestUtil.addCOWPartitions(metaClient, 1, false, true, dateTime, commitTime2);
 
     // Lets do the sync
     reInitHiveSyncClient();
@@ -1013,7 +1017,7 @@ public class TestHiveSyncTool {
 
     String instantTime = "100";
     String deltaCommitTime = "101";
-    HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
+    HoodieTableMetaClient metaClient = HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
         useSchemaFromCommitMetadata);
 
     String roTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
@@ -1046,8 +1050,8 @@ public class TestHiveSyncTool {
     String commitTime2 = "102";
     String deltaCommitTime2 = "103";
 
-    HiveTestUtil.addCOWPartitions(1, true, useSchemaFromCommitMetadata, dateTime, commitTime2);
-    HiveTestUtil.addMORPartitions(1, true, false,
+    HiveTestUtil.addCOWPartitions(metaClient, 1, true, useSchemaFromCommitMetadata, dateTime, commitTime2);
+    HiveTestUtil.addMORPartitions(metaClient, 1, true, false,
         useSchemaFromCommitMetadata, dateTime, commitTime2, deltaCommitTime2);
     // Lets do the sync
     reInitHiveSyncClient();
@@ -1097,14 +1101,14 @@ public class TestHiveSyncTool {
     String instantTime2 = "102";
     String deltaCommitTime2 = "103";
     // let's create MOR table in the new basepath
-    HiveTestUtil.createMORTable(instantTime2, deltaCommitTime2, 2, true,
+    HoodieTableMetaClient metaClient = HiveTestUtil.createMORTable(instantTime2, deltaCommitTime2, 2, true,
         useSchemaFromCommitMetadata);
 
     // let's add more partitions in the new basepath
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
     String commitTime3 = "104";
     String deltaCommitTime3 = "105";
-    HiveTestUtil.addMORPartitions(2, true, false,
+    HiveTestUtil.addMORPartitions(metaClient, 2, true, false,
         useSchemaFromCommitMetadata, dateTime, commitTime3, deltaCommitTime3);
 
     // reinitialize hive client
@@ -1139,7 +1143,7 @@ public class TestHiveSyncTool {
     String instantTime = "100";
     String deltaCommitTime = "101";
     String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
-    HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true, useSchemaFromCommitMetadata);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true, useSchemaFromCommitMetadata);
     reInitHiveSyncClient();
     assertFalse(hiveClient.tableExists(snapshotTableName),
         "Table " + HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
@@ -1174,8 +1178,8 @@ public class TestHiveSyncTool {
     String commitTime2 = "102";
     String deltaCommitTime2 = "103";
 
-    HiveTestUtil.addCOWPartitions(1, true, useSchemaFromCommitMetadata, dateTime, commitTime2);
-    HiveTestUtil.addMORPartitions(1, true, false, useSchemaFromCommitMetadata, dateTime, commitTime2, deltaCommitTime2);
+    HiveTestUtil.addCOWPartitions(metaClient, 1, true, useSchemaFromCommitMetadata, dateTime, commitTime2);
+    HiveTestUtil.addMORPartitions(metaClient, 1, true, false, useSchemaFromCommitMetadata, dateTime, commitTime2, deltaCommitTime2);
     // Lets do the sync
     reInitHiveSyncClient();
     reSyncHiveTable();
@@ -1326,7 +1330,9 @@ public class TestHiveSyncTool {
     // and stored as keys in a map. The following tests this particular case.
     // Now lets create partition "2010/01/02" and followed by "2010/02/01".
     String commitTime2 = "101";
-    HiveTestUtil.addCOWPartition("2010/01/02", true, true, commitTime2);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+
+    HiveTestUtil.addCOWPartition(metaClient, "2010/01/02", true, true, commitTime2);
 
     reInitHiveSyncClient();
     List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.of(instantTime), Option.of(getLastCommitCompletionTimeSynced()));
@@ -1345,7 +1351,7 @@ public class TestHiveSyncTool {
 
     // create partition "2010/02/01" and ensure sync works
     String commitTime3 = "102";
-    HiveTestUtil.addCOWPartition("2010/02/01", true, true, commitTime3);
+    HiveTestUtil.addCOWPartition(metaClient, "2010/02/01", true, true, commitTime3);
     HiveTestUtil.getCreatedTablesSet().add(HiveTestUtil.DB_NAME + "." + HiveTestUtil.TABLE_NAME);
 
     reInitHiveSyncClient();
@@ -1393,7 +1399,8 @@ public class TestHiveSyncTool {
     assertEquals(1, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "No new partition should be added");
     hiveClient.addPartitionsToTable(HiveTestUtil.TABLE_NAME, newPartition);
-    FileCreateUtils.createPartitionMetaFile(basePath, "2050/01/01");
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+    FileCreateUtils.createPartitionMetaFile(metaClient, "2050/01/01");
     assertEquals(2, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "New partition should be added");
 
@@ -1435,7 +1442,9 @@ public class TestHiveSyncTool {
     // add a partition but do not sync
     String instantTime2 = "101";
     String newPartition = "2010/02/01";
-    HiveTestUtil.addCOWPartition(newPartition, true, true, instantTime2);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+
+    HiveTestUtil.addCOWPartition(metaClient, newPartition, true, true, instantTime2);
     HiveTestUtil.getCreatedTablesSet().add(HiveTestUtil.DB_NAME + "." + HiveTestUtil.TABLE_NAME);
     partitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     assertEquals(1, partitions.size(),
@@ -1497,7 +1506,7 @@ public class TestHiveSyncTool {
 
     String commitTime = "100";
     String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
-    HiveTestUtil.createMORTable(commitTime, "", 5, false, true);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createMORTable(commitTime, "", 5, false, true);
     reInitHiveSyncClient();
 
     assertFalse(hiveClient.tableExists(snapshotTableName), "Table " + HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
@@ -1521,7 +1530,7 @@ public class TestHiveSyncTool {
     String commitTime2 = "102";
     String deltaCommitTime2 = "103";
 
-    HiveTestUtil.addMORPartitions(1, true, false, true, dateTime, commitTime2, deltaCommitTime2);
+    HiveTestUtil.addMORPartitions(metaClient, 1, true, false, true, dateTime, commitTime2, deltaCommitTime2);
     // Lets do the sync
     reInitHiveSyncClient();
     reSyncHiveTable();
@@ -1545,7 +1554,7 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(RECREATE_HIVE_TABLE_ON_ERROR.key(), "true");
 
     String commitTime = "100";
-    HiveTestUtil.createMORTable(commitTime, "", 5, false, true);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createMORTable(commitTime, "", 5, false, true);
     reInitHiveSyncClient();
     String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
     String roTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
@@ -1583,7 +1592,7 @@ public class TestHiveSyncTool {
     String deltaCommitTime2 = "103";
     DateTimeFormatter dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     List<String> partitions = Arrays.asList(dateTime.format(dtfOut));
-    HiveTestUtil.addMORPartitions(partitions, "/complex-schema-evolved.avsc", "/complex-schema-evolved.data", true, commitTime2, deltaCommitTime2);
+    HiveTestUtil.addMORPartitions(metaClient, partitions, "/complex-schema-evolved.avsc", "/complex-schema-evolved.data", true, commitTime2, deltaCommitTime2);
 
     // Lets do the sync
     reInitHiveSyncClient();
@@ -1655,7 +1664,7 @@ public class TestHiveSyncTool {
     String instantTime = "100";
     String deltaCommitTime = "101";
     String snapshotTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
-    HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 0, true, true);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 0, true, true);
     reInitHiveSyncClient();
     assertFalse(hiveClient.tableExists(snapshotTableName),
         "Table " + HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
@@ -1687,7 +1696,7 @@ public class TestHiveSyncTool {
     String commitTime2 = "102";
     String deltaCommitTime2 = "103";
 
-    HiveTestUtil.addMORPartitions(1, true, false, true, dateTime, commitTime2, deltaCommitTime2);
+    HiveTestUtil.addMORPartitions(metaClient, 1, true, false, true, dateTime, commitTime2, deltaCommitTime2);
     // Lets do the sync
     reInitHiveSyncClient();
     reSyncHiveTable();
@@ -1769,7 +1778,8 @@ public class TestHiveSyncTool {
     // evolve the schema
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
     String commitTime2 = "101";
-    HiveTestUtil.addCOWPartitions(1, false, true, dateTime, commitTime2);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+    HiveTestUtil.addCOWPartitions(metaClient, 1, false, true, dateTime, commitTime2);
 
     // create empty commit
     final String emptyCommitTime = "200";
@@ -1819,7 +1829,8 @@ public class TestHiveSyncTool {
     // evolve the schema
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
     String commitTime2 = "301";
-    HiveTestUtil.addCOWPartitions(1, false, true, dateTime, commitTime2);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(HoodieStorageUtils.getStorage(getDefaultStorageConf()), basePath);
+    HiveTestUtil.addCOWPartitions(metaClient, 1, false, true, dateTime, commitTime2);
     //HiveTestUtil.createCommitFileWithSchema(commitMetadata, "400", false); // create another empty commit
     //HiveTestUtil.createCommitFile(commitMetadata, "400"); // create another empty commit
 
@@ -1895,7 +1906,7 @@ public class TestHiveSyncTool {
     String commitTime3 = "103";
     String commitTime4 = "104";
     String commitTime5 = "105";
-    HiveTestUtil.createMORTable(commitTime0, commitTime1, 2, true, true);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createMORTable(commitTime0, commitTime1, 2, true, true);
 
     reInitHiveSyncClient();
     reSyncHiveTable();
@@ -1903,7 +1914,7 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.tableExists(tableName));
     assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
 
-    HiveTestUtil.addMORPartitions(0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime2, commitTime3);
+    HiveTestUtil.addMORPartitions(metaClient, 0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime2, commitTime3);
 
     reSyncHiveTable();
     assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
@@ -1911,7 +1922,7 @@ public class TestHiveSyncTool {
     // Let the last commit time synced to be before the start of the active timeline,
     // to trigger the fallback of listing all partitions. There is no partition change
     // and the last commit time synced should still be the same.
-    HiveTestUtil.addMORPartitions(0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime4, commitTime5);
+    HiveTestUtil.addMORPartitions(metaClient, 0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime4, commitTime5);
     HiveTestUtil.removeCommitFromActiveTimeline(commitTime0, COMMIT_ACTION);
     HiveTestUtil.removeCommitFromActiveTimeline(commitTime1, DELTA_COMMIT_ACTION);
     HiveTestUtil.removeCommitFromActiveTimeline(commitTime2, COMMIT_ACTION);
@@ -1936,7 +1947,7 @@ public class TestHiveSyncTool {
     String commitTime5 = InProcessTimeGenerator.createNewInstantTime(5);
 
     // Commit 4 and commit5 will be committed first
-    HiveTestUtil.createMORTable(commitTime4, commitTime5, 2, true, true);
+    HoodieTableMetaClient metaClient = HiveTestUtil.createMORTable(commitTime4, commitTime5, 2, true, true);
     reInitHiveSyncClient();
     reSyncHiveTable();
 
@@ -1946,7 +1957,7 @@ public class TestHiveSyncTool {
     assertEquals(2, hiveClient.getAllPartitions(tableName).size());
 
     // Commit2 and commit3 committed after commit4 and commit5
-    HiveTestUtil.addMORPartitions(4, true, true, true, ZonedDateTime.now().plusDays(2), commitTime2, commitTime3);
+    HiveTestUtil.addMORPartitions(metaClient, 4, true, true, true, ZonedDateTime.now().plusDays(2), commitTime2, commitTime3);
     reInitHiveSyncClient();
     reSyncHiveTable();
 

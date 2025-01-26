@@ -36,10 +36,10 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
 
 public class HoodieTestReplaceCommitMetadataGenerator extends HoodieTestCommitMetadataGenerator {
-  public static void createReplaceCommitFileWithMetadata(String basePath, String commitTime, Option<Integer> writes, Option<Integer> updates,
+  public static void createReplaceCommitFileWithMetadata(String commitTime, Option<Integer> writes, Option<Integer> updates,
                                                          HoodieTableMetaClient metaclient) throws Exception {
 
-    HoodieReplaceCommitMetadata replaceMetadata = generateReplaceCommitMetadata(basePath, commitTime, UUID.randomUUID().toString(),
+    HoodieReplaceCommitMetadata replaceMetadata = generateReplaceCommitMetadata(metaclient, commitTime, UUID.randomUUID().toString(),
         UUID.randomUUID().toString(), writes, updates);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = getHoodieRequestedReplaceMetadata();
 
@@ -54,10 +54,11 @@ public class HoodieTestReplaceCommitMetadataGenerator extends HoodieTestCommitMe
         .build();
   }
 
-  private static HoodieReplaceCommitMetadata generateReplaceCommitMetadata(String basePath, String commitTime, String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates)
+  private static HoodieReplaceCommitMetadata generateReplaceCommitMetadata(
+      HoodieTableMetaClient metaClient, String commitTime, String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates)
       throws Exception {
-    FileCreateUtils.createBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
-    FileCreateUtils.createBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
+    FileCreateUtils.createBaseFile(metaClient, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
+    FileCreateUtils.createBaseFile(metaClient, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
     return generateReplaceCommitMetadata(new HashMap<String, List<String>>() {
       {
         put(DEFAULT_FIRST_PARTITION_PATH, createImmutableList(baseFileName(DEFAULT_FIRST_PARTITION_PATH, fileId1)));

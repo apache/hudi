@@ -114,7 +114,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, storageConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 
@@ -142,14 +142,14 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<HoodieInstant, Integer[]> entry : commitData.entrySet()) {
       String key = entry.getKey().requestedTime();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, storageConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 
     for (Map.Entry<HoodieInstant, Integer[]> entry : replaceCommitData.entrySet()) {
       String key = entry.getKey().requestedTime();
       Integer[] value = entry.getValue();
-      HoodieTestReplaceCommitMetadataGenerator.createReplaceCommitFileWithMetadata(tablePath1, key,
+      HoodieTestReplaceCommitMetadataGenerator.createReplaceCommitFileWithMetadata(key,
           Option.of(value[0]), Option.of(value[1]), metaClient);
     }
 
@@ -298,7 +298,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, storageConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 
@@ -345,7 +345,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath1, key, storageConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
       // archive
       metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
@@ -530,7 +530,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath2, key, storageConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 
@@ -559,7 +559,7 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath2, key, storageConf(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, key, storageConf(),
           Option.of(value[0]), Option.of(value[1]));
     }
 

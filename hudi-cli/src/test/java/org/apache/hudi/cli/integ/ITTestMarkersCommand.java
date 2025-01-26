@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
 
 import java.io.IOException;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -55,7 +57,7 @@ public class ITTestMarkersCommand extends HoodieCLIIntegrationTestBase {
   public void init() throws IOException {
     String tableName = "test_table";
     tablePath = basePath + StoragePath.SEPARATOR + tableName;
-
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, new Properties());
     // Create table and connect
     new TableCommand().createTable(
         tablePath, "test_table", HoodieTableType.COPY_ON_WRITE.name(),
@@ -71,16 +73,17 @@ public class ITTestMarkersCommand extends HoodieCLIIntegrationTestBase {
     // generate markers
     String instantTime1 = "101";
 
-    FileCreateUtils.createMarkerFile(tablePath, "partA", instantTime1, "f0", IOType.APPEND);
-    FileCreateUtils.createMarkerFile(tablePath, "partA", instantTime1, "f1", IOType.APPEND);
+    FileCreateUtils.createMarkerFile(metaClient, "partA", instantTime1, "f0", IOType.APPEND);
+    FileCreateUtils.createMarkerFile(metaClient, "partA", instantTime1, "f1", IOType.APPEND);
 
-    assertEquals(2, FileCreateUtils.getTotalMarkerFileCount(tablePath, "partA", instantTime1, IOType.APPEND));
+    assertEquals(2, FileCreateUtils.getTotalMarkerFileCount(metaClient, "partA", instantTime1, IOType.APPEND));
 
     Object result = shell.evaluate(() ->
             String.format("marker delete --commit %s --sparkMaster %s", instantTime1, "local"));
 
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
-    assertEquals(0, FileCreateUtils.getTotalMarkerFileCount(tablePath, "partA", instantTime1, IOType.APPEND));
+    metaClient.reloadActiveTimeline();
+    assertEquals(0, FileCreateUtils.getTotalMarkerFileCount(metaClient, "partA", instantTime1, IOType.APPEND));
   }
 }

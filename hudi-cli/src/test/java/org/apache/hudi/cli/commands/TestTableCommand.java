@@ -280,14 +280,14 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     data.put("102", new Integer[] {15, 10});
     data.put("101", new Integer[] {20, 10});
     data.put("100", new Integer[] {15, 15});
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, key, HoodieCLI.conf,
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(metaClient, key, HoodieCLI.conf,
           Option.of(value[0]), Option.of(value[1]), Collections.singletonMap(HoodieCommitMetadata.SCHEMA_KEY, schemaStr));
     }
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
         "There should have 3 commits");
     return data;

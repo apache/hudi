@@ -18,7 +18,9 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.model.IOType
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.FileCreateUtils
+import org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient
 
 class TestCallProcedure extends HoodieSparkProcedureTestBase {
 
@@ -195,16 +197,17 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(s"""call delete_marker(table => '$tableName')""")(
         s"Argument: instant_time is required")
 
+      val metaClient: HoodieTableMetaClient = createMetaClient(tablePath)
       val instantTime = "101"
-      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
+      FileCreateUtils.createMarkerFile(metaClient, "", instantTime, "f0", IOType.APPEND)
       assertResult(1) {
-        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+        FileCreateUtils.getTotalMarkerFileCount(metaClient, "", instantTime, IOType.APPEND)
       }
 
       checkAnswer(s"""call delete_marker(table => '$tableName', instant_time => '$instantTime')""")(Seq(true))
 
       assertResult(0) {
-        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+        FileCreateUtils.getTotalMarkerFileCount(metaClient, "", instantTime, IOType.APPEND)
       }
     }
   }
@@ -232,23 +235,24 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
       // Check required fields
       checkExceptionContain(s"""call delete_marker(table => '$tableName')""")(
         s"Argument: instant_time is required")
+      val metaClient: HoodieTableMetaClient = createMetaClient(tablePath)
 
       var instantTime = "101"
-      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
+      FileCreateUtils.createMarkerFile(metaClient, "", instantTime, "f0", IOType.APPEND)
       assertResult(1) {
-        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+        FileCreateUtils.getTotalMarkerFileCount(metaClient, "", instantTime, IOType.APPEND)
       }
       instantTime = "102"
-      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
+      FileCreateUtils.createMarkerFile(metaClient, "", instantTime, "f0", IOType.APPEND)
       assertResult(1) {
-        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+        FileCreateUtils.getTotalMarkerFileCount(metaClient, "", instantTime, IOType.APPEND)
       }
 
       instantTime = "101,102"
       checkAnswer(s"""call delete_marker(table => '$tableName', instant_time => '$instantTime')""")(Seq(true))
 
       assertResult(0) {
-        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+        FileCreateUtils.getTotalMarkerFileCount(metaClient, "", instantTime, IOType.APPEND)
       }
     }
   }

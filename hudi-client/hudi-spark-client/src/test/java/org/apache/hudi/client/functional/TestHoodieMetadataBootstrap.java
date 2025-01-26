@@ -94,7 +94,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
     // add few extra files to table. bootstrap should include those files.
     String fileName = UUID.randomUUID().toString();
     Path baseFilePath = FileCreateUtils.getBaseFilePath(basePath, "p1", "0000006", fileName);
-    FileCreateUtils.createBaseFile(basePath, "p1", "0000006", fileName, 100);
+    FileCreateUtils.createBaseFile(metaClient, "p1", "0000006", fileName, 100);
 
     writeConfig = getWriteConfig(true, true);
     initWriteConfigAndMetatableWriter(writeConfig, true);

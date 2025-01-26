@@ -121,7 +121,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
-        URI partitionMetaFile = FileCreateUtils.createPartitionMetaFile(basePath, p);
+        URI partitionMetaFile = FileCreateUtils.createPartitionMetaFile(metaClient, p);
         StoragePath partitionMetadataPath = new StoragePath(partitionMetaFile);
         String fileId1 = UUID.randomUUID().toString();
         FileSlice fileSlice1 = new FileSlice(p, instant1, fileId1);
@@ -233,7 +233,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
-        URI partitionMetaFile = FileCreateUtils.createPartitionMetaFile(basePath, p);
+        URI partitionMetaFile = FileCreateUtils.createPartitionMetaFile(metaClient, p);
         StoragePath partitionMetadataPath = new StoragePath(partitionMetaFile);
         String fileId1 = UUID.randomUUID().toString();
         // add only one parquet file in first file slice

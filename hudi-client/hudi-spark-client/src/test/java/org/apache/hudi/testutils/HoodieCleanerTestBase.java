@@ -190,7 +190,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     partToFileId.forEach((key, value) -> {
       try {
         List<String> files = new ArrayList<>();
-        FileCreateUtils.createPartitionMetaFile(basePath, key);
+        FileCreateUtils.createPartitionMetaFile(metaClient, key);
         if (addBaseFiles) {
           files.addAll(testTable.withBaseFilesInPartition(key, value.toArray(new String[0])).getValue());
         }

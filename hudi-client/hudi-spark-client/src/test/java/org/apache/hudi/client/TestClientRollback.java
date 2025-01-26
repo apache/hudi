@@ -554,7 +554,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       HoodieInstant rollbackInstant = rollbackInstants.get(0);
 
       // delete rollback completed meta file and retry rollback.
-      FileCreateUtils.deleteRollbackCommit(basePath, rollbackInstant.requestedTime());
+      FileCreateUtils.deleteRollbackCommit(metaClient, rollbackInstant.requestedTime());
 
       if (instantToRollbackExists) {
         // recreate actual commit files if needed
@@ -751,7 +751,7 @@ public class TestClientRollback extends HoodieClientTestBase {
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       if (isRollbackPlanCorrupted) {
         // Add a corrupted requested rollback plan
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, new byte[] {0, 1, 2});
+        FileCreateUtils.createRequestedRollbackFile(metaClient, rollbackInstantTime, new byte[] {0, 1, 2});
       } else {
         // Add a valid requested rollback plan to roll back commitTime3
         HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
@@ -763,7 +763,7 @@ public class TestClientRollback extends HoodieClientTestBase {
             .collect(Collectors.toList());
         rollbackPlan.setRollbackRequests(rollbackRequestList);
         rollbackPlan.setInstantToRollback(new HoodieInstantInfo(commitTime3, HoodieTimeline.COMMIT_ACTION));
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, rollbackPlan);
+        FileCreateUtils.createRequestedRollbackFile(metaClient, rollbackInstantTime, rollbackPlan);
       }
 
       // Rollback commit3
