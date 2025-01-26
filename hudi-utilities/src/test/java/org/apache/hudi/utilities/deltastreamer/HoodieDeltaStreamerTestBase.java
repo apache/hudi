@@ -79,6 +79,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
@@ -717,6 +718,20 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         return ret;
       });
       res.get(timeoutInSecs, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Waits for booleanSupplier to return true
+     * @param booleanSupplier Boolean supplier
+     */
+    static void waitFor(BooleanSupplier booleanSupplier) {
+      while (!booleanSupplier.getAsBoolean()) {
+        try {
+          Thread.sleep(10);
+        } catch (Throwable error) {
+          LOG.debug("Got error waiting for condition", error);
+        }
+      }
     }
 
     static void assertAtLeastNCommits(int minExpected, String tablePath) {

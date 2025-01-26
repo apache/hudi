@@ -57,12 +57,15 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.JavaTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -87,6 +90,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieIndexer;
+import org.apache.hudi.utilities.HoodieMetadataTableValidator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.SourceTestConfig;
@@ -154,6 +158,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1037,14 +1042,24 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                                                   String indexInstantTime,
                                                   String runningMode,
                                                   String indexTypes) {
-    HoodieIndexer.Config config = new HoodieIndexer.Config();
-    config.basePath = basePath;
-    config.tableName = tableName;
-    config.indexInstantTime = indexInstantTime;
-    config.propsFilePath = UtilitiesTestBase.basePath + "/indexer.properties";
-    config.runningMode = runningMode;
-    config.indexTypes = indexTypes;
-    return config;
+    return buildIndexerConfig(basePath, tableName, indexInstantTime, runningMode, indexTypes, Collections.emptyList());
+  }
+
+  private HoodieIndexer.Config buildIndexerConfig(String basePath,
+                                                  String tableName,
+                                                  String indexInstantTime,
+                                                  String runningMode,
+                                                  String indexTypes,
+                                                  List<String> configs) {
+    HoodieIndexer.Config indexerConfig = new HoodieIndexer.Config();
+    indexerConfig.basePath = basePath;
+    indexerConfig.tableName = tableName;
+    indexerConfig.indexInstantTime = indexInstantTime;
+    indexerConfig.propsFilePath = UtilitiesTestBase.basePath + "/indexer.properties";
+    indexerConfig.runningMode = runningMode;
+    indexerConfig.indexTypes = indexTypes;
+    indexerConfig.configs = configs;
+    return indexerConfig;
   }
 
   @ParameterizedTest
@@ -1079,6 +1094,109 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
       return true;
     });
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
+  public void testHoodieIndexerExecutionAfterCommit(HoodieRecordType recordType) throws Exception {
+    String tableBasePath = basePath + "/asyncindexer";
+    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "false", recordType, WriteOperationType.UPSERT,
+        Collections.singleton(HoodieIndexConfig.INDEX_TYPE.key() + "=GLOBAL_SIMPLE"));
+
+    deltaStreamerTestRunner(ds, (r) -> {
+      TestHelpers.assertAtLeastNCommits(2, tableBasePath);
+
+      Option<String> scheduleIndexInstantTime;
+      try {
+        HoodieIndexer scheduleIndexingJob = new HoodieIndexer(jsc,
+            buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "RECORD_INDEX"));
+        scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
+      } catch (Exception e) {
+        LOG.info("Schedule indexing failed", e);
+        return false;
+      }
+      if (scheduleIndexInstantTime.isPresent()) {
+        TestHelpers.assertPendingIndexCommit(tableBasePath);
+        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
+        TestHelpers.waitFor(() -> {
+          HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, tableBasePath);
+          HoodieTimeline pendingCommitsTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested();
+          return !pendingCommitsTimeline.empty();
+        });
+        HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
+            buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), UtilHelpers.EXECUTE, "RECORD_INDEX",
+                Collections.singletonList(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key() + "=true")));
+        runIndexingJob.start(0);
+        LOG.info("Metadata indexing success");
+        TestHelpers.assertCompletedIndexCommit(tableBasePath);
+      } else {
+        LOG.warn("Metadata indexing failed");
+      }
+      return true;
+    });
+
+    validateRecordIndex(tableBasePath);
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  private static void validateRecordIndex(String tableBasePath) {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = tableBasePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    config.validateRecordIndexContent = true;
+    config.validateRecordIndexCount = true;
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    assertTrue(validator.run());
+    assertFalse(validator.hasValidationFailure());
+    assertTrue(validator.getThrowables().isEmpty());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
+  public void testHoodieIndexerExecutionAfterClustering(HoodieRecordType recordType) throws Exception {
+    String tableBasePath = basePath + "/asyncindexer";
+    HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "true", recordType, WriteOperationType.UPSERT,
+        new HashSet<>(Arrays.asList(HoodieIndexConfig.INDEX_TYPE.key() + "=GLOBAL_SIMPLE", HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key() + "=1",
+            HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
+
+    deltaStreamerTestRunner(ds, (r) -> {
+      TestHelpers.assertAtLeastNCommits(1, tableBasePath);
+
+      Option<String> scheduleIndexInstantTime;
+      try {
+        HoodieIndexer scheduleIndexingJob = new HoodieIndexer(jsc,
+            buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "RECORD_INDEX"));
+        scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
+      } catch (Exception e) {
+        LOG.info("Schedule indexing failed", e);
+        return false;
+      }
+      if (scheduleIndexInstantTime.isPresent()) {
+        TestHelpers.assertPendingIndexCommit(tableBasePath);
+        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
+        TestHelpers.waitFor(() -> {
+          HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, tableBasePath);
+          return metaClient.getActiveTimeline().getFirstPendingClusterInstant().isPresent();
+        });
+        try {
+          HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
+              buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), UtilHelpers.EXECUTE, "RECORD_INDEX",
+                  Arrays.asList(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key() + "=true", HoodieMetadataConfig.METADATA_INDEX_CHECK_TIMEOUT_SECONDS.key() + "=20")));
+          runIndexingJob.start(0);
+          fail("Indexing should fail with catchup failure");
+        } catch (Throwable t) {
+          boolean res = JavaTestUtils.checkNestedExceptionContains(t, "Index catchup failed");
+          assertTrue(res, "Indexing catchup task should have timed out");
+        }
+        LOG.info("Metadata indexing timed out");
+      } else {
+        LOG.warn("Metadata indexing failed");
+      }
+      return true;
+    });
+
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
