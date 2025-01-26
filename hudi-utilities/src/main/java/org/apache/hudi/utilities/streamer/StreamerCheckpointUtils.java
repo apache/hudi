@@ -46,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.buildCheckpointFromConfigOverride;
-import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.buildCheckpointFromGeneralSource;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
@@ -77,7 +76,7 @@ public class StreamerCheckpointUtils {
                                                                      TypedProperties props,
                                                                      HoodieTableMetaClient metaClient) throws IOException {
     Option<Checkpoint> checkpoint = Option.empty();
-    validateOverrideConfig(metaClient, streamerConfig, props);
+    assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
     // If we have both streamer config and commits specifying what checkpoint to use, go with the
     // checkpoint resolution logic to resolve conflicting configurations.
     if (commitsTimelineOpt.isPresent()) {
@@ -91,7 +90,9 @@ public class StreamerCheckpointUtils {
   private static void assertNoCheckpointOverrideDuringUpgrade(HoodieTableMetaClient metaClient, HoodieStreamer.Config streamerConfig, TypedProperties props) {
     if (!StringUtils.isNullOrEmpty(streamerConfig.checkpoint)
         || !StringUtils.isNullOrEmpty(streamerConfig.ignoreCheckpoint)) {
-      if (needsUpgradeOrDowngrade(metaClient, HoodieWriteConfig.newBuilder().withProps(props).build(), HoodieTableVersion.current())) {
+      HoodieTableVersion writeTableVersion = HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION));
+      HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(streamerConfig.targetBasePath).withProps(props).build();
+      if (config.autoUpgrade() && needsUpgradeOrDowngrade(metaClient, config, writeTableVersion)) {
         throw new HoodieUpgradeDowngradeException(
             String.format("When upgrade/downgrade is happening, please avoid setting --checkpoint option and --ignore-checkpoint for your delta streamers."
                 + " Detected invalid streamer configuration:\n%s", streamerConfig));
@@ -99,17 +100,12 @@ public class StreamerCheckpointUtils {
     }
   }
 
-  private static void validateOverrideConfig(HoodieTableMetaClient metaClient, HoodieStreamer.Config streamerConfig, TypedProperties props) {
-    // During
-    assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
-  }
-
   private static Option<Checkpoint> useCkpFromOverrideConfigIfAny(
       HoodieStreamer.Config streamerConfig, TypedProperties props, Option<Checkpoint> checkpoint) {
     LOG.debug("Checkpoint from config: " + streamerConfig.checkpoint);
     if (!checkpoint.isPresent() && streamerConfig.checkpoint != null) {
       int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION);
-      checkpoint = Option.of(buildCheckpointFromGeneralSource(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
+      checkpoint = Option.of(buildCheckpointFromConfigOverride(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
     }
     return checkpoint;
   }
@@ -170,7 +166,7 @@ public class StreamerCheckpointUtils {
         }
       } else if (streamerConfig.checkpoint != null) {
         // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
-        resumeCheckpoint = Option.of(buildCheckpointFromGeneralSource(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
+        resumeCheckpoint = Option.of(buildCheckpointFromConfigOverride(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
       }
     }
     return resumeCheckpoint;
