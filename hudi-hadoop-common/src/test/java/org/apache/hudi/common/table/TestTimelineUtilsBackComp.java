@@ -35,6 +35,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,23 +49,29 @@ public class TestTimelineUtilsBackComp extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @CsvSource({
-      "FAIL, SIX, VERSION_1",
-      "FAIL, EIGHT, VERSION_2",
-      "BLOCK, SIX, VERSION_1",
-      "BLOCK, EIGHT, VERSION_2",
-      "USE_TRANSITION_TIME, SIX, VERSION_1",
-      "USE_TRANSITION_TIME, EIGHT, VERSION_2"
+      "FAIL, SIX",
+      "FAIL, EIGHT",
+      "BLOCK, SIX",
+      "BLOCK, EIGHT",
+      "USE_TRANSITION_TIME, SIX",
+      "USE_TRANSITION_TIME, EIGHT"
   })
   void testHandleHollowCommit(HollowCommitHandling handlingMode,
-                             HoodieTableVersion tableVersion,
-                             TimelineLayoutVersion timelineLayoutVersion) throws Exception {
+                             HoodieTableVersion tableVersion) throws Exception {
+    Integer timelineLayoutVersion = tableVersion == HoodieTableVersion.SIX
+        ? TimelineLayoutVersion.VERSION_1 
+        : TimelineLayoutVersion.VERSION_2;
+    
     metaClient =
       HoodieTableMetaClient.newTableBuilder()
         .setDatabaseName("dataset")
         .setTableName("testTable")
-        .setTimelineLayoutVersion(timelineLayoutVersion.getVersion())
+        .setTimelineLayoutVersion(timelineLayoutVersion)
         .setTableVersion(tableVersion)
         .setTableType(HoodieTableType.MERGE_ON_READ).initTable(getDefaultStorageConf(), basePath);
+    HoodieTableVersion actualTableVersion = metaClient.getTableConfig().getTableVersion();
+    assertEquals(actualTableVersion.getTimelineLayoutVersion().getVersion(), timelineLayoutVersion);
+    assertEquals(actualTableVersion.versionCode(), tableVersion.versionCode());
     HoodieTestTable.of(metaClient)
         .addCommit("001")
         .addInflightCommit("003")
