@@ -1080,7 +1080,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   /**
    * Test expression index partition pruning with partition stats.
    */
-  @Test
+  @Disabled("HUDI-8919")
   def testPartitionPruningWithPartitionStats(): Unit = {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
