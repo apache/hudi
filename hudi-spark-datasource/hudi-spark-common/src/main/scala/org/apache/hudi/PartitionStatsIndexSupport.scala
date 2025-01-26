@@ -87,7 +87,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     if (queryFilters.nonEmpty && containsAnySqlFunction(queryFilters)) {
       // If the query contains any SQL function, skip the pruning.
       // Expression Index will be used in such cases, if available.
-      return Option.empty
+      Option.empty
     }
     if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
       val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
