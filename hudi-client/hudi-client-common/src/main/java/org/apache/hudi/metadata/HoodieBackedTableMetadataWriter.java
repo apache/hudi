@@ -33,7 +33,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -220,9 +219,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     if (metadataView == null || !metadataView.equals(metadata.getMetadataFileSystemView())) {
       ValidationUtils.checkState(metadata != null, "Metadata table not initialized");
       ValidationUtils.checkState(dataMetaClient != null, "Data table meta client not initialized");
-      if (metadataView != null) {
-        metadataView.close();
-      }
       metadataView = new HoodieMetadataFileSystemView(dataMetaClient, dataMetaClient.getActiveTimeline(), metadata);
     }
     return metadataView;
@@ -1198,31 +1194,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieMetadataFileSystemView fsView = getMetadataView();
     fsView.loadPartitions(new ArrayList<>(commitMetadata.getWritePartitionPaths()));
     return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(), fsView, dataMetaClient, engineContext, getEngineType());
-  }
-
-  /**
-   * Build a list of baseFiles + logFiles for every partition that this commit touches
-   * {
-   *  {
-   *    "partition1", { { "baseFile11", {"logFile11", "logFile12"}}, {"baseFile12", {"logFile11"} } }
-   *  },
-   *  {
-   *    "partition2", { {"baseFile21", {"logFile21", "logFile22"}}, {"baseFile22", {"logFile21"} } }
-   *  }
-   * }
-   */
-  private static List<Pair<String, Pair<String, List<String>>>> getPartitionFilePairs(HoodieCommitMetadata commitMetadata) {
-    List<Pair<String, Pair<String, List<String>>>> partitionFilePairs = new ArrayList<>();
-    commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> {
-      writeStats.forEach(writeStat -> {
-        if (writeStat instanceof HoodieDeltaWriteStat) {
-          partitionFilePairs.add(Pair.of(dataPartition, Pair.of(((HoodieDeltaWriteStat) writeStat).getBaseFile(), ((HoodieDeltaWriteStat) writeStat).getLogFiles())));
-        } else {
-          partitionFilePairs.add(Pair.of(dataPartition, Pair.of(writeStat.getPath(), Collections.emptyList())));
-        }
-      });
-    });
-    return partitionFilePairs;
   }
 
   /**
