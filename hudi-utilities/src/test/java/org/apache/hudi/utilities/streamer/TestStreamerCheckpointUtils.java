@@ -66,7 +66,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
 
   @Test
   public void testEmptyTimelineCase() throws IOException {
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.isEmpty());
   }
@@ -82,7 +82,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.ignoreCheckpoint = "ignore_checkpoint_1";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.isEmpty());
   }
@@ -98,7 +98,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.ignoreCheckpoint = "ignore_checkpoint_1";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.isEmpty());
   }
@@ -114,7 +114,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
     HoodieStreamerException exception = assertThrows(HoodieStreamerException.class, () -> {
-      StreamerCheckpointUtils.getCheckpointToResumeString(
+      StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
           metaClient.getActiveTimeline(), streamerConfig, props);
     });
     assertTrue(exception.getMessage().contains("Unable to find previous checkpoint"));
@@ -132,7 +132,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.KafkaSource";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("earliest", checkpoint.get().getCheckpointKey());
@@ -149,7 +149,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.KafkaSource";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "1");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("earliest", checkpoint.get().getCheckpointKey());
@@ -166,7 +166,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
 
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertEquals("earliest-0-100", checkpoint.get().getCheckpointKey());
   }
@@ -180,7 +180,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.KafkaSource";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV2);
     assertEquals("earliest", checkpoint.get().getCheckpointKey());
@@ -196,7 +196,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.KafkaSource";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "1");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("earliest", checkpoint.get().getCheckpointKey());
@@ -224,7 +224,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.ignoreCheckpoint = "ignore_checkpoint_1";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.isEmpty());
   }
@@ -240,7 +240,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.checkpoint = "new-checkpoint";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("new-checkpoint", checkpoint.get().getCheckpointKey());
@@ -257,7 +257,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.checkpoint = "new-checkpoint";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("new-checkpoint", checkpoint.get().getCheckpointKey());
@@ -283,7 +283,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     deltaCommitMetadata.put(HoodieStreamer.CHECKPOINT_KEY, "deltacommit-cp");
     createDeltaCommit(deltaCommitTime, deltaCommitMetadata);
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
 
     // Should use deltacommit checkpoint
@@ -302,7 +302,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     commitMetadata.put(HoodieStreamer.CHECKPOINT_KEY, "commit-cp");
     createCommit(commitTime, commitMetadata);
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeString(
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointBetweenConfigAndPrevCommit(
         metaClient.getActiveTimeline(), streamerConfig, props);
 
     // Should use commit checkpoint
@@ -325,8 +325,8 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.KafkaSource";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeFrom(
-        Option.empty(), streamerConfig, props);
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(
+        Option.empty(), streamerConfig, props, metaClient);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("test-cp", checkpoint.get().getCheckpointKey());
   }
@@ -336,8 +336,8 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.checkpoint = "test-cp";
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "1");
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeFrom(
-        Option.empty(), streamerConfig, props);
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(
+        Option.empty(), streamerConfig, props, metaClient);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("test-cp", checkpoint.get().getCheckpointKey());
   }
@@ -345,8 +345,8 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
   @Test
   public void testEmptyTimelineAndNullCheckpoint() throws IOException {
     streamerConfig.checkpoint = null;
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeFrom(
-        Option.empty(), streamerConfig, props);
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(
+        Option.empty(), streamerConfig, props, metaClient);
     assertTrue(checkpoint.isEmpty());
   }
 
@@ -359,8 +359,8 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
 
     streamerConfig.checkpoint = "config-cp";
 
-    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.getCheckpointToResumeFrom(
-        Option.of(metaClient.getActiveTimeline()), streamerConfig, props);
+    Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveWhatCheckpointToResumeFrom(
+        Option.of(metaClient.getActiveTimeline()), streamerConfig, props, metaClient);
     assertEquals("config-cp", checkpoint.get().getCheckpointKey());
   }
 }

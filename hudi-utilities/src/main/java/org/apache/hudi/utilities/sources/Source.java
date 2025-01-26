@@ -99,6 +99,16 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
         sourceLimit);
   }
 
+  /**
+   * The second phase of checkpoint resolution - Checkpoint version translation.
+   * After the checkpoint value is decided based on the existing configurations at
+   * org.apache.hudi.utilities.streamer.StreamerCheckpointUtils#resolveWhatCheckpointToResume,
+   *
+   * For most of the data sources the there is no difference between checkpoint V1 and V2, it's
+   * merely changing the wrapper class.
+   *
+   * Check child class method overrides to see special case handling.
+   * */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   protected Option<Checkpoint> translateCheckpoint(Option<Checkpoint> lastCheckpoint) {
     if (lastCheckpoint.isEmpty()) {

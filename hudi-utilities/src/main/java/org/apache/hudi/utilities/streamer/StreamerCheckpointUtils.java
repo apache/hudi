@@ -22,10 +22,10 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
 
@@ -44,34 +45,74 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.buildCheckpointFromConfigOverride;
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.buildCheckpointFromGeneralSource;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_RESET_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
+import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgradeOrDowngrade;
 
 public class StreamerCheckpointUtils {
   private static final Logger LOG = LoggerFactory.getLogger(StreamerCheckpointUtils.class);
 
-  public static Option<Checkpoint> getCheckpointToResumeFrom(Option<HoodieTimeline> commitsTimelineOpt,
-                                                             HoodieStreamer.Config streamerConfig,
-                                                             TypedProperties props) throws IOException {
+  /**
+   * The first phase of checkpoint resolution - read the checkpoint configs from 2 sources and resolve
+   * conflicts:
+   * <ul>
+   *   <li>commit metadata from the last completed instant, which can contain what is the last checkpoint
+   *       from the previous streamer ingestion.</li>
+   *   <li>user checkpoint overrides specified in the writer config {@code streamerConfig}. Users might want to
+   *       forcefully set the checkpoint to an arbitrary position or start from the very beginning.</li>
+   * </ul>
+   * The 2 sources can have conflicts, and we need to decide which config should prevail.
+   * <p>
+   * For the second phase of checkpoint resolution please refer
+   * {@link org.apache.hudi.utilities.sources.Source#translateCheckpoint} and child class overrides of this
+   * method.
+   */
+  public static Option<Checkpoint> resolveWhatCheckpointToResumeFrom(Option<HoodieTimeline> commitsTimelineOpt,
+                                                                     HoodieStreamer.Config streamerConfig,
+                                                                     TypedProperties props,
+                                                                     HoodieTableMetaClient metaClient) throws IOException {
     Option<Checkpoint> checkpoint = Option.empty();
+    assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+    // If we have both streamer config and commits specifying what checkpoint to use, go with the
+    // checkpoint resolution logic to resolve conflicting configurations.
     if (commitsTimelineOpt.isPresent()) {
-      checkpoint = getCheckpointToResumeString(commitsTimelineOpt.get(), streamerConfig, props);
+      checkpoint = resolveCheckpointBetweenConfigAndPrevCommit(commitsTimelineOpt.get(), streamerConfig, props);
     }
+    // If there is only streamer config, extract the checkpoint directly.
+    checkpoint = useCkpFromOverrideConfigIfAny(streamerConfig, props, checkpoint);
+    return checkpoint;
+  }
 
+  private static void assertNoCheckpointOverrideDuringUpgrade(HoodieTableMetaClient metaClient, HoodieStreamer.Config streamerConfig, TypedProperties props) {
+    if (!StringUtils.isNullOrEmpty(streamerConfig.checkpoint)
+        || !StringUtils.isNullOrEmpty(streamerConfig.ignoreCheckpoint)) {
+      if (needsUpgradeOrDowngrade(metaClient, HoodieWriteConfig.newBuilder().withProps(props).build(), HoodieTableVersion.current())) {
+        throw new HoodieUpgradeDowngradeException(
+            String.format("When upgrade/downgrade is happening, please avoid setting --checkpoint option and --ignore-checkpoint for your delta streamers."
+                + " Detected invalid streamer configuration:\n%s", streamerConfig));
+      }
+    }
+  }
+
+  private static Option<Checkpoint> useCkpFromOverrideConfigIfAny(
+      HoodieStreamer.Config streamerConfig, TypedProperties props, Option<Checkpoint> checkpoint) {
     LOG.debug("Checkpoint from config: " + streamerConfig.checkpoint);
     if (!checkpoint.isPresent() && streamerConfig.checkpoint != null) {
       int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION);
-      checkpoint = Option.of(CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, streamerConfig.sourceClassName)
-          ? new StreamerCheckpointV2(streamerConfig.checkpoint) : new StreamerCheckpointV1(streamerConfig.checkpoint));
+      checkpoint = Option.of(buildCheckpointFromGeneralSource(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
     }
     return checkpoint;
   }
 
   /**
    * Process previous commit metadata and checkpoint configs set by user to determine the checkpoint to resume from.
+   * The function consults various checkpoint related configurations and set the right
+   * `org.apache.hudi.common.table.checkpoint.Checkpoint#checkpointKey` value in the returned object.
    *
    * @param commitsTimeline commits timeline of interest, including .commit and .deltacommit.
    *
@@ -79,9 +120,9 @@ public class StreamerCheckpointUtils {
    * @throws IOException
    */
   @VisibleForTesting
-  static Option<Checkpoint> getCheckpointToResumeString(HoodieTimeline commitsTimeline,
-                                                        HoodieStreamer.Config streamerConfig,
-                                                        TypedProperties props) throws IOException {
+  static Option<Checkpoint> resolveCheckpointBetweenConfigAndPrevCommit(HoodieTimeline commitsTimeline,
+                                                                        HoodieStreamer.Config streamerConfig,
+                                                                        TypedProperties props) throws IOException {
     Option<Checkpoint> resumeCheckpoint = Option.empty();
     // has deltacommit and this is a MOR table, then we should get checkpoint from .deltacommit
     // if changing from mor to cow, before changing we must do a full compaction, so we can only consider .commit in such case
@@ -102,15 +143,13 @@ public class StreamerCheckpointUtils {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
         Checkpoint checkpointFromCommit = CheckpointUtils.getCheckpoint(commitMetadata);
         LOG.debug("Checkpoint reset from metadata: " + checkpointFromCommit.getCheckpointResetKey());
-        if (streamerConfig.ignoreCheckpoint != null && (StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointIgnoreKey())
-            || !streamerConfig.ignoreCheckpoint.equals(checkpointFromCommit.getCheckpointIgnoreKey()))) {
+        if (ignoreCkpCfgPrevailsOverCkpFromPrevCommit(streamerConfig, checkpointFromCommit)) {
           // we ignore any existing checkpoint and start ingesting afresh
           resumeCheckpoint = Option.empty();
-        } else if (streamerConfig.checkpoint != null && (StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointResetKey())
-            || !streamerConfig.checkpoint.equals(checkpointFromCommit.getCheckpointResetKey()))) {
-          resumeCheckpoint = Option.of(CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, streamerConfig.sourceClassName)
-              ? new StreamerCheckpointV2(streamerConfig.checkpoint) : new StreamerCheckpointV1(streamerConfig.checkpoint));
-        } else if (!StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointKey())) {
+        } else if (ckpOverrideCfgPrevailsOverCkpFromPrevCommit(streamerConfig, checkpointFromCommit)) {
+          resumeCheckpoint = Option.of(buildCheckpointFromConfigOverride(
+              streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
+        } else if (shouldUseCkpFromPrevCommit(checkpointFromCommit)) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
           resumeCheckpoint = Option.of(checkpointFromCommit);
         } else if (compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
@@ -126,11 +165,24 @@ public class StreamerCheckpointUtils {
         }
       } else if (streamerConfig.checkpoint != null) {
         // getLatestCommitMetadataWithValidCheckpointInfo(commitTimelineOpt.get()) will never return a commit metadata w/o any checkpoint key set.
-        resumeCheckpoint = Option.of(CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, streamerConfig.sourceClassName)
-            ? new StreamerCheckpointV2(streamerConfig.checkpoint) : new StreamerCheckpointV1(streamerConfig.checkpoint));
+        resumeCheckpoint = Option.of(buildCheckpointFromGeneralSource(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
       }
     }
     return resumeCheckpoint;
+  }
+
+  private static boolean shouldUseCkpFromPrevCommit(Checkpoint checkpointFromCommit) {
+    return !StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointKey());
+  }
+
+  private static boolean ckpOverrideCfgPrevailsOverCkpFromPrevCommit(HoodieStreamer.Config streamerConfig, Checkpoint checkpointFromCommit) {
+    return streamerConfig.checkpoint != null && (StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointResetKey())
+        || !streamerConfig.checkpoint.equals(checkpointFromCommit.getCheckpointResetKey()));
+  }
+
+  private static boolean ignoreCkpCfgPrevailsOverCkpFromPrevCommit(HoodieStreamer.Config streamerConfig, Checkpoint checkpointFromCommit) {
+    return streamerConfig.ignoreCheckpoint != null && (StringUtils.isNullOrEmpty(checkpointFromCommit.getCheckpointIgnoreKey())
+        || !streamerConfig.ignoreCheckpoint.equals(checkpointFromCommit.getCheckpointIgnoreKey()));
   }
 
   public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline)

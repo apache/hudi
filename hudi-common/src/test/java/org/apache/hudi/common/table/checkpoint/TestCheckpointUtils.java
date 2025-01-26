@@ -207,7 +207,7 @@ public class TestCheckpointUtils {
       "8, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource, false",
       "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource, false"
   })
-  public void testTargetCheckpointV2(int version, String sourceClassName, boolean expected) {
-    assertEquals(expected, CheckpointUtils.shouldTargetCheckpointV2(version, sourceClassName));
+  public void testTargetCheckpointV2(int version, String sourceClassName, boolean isV2Checkpoint) {
+    assertEquals(isV2Checkpoint, CheckpointUtils.buildCheckpointFromGeneralSource(version, sourceClassName) instanceof StreamerCheckpointV2);
   }
 }
