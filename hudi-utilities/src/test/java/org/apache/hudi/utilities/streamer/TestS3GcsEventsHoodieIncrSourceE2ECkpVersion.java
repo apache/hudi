@@ -49,14 +49,12 @@ import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_CKP_IGNO
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_CKP_KEY_EQ_VAL;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_CKP_RESET_KEY_IS_NULL;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_EMPTY_CKP_KEY;
+import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_INPUT_CKP;
 import static org.apache.hudi.utilities.sources.CheckpointValidator.VAL_NON_EMPTY_CKP_ALL_MEMBERS;
-import static org.apache.hudi.utilities.sources.DummyOperationExecutor.CUSTOM_CHECKPOINT1;
-import static org.apache.hudi.utilities.sources.DummyOperationExecutor.CUSTOM_CHECKPOINT2;
-import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY;
-import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP2_KEY;
+import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_ROW_SET_NULL_CKP_KEY;
-import static org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource.OP_FETCH_NEXT_BATCH;
-import static org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource.VAL_INPUT_CKP;
+import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_FETCH_NEXT_BATCH;
+import static org.apache.hudi.utilities.sources.DummyOperationExecutor.RETURN_CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -109,7 +107,8 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     TypedProperties props = setupBaseProperties(tableVersion);
     // Dummy behavior injection to return ckp 1.
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT1);
     // Validating the source input ckp is empty when doing the sync.
     props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY);
     props.put("hoodie.metadata.enable", "false");
@@ -128,11 +127,12 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     props = setupBaseProperties(toggleVersion(tableVersion));
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 2.
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP2_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT2);
     props.put("hoodie.write.auto.upgrade", "false");
     // Validate the given checkpoint is ckp 1 when doing the sync.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
-    props.put(VAL_CKP_KEY_EQ_VAL, CUSTOM_CHECKPOINT1);
+    props.put(VAL_CKP_KEY_EQ_VAL, "10");
     props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
     props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
 
@@ -150,12 +150,13 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     // In the third round, enable MDT and auto upgrade, use table version 8
     props = setupBaseProperties("8");
     props.put("hoodie.metadata.enable", "false");
-    // Dummy behavior injection to return ckp 2.
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY);
+    // Dummy behavior injection to return ckp 1.
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT1);
     props.put("hoodie.write.auto.upgrade", "false");
     // Validate the given checkpoint is ckp 2 when doing the sync.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
-    props.put(VAL_CKP_KEY_EQ_VAL, CUSTOM_CHECKPOINT2);
+    props.put(VAL_CKP_KEY_EQ_VAL, "20");
     props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
     props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
 
@@ -217,7 +218,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     TypedProperties props = setupBaseProperties(tableVersion);
     props.put(CHECKPOINT_FORCE_SKIP.key(), "true");
-    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
     props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY);
 
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(createConfig(basePath(), null), jsc, Option.of(props));

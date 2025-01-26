@@ -40,12 +40,6 @@ import org.apache.spark.sql.SparkSession;
  * and data ingestion behavior of the StreamSync class.
  */
 public class MockS3EventsHoodieIncrSource extends S3EventsHoodieIncrSource {
-
-  /**
-   * Constants for operation types and validation modes used in testing.
-   */
-  public static final String OP_FETCH_NEXT_BATCH = "mockTestFetchNextBatchOp";
-  public static final String VAL_INPUT_CKP = "valInputCkp";
   
   /**
    * Constructs a new MockS3EventsHoodieIncrSource with the specified parameters.
@@ -88,17 +82,14 @@ public class MockS3EventsHoodieIncrSource extends S3EventsHoodieIncrSource {
 
   /**
    * Overrides the fetchNextBatch method to simulate different test scenarios based on configuration.
-   * 
+   *
    * @param lastCheckpoint Option containing the last checkpoint
    * @param sourceLimit maximum number of records to fetch
    * @return Pair containing Option<Dataset<Row>> and Checkpoint
    */
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
-    String valType = (String) props.getOrDefault(VAL_INPUT_CKP, CheckpointValidator.VAL_NO_OP);
-    CheckpointValidator.validateCheckpointOption(lastCheckpoint, valType, props);
-
-    String opType = (String) props.getOrDefault(OP_FETCH_NEXT_BATCH, DummyOperationExecutor.OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY);
-    return DummyOperationExecutor.executeDummyOperation(lastCheckpoint, sourceLimit, opType);
+    CheckpointValidator.validateCheckpointOption(lastCheckpoint, props);
+    return DummyOperationExecutor.executeDummyOperation(lastCheckpoint, sourceLimit, props);
   }
 }

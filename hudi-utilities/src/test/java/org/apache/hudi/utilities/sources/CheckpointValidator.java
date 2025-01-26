@@ -21,14 +21,12 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.util.Option;
 
 import java.util.function.BiFunction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -37,10 +35,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Used by MockS3EventsHoodieIncrSource to validate checkpoint behavior.
  */
 public class CheckpointValidator {
+  public static final String VAL_INPUT_CKP = "valInputCkp";
+
   /**
    * Validation keys for checkpoint testing.
    */
-  public static final String VAL_CKP_KEY_EQ_VAL = "VAL_CKP_KEY";
+  public static final String VAL_CKP_KEY_EQ_VAL = "VAL_CKP_KEY_EQ_VAL_KEY";
   public static final String VAL_CKP_RESET_KEY_EQUALS = "VAL_CKP_RESET_KEY";
   public static final String VAL_CKP_RESET_KEY_IS_NULL = "VAL_CKP_RESET_KEY_IS_NULL";
   public static final String VAL_CKP_IGNORE_KEY_EQUALS = "VAL_CKP_IGNORE_KEY";
@@ -50,8 +50,8 @@ public class CheckpointValidator {
   public static final String VAL_NO_OP = "VAL_NO_OP";
 
   /*
-  * Checkpoint validation method that assert value equals to expected ones.
-  * */
+   * Checkpoint validation method that assert value equals to expected ones.
+   * */
   private static final BiFunction<Option<Checkpoint>, TypedProperties, Void> VAL_NON_EMPTY_CKP_WITH_FIXED_VALUE = (ckpOpt, props) -> {
     assertFalse(ckpOpt.isEmpty());
     if (props.containsKey(VAL_CKP_KEY_EQ_VAL)) {
@@ -80,24 +80,26 @@ public class CheckpointValidator {
   };
 
   /**
-   * Validates the checkpoint option based on the validation type specified in properties.
+   * Validates the checkpoint option based on validation type specified in props.
    *
-   * @param lastCheckpoint Option containing the checkpoint to validate
-   * @param valType validation type to perform
+   * @param lastCheckpoint Option containing the last checkpoint to validate
    * @param props TypedProperties containing validation configuration
+   * @throws IllegalArgumentException if validation fails
    */
-  public static void validateCheckpointOption(Option<Checkpoint> lastCheckpoint, String valType, TypedProperties props) {
-    if (!lastCheckpoint.isEmpty()) {
-      assertInstanceOf(StreamerCheckpointV1.class, lastCheckpoint.get());
-    }
-    if (valType.equals(VAL_NO_OP)) {
-      return;
-    }
-    if (valType.equals(VAL_NON_EMPTY_CKP_ALL_MEMBERS)) {
-      VAL_NON_EMPTY_CKP_WITH_FIXED_VALUE.apply(lastCheckpoint, props);
-    }
-    if (valType.equals(VAL_EMPTY_CKP_KEY)) {
-      VAL_EMPTY_CKP.apply(lastCheckpoint, props);
+  public static void validateCheckpointOption(Option<Checkpoint> lastCheckpoint, TypedProperties props) {
+    String valType = props.getString(VAL_INPUT_CKP, VAL_NO_OP);
+
+    switch (valType) {
+      case VAL_NO_OP:
+        break;
+      case VAL_NON_EMPTY_CKP_ALL_MEMBERS:
+        VAL_NON_EMPTY_CKP_WITH_FIXED_VALUE.apply(lastCheckpoint, props);
+        break;
+      case VAL_EMPTY_CKP_KEY:
+        VAL_EMPTY_CKP.apply(lastCheckpoint, props);
+        break;
+      default:
+        throw new IllegalArgumentException("Unsupported validation type: " + valType);
     }
   }
-} 
+}

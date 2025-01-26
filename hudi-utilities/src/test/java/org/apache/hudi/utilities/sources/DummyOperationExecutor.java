@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.util.Option;
@@ -27,45 +28,42 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
-import java.util.function.BiFunction;
-
 /**
  * Helper class to execute dummy operations for testing S3EventsHoodieIncrSource.
  * Provides different scenarios of empty row sets with various checkpoint configurations.
  */
 public class DummyOperationExecutor {
+
+  public static final String OP_FETCH_NEXT_BATCH = "mockTestFetchNextBatchOp";
+
   /**
    * Operation keys for different test scenarios returning empty row sets with different checkpoint configurations.
    */
-  public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY";
-  public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP2_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP2_KEY";
+  public static final String OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY = "OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY";
   public static final String OP_EMPTY_ROW_SET_NULL_CKP_KEY = "OP_EMPTY_ROW_SET_NULL_CKP";
   
   /**
    * Custom checkpoint values used in testing.
    */
   public static final String CUSTOM_CHECKPOINT1 = "custom-checkpoint1";
-  public static final String CUSTOM_CHECKPOINT2 = "custom-checkpoint2";
+  public static final String RETURN_CHECKPOINT_KEY = "RETURN_CHECKPOINT_KEY";
 
-  private static final BiFunction<Option<Checkpoint>, Long, Pair<Option<Dataset<Row>>, Checkpoint>> EMPTY_ROW_SET_NONE_NULL_CKP_1 =
-      (checkpoint, limit) -> {
+  @FunctionalInterface
+  private interface OperationFunction {
+    Pair<Option<Dataset<Row>>, Checkpoint> apply(Option<Checkpoint> checkpoint, Long limit, TypedProperties props);
+  }
+
+  private static final OperationFunction EMPTY_ROW_SET_NONE_NULL_CKP =
+      (checkpoint, limit, props) -> {
         Option<Dataset<Row>> empty = Option.empty();
+        String returnCheckpoint = props.getString(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT1);
         return Pair.of(
           empty,
-          new StreamerCheckpointV1(CUSTOM_CHECKPOINT1));
+          new StreamerCheckpointV1(returnCheckpoint));
       };
 
-  private static final BiFunction<Option<Checkpoint>, Long, Pair<Option<Dataset<Row>>, Checkpoint>> EMPTY_ROW_SET_NONE_NULL_CKP_2 =
-      (checkpoint, limit) -> {
-        Option<Dataset<Row>> empty = Option.empty();
-        return Pair.of(
-            empty,
-            new StreamerCheckpointV1(CUSTOM_CHECKPOINT2)
-        );
-      };
-
-  private static final BiFunction<Option<Checkpoint>, Long, Pair<Option<Dataset<Row>>, Checkpoint>> EMPTY_ROW_SET_NULL_CKP =
-      (checkpoint, limit) -> {
+  private static final OperationFunction EMPTY_ROW_SET_NULL_CKP =
+      (checkpoint, limit, props) -> {
         Option<Dataset<Row>> empty = Option.empty();
         return Pair.of(
             empty,
@@ -74,27 +72,24 @@ public class DummyOperationExecutor {
       };
 
   /**
-   * Executes the dummy operation based on the operation type.
+   * Executes the dummy operation based on the operation type in props.
    *
    * @param lastCheckpoint Option containing the last checkpoint
    * @param sourceLimit maximum number of records to fetch
-   * @param opType type of operation to execute
+   * @param props TypedProperties containing the operation type
    * @return Pair containing Option<Dataset<Row>> and Checkpoint
    * @throws IllegalArgumentException if operation type is not supported
    */
   public static Pair<Option<Dataset<Row>>, Checkpoint> executeDummyOperation(
-      Option<Checkpoint> lastCheckpoint, 
-      long sourceLimit, 
-      String opType) {
-    if (opType.equals(OP_EMPTY_ROW_SET_NONE_NULL_CKP1_KEY)) {
-      return EMPTY_ROW_SET_NONE_NULL_CKP_1.apply(lastCheckpoint, sourceLimit);
+      Option<Checkpoint> lastCheckpoint, long sourceLimit, TypedProperties props) {
+    String opType = props.getString(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    switch (opType) {
+      case OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY:
+        return EMPTY_ROW_SET_NONE_NULL_CKP.apply(lastCheckpoint, sourceLimit, props);
+      case OP_EMPTY_ROW_SET_NULL_CKP_KEY:
+        return EMPTY_ROW_SET_NULL_CKP.apply(lastCheckpoint, sourceLimit, props);
+      default:
+        throw new IllegalArgumentException("Unsupported operation type: " + opType);
     }
-    if (opType.equals(OP_EMPTY_ROW_SET_NONE_NULL_CKP2_KEY)) {
-      return EMPTY_ROW_SET_NONE_NULL_CKP_2.apply(lastCheckpoint, sourceLimit);
-    }
-    if (opType.equals(OP_EMPTY_ROW_SET_NULL_CKP_KEY)) {
-      return EMPTY_ROW_SET_NULL_CKP.apply(lastCheckpoint, sourceLimit);
-    }
-    throw new IllegalArgumentException("Unsupported operation type: " + opType);
   }
 } 
