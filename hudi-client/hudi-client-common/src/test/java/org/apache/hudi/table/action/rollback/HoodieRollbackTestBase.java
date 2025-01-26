@@ -19,9 +19,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,6 +27,8 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
@@ -53,8 +52,8 @@ import static org.mockito.Mockito.when;
 public class HoodieRollbackTestBase {
   @TempDir
   java.nio.file.Path tmpDir;
-  protected Path basePath;
-  protected HoodieWrapperFileSystem fs;
+  protected StoragePath basePath;
+  protected HoodieStorage storage;
   @Mock
   protected HoodieTable table;
   @Mock
@@ -70,35 +69,34 @@ public class HoodieRollbackTestBase {
   void setup() throws IOException {
     MockitoAnnotations.openMocks(this);
     when(table.getMetaClient()).thenReturn(metaClient);
-    basePath = new Path(tmpDir.toString(), UUID.randomUUID().toString());
-    fs = new HoodieWrapperFileSystem(FSUtils.getFs(
-        basePath, HoodieTestUtils.getDefaultHadoopConf()), new NoOpConsistencyGuard());
-    when(metaClient.getBasePath()).thenReturn(basePath.toString());
-    when(metaClient.getBasePathV2()).thenReturn(basePath);
+    basePath = new StoragePath(tmpDir.toString(), UUID.randomUUID().toString());
+    storage = HoodieTestUtils.getStorage(basePath);
+    when(metaClient.getBasePath()).thenReturn(basePath);
     when(metaClient.getMarkerFolderPath(any()))
         .thenReturn(basePath + Path.SEPARATOR + TEMPFOLDER_NAME);
-    when(metaClient.getFs()).thenReturn(fs);
+    when(metaClient.getStorage()).thenReturn(storage);
     when(metaClient.getActiveTimeline()).thenReturn(timeline);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(config.getMarkersType()).thenReturn(MarkerType.DIRECT);
     Properties props = new Properties();
     props.put("hoodie.table.name", "test_table");
-    HoodieTableMetaClient.initTableAndGetMetaClient(
-        HoodieTestUtils.getDefaultHadoopConf(), metaClient.getBasePathV2().toString(), props);
+    HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(props)
+        .initTable(storage.getConf(), metaClient.getBasePath());
   }
 
-  protected Path createBaseFileToRollback(String partition,
-                                          String fileId,
-                                          String instantTime) throws IOException {
-    Path baseFilePath = new Path(new Path(basePath, partition),
+  protected StoragePath createBaseFileToRollback(String partition,
+                                                 String fileId,
+                                                 String instantTime) throws IOException {
+    StoragePath baseFilePath = new StoragePath(new StoragePath(basePath, partition),
         FileCreateUtils.baseFileName(instantTime, fileId));
-    if (!fs.exists(baseFilePath.getParent())) {
-      fs.mkdirs(baseFilePath.getParent());
+    if (!storage.exists(baseFilePath.getParent())) {
+      storage.createDirectory(baseFilePath.getParent());
       // Add partition metafile so partition path listing works
-      fs.create(new Path(baseFilePath.getParent(),
+      storage.create(new StoragePath(baseFilePath.getParent(),
           HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
     }
-    fs.create(baseFilePath).close();
+    storage.create(baseFilePath).close();
     return baseFilePath;
   }
 
@@ -111,7 +109,7 @@ public class HoodieRollbackTestBase {
         .map(version -> {
           String logFileName = FileCreateUtils.logFileName(instantTime, fileId, version);
           try {
-            fs.create(new Path(new Path(basePath, partition), logFileName)).close();
+            storage.create(new StoragePath(new StoragePath(basePath, partition), logFileName)).close();
           } catch (IOException e) {
             throw new RuntimeException(e);
           }

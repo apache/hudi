@@ -47,7 +47,6 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
-import static org.apache.hudi.table.action.rollback.RollbackUtils.groupRollbackRequestsBasedOnFileGroup;
 
 /**
  * Performs rollback using marker files generated during the write..

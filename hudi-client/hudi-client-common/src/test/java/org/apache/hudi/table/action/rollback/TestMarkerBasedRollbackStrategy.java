@@ -25,10 +25,8 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -43,6 +41,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFileMarker;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.table.action.rollback.TestRollbackUtils.assertRollbackRequestListEquals;
 
 class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
@@ -56,8 +55,7 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
 
   @Test
   void testGetRollbackRequestsWithMultipleLogFilesInOneFileGroup() throws IOException {
-    Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    HoodieEngineContext context = new HoodieLocalEngineContext(hadoopConf);
+    HoodieEngineContext context = new HoodieLocalEngineContext(storage.getConf());
     String rollbackInstantTime = "003";
     String instantToRollbackTs = "002";
     String baseInstantTimeOfLogFiles = "001";
@@ -69,9 +67,9 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
     String logFileId1 = UUID.randomUUID().toString();
     String logFileId2 = UUID.randomUUID().toString();
     // Base files to roll back
-    Path baseFilePath1 = createBaseFileAndMarkerToRollback(partition1, baseFileId1, instantToRollbackTs);
-    Path baseFilePath2 = createBaseFileAndMarkerToRollback(partition2, baseFileId2, instantToRollbackTs);
-    Path baseFilePath3 = createBaseFileAndMarkerToRollback(partition2, baseFileId3, instantToRollbackTs);
+    StoragePath baseFilePath1 = createBaseFileAndMarkerToRollback(partition1, baseFileId1, instantToRollbackTs);
+    StoragePath baseFilePath2 = createBaseFileAndMarkerToRollback(partition2, baseFileId2, instantToRollbackTs);
+    StoragePath baseFilePath3 = createBaseFileAndMarkerToRollback(partition2, baseFileId3, instantToRollbackTs);
     // Log files to roll back
     Map<String, Long> logFilesToRollback1 = createLogFilesAndMarkersToRollback(
         partition2, logFileId1, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(1));
@@ -81,7 +79,7 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
             partition2, logFileId2, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(version))
             .entrySet().stream())
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    HoodieInstant instantToRollback = new HoodieInstant(
+    HoodieInstant instantToRollback = INSTANT_GENERATOR.createNewInstant(
         HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, instantToRollbackTs);
 
     List<HoodieRollbackRequest> actual =
@@ -101,10 +99,10 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
     assertRollbackRequestListEquals(expected, actual);
   }
 
-  private Path createBaseFileAndMarkerToRollback(String partition,
+  private StoragePath createBaseFileAndMarkerToRollback(String partition,
                                                  String fileId,
                                                  String instantTime) throws IOException {
-    Path baseFilePath = createBaseFileToRollback(partition, fileId, instantTime);
+    StoragePath baseFilePath = createBaseFileToRollback(partition, fileId, instantTime);
     createMarkerFile(basePath.toString(), partition, instantTime, fileId, IOType.CREATE);
     return baseFilePath;
   }
