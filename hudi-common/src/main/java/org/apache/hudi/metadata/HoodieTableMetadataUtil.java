@@ -1455,7 +1455,7 @@ public class HoodieTableMetadataUtil {
           .sorted(Comparator.comparing(FileSlice::getFileId))
           .collect(Collectors.toList());
     } finally {
-      if (!fileSystemView.isPresent()) {
+      if (!fileSystemView.isPresent() && fsView != null) {
         fsView.close();
       }
     }
