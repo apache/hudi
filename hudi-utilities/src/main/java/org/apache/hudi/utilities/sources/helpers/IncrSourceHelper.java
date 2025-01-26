@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointFromCfgCkp;
 import org.apache.hudi.common.table.log.InstantRange.RangeType;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -53,6 +54,7 @@ import java.util.function.Function;
 
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.convertToCheckpointV1ForCommitTime;
+import static org.apache.hudi.common.table.checkpoint.HoodieIncrSourceCheckpointValUtils.resolveToV1V2Checkpoint;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
@@ -196,6 +198,12 @@ public class IncrSourceHelper {
     RangeType rangeType;
 
     if (lastCheckpoint.isPresent() && !lastCheckpoint.get().getCheckpointKey().isEmpty()) {
+      // User might override checkpoint based on
+      // - instant request time: Then we will treat it as a V1 checkpoint.
+      // - completion time: We will treat it as a normal V2 checkpoint.
+      if (lastCheckpoint.get() instanceof StreamerCheckpointFromCfgCkp) {
+        lastCheckpoint = Option.of(resolveToV1V2Checkpoint((StreamerCheckpointFromCfgCkp) lastCheckpoint.get()));
+      }
       // Translate checkpoint
       StreamerCheckpointV2 lastStreamerCheckpointV2 = CheckpointUtils.convertToCheckpointV2ForCommitTime(
           lastCheckpoint.get(), metaClient, handlingMode);

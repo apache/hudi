@@ -61,6 +61,20 @@ public class CheckpointUtils {
     throw new HoodieException("Checkpoint is not found in the commit metadata: " + commitMetadata.getExtraMetadata());
   }
 
+  public static Checkpoint buildCheckpointFromGeneralSource(
+      String sourceClassName, int writeTableVersion, String checkpointToResume) {
+    return CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
+        ? new StreamerCheckpointV2(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
+  }
+
+  // Whenever we create checkpoint from streamer config checkpoint override, we should use this function
+  // to build checkpoints.
+  public static Checkpoint buildCheckpointFromConfigOverride(
+      String sourceClassName, int writeTableVersion, String checkpointToResume) {
+    return CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, sourceClassName)
+        ? new StreamerCheckpointFromCfgCkp(checkpointToResume) : new StreamerCheckpointV1(checkpointToResume);
+  }
+
   public static boolean shouldTargetCheckpointV2(int writeTableVersion, String sourceClassName) {
     return writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()
         && !DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2.contains(sourceClassName);

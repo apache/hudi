@@ -77,7 +77,7 @@ public class StreamerCheckpointUtils {
                                                                      TypedProperties props,
                                                                      HoodieTableMetaClient metaClient) throws IOException {
     Option<Checkpoint> checkpoint = Option.empty();
-    assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
+    validateOverrideConfig(metaClient, streamerConfig, props);
     // If we have both streamer config and commits specifying what checkpoint to use, go with the
     // checkpoint resolution logic to resolve conflicting configurations.
     if (commitsTimelineOpt.isPresent()) {
@@ -97,6 +97,11 @@ public class StreamerCheckpointUtils {
                 + " Detected invalid streamer configuration:\n%s", streamerConfig));
       }
     }
+  }
+
+  private static void validateOverrideConfig(HoodieTableMetaClient metaClient, HoodieStreamer.Config streamerConfig, TypedProperties props) {
+    // During
+    assertNoCheckpointOverrideDuringUpgrade(metaClient, streamerConfig, props);
   }
 
   private static Option<Checkpoint> useCkpFromOverrideConfigIfAny(
