@@ -32,13 +32,12 @@ import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
-import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.JavaConverters._
 
 class PartitionStatsIndexSupport(spark: SparkSession,
@@ -85,6 +84,11 @@ class PartitionStatsIndexSupport(spark: SparkSession,
   def prunePartitions(fileIndex: HoodieFileIndex,
                       queryFilters: Seq[Expression],
                       queryReferencedColumns: Seq[String]): Option[Set[String]] = {
+    if (queryFilters.nonEmpty && containsAnySqlFunction(queryFilters)) {
+      // If the query contains any SQL function, skip the pruning.
+      // Expression Index will be used in such cases, if available.
+      return Option.empty
+    }
     if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
       val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
       loadTransposed(queryReferencedColumns, readInMemory, Option.empty, Option.empty) {
@@ -126,6 +130,30 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     } else {
       Option.empty
     }
+  }
+
+  private def containsAnySqlFunction(queryFilters: Seq[Expression]): Boolean = {
+    val isMatchingExpression = (expr: Expression) => {
+      expr.find {
+        case _: UnaryExpression => true
+        case _: DateFormatClass => true
+        case _: FromUnixTime => true
+        case _: UnixTimestamp => true
+        case _: ParseToDate => true
+        case _: ParseToTimestamp => true
+        case _: DateAdd => true
+        case _: DateSub  => true
+        case _: Substring => true
+        case _: StringTrim => true
+        case _: StringTrimLeft => true
+        case _: StringTrimRight => true
+        case _: RegExpReplace  => true
+        case _: RegExpExtract  => true
+        case _: StringSplit => true
+        case _ => false
+      }.isDefined
+    }
+    queryFilters.exists(isMatchingExpression)
   }
 }
 
