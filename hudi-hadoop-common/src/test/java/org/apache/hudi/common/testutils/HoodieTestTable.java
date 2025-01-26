@@ -121,6 +121,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDel
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightSavepoint;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFileMarker;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
@@ -706,6 +707,11 @@ public class HoodieTestTable implements AutoCloseable {
     String logFileName = FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, currentInstantTime, HoodieLogFile.LOGFILE_BASE_VERSION, HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
     String markerFileName = FileCreateUtils.markerFileName(logFileName, ioType);
     FileCreateUtils.createMarkerFile(metaClient, partitionPath, currentInstantTime, markerFileName);
+    return this;
+  }
+
+  public HoodieTestTable withLogMarkerFile(String partitionPath, String fileName) throws IOException {
+    createLogFileMarker(basePath, partitionPath, currentInstantTime, fileName);
     return this;
   }
 

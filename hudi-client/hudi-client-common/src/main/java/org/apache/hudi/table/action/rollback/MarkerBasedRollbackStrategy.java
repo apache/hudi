@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.table.action.rollback.RollbackUtils.groupRollbackRequestsBasedOnFileGroup;
 
 /**
  * Performs rollback using marker files generated during the write..
@@ -79,7 +80,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
           table, context, instantToRollback.requestedTime(), config.getRollbackParallelism());
       int parallelism = Math.max(Math.min(markerPaths.size(), config.getRollbackParallelism()), 1);
-      return context.map(markerPaths, markerFilePath -> {
+      return RollbackUtils.groupRollbackRequestsBasedOnFileGroup(context.map(markerPaths, markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);
         String filePathStr = WriteMarkers.stripMarkerSuffix(markerFilePath);
@@ -96,7 +97,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
           default:
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
         }
-      }, parallelism);
+      }, parallelism));
     } catch (Exception e) {
       throw new HoodieRollbackException("Error rolling back using marker files written for " + instantToRollback, e);
     }
