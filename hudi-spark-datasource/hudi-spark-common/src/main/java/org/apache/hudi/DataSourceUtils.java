@@ -24,6 +24,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -242,7 +243,7 @@ public class DataSourceUtils {
       JavaRDD<HoodieRecord> records = hoodieKeysAndLocations.map(tuple -> {
         HoodieRecord record = recordType == HoodieRecord.HoodieRecordType.AVRO
             ? new HoodieAvroRecord(tuple._1, new EmptyHoodieRecordPayload())
-            : new HoodieSparkRecord(tuple._1, null, false);
+            : new HoodieEmptyRecord(tuple._1, HoodieRecord.HoodieRecordType.SPARK);
         record.setCurrentLocation(tuple._2.get());
         return record;
       });

@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
@@ -161,14 +162,11 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
             Seq(2, "B", 40.0, 101)
           )
           // Delete record with no ts.
-          // [HUDI-8851] For MOR we hit NPE
-          if (tableType.equals("cow")) {
-            spark.sql(s"delete from $tableName where id = 1")
-            // Verify deletion
-            checkAnswer(s"select id, name, price, ts from $tableName order by id")(
-              Seq(2, "B", 40.0, 101)
-            )
-          }
+          spark.sql(s"delete from $tableName where id = 1")
+          // Verify deletion
+          checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+            Seq(2, "B", 40.0, 101)
+          )
         })
       }
     }
