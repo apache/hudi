@@ -71,7 +71,7 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_ME
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_ORDERING_VALUE;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
@@ -560,19 +560,19 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   }
 
   static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
-    return orderingValue == null || orderingValue.equals(COMMIT_TIME_ORDERING_VALUE);
+    return orderingValue == null || orderingValue.equals(DEFAULT_ORDERING_VALUE);
   }
 
   static Comparable getOrderingValue(HoodieReaderContext readerContext,
                                      DeleteRecord deleteRecord) {
     return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
-        ? COMMIT_TIME_ORDERING_VALUE
+        ? DEFAULT_ORDERING_VALUE
         : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
   }
 
   private boolean isDeleteRecordWithNaturalOrder(Option<T> rowOption,
                                                  Comparable orderingValue) {
-    return rowOption.isEmpty() && orderingValue.equals(COMMIT_TIME_ORDERING_VALUE);
+    return rowOption.isEmpty() && orderingValue.equals(DEFAULT_ORDERING_VALUE);
   }
 
   private boolean isDeleteRecord(Option<T> record, Schema schema) {

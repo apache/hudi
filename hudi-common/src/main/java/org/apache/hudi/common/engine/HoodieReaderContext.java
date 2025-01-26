@@ -43,7 +43,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
-import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_ORDERING_VALUE;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
@@ -245,11 +245,11 @@ public abstract class HoodieReaderContext<T> implements Closeable {
     }
 
     if (!recordOption.isPresent() || orderingFieldName.isEmpty()) {
-      return COMMIT_TIME_ORDERING_VALUE;
+      return DEFAULT_ORDERING_VALUE;
     }
 
     Object value = getValue(recordOption.get(), schema, orderingFieldName.get());
-    Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : COMMIT_TIME_ORDERING_VALUE;
+    Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
     metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;
   }

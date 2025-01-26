@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.DeleteRecord;
 
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_ORDERING_VALUE;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.table.read.HoodieBaseFileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -39,9 +39,9 @@ public class TestHoodieFileGroupRecordBuffer {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
     DeleteRecord deleteRecord = mock(DeleteRecord.class);
     mockDeleteRecord(deleteRecord, null);
-    assertEquals(COMMIT_TIME_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
-    mockDeleteRecord(deleteRecord, COMMIT_TIME_ORDERING_VALUE);
-    assertEquals(COMMIT_TIME_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
+    assertEquals(DEFAULT_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
+    mockDeleteRecord(deleteRecord, DEFAULT_ORDERING_VALUE);
+    assertEquals(DEFAULT_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
     String orderingValue = "xyz";
     String convertedValue = "_xyz";
     mockDeleteRecord(deleteRecord, orderingValue);

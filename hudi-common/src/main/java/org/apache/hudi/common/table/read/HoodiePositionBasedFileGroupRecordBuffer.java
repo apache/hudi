@@ -51,7 +51,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_ORDERING_VALUE;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -179,7 +179,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
         for (Long recordPosition : recordPositions) {
           records.putIfAbsent(recordPosition,
               Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-                  null, "", COMMIT_TIME_ORDERING_VALUE)));
+                  null, "", DEFAULT_ORDERING_VALUE)));
         }
         return;
       case EVENT_TIME_ORDERING:

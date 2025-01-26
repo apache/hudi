@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_ORDERING_VALUE;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * Default payload.
@@ -58,7 +58,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, COMMIT_TIME_ORDERING_VALUE); // natural order
+    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
   }
 
   @Override

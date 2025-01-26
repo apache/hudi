@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_ORDERING_VALUE
+import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.storage.StorageConfiguration
@@ -152,17 +152,17 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     assertEquals(100L, sparkReaderContext.getOrderingValue(
       HOption.empty(), metadataMap.asJava.asInstanceOf[java.util.Map[String, Object]],
       avroSchema, HOption.of(orderingFieldName)))
-    assertEquals(COMMIT_TIME_ORDERING_VALUE, sparkReaderContext.getOrderingValue(
+    assertEquals(DEFAULT_ORDERING_VALUE, sparkReaderContext.getOrderingValue(
       HOption.empty(), Map().asJava.asInstanceOf[java.util.Map[String, Object]],
       avroSchema, HOption.of(orderingFieldName)))
-    assertEquals(COMMIT_TIME_ORDERING_VALUE, sparkReaderContext.getOrderingValue(
+    assertEquals(DEFAULT_ORDERING_VALUE, sparkReaderContext.getOrderingValue(
       HOption.of(row), Map().asJava.asInstanceOf[java.util.Map[String, Object]],
       avroSchema, HOption.empty()))
     testGetOrderingValue(sparkReaderContext, row, avroSchema, orderingFieldName, 1000L)
     testGetOrderingValue(
       sparkReaderContext, row, avroSchema, "col3", UTF8String.fromString("blue"))
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "non_existent_col", COMMIT_TIME_ORDERING_VALUE)
+      sparkReaderContext, row, avroSchema, "non_existent_col", DEFAULT_ORDERING_VALUE)
   }
 
   private def testGetOrderingValue(sparkReaderContext: HoodieReaderContext[InternalRow],

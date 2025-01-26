@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
-import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_ORDERING_VALUE;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * The only difference with {@link DefaultHoodieRecordPayload} is that is does not
@@ -42,7 +42,7 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
   }
 
   public EventTimeAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, COMMIT_TIME_ORDERING_VALUE); // natural order
+    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
   }
 
   @Override
