@@ -88,6 +88,10 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     return config -> new WriteClientBrokenClustering<>(context, config, throwable);
   }
 
+  private Function<HoodieWriteConfig, BaseHoodieWriteClient> createBrokenCleaningClient(Throwable throwable) {
+    return config -> new WriteClientBrokenClean<>(context, config, throwable);
+  }
+
   private final Function2<HoodieTable, HoodieTableMetaClient, HoodieWriteConfig> getHoodieTable =
       (metaClient, config) -> getHoodieTable(metaClient, config);
 
@@ -370,13 +374,20 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   @ValueSource(booleans = {true, false})
   public void testFailWritesOnInlineTableServiceExceptions(boolean shouldFail) throws IOException {
     testFailWritesOnInlineTableServiceThrowable(shouldFail, shouldFail,
-        createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)));
+        createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), CLUSTERING_FAILURE);
   }
 
   @Test
   public void testFailWritesOnInlineTableServiceErrors() throws IOException {
     testFailWritesOnInlineTableServiceThrowable(false, true,
-        createBrokenClusteringClient(new OutOfMemoryError(CLUSTERING_FAILURE)));
+        createBrokenClusteringClient(new OutOfMemoryError(CLUSTERING_FAILURE)), CLUSTERING_FAILURE);
+  }
+
+  @Test
+  public void testFailWritesOnInlineCleanExceptions() throws IOException {
+    testFailWritesOnInlineTableServiceThrowable(true, true, createBrokenCleaningClient(new HoodieException(CLEANING_FAILURE)), CLEANING_FAILURE);
+    testFailWritesOnInlineTableServiceThrowable(false, true, createBrokenCleaningClient(new HoodieException(CLEANING_FAILURE)), CLEANING_FAILURE);
+    testFailWritesOnInlineTableServiceThrowable(true, true, createBrokenCleaningClient(new OutOfMemoryError(CLEANING_FAILURE)), CLEANING_FAILURE);
   }
 
   /**
@@ -447,12 +458,18 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     super.testParallelInsertAndCleanPreviousFailedCommits(true);
   }
 
-  public static class WriteClientBrokenClustering<T extends HoodieRecordPayload> extends org.apache.hudi.client.HoodieJavaWriteClient<T> {
-    private final Throwable throwable;
+  public static class WriteClientBrokenBase<T extends HoodieRecordPayload> extends org.apache.hudi.client.HoodieJavaWriteClient<T> {
+    protected final Throwable throwable;
 
-    public WriteClientBrokenClustering(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
+    public WriteClientBrokenBase(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
       super(context, clientConfig);
       this.throwable = throwable;
+    }
+  }
+
+  public static class WriteClientBrokenClustering<T extends HoodieRecordPayload> extends WriteClientBrokenBase<T> {
+    public WriteClientBrokenClustering(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
+      super(context, clientConfig, throwable);
     }
 
     @Override
@@ -463,6 +480,20 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         }
         throw (HoodieException) throwable;
       }
+    }
+  }
+
+  public static class WriteClientBrokenClean<T extends HoodieRecordPayload> extends WriteClientBrokenBase<T> {
+    public WriteClientBrokenClean(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
+      super(context, clientConfig, throwable);
+    }
+
+    @Override
+    protected void autoCleanOnCommit() {
+      if (throwable instanceof Error) {
+        throw (Error) throwable;
+      }
+      throw (HoodieException) throwable;
     }
   }
 }
