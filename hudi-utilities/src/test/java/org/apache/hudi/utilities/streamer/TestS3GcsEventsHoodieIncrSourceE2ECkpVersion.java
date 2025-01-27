@@ -28,6 +28,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase;
 import org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource;
+import org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource;
 import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource;
 import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness;
 
@@ -69,7 +70,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
   }
 
   private HoodieDeltaStreamer.Config createConfig(String basePath, String sourceCheckpoint) {
-    return createConfig(basePath, sourceCheckpoint, S3EventsHoodieIncrSource.class.getName());
+    return createConfig(basePath, sourceCheckpoint, MockS3EventsHoodieIncrSource.class.getName());
   }
 
   private HoodieDeltaStreamer.Config createConfig(String basePath, String sourceCheckpoint, String sourceClass) {
