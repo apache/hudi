@@ -56,6 +56,7 @@ import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_EMPTY_
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.OP_FETCH_NEXT_BATCH;
 import static org.apache.hudi.utilities.sources.DummyOperationExecutor.RETURN_CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
+import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -99,16 +100,36 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     assertEquals(metadata.get().getExtraMetadata(), expectedMetadata);
   }
 
+  /**
+   * Tests the end-to-end sync behavior with multiple sync iterations.
+   *
+   * Test flow:
+   * 1. First sync:
+   *    - Starts with no checkpoint
+   *    - Ingests data until checkpoint "10"
+   *    - Verifies commit metadata contains only checkpoint="10"
+   *
+   * 2. Second sync:
+   *    - Uses different table version
+   *    - Continues from checkpoint "10" to "20"
+   *    - Verifies commit metadata contains checkpoint="20"
+   *
+   * 3. Third sync:
+   *    - Upgrades to table version 8
+   *    - Continues from checkpoint "20" to "30"
+   *    - Verifies commit metadata still uses checkpoint V1 format
+   *    - Verifies final checkpoint="30"
+   */
   @ParameterizedTest
   @ValueSource(strings = {"6", "8"})
-  public void testSyncE2ENoPrevCkpThenSyncTwice(String tableVersion) throws Exception {
+  public void testSyncE2ENoPrevCkpThenSyncMultipleTimes(String tableVersion) throws Exception {
     // First start with no previous checkpoint and ingest till ckp 1 with table version.
     // Disable auto upgrade and MDT as we want to keep things as it is.
     metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
     TypedProperties props = setupBaseProperties(tableVersion);
-    // Dummy behavior injection to return ckp 1.
+    // Round 1: ingest start from beginning to checkpoint 10. No checkpoint override.
     props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
-    props.put(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT1);
+    props.put(RETURN_CHECKPOINT_KEY, "10");
     // Validating the source input ckp is empty when doing the sync.
     props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY);
     props.put("hoodie.metadata.enable", "false");
@@ -118,8 +139,9 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     ds.sync();
 
     Map<String, String> expectedMetadata = new HashMap<>();
+    // Confirm the resulting checkpoint is 10 and no other metadata.
     expectedMetadata.put("schema", "");
-    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, CUSTOM_CHECKPOINT1);
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "10");
     verifyLastInstantCommitMetadata(expectedMetadata);
 
     // Then resume from ckp 1 and ingest till ckp 2 with table version Y.
@@ -128,7 +150,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 2.
     props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
-    props.put(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT2);
+    props.put(RETURN_CHECKPOINT_KEY, "20");
     props.put("hoodie.write.auto.upgrade", "false");
     // Validate the given checkpoint is ckp 1 when doing the sync.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
@@ -136,15 +158,14 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
     props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
 
-    ds = new HoodieDeltaStreamer(createConfig(basePath(), CUSTOM_CHECKPOINT1), jsc, Option.of(props));
+    ds = new HoodieDeltaStreamer(createConfig(basePath(), null), jsc, Option.of(props));
     ds.sync();
 
     // We do not allow table version 8 and ingest with version 6 delta streamer. But not table with version 6
     // and delta streamer with version 8.
     expectedMetadata = new HashMap<>();
     expectedMetadata.put("schema", "");
-    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, CUSTOM_CHECKPOINT2);
-    expectedMetadata.put(STREAMER_CHECKPOINT_RESET_KEY_V1, CUSTOM_CHECKPOINT1);
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "20");
     verifyLastInstantCommitMetadata(expectedMetadata);
 
     // In the third round, enable MDT and auto upgrade, use table version 8
@@ -152,7 +173,7 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     props.put("hoodie.metadata.enable", "false");
     // Dummy behavior injection to return ckp 1.
     props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
-    props.put(RETURN_CHECKPOINT_KEY, CUSTOM_CHECKPOINT1);
+    props.put(RETURN_CHECKPOINT_KEY, "30");
     props.put("hoodie.write.auto.upgrade", "false");
     // Validate the given checkpoint is ckp 2 when doing the sync.
     props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
@@ -160,17 +181,145 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     props.put(VAL_CKP_RESET_KEY_IS_NULL, "IGNORED");
     props.put(VAL_CKP_IGNORE_KEY_IS_NULL, "IGNORED");
 
-    ds = new HoodieDeltaStreamer(createConfig(basePath(), CUSTOM_CHECKPOINT2), jsc, Option.of(props));
+    ds = new HoodieDeltaStreamer(createConfig(basePath(), null), jsc, Option.of(props));
     ds.sync();
 
     // After upgrading, we still use checkpoint V1 since this is s3/Gcs incremental source.
     expectedMetadata = new HashMap<>();
     expectedMetadata.put("schema", "");
-    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, CUSTOM_CHECKPOINT1);
-    expectedMetadata.put(STREAMER_CHECKPOINT_RESET_KEY_V1, CUSTOM_CHECKPOINT2);
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "30");
     verifyLastInstantCommitMetadata(expectedMetadata);
   }
 
+  /**
+   * Tests sync behavior with checkpoint override configurations.
+   *
+   * Test flow:
+   * 1. Initial sync with override:
+   *    - Starts with no previous commits but config forces start at "10"
+   *    - Ingests until checkpoint "30"
+   *    - Verifies metadata contains checkpoint="30" and reset_key="10"
+   *
+   * 2. Second sync with same override:
+   *    - Continues from "30" to "40"
+   *    - Verifies reset_key="10" is maintained
+   *
+   * 3. Third sync without override:
+   *    - Continues from "40" to "50"
+   *    - Verifies reset_key is removed from metadata
+   *
+   * 4. Fourth sync with ignore checkpoint:
+   *    - Sets ignore_checkpoint="50"
+   *    - Ingests to "60"
+   *    - Verifies metadata contains ignore_key="50"
+   *
+   * 5. Final syncs:
+   *    - Tests that ignore_key persists with same config
+   *    - Verifies ignore_key is removed when config is lifted
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"6", "8"})
+  public void testSyncE2ENoPrevCkpWithCkpOverride(String tableVersion) throws Exception {
+    // The streamer started clean with no previous commit metadata, now streamer config forcefully
+    // set it to start at ckp "10" and in that iteration the streamer stops at ckp "30
+    metaClient = getHoodieMetaClientWithTableVersion(storageConf(), basePath(), tableVersion);
+    TypedProperties props = setupBaseProperties(tableVersion);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
+    props.put(RETURN_CHECKPOINT_KEY, "30"); // The data source said it stops at "30".
+    props.put(VAL_CKP_KEY_EQ_VAL, "10"); // Ensure the data source is notified we should start at "10"
+
+    HoodieDeltaStreamer.Config cfg = createConfig(basePath(), "10");
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc, Option.of(props));
+    ds.sync();
+
+    Map<String, String> expectedMetadata = new HashMap<>();
+    expectedMetadata.put("schema", "");
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "30");
+    expectedMetadata.put(STREAMER_CHECKPOINT_RESET_KEY_V1, "10");
+    verifyLastInstantCommitMetadata(expectedMetadata);
+
+    // Set dummy data source behavior
+    props.put(RETURN_CHECKPOINT_KEY, "40"); // The data source said it stops at "40".
+    props.put(VAL_CKP_KEY_EQ_VAL, "30"); // Ensure the data source is notified we should start at "10".
+    // With the same config that contains the checkpoint override, it does not affect ds to proceed normally.
+    ds = new HoodieDeltaStreamer(cfg, jsc, Option.of(props));
+    ds.sync();
+
+    expectedMetadata.clear();
+    expectedMetadata.put("schema", "");
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "40");
+    expectedMetadata.put(STREAMER_CHECKPOINT_RESET_KEY_V1, "10");
+    verifyLastInstantCommitMetadata(expectedMetadata);
+
+    // Later if we lift the override config from props, the reset key info is also gone in the resulting
+    // commit metadata.
+    props.put(VAL_CKP_KEY_EQ_VAL, "40"); // Ensure the data source is notified we should start at "40".
+    props.put(RETURN_CHECKPOINT_KEY, "50");
+    ds = new HoodieDeltaStreamer(createConfig(basePath(), null), jsc, Option.of(props));
+    ds.sync();
+
+    expectedMetadata.clear();
+    expectedMetadata.put("schema", "");
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "50"); // no more reset key.
+    verifyLastInstantCommitMetadata(expectedMetadata);
+
+    // Check ignore key config validation
+    // Later if we lift the override config from props, the reset key info is also gone in the resulting
+    // commit metadata.
+    props.put(VAL_INPUT_CKP, VAL_EMPTY_CKP_KEY); // Ensure the data source is notified we should start at "40".
+    props.put(RETURN_CHECKPOINT_KEY, "60");
+    cfg = createConfig(basePath(), null);
+    cfg.ignoreCheckpoint = "50"; // Set the ckp to be the same as where we stopped at in the last iteration.
+    ds = new HoodieDeltaStreamer(cfg, jsc, Option.of(props));
+    ds.sync();
+
+    expectedMetadata.clear();
+    expectedMetadata.put("schema", "");
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "60");
+    expectedMetadata.put(CHECKPOINT_IGNORE_KEY, "50");
+    verifyLastInstantCommitMetadata(expectedMetadata);
+
+    // In the next iteration, using the same config with ignore key setting does not lead to checkpoint reset.
+    props = setupBaseProperties(tableVersion);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, "70"); // Stop at 70 after ingestion.
+    props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
+    props.put(VAL_CKP_KEY_EQ_VAL, "60"); // Ensure the data source is notified we should start at "60".
+    ds = new HoodieDeltaStreamer(cfg, jsc, Option.of(props));
+    ds.sync();
+
+    expectedMetadata.clear();
+    expectedMetadata.put("schema", "");
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "70");
+    expectedMetadata.put(CHECKPOINT_IGNORE_KEY, "50");
+    verifyLastInstantCommitMetadata(expectedMetadata);
+
+    // Once we lift the ignore key in the given streamer config, the resulting commit metadata also won't
+    // contain that info.
+    cfg.ignoreCheckpoint = null;
+    props = setupBaseProperties(tableVersion);
+    props.put(OP_FETCH_NEXT_BATCH, OP_EMPTY_ROW_SET_NONE_NULL_CKP_KEY);
+    props.put(RETURN_CHECKPOINT_KEY, "80"); // Stop at 70 after ingestion.
+    props.put(VAL_INPUT_CKP, VAL_NON_EMPTY_CKP_ALL_MEMBERS);
+    props.put(VAL_CKP_KEY_EQ_VAL, "70"); // Ensure the data source is notified we should start at "60".
+    ds = new HoodieDeltaStreamer(cfg, jsc, Option.of(props));
+    ds.sync();
+
+    expectedMetadata.clear();
+    expectedMetadata.put("schema", "");
+    expectedMetadata.put(STREAMER_CHECKPOINT_KEY_V1, "80");
+    verifyLastInstantCommitMetadata(expectedMetadata);
+  }
+
+  /**
+   * Tests sync behavior when source returns null checkpoint and no previous checkpoint exists.
+   *
+   * Expected behavior:
+   * - Sync completes successfully
+   * - Commit metadata contains only schema="" with no checkpoint information
+   * - Requires allowCommitOnNoCheckpointChange=true to permit commit
+   */
   @ParameterizedTest
   @ValueSource(strings = {"6", "8"})
   public void testSyncE2ENoNextCkpNoPrevCkp(String tableVersion) throws Exception {
@@ -189,6 +338,16 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     verifyLastInstantCommitMetadata(expectedMetadata);
   }
 
+  /**
+   * Tests sync behavior when source returns null checkpoint but has previous checkpoint.
+   *
+   * Expected behavior:
+   * - Sync completes with previous checkpoint "previousCkp"
+   * - Commit metadata contains:
+   *   - schema=""
+   *   - checkpoint_reset_key="previousCkp"
+   * - Requires allowCommitOnNoCheckpointChange=true to permit commit
+   */
   @ParameterizedTest
   @ValueSource(strings = {"6", "8"})
   public void testSyncE2ENoNextCkpHasPrevCkp(String tableVersion) throws Exception {
@@ -212,6 +371,14 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     verifyLastInstantCommitMetadata(expectedMetadata);
   }
 
+  /**
+   * Tests sync behavior with force skip checkpoint enabled.
+   *
+   * Expected behavior:
+   * - Sync completes without processing any checkpoints
+   * - Commit metadata contains only schema=""
+   * - No checkpoint information is stored regardless of source checkpoint
+   */
   @ParameterizedTest
   @ValueSource(strings = {"6", "8"})
   public void testSyncE2EForceSkip(String tableVersion) throws Exception {
@@ -229,6 +396,16 @@ public class TestS3GcsEventsHoodieIncrSourceE2ECkpVersion extends S3EventsHoodie
     verifyLastInstantCommitMetadata(expectedMetadata);
   }
 
+  /**
+   * Tests checkpoint version selection for S3 and GCS sources.
+   *
+   * Expected behavior:
+   * - Both S3EventsHoodieIncrSource and GcsEventsHoodieIncrSource must use checkpoint V1
+   * - This remains true for both table version 6 and 8
+   * - targetCheckpointV2() returns false in all these cases
+   *
+   * This ensures these sources maintain backward compatibility with checkpoint V1 format
+   */
   @Test
   public void testTargetCheckpointV2ForS3Gcs() {
     // To ensure we properly track sources that must use checkpoint V1.
