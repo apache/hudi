@@ -710,6 +710,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           try {
             Thread.sleep(2000);
             ret = condition.apply(true);
+            LOG.info("Condition completed successfully");
           } catch (Throwable error) {
             LOG.debug("Got error waiting for condition", error);
             ret = false;
