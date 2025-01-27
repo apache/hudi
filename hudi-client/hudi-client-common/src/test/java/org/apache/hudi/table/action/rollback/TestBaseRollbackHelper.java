@@ -22,6 +22,10 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -32,7 +36,8 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,8 +69,10 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
     storage.deleteDirectory(basePath);
   }
 
-  @Test
-  void testMaybeDeleteAndCollectStatsWithMultipleRequestsPerFileGroup() throws IOException {
+  @ParameterizedTest
+  @ValueSource(strings = {"SIX", "EIGHT"})
+  void testMaybeDeleteAndCollectStatsWithMultipleRequestsPerFileGroup(HoodieTableVersion tableVersion) throws IOException {
+    when(tableConfig.getTableVersion()).thenReturn(tableVersion);
     String rollbackInstantTime = "003";
     String instantToRollback = "002";
     BaseRollbackHelper rollbackHelper = new BaseRollbackHelper(metaClient, config);
@@ -84,10 +91,10 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
     StoragePath baseFilePath2 = addRollbackRequestForBaseFile(rollbackRequests, partition2, baseFileId2, instantToRollback);
     StoragePath baseFilePath3 = addRollbackRequestForBaseFile(rollbackRequests, partition2, baseFileId3, instantToRollback);
     // Log files to roll back
-    Map<String, Long> logFilesToRollback1 = addRollbackRequestForLogFiles(
+    addRollbackRequestForLogFiles(
         rollbackRequests, partition2, logFileId1, baseInstantTimeOfLogFiles, IntStream.of(1));
     // Multiple rollback requests of log files belonging to the same file group
-    Map<String, Long> logFilesToRollback2 = IntStream.range(1, ROLLBACK_LOG_VERSION).boxed()
+    IntStream.range(1, ROLLBACK_LOG_VERSION).boxed()
         .flatMap(version -> addRollbackRequestForLogFiles(
             rollbackRequests, partition2, logFileId2, baseInstantTimeOfLogFiles, IntStream.of(version))
             .entrySet().stream())
@@ -108,9 +115,15 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
         rollbackRequests, true, 5);
     validateStateAfterRollback(rollbackRequests);
     StoragePath rollbackLogPath1 = new StoragePath(new StoragePath(basePath, partition2),
-        FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId1, 2));
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+            ? FSUtils.makeLogFileName(logFileId1, HoodieFileFormat.HOODIE_LOG.getFileExtension(),
+            instantToRollback, 1, HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            : FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId1, 2));
     StoragePath rollbackLogPath2 = new StoragePath(new StoragePath(basePath, partition2),
-        FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId2, ROLLBACK_LOG_VERSION));
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+            ? FSUtils.makeLogFileName(logFileId2, HoodieFileFormat.HOODIE_LOG.getFileExtension(),
+            instantToRollback, 1, HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            : FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId2, ROLLBACK_LOG_VERSION));
     List<Pair<String, HoodieRollbackStat>> expected = new ArrayList<>();
     expected.add(Pair.of(partition1,
         HoodieRollbackStat.newBuilder()
@@ -132,14 +145,12 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
             .withPartitionPath(partition2)
             .withRollbackBlockAppendResults(Collections.singletonMap(
                 storage.getPathInfo(rollbackLogPath1), 1L))
-            .withLogFilesFromFailedCommit(logFilesToRollback1)
             .build()));
     expected.add(Pair.of(partition2,
         HoodieRollbackStat.newBuilder()
             .withPartitionPath(partition2)
             .withRollbackBlockAppendResults(Collections.singletonMap(
                 storage.getPathInfo(rollbackLogPath2), 1L))
-            .withLogFilesFromFailedCommit(logFilesToRollback2)
             .build()));
     expected.add(Pair.of(partition2,
         HoodieRollbackStat.newBuilder()
@@ -148,8 +159,10 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
     assertRollbackStatsEquals(expected, rollbackStats);
   }
 
-  @Test
-  void testMaybeDeleteAndCollectStatsWithSingleRequestPerFileGroup() throws IOException {
+  @ParameterizedTest
+  @ValueSource(strings = {"SIX", "EIGHT"})
+  void testMaybeDeleteAndCollectStatsWithSingleRequestPerFileGroup(HoodieTableVersion tableVersion) throws IOException {
+    when(tableConfig.getTableVersion()).thenReturn(tableVersion);
     String rollbackInstantTime = "003";
     String instantToRollback = "002";
     BaseRollbackHelper rollbackHelper = new BaseRollbackHelper(metaClient, config);
@@ -173,7 +186,10 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
         rollbackRequests, true, 5);
     validateStateAfterRollback(rollbackRequests);
     StoragePath rollbackLogPath = new StoragePath(new StoragePath(basePath, partition),
-        FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId, ROLLBACK_LOG_VERSION));
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+            ? FSUtils.makeLogFileName(logFileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(),
+            instantToRollback, 1, HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            : FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId, ROLLBACK_LOG_VERSION));
     List<Pair<String, HoodieRollbackStat>> expected = new ArrayList<>();
     expected.add(Pair.of(partition,
         HoodieRollbackStat.newBuilder()
@@ -186,7 +202,6 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
             .withPartitionPath(partition)
             .withRollbackBlockAppendResults(Collections.singletonMap(
                 storage.getPathInfo(rollbackLogPath), 1L))
-            .withLogFilesFromFailedCommit(logFilesToRollback)
             .build()
     ));
     assertRollbackStatsEquals(expected, rollbackStats);
@@ -236,20 +251,20 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
         .sorted(Comparator.comparing(
             e -> Triple.of(
                 e.getRight().getSuccessDeleteFiles().size(),
-                e.getRight().getLogFilesFromFailedCommit().size(),
+                e.getRight().getCommandBlocksCount().size(),
                 !e.getRight().getSuccessDeleteFiles().isEmpty()
                     ? e.getRight().getSuccessDeleteFiles().get(0)
-                    : !e.getRight().getLogFilesFromFailedCommit().isEmpty()
-                    ? e.getRight().getLogFilesFromFailedCommit().keySet().stream().findFirst().get()
+                    : !e.getRight().getCommandBlocksCount().isEmpty()
+                    ? e.getRight().getCommandBlocksCount().keySet().stream().findFirst().get()
                     : ""),
             Comparator.naturalOrder()))
         .collect(Collectors.toList());
   }
 
   private StoragePath addRollbackRequestForBaseFile(List<SerializableHoodieRollbackRequest> rollbackRequests,
-                                             String partition,
-                                             String fileId,
-                                             String instantTime) throws IOException {
+                                                    String partition,
+                                                    String fileId,
+                                                    String instantTime) throws IOException {
     StoragePath baseFilePath = createBaseFileToRollback(partition, fileId, instantTime);
     rollbackRequests.add(new SerializableHoodieRollbackRequest(
         HoodieRollbackRequest.newBuilder()

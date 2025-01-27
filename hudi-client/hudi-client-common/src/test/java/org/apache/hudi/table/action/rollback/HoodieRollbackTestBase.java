@@ -20,8 +20,10 @@
 package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -71,6 +73,7 @@ public class HoodieRollbackTestBase {
     when(table.getMetaClient()).thenReturn(metaClient);
     basePath = new StoragePath(tmpDir.toString(), UUID.randomUUID().toString());
     storage = HoodieTestUtils.getStorage(basePath);
+    when(table.getStorage()).thenReturn(storage);
     when(metaClient.getBasePath()).thenReturn(basePath);
     when(metaClient.getMarkerFolderPath(any()))
         .thenReturn(basePath + Path.SEPARATOR + TEMPFOLDER_NAME);
@@ -80,6 +83,7 @@ public class HoodieRollbackTestBase {
     when(config.getMarkersType()).thenReturn(MarkerType.DIRECT);
     Properties props = new Properties();
     props.put("hoodie.table.name", "test_table");
+    props.put(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
         .initTable(storage.getConf(), metaClient.getBasePath());
