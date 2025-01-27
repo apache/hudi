@@ -23,12 +23,14 @@ import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,6 +38,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -43,6 +46,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFileMark
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.table.action.rollback.TestRollbackUtils.assertRollbackRequestListEquals;
+import static org.mockito.Mockito.when;
 
 class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
   private static final int ROLLBACK_LOG_VERSION = 10;
@@ -53,8 +57,11 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
     super.setup();
   }
 
-  @Test
-  void testGetRollbackRequestsWithMultipleLogFilesInOneFileGroup() throws IOException {
+  @ParameterizedTest
+  @ValueSource(strings = {"SIX", "EIGHT"})
+  void testGetRollbackRequestsWithMultipleLogFilesInOneFileGroup(HoodieTableVersion tableVersion) throws IOException {
+    when(tableConfig.getTableVersion()).thenReturn(tableVersion);
+    when(table.version()).thenReturn(tableVersion);
     HoodieEngineContext context = new HoodieLocalEngineContext(storage.getConf());
     String rollbackInstantTime = "003";
     String instantToRollbackTs = "002";
@@ -72,11 +79,13 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
     StoragePath baseFilePath3 = createBaseFileAndMarkerToRollback(partition2, baseFileId3, instantToRollbackTs);
     // Log files to roll back
     Map<String, Long> logFilesToRollback1 = createLogFilesAndMarkersToRollback(
-        partition2, logFileId1, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(1));
+        partition2, logFileId1, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(1),
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT));
     // Multiple rollback requests of log files belonging to the same file group
     Map<String, Long> logFilesToRollback2 = IntStream.range(1, ROLLBACK_LOG_VERSION).boxed()
         .flatMap(version -> createLogFilesAndMarkersToRollback(
-            partition2, logFileId2, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(version))
+            partition2, logFileId2, baseInstantTimeOfLogFiles, instantToRollbackTs, IntStream.of(version),
+            tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT))
             .entrySet().stream())
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     HoodieInstant instantToRollback = INSTANT_GENERATOR.createNewInstant(
@@ -93,9 +102,13 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
     expected.add(new HoodieRollbackRequest(
         partition2, baseFileId3, instantToRollbackTs, Collections.singletonList(baseFilePath3.toString()), Collections.emptyMap()));
     expected.add(new HoodieRollbackRequest(
-        partition2, logFileId1, baseInstantTimeOfLogFiles, Collections.emptyList(), logFilesToRollback1));
+        partition2, logFileId1,
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? instantToRollbackTs : baseInstantTimeOfLogFiles,
+        Collections.emptyList(), logFilesToRollback1));
     expected.add(new HoodieRollbackRequest(
-        partition2, logFileId2, baseInstantTimeOfLogFiles, Collections.emptyList(), logFilesToRollback2));
+        partition2, logFileId2,
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? instantToRollbackTs : baseInstantTimeOfLogFiles,
+        Collections.emptyList(), logFilesToRollback2));
     assertRollbackRequestListEquals(expected, actual);
   }
 
@@ -111,17 +124,21 @@ class TestMarkerBasedRollbackStrategy extends TestBaseRollbackHelper {
                                                                String fileId,
                                                                String baseInstantTime,
                                                                String currentInstantTime,
-                                                               IntStream logVersions) {
+                                                               IntStream logVersions,
+                                                               boolean useFullPath) {
     Map<String, Long> logFilesToRollback = createLogFilesToRollback(
         partition, fileId, baseInstantTime, logVersions, 0L);
-    logFilesToRollback.keySet().forEach(logFileName -> {
+    return logFilesToRollback.keySet().stream().map(logFileName -> {
       try {
         createLogFileMarker(basePath.toString(), partition, currentInstantTime, logFileName);
+        if (useFullPath) {
+          return new StoragePath(new StoragePath(basePath, partition), logFileName).toString();
+        }
+        return logFileName;
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-    });
-    return logFilesToRollback;
+    }).collect(Collectors.toMap(Function.identity(), e -> 1L));
   }
 }
 

@@ -28,12 +28,16 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -58,12 +62,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -291,10 +297,15 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     assertEquals(1, rollbackRequests.size());
   }
 
-  @Test
-  void testRollbackMultipleLogFilesInOneFileGroupInMORTableVersionSix() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"SIX", "EIGHT"})
+  void testRollbackMultipleAppendLogFilesInOneFileGroupInMOR(HoodieTableVersion tableVersion) throws Exception {
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.VERSION.key(), tableVersion.versionCode());
+    initMetaClient(tableType, props);
     String partition = "partA";
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(RawTripTestPayload.JSON_DATA_SCHEMA));
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(
+        metaClient, addMetadataFields(RawTripTestPayload.JSON_DATA_SCHEMA));
     String fileId = UUID.randomUUID().toString();
     HoodieRecord tripRecord = new RawTripTestPayload(
         "{\"_row_key\":\"key1\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}")
@@ -307,16 +318,25 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
     String instantTime2 = "002";
     testTable.forDeltaCommit(instantTime2)
-        .withLogFile(partition, fileId, 1);
+        .withLogFile(partition, fileId,
+            tableVersion.getTimelineLayoutVersion()
+                .compareTo(TimelineLayoutVersion.LAYOUT_VERSION_2) >= 0
+                ? instantTime2 : instantTime1, 1);
     testTable.addDeltaCommit(instantTime2);
 
     String instantTime3 = "003";
     int numLogFiles = 199;
-    int[] logVersions = IntStream.rangeClosed(2, numLogFiles + 1).toArray();
+    int[] logVersions = tableVersion.getTimelineLayoutVersion()
+        .compareTo(TimelineLayoutVersion.LAYOUT_VERSION_2) >= 0
+        ? IntStream.rangeClosed(1, numLogFiles).toArray()
+        : IntStream.rangeClosed(2, numLogFiles + 1).toArray();
+    String logFileInstantTime = tableVersion.getTimelineLayoutVersion()
+        .compareTo(TimelineLayoutVersion.LAYOUT_VERSION_2) >= 0
+        ? instantTime3 : instantTime1;
     testTable.forDeltaCommit(instantTime3)
-        .withLogFile(partition, fileId, logVersions);
+        .withLogFile(partition, fileId, logFileInstantTime, logVersions);
     for (int version : logVersions) {
-      String logFileName = FileCreateUtils.logFileName(instantTime3, fileId, version);
+      String logFileName = FileCreateUtils.logFileName(logFileInstantTime, fileId, version);
       assertTrue(storage.exists(new StoragePath(new StoragePath(basePath, partition), logFileName)));
       testTable.withLogMarkerFile(partition, logFileName);
     }
@@ -347,7 +367,10 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         context, writeConfig, hoodieTable, "004", instantToRollback, true, false);
     List<HoodieRollbackStat> rollbackStats = rollbackActionExecutor.doRollbackAndGetStats(rollbackPlan);
     StoragePath rollbackLogPath = new StoragePath(new StoragePath(basePath, partition),
-        FileCreateUtils.logFileName(instantTime3, fileId, numLogFiles + 2));
+        tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+            ? FSUtils.makeLogFileName(fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(),
+            instantToRollback.requestedTime(), 1, "0-1-100")
+            : FileCreateUtils.logFileName(instantTime1, fileId, numLogFiles + 2));
     assertTrue(storage.exists(rollbackLogPath));
     timelineServer.stopForBasePath(basePath);
     assertEquals(1, rollbackStats.size());
@@ -359,10 +382,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     assertEquals(rollbackLogPath.getPathWithoutSchemeAndAuthority(),
         rollbackStat.getCommandBlocksCount().entrySet().stream().findFirst().get()
             .getKey().getPath().getPathWithoutSchemeAndAuthority());
-    assertEquals(numLogFiles, rollbackStat.getLogFilesFromFailedCommit().size());
-    for (int version : logVersions) {
-      String logFileName = FileCreateUtils.logFileName(instantTime3, fileId, version);
-      assertTrue(rollbackStat.getLogFilesFromFailedCommit().containsKey(logFileName));
-    }
+    assertEquals(0, rollbackStat.getLogFilesFromFailedCommit().size());
   }
 }

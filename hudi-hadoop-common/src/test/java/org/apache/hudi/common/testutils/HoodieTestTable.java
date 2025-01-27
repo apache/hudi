@@ -51,6 +51,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.TestLogReaderUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -772,6 +773,11 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public Pair<HoodieTestTable, List<String>> withLogFile(String partitionPath, String fileId, int... versions) throws Exception {
+    return withLogFile(partitionPath, fileId, currentInstantTime, versions);
+  }
+
+  public Pair<HoodieTestTable, List<String>> withLogFile(String partitionPath, String fileId,
+                                                         String instantTime, int... versions) throws Exception {
     List<String> logFiles = new ArrayList<>();
     for (int version : versions) {
       logFiles.add(FileCreateUtils.createLogFile(metaClient, partitionPath, currentInstantTime, fileId, version));
